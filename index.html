@@ -68,6 +68,13 @@
   .calnav button:hover{border-color:var(--accent)}
   .calnav .mlabel{font-family:var(--mono);min-width:130px;text-align:center;font-size:13px}
   .calgrid{display:grid;grid-template-columns:84px repeat(7,1fr);gap:6px}
+  .calscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .calscroll::-webkit-scrollbar{height:6px}
+  .calscroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  @media(max-width:620px){
+    .calgrid{min-width:602px;grid-template-columns:58px repeat(7,1fr)}
+    .cell{min-height:66px}
+  }
   .dow{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);
     text-align:center;padding-bottom:2px}
   .dow.wk{text-align:left}
@@ -109,6 +116,49 @@
   details.defs .dbody dd{margin:2px 0 0;color:var(--dim)}
   details.defs .warn dt{color:#e3b341}
 
+  /* ---- break-even calculator ---- */
+  .calc .cwrap{display:grid;grid-template-columns:minmax(0,290px) 1fr;gap:26px}
+  @media(max-width:680px){.calc .cwrap{grid-template-columns:1fr;gap:18px}}
+  .calc .isub{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);
+    margin:14px 0 2px;padding-top:6px}
+  .calc .isub:first-child{margin-top:0;padding-top:0}
+  .calc .irow{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:7px 0;border-bottom:1px solid var(--line)}
+  .calc .irow label{font-size:12.5px;color:var(--dim)}
+  .calc input{width:92px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    font-family:var(--mono);font-size:13px;text-align:right;padding:5px 8px;border-radius:6px;
+    font-variant-numeric:tabular-nums;outline:none;-moz-appearance:textfield}
+  .calc input:focus{border-color:var(--accent)}
+  .calc input::-webkit-outer-spin-button,.calc input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .calc select{max-width:188px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    font-family:var(--mono);font-size:12px;padding:5px 8px;border-radius:6px;outline:none;cursor:pointer}
+  .calc select:focus{border-color:var(--accent)}
+  .calc .irow.ro{border-bottom-style:dashed}
+  .calc .roval{font-family:var(--mono);font-size:13.5px;color:var(--txt);font-variant-numeric:tabular-nums}
+  .calc .behero{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:14px 16px}
+  .calc .behero .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+  .calc .behero .v{font-family:var(--mono);font-size:30px;font-weight:600;margin-top:6px;
+    font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .calc .behero .sub{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:4px}
+  .calc .behero .tax{font-family:var(--mono);font-size:12.5px;color:var(--txt);margin-top:9px;
+    padding-top:9px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+  .calc .crows{margin-top:12px}
+  .calc .crow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+    padding:8px 0;border-bottom:1px solid var(--line)}
+  .calc .crow .cl{font-size:12.5px;color:var(--dim)}
+  .calc .crow .cv{font-family:var(--mono);font-size:13.5px;font-variant-numeric:tabular-nums;text-align:right}
+  .calc .crow.tot .cl{color:var(--txt)} .calc .crow.tot .cv{color:var(--txt);font-weight:600}
+  .calc .actual{margin-top:12px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:4px 14px 11px}
+  .calc .actual .ah{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:9px 0 2px}
+  .calc details.cdefs{margin-top:14px;border-top:1px solid var(--line)}
+  .calc details.cdefs summary{cursor:pointer;padding:11px 0 0;font-size:12px;letter-spacing:.04em;
+    color:var(--dim);list-style:none;outline:none}
+  .calc details.cdefs summary::-webkit-details-marker{display:none}
+  .calc details.cdefs summary::before{content:"\25B8 ";color:var(--faint)}
+  .calc details.cdefs[open] summary::before{content:"\25BE "}
+  .calc details.cdefs .cdbody{font-size:12px;color:var(--dim);line-height:1.6;padding:9px 0 2px}
+  .calc details.cdefs .cdbody b{color:var(--txt);font-weight:500}
+
   .empty{padding:40px;text-align:center;color:var(--dim)}
 </style>
 </head>
@@ -130,7 +180,7 @@
 
   <div class="panel">
     <h2>Performance</h2>
-    <p class="hint">Cumulative realized PnL by trade sequence. Shaded band = drawdown from running peak.</p>
+    <p class="hint">Cumulative realized PnL by trade sequence (gross of fees). Shaded band = drawdown from running peak.</p>
     <svg class="curve" id="curve" preserveAspectRatio="none"></svg>
   </div>
 
@@ -143,7 +193,40 @@
         <button id="next" title="Next month">›</button>
       </div>
     </div>
-    <div class="calgrid" id="cal"></div>
+    <div class="calscroll"><div class="calgrid" id="cal"></div></div>
+  </div>
+
+  <div class="panel calc">
+    <h2>Break-even &amp; Cost Budget</h2>
+    <p class="hint">Costs are applied to the loaded sample: commissions (per trade) and a prorated share of subscriptions are subtracted from Net&nbsp;PnL and the commission-adjusted Profit&nbsp;Factor in the cards above. Tax is estimated on net profit only. Trade count and date span come from the CSV.</p>
+    <div class="cwrap">
+      <div class="inputs">
+        <div class="isub">Fixed cost / month</div>
+        <div class="irow"><label>Platform fee</label><input id="c_tv" type="number" step="1" value="35"></div>
+        <div class="irow"><label>Data feed (AMP / CQG)</label><select id="c_feed"></select></div>
+        <div class="isub">Commission</div>
+        <div class="irow"><label>Commission $/side</label><input id="c_comm" type="number" step="0.01" value="0.62"></div>
+        <div class="isub">Tax — Section 1256</div>
+        <div class="irow"><label>State</label><select id="c_state_sel"></select></div>
+        <div class="irow ro"><label>State rate</label><span class="roval" id="c_state_out">—</span></div>
+        <div class="irow ro"><label>Blended 1256 rate</label><span class="roval" id="c_blend_out">—</span></div>
+      </div>
+      <div class="cout">
+        <div class="behero" id="c_head"></div>
+        <div class="crows" id="c_rows"></div>
+        <details class="cdefs">
+          <summary>Assumptions &amp; caveats</summary>
+          <div class="cdbody">
+            <b>One round turn per trade.</b> Each CSV row is a position close (entry + exit, 1 contract), so the round-turn commission &mdash; 2&nbsp;&times; per-side &mdash; is charged once per trade. A single rate is applied to every symbol; the sample mixes MES/MNQ/MCL micros (~$0.62/side), so it is an approximation.<br>
+            <b>Subscriptions are prorated</b> by the sample's calendar-day span over 30.44&nbsp;days/mo. Load a full month and you are charged a full month; load 9&nbsp;days and you are charged ~9/30 of it.<br>
+            <b>Net&nbsp;PnL</b> (card) = gross &minus; commissions &minus; prorated subscriptions. <b>Profit&nbsp;Factor</b> (card) is recomputed net of commissions per trade. Win&nbsp;rate, drawdown, and the equity curve stay gross.<br>
+            <b>Data feed</b> list is AMP's published CQG schedule. Default is CME Equity Indices &mdash; Top-of-Book ($5); the Market-Depth (L2) version of that line is $17. EUREX is listed in EUR.<br>
+            <b>Tax</b> = blended 1256 rate: 60% &times; 15% long-term + 40% &times; 24% ordinary (assumed bracket, fixed) + your state's top rate on the <em>full</em> gain. It applies only when net profit is positive; no state mirrors the 60/40 split, and short-term 1256 gains never qualify for state long-term exclusions.<br>
+            <b>Break-even / trade</b> = total period costs &divide; trade count: the average gross each trade needed to clear costs.
+          </div>
+        </details>
+      </div>
+    </div>
   </div>
 
   <div class="panel">
@@ -164,7 +247,7 @@
       <dl class="warn">
         <dt>Max Drawdown is REALIZED only</dt><dd>Computed on the closed-trade equity curve (cumulative realized PnL), peak-to-trough. It does NOT capture open-position heat between entry and exit — true intratrade drawdown is larger and is not in this export.</dd>
         <dt>Trade length unavailable</dt><dd>The balance export contains only close timestamps, not entries, so holding time cannot be computed. Shown as —.</dd>
-        <dt>Commissions absent</dt><dd>Paper-trading export carries no fees, so all PnL is gross and Total Commissions is $0. Live results will differ.</dd>
+        <dt>Commissions modeled, not exported</dt><dd>The paper export carries no fees, so the raw PnL is gross. Total Commissions, Net PnL, and Profit Factor are overlaid from the Break-even &amp; Cost Budget panel (round turn × trade count); change the commission there and these update.</dd>
         <dt>Calendar-day grouping</dt><dd>Days are grouped by the literal date in the Time column, not by the CME session day (Globex opens ~17:00 prior day). Overnight trades may land on a different "day" than your session view. Sharpe uses daily PnL, population std, not annualized — near-meaningless on a handful of days.</dd>
       </dl>
     </div>
@@ -237,7 +320,7 @@ function compute(tr){
   const sd=Math.sqrt(variance);
   const sharpe= sd>0 ? mean/sd : NaN;
   return {n,wins:wins.length,losses:losses.length,scratch:scratch.length,
-    net,gp,gl,pf,avgW,avgL,wl,maxDD,curve,
+    net,gp,gl,pf,avgW,avgL,wl,maxDD,curve,pnls,
     best:n?Math.max(...pnls):0, worst:n?Math.min(...pnls):0,
     days,active,winDays,avgDaily:active?net/active:0,avgTrades:active?n/active:0,
     winDayPct:active?100*winDays/active:0, mcw,mcl,
@@ -251,19 +334,47 @@ const usd=(v,s=true)=>{ if(v===Infinity)return '∞'; const sign=v<0?'-':(s&&v>0
   return sign+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
 const cls=v=> v>0?'pos':v<0?'neg':'';
 
+/* ---------- cost model (drives cards + budget panel from calc inputs) ---------- */
+const FED_ORD=24, LTCG=15;   // assumed federal bracket / LTCG rate, held fixed
+function numIn(id){ const e=document.getElementById(id); const v=e?parseFloat(e.value):NaN; return isNaN(v)?0:v; }
+function feedCost(){ const o=document.getElementById('c_feed'); const x=o&&o.selectedOptions[0]?parseFloat(o.selectedOptions[0].dataset.cost):NaN; return isNaN(x)?0:x; }
+function stateRate(){ const o=document.getElementById('c_state_sel'); const x=o&&o.selectedOptions[0]?parseFloat(o.selectedOptions[0].dataset.rate):NaN; return isNaN(x)?0:x; }
+function blendedRate(){ return 0.6*LTCG/100 + 0.4*FED_ORD/100 + stateRate()/100; }
+function costModel(m){
+  const platform=numIn('c_tv'), data=feedCost(), comm=numIn('c_comm');
+  const fixedMo=platform+data, rt=comm*2;
+  const n=m?m.n:0, totalComm=n*rt;
+  let spanDays=1;
+  if(m && m.firstDate!=='—' && m.lastDate!=='—'){
+    const d0=new Date(m.firstDate+'T00:00:00'), d1=new Date(m.lastDate+'T00:00:00');
+    spanDays=Math.max(1, Math.round((d1-d0)/864e5)+1);
+  }
+  const fixedPeriod=fixedMo*spanDays/30.44;
+  const gross=m?m.net:0;
+  const netPreTax=gross-totalComm-fixedPeriod;
+  const tEff=blendedRate();
+  const tax= netPreTax>0 ? netPreTax*tEff : 0;
+  const afterTax=netPreTax-tax;
+  let gp=0, gl=0;                       // commission-adjusted profit factor
+  if(m && m.pnls) for(const p of m.pnls){ const x=p-rt; if(x>0)gp+=x; else if(x<0)gl+=x; }
+  const pf= gl!==0 ? gp/Math.abs(gl) : (gp>0?Infinity:0);
+  return {platform,data,comm,fixedMo,rt,n,totalComm,spanDays,fixedPeriod,gross,netPreTax,tEff,tax,afterTax,pfGP:gp,pfGL:gl,pf};
+}
+
 /* ---------- render: cards ---------- */
 function renderCards(m){
   const el=document.getElementById('cards');
+  const c=costModel(m);
   el.innerHTML=`
    <div class="card"><div class="k">Net PnL</div>
-     <div class="v ${cls(m.net)}">${usd(m.net)}</div>
-     <div class="sub">${m.n} trades</div></div>
+     <div class="v ${cls(c.netPreTax)}">${usd(c.netPreTax)}</div>
+     <div class="sub">${m.n} trades · net of fees · gross ${usd(m.net)}</div></div>
    <div class="card"><div class="k">Win Rate</div>
      <div class="v">${m.winDayPct!==undefined?(100*m.wins/(m.n||1)).toFixed(1):0}%</div>
      <div class="sub">${m.wins} W / ${m.losses} L${m.scratch?` / ${m.scratch} BE`:''}</div></div>
    <div class="card"><div class="k">Profit Factor</div>
-     <div class="v ${m.pf>=1?'pos':'neg'}">${m.pf===Infinity?'∞':m.pf.toFixed(2)}</div>
-     <div class="sub">${usd(m.gp)} / ${usd(Math.abs(m.gl),false)}</div></div>
+     <div class="v ${c.pf>=1?'pos':'neg'}">${c.pf===Infinity?'∞':c.pf.toFixed(2)}</div>
+     <div class="sub">${usd(c.pfGP)} / ${usd(Math.abs(c.pfGL),false)} · net of comm</div></div>
    <div class="card"><div class="k">Avg Win/Loss</div>
      <div class="v">${m.wl===Infinity?'∞':m.wl.toFixed(2)}</div>
      <div class="sub"><span class="pos">${usd(m.avgW)}</span> / <span class="neg">${usd(m.avgL)}</span></div></div>
@@ -354,13 +465,14 @@ function isoWeek(d){ const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.ge
 /* ---------- render: advanced ---------- */
 function renderAdv(m){
   const na='<span class="av na">—</span>';
+  const c=costModel(m);
   const rows=[
     ['head','Performance Metrics'],
     ['Avg Daily PnL', `<span class="av ${cls(m.avgDaily)}">${usd(m.avgDaily)}</span>`],
     ['Best Trade', `<span class="av pos">${usd(m.best)}</span>`],
     ['Worst Trade', `<span class="av neg">${usd(m.worst)}</span>`],
     ['Winning Days', `<span class="av">${m.winDayPct.toFixed(1)}%</span>`],
-    ['Total Commissions', `<span class="av na">$0.00</span>`],
+    ['Total Commissions', `<span class="av ${c.totalComm?'neg':'na'}">${usd(-c.totalComm)}</span>`],
     ['Sharpe (daily)', `<span class="av">${isNaN(m.sharpe)?'—':m.sharpe.toFixed(2)}</span>`],
     ['head','Trading Patterns'],
     ['Avg Trades/Day', `<span class="av">${m.avgTrades.toFixed(1)}</span>`],
@@ -376,6 +488,32 @@ function renderAdv(m){
   document.getElementById('adv').innerHTML=rows.map(([a,b])=>
     a==='head'?`<div class="subhead">${b}</div>`
     :`<div class="arow"><span class="al">${a}</span>${b}</div>`).join('');
+}
+
+/* ---------- break-even / cost budget (CSV-driven) ---------- */
+function renderCalc(){
+  if(typeof METRICS==='undefined' || !METRICS || !METRICS.n) return;
+  const m=METRICS, c=costModel(m);
+  const money=v=>(v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const bePer= c.n>0 ? (c.totalComm+c.fixedPeriod)/c.n : 0;
+
+  document.getElementById('c_state_out').textContent = stateRate().toFixed(2)+'%';
+  document.getElementById('c_blend_out').textContent = (c.tEff*100).toFixed(1)+'%';
+
+  document.getElementById('c_head').innerHTML=
+    `<div class="k">Net P&L after costs &middot; this sample</div>
+     <div class="v ${cls(c.netPreTax)}">${money(c.netPreTax)}</div>
+     <div class="sub">${c.n} trades over ${c.spanDays} day${c.spanDays===1?'':'s'} &middot; gross ${money(c.gross)}</div>
+     <div class="tax">After 1256 tax (${(c.tEff*100).toFixed(1)}%): ${money(c.afterTax)} &nbsp;&middot;&nbsp; break-even ${money(bePer)}/trade</div>`;
+
+  const row=(l,v,cl='')=>`<div class="crow ${cl}"><span class="cl">${l}</span><span class="cv">${v}</span></div>`;
+  document.getElementById('c_rows').innerHTML=
+     row('Gross P&L', `<span class="${cls(c.gross)}">${money(c.gross)}</span>`)
+    +row('Commissions ('+c.n+' &times; '+money(c.rt)+' RT)', `<span class="neg">${money(-c.totalComm)}</span>`)
+    +row('Subscriptions ('+money(c.fixedMo)+'/mo &times; '+c.spanDays+'/30.4)', `<span class="neg">${money(-c.fixedPeriod)}</span>`)
+    +row('Net P&L (pre-tax)', `<span class="${cls(c.netPreTax)}">${money(c.netPreTax)}</span>`,'tot')
+    +row('Est. 1256 tax', `<span class="neg">${money(-c.tax)}</span>`)
+    +row('After-tax take-home', `<span class="${cls(c.afterTax)}">${money(c.afterTax)}</span>`,'tot');
 }
 
 /* ---------- driver ---------- */
@@ -394,6 +532,7 @@ function load(text,name){
       +'Export your balance history from TradingView (or another platform) as CSV, then use <b>Load CSV</b> above.<br>'
       +'<span style="font-size:12px;color:var(--faint)">Expected columns: Time · Realized PnL (value) · Action. Nothing is uploaded — parsing happens entirely in your browser.</span>'
       +'</div>';
+    renderCalc();
     return;
   }
   setDashVisible(true);
@@ -404,11 +543,67 @@ function load(text,name){
   // default calendar to most recent month with data
   const [yy,mm]=METRICS.lastDate.split('-').map(Number);
   calYear=yy; calMonth=mm-1; renderCalendar();
+  renderCalc();
 }
 document.getElementById('prev').onclick=()=>{ if(!METRICS)return; if(--calMonth<0){calMonth=11;calYear--;} renderCalendar(); };
 document.getElementById('next').onclick=()=>{ if(!METRICS)return; if(++calMonth>11){calMonth=0;calYear++;} renderCalendar(); };
 document.getElementById('file').onchange=e=>{ const f=e.target.files[0]; if(!f)return;
   const r=new FileReader(); r.onload=()=>load(r.result,f.name); r.readAsText(f); };
+
+/* ---------- calculator data: AMP / CQG data feeds + state tax rates ---------- */
+const FEEDS={
+  'CME — Market-Depth (L2)':[
+    ['Bundle — All CME markets',45],['CME — Equity Indices, Currencies, Meats, Softs',17],
+    ['CBOT — Financials, Grains',17],['NYMEX — Energies',17],['COMEX — Metals',17]],
+  'CME — Top-of-Book (L1)':[
+    ['Bundle — All CME markets',15],['CME — Equity Indices, Currencies, Meats, Softs',5],
+    ['CBOT — Financials, Grains',5],['NYMEX — Energies',5],['COMEX — Metals',5]],
+  'ICE':[['ICE-US — TF, DX',148],['ICE-LIFFE — FTSE, Gilt, Short Sterling',139],['ICE-UK — Energies',161]],
+  'EUREX':[['EUREX | non-pro (24.00 EUR)',24]],
+  'Foreign (Non-US)':[['Osaka — Japan (JPX)',32],['Singapore (SGX)',81],
+    ['Sydney (SFE)',32],['Euronext — CAC-40',65],['Hong Kong (HKEX)',18]],
+  'CFE / CBOE':[['Mini VIX (VXM) | non-pro',15]],
+  'Cash Index':[['$SP500',18],['$DOW, ^TICK, ^TRIN, Internals',13],['NASDAQ Indexes',19]],
+  'Other':[['None',0]]
+};
+const FEED_DEFAULT='CME — Equity Indices, Currencies, Meats, Softs|5';   // CME L1 = $5
+const STATES=[
+  ['AL',5.0,'Alabama'],['AK',0,'Alaska — no income tax'],['AZ',2.5,'Arizona'],
+  ['AR',3.9,'Arkansas'],['CA',13.3,'California'],['CO',4.4,'Colorado'],['CT',6.99,'Connecticut'],
+  ['DE',6.6,'Delaware'],['DC',10.75,'District of Columbia'],['FL',0,'Florida — no income tax'],
+  ['GA',5.19,'Georgia'],['HI',11.0,'Hawaii'],['ID',5.695,'Idaho'],['IL',4.95,'Illinois'],
+  ['IN',3.0,'Indiana'],['IA',3.8,'Iowa'],['KS',5.58,'Kansas'],['KY',3.5,'Kentucky'],
+  ['LA',3.0,'Louisiana'],['ME',7.15,'Maine'],['MD',5.75,'Maryland'],['MA',5.0,'Massachusetts'],
+  ['MI',4.25,'Michigan'],['MN',9.85,'Minnesota'],['MS',4.0,'Mississippi'],['MO',4.7,'Missouri'],
+  ['MT',5.65,'Montana'],['NE',4.55,'Nebraska'],['NV',0,'Nevada — no income tax'],
+  ['NH',0,'New Hampshire — no wage tax'],['NJ',10.75,'New Jersey'],['NM',5.9,'New Mexico'],
+  ['NY',10.9,'New York'],['NC',3.99,'North Carolina'],['ND',2.5,'North Dakota'],['OH',3.5,'Ohio'],
+  ['OK',4.75,'Oklahoma'],['OR',9.9,'Oregon'],['PA',3.07,'Pennsylvania'],['RI',5.99,'Rhode Island'],
+  ['SC',6.2,'South Carolina'],['SD',0,'South Dakota — no income tax'],['TN',0,'Tennessee — no income tax'],
+  ['TX',0,'Texas — no income tax'],['UT',4.5,'Utah'],['VT',8.75,'Vermont'],['VA',5.75,'Virginia'],
+  ['WA',0,'Washington — no tax on futures'],['WV',4.82,'West Virginia'],['WI',7.65,'Wisconsin'],
+  ['WY',0,'Wyoming — no income tax']
+];
+function recalc(){ if(typeof METRICS!=='undefined' && METRICS && METRICS.n){ renderCards(METRICS); renderAdv(METRICS); renderCalc(); } }
+function initCalc(){
+  const fSel=document.getElementById('c_feed');
+  let h='';
+  for(const grp in FEEDS){
+    h+=`<optgroup label="${grp}">`;
+    for(const [name,cost] of FEEDS[grp])
+      h+=`<option value="${name}|${cost}" data-cost="${cost}">${name} — $${cost}</option>`;
+    h+='</optgroup>';
+  }
+  fSel.innerHTML=h; fSel.value=FEED_DEFAULT;
+  fSel.addEventListener('change',recalc);
+  const sSel=document.getElementById('c_state_sel');
+  sSel.innerHTML=STATES.slice().sort((a,b)=>a[2]<b[2]?-1:1)
+    .map(([a,r,n])=>`<option value="${a}" data-rate="${r}">${n}</option>`).join('');
+  sSel.value='AR';
+  sSel.addEventListener('change',recalc);
+  ['c_tv','c_comm'].forEach(id=>document.getElementById(id).addEventListener('input',recalc));
+}
+initCalc();
 
 load(DEFAULT_CSV,'paper-trading balance history (sample)');
 </script>
