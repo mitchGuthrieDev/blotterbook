@@ -38,11 +38,27 @@
     transition:border-color .15s,background .15s}
   .btn:hover,label.loader:hover{border-color:var(--accent);background:var(--panel2)}
   label.loader input{display:none}
-  label.loader.disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
+  .btn.disabled,.btn:disabled,label.loader.disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
+
+  /* visibility driven by load state (body.loaded) */
+  body:not(.loaded) #loadlbl,
+  body:not(.loaded) #exportBtn,
+  body:not(.loaded) #setuphead{display:none}
+  body.loaded #demoBtn,
+  body.loaded #setupLoad,
+  body.loaded .setup .hintline{display:none}
 
   /* ---- setup bar (broker / feed / platform fee / state — chosen before load) ---- */
-  .setup{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;background:var(--panel);
-    border:1px solid var(--line);border-radius:10px;padding:13px 14px;margin-bottom:14px}
+  .setup{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:13px 14px;margin-bottom:14px}
+  .setuphead{display:flex;align-items:center;gap:10px;margin-bottom:12px;user-select:none;cursor:pointer}
+  .setuphead h2{flex:1;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin:0;font-weight:600}
+  .setuphead .chev{background:none;border:none;color:var(--dim);cursor:pointer;font-size:12px;
+    padding:2px 5px;transition:transform .15s;line-height:1}
+  .setup.collapsed .setupbody{display:none}
+  .setup.collapsed .setuphead{margin-bottom:0}
+  .setup.collapsed .setuphead .chev{transform:rotate(-90deg)}
+  .setupgrid{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
   .setup .fld{display:flex;flex-direction:column;gap:5px;min-width:0}
   .setup .fld label{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
   .setup select,.setup input{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
@@ -52,7 +68,8 @@
   .setup .fld.feed{min-width:230px;flex:1}
   .setup .fld.state{min-width:170px}
   .setup input#c_tv{width:96px;text-align:right}
-  .setup .hintline{flex-basis:100%;font-size:11px;color:var(--faint);margin-top:2px}
+  .setup .hintline{font-size:11px;color:var(--faint);margin-top:10px}
+  .setup .loadbtn{margin-top:12px}
 
   /* ---- scope toggle ---- */
   .scoperow{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
@@ -228,8 +245,8 @@
   @media print{
     @page{margin:12mm}
     body{-webkit-print-color-adjust:exact;print-color-adjust:exact;overflow:visible}
-    .topbtns,.scope,.phead .grip,.phead .chev,.curvebar,.calnav,.setup .hintline,.curvetip{display:none !important}
-    .panel.collapsed .pbody{display:block !important}
+    .topbtns,.scope,.phead .grip,.phead .chev,.curvebar,.calnav,.setup .hintline,.setuphead .chev,.curvetip{display:none !important}
+    .panel.collapsed .pbody,.setup.collapsed .setupbody{display:block !important}
     .panel{break-inside:avoid;margin-top:10px}
     .calscroll{overflow:visible !important}
   }
@@ -258,17 +275,26 @@
     </div>
   </div>
 
-  <!-- ============ setup controls (used before and after load) ============ -->
-  <div class="setup">
-    <div class="fld broker"><label for="c_broker">Broker</label>
-      <select id="c_broker"></select></div>
-    <div class="fld feed"><label for="c_feed">Data feed (monthly)</label>
-      <select id="c_feed"></select></div>
-    <div class="fld"><label for="c_tv">Platform fee /mo</label>
-      <input id="c_tv" type="number" step="1" min="0" value="35"></div>
-    <div class="fld state"><label for="c_state_sel">State (tax)</label>
-      <select id="c_state_sel"></select></div>
-    <div class="hintline">Choose a broker, data feed, and state to enable <b>Load CSV</b>. Commission and feed rates follow the broker. Demo uses default selections.</div>
+  <!-- ============ setup controls (used before and after load; collapsible once loaded) ============ -->
+  <div class="setup" id="setup">
+    <div class="setuphead" id="setuphead">
+      <h2>Setup — Broker &amp; Costs</h2>
+      <button class="chev" aria-label="Collapse setup">&#9662;</button>
+    </div>
+    <div class="setupbody">
+      <div class="setupgrid">
+        <div class="fld broker"><label for="c_broker">Broker</label>
+          <select id="c_broker"></select></div>
+        <div class="fld feed"><label for="c_feed">Data feed (monthly)</label>
+          <select id="c_feed"></select></div>
+        <div class="fld"><label for="c_tv">Platform fee /mo</label>
+          <input id="c_tv" type="number" step="1" min="0" value="35"></div>
+        <div class="fld state"><label for="c_state_sel">State (tax)</label>
+          <select id="c_state_sel"></select></div>
+      </div>
+      <div class="hintline">Choose a broker, data feed, and state to enable <b>Load CSV</b>, then load your file below. Commission and feed rates follow the broker. Or click <b>Demo</b> to explore with sample data.</div>
+      <button class="btn loadbtn disabled" id="setupLoad" title="Select broker, data feed, and state first" disabled>Load CSV</button>
+    </div>
   </div>
 
   <!-- ============ scope toggle ============ -->
@@ -900,6 +926,8 @@ function setScope(s){
 function setDashVisible(v){
   document.getElementById('dash').style.display = v?'':'none';
   document.getElementById('scoperow').style.display = v?'':'none';
+  document.body.classList.toggle('loaded', v);          // drives top-bar / setup visibility
+  if(v) document.getElementById('setup').classList.remove('collapsed');   // expand on fresh load
 }
 function showEmpty(){
   document.getElementById('cards').innerHTML=
@@ -1000,9 +1028,12 @@ function updateGate(){
   const ok = !!(document.getElementById('c_broker').value
             && document.getElementById('c_feed').value
             && document.getElementById('c_state_sel').value);
-  const inp=document.getElementById('file'), lbl=document.getElementById('loadlbl');
-  inp.disabled=!ok; lbl.classList.toggle('disabled',!ok);
-  lbl.title = ok? 'Load a balance-history CSV' : 'Select broker, data feed, and state first';
+  const inp=document.getElementById('file'), lbl=document.getElementById('loadlbl'),
+        sbtn=document.getElementById('setupLoad');
+  const title = ok? 'Load a balance-history CSV' : 'Select broker, data feed, and state first';
+  inp.disabled=!ok;
+  lbl.classList.toggle('disabled',!ok); lbl.title=title;
+  sbtn.disabled=!ok; sbtn.classList.toggle('disabled',!ok); sbtn.title=title;
 }
 function recalc(){ if(METRICS_ALL) renderDash(); }
 function initSetup(){
@@ -1080,6 +1111,8 @@ document.getElementById('file').onchange=e=>{ const f=e.target.files[0]; if(!f)r
 document.querySelectorAll('#scope button').forEach(b=>b.onclick=()=>setScope(b.dataset.s));
 document.getElementById('demoBtn').onclick=runDemo;
 document.getElementById('exportBtn').onclick=()=>window.print();
+document.getElementById('setupLoad').onclick=()=>document.getElementById('file').click();
+document.getElementById('setuphead').onclick=()=>document.getElementById('setup').classList.toggle('collapsed');
 document.getElementById('brand').onclick=resetApp;
 ['cs_gross','cs_net','cs_take'].forEach(id=>document.getElementById(id).addEventListener('change',e=>{
   curveSel[id.slice(3)]=e.target.checked; if(METRICS_ALL) renderCurve(activeMetrics());
