@@ -261,9 +261,25 @@ function dailySeries(m){
   }
   return {pts,subs,tEff};
 }
+/* "nice" axis ticks spanning [min,max] with ~count steps, always including 0. */
+function niceTicks(min,max,count){
+  const span=(max-min)||1;
+  const rawStep=span/Math.max(1,count);
+  const mag=Math.pow(10,Math.floor(Math.log10(rawStep)));
+  const norm=rawStep/mag;
+  const step=(norm<1.5?1:norm<3?2:norm<7?5:10)*mag;
+  const lo=Math.floor(min/step)*step, hi=Math.ceil(max/step)*step;
+  const ticks=[]; for(let v=lo; v<=hi+step*1e-6; v+=step) ticks.push(+v.toFixed(6));
+  return ticks;
+}
+/* compact money for axis labels: $1.2k / $850 / -$3.4k */
+function axMoney(v){ const a=Math.abs(v), s=v<0?'-':'';
+  if(a>=1000) return s+'$'+(a/1000).toFixed(a>=10000?0:1)+'k';
+  return s+'$'+Math.round(a); }
+
 function renderCurve(m){
   const svg=document.getElementById('curve'), tip=document.getElementById('curvetip');
-  const W=1000,H=230,padL=58,padR=16,padT=14,padB=42;
+  const W=1000,H=260,padL=62,padR=20,padT=18,padB=46;
   if(!m || !m.n){ svg.innerHTML=''; if(tip)tip.style.display='none'; return; }
 
   const [rd0,rd1]=dateRange(m);
@@ -275,36 +291,51 @@ function renderCurve(m){
   if(curveSel.gross) series.push({key:'gross',color:'var(--green)',label:'Gross'});
   if(curveSel.net)   series.push({key:'net',  color:'var(--accent)',label:'Net'});
   if(curveSel.take)  series.push({key:'take', color:'var(--take)',  label:'Take-home'});
-  if(!series.length) series.push({key:'gross',color:'var(--green)',label:'Gross'});
+  if(!series.length) series.push({key:'gross',color:'var(--green)',label:'Gross'}); // defensive
 
   let vals=[0];
   for(const p of disp) for(const s of series) vals.push(p[s.key]);
   let min=Math.min(...vals), max=Math.max(...vals); if(min===max){min-=1;max+=1;}
+  // expand the domain out to nice round tick bounds so the plot is framed cleanly
+  const yticks=niceTicks(min,max,5);
+  min=Math.min(min,yticks[0]); max=Math.max(max,yticks[yticks.length-1]);
 
   const xMs=ms=> padL+((ms-d0ms)/(d1ms-d0ms))*(W-padL-padR);
   const xOf=p=> xMs(new Date(p.date+'T00:00:00').getTime());
   const yPx=v=> padT+(1-(v-min)/((max-min)||1))*(H-padT-padB);
+  const zeroY=yPx(0);
 
-  // y gridlines (min, 0, max)
-  const yticks=[max,0,min].filter((v,i,a)=>a.indexOf(v)===i);
-  let grid=yticks.map(v=>`<line class="grid" x1="${padL}" x2="${W-padR}" y1="${yPx(v)}" y2="${yPx(v)}"/>
-     <text x="${padL-8}" y="${yPx(v)+3}" text-anchor="end">${usd(v,false)}</text>`).join('');
-  // x ticks (start, mid, end)
-  const xticks=[d0ms,(d0ms+d1ms)/2,d1ms];
-  grid+=xticks.map(ms=>{ const d=new Date(ms);
-    return `<text x="${xMs(ms)}" y="${H-padB+15}" text-anchor="middle">${pad2(d.getMonth()+1)}-${pad2(d.getDate())}</text>`;}).join('');
+  // horizontal gridlines + y labels
+  let grid=yticks.map(v=>{ const y=yPx(v);
+    return `<line class="grid" x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}"/>
+      <text x="${padL-9}" y="${y+3.5}" text-anchor="end">${axMoney(v)}</text>`;}).join('');
+  // vertical gridlines + date labels (5 ticks across the range)
+  const xticks=[0,1,2,3,4].map(i=>d0ms+(d1ms-d0ms)*i/4);
+  grid+=xticks.map((ms,i)=>{ const d=new Date(ms), x=xMs(ms);
+    const vline=(i>0&&i<4)?`<line class="vgrid" x1="${x}" x2="${x}" y1="${padT}" y2="${H-padB}"/>`:'';
+    return vline+`<text x="${x}" y="${H-padB+16}" text-anchor="middle">${pad2(d.getMonth()+1)}/${pad2(d.getDate())}</text>`;}).join('');
 
-  // gross drawdown band
+  // gradient area fill under the primary (first) series
+  const prim=series[0];
+  const areaPts=disp.map(p=>xOf(p)+','+yPx(p[prim.key])).join(' L ');
+  const x0=xOf(disp[0]), xN=xOf(disp[disp.length-1]);
+  const defs=`<defs><linearGradient id="cgrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color:${prim.color};stop-opacity:.26"/>
+      <stop offset="1" style="stop-color:${prim.color};stop-opacity:0"/></linearGradient></defs>`;
+  const area=`<path d="M${areaPts} L ${xN},${H-padB} L ${x0},${H-padB} Z" fill="url(#cgrad)"/>`;
+
+  // drawdown band only when focused on gross alone (keeps multi-overlay views clean)
   let band='';
-  if(curveSel.gross || series[0].key==='gross'){
+  if(curveSel.gross && series.length===1){
     let peak=-Infinity; const top=[],bot=[];
     for(const p of disp){ peak=Math.max(peak,p.gross); top.push([xOf(p),yPx(peak)]); bot.push([xOf(p),yPx(p.gross)]); }
     band=`<path class="ddband" d="M${top.map(p=>p.join(',')).join(' L ')} L ${bot.reverse().map(p=>p.join(',')).join(' L ')} Z"/>`;
   }
-  const zeroY=yPx(0);
-  const lines=series.map(s=>`<path d="M${disp.map(p=>xOf(p)+','+yPx(p[s.key])).join(' L ')}" fill="none" stroke="${s.color}" stroke-width="1.6"/>`).join('');
+  const lines=series.map(s=>`<path d="M${disp.map(p=>xOf(p)+','+yPx(p[s.key])).join(' L ')}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`).join('');
+  const endDots=series.map(s=>{ const last=disp[disp.length-1];
+    return `<circle cx="${xN}" cy="${yPx(last[s.key])}" r="3.2" fill="${s.color}"/>`;}).join('');
   const endLabels=series.map(s=>{ const last=disp[disp.length-1];
-    return `<text x="${W-padR}" y="${yPx(last[s.key])-5}" text-anchor="end" style="fill:${s.color}">${usd(last[s.key])}</text>`;}).join('');
+    return `<text x="${W-padR}" y="${yPx(last[s.key])-7}" text-anchor="end" style="fill:${s.color};font-weight:600">${usd(last[s.key])}</text>`;}).join('');
 
   // selected-date marker
   let sel='';
@@ -317,12 +348,12 @@ function renderCurve(m){
   }
   // axis titles
   const axis=`<text class="axt" x="${padL+(W-padL-padR)/2}" y="${H-4}" text-anchor="middle">Date</text>
-    <text class="axt" transform="rotate(-90)" x="${-(padT+(H-padB)/2)}" y="14" text-anchor="middle">Cumulative PnL ($)</text>`;
+    <text class="axt" transform="rotate(-90)" x="${-(padT+(H-padB)/2)}" y="15" text-anchor="middle">Cumulative PnL ($)</text>`;
 
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
-  svg.innerHTML=grid+band
+  svg.innerHTML=defs+grid+area+band
     +`<line class="zero" x1="${padL}" x2="${W-padR}" y1="${zeroY}" y2="${zeroY}"/>`
-    +lines+endLabels+sel+axis;
+    +lines+endDots+endLabels+sel+axis;
 
   // hover guide
   const g=document.createElementNS(SVGNS,'g'); g.style.display='none';
@@ -610,7 +641,8 @@ function runDemo(){
   // demo data is in-memory only — it never touches local storage
   DEMO_MODE=true;
   TRADES=toTrades(demoCSV());
-  renderLoaded('demo dataset (generated)', `<b>${TRADES.length}</b> trades &nbsp;·&nbsp; not saved · demo`);
+  // no source label on the demo (the DEMO badge already says it); just the meta
+  renderLoaded('', `<b>${TRADES.length}</b> trades &nbsp;·&nbsp; sample data, not saved`);
 }
 
 /* ============================================================
@@ -876,6 +908,26 @@ function exportReport(){
     +stat('Max consecutive W / L', `${m.mcw} / ${m.mcl}`)
     +stat('Sharpe (daily, illustrative)', isNaN(m.sharpe)?'—':m.sharpe.toFixed(2));
 
+  // plaintext summary for the "Email a copy" mailto (attachments aren't possible via mailto)
+  const reportText=
+     `Blotterbook — Performance Report\n`
+    +`Period: ${range} (${scopeLabel()})\n`
+    +`Generated: ${fmtDate(gen)} ${pad2(gen.getHours())}:${pad2(gen.getMinutes())}\n`
+    +`Broker: ${BROKERS[c.broker]?BROKERS[c.broker].name:c.broker} · Feed: ${feedName()} · State: ${stateLabel()}\n\n`
+    +`Net P&L (pre-tax): ${money(c.netPreTax)}\n`
+    +`Take-home (post-tax): ${money(c.afterTax)}\n`
+    +`Gross P&L: ${money(c.gross)}\n`
+    +`Win rate: ${(m.n?100*m.wins/m.n:0).toFixed(1)}%\n`
+    +`Profit factor: ${c.pf===Infinity?'∞':c.pf.toFixed(2)}\n`
+    +`Max drawdown: ${money(-m.maxDD)}\n`
+    +`Trades: ${m.n} · Active days: ${m.active}\n\n`
+    +`Commissions: ${money(c.totalComm)} · Subscriptions: ${money(c.fixedPeriod)} · Est. 1256 tax: ${money(c.tax)}\n`
+    +`Break-even / trade: ${money(bePer)}\n\n`
+    +`Estimates only — not financial or tax advice. A formatted copy can be downloaded from the report page.`;
+  const fname=`blotterbook-report-${fmtDate(gen)}.html`;
+  const mailto='mailto:?subject='+encodeURIComponent(`Blotterbook Performance Report — ${range}`)
+    +'&body='+encodeURIComponent(reportText);
+
   const html=`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <title>Blotterbook — Performance Report</title>
 <style>
@@ -919,7 +971,8 @@ function exportReport(){
   @media print{.bar{display:none}.sheet{padding:0 6mm}@page{margin:12mm}}
 </style></head><body>
   <div class="bar">
-    <button onclick="window.print()" class="pri">Print / Save as PDF</button>
+    <button onclick="dlReport()" class="pri">Download</button>
+    <button onclick="emailReport()">Email a copy</button>
     <button onclick="window.close()">Close</button>
   </div>
   <div class="sheet">
@@ -962,7 +1015,20 @@ function exportReport(){
       modeled, not statements of record. Max drawdown is realized, closed-trade only. Not financial or tax advice.
     </div>
   </div>
-  <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},250);});<\/script>
+  <script id="rscript">
+    var RFNAME=${JSON.stringify(fname)}, RMAILTO=${JSON.stringify(mailto)};
+    function dlReport(){
+      var clone=document.documentElement.cloneNode(true);
+      var b=clone.querySelector('.bar'); if(b) b.remove();
+      var s=clone.querySelector('#rscript'); if(s) s.remove();
+      var html='<!DOCTYPE html>\\n'+clone.outerHTML;
+      var a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));
+      a.download=RFNAME; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){URL.revokeObjectURL(a.href);},1500);
+    }
+    function emailReport(){ window.location.href=RMAILTO; }
+  <\/script>
 </body></html>`;
 
   const w=window.open('', '_blank');
@@ -982,30 +1048,34 @@ function openDataManager(){
 }
 function closeDataManager(){ const ov=$('dataModal'); if(ov) ov.classList.remove('open'); document.body.style.overflow=''; }
 
+const esc=s=>(s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 async function renderDataManager(){
-  const trades=await Store.getAllTrades();
-  const notes=await Store.getAllJournal();
+  // each section renders independently so one failure can't blank the rest
+  let trades=[], notes=[];
+  try{ trades=await Store.getAllTrades(); }catch(e){ console.error('getAllTrades', e); }
+  try{ notes=await Store.getAllJournal(); }catch(e){ console.error('getAllJournal', e); }
+
+  // Overview
   const range = trades.length ? `${trades[0].date} → ${trades[trades.length-1].date}` : '—';
-  let bytes=0; try{ bytes=new Blob([JSON.stringify(await Store.exportAll())]).size; }catch(_){}
-  const kb = bytes? (bytes/1024).toFixed(1)+' KB' : '—';
-  $('dm_summary').innerHTML=
+  let kb='—'; try{ kb=(new Blob([JSON.stringify(await Store.exportAll())]).size/1024).toFixed(1)+' KB'; }catch(e){ console.error('size', e); }
+  if($('dm_summary')) $('dm_summary').innerHTML=
      `<div class="dmstat"><div class="dk">Trades</div><div class="dv">${trades.length}</div></div>`
     +`<div class="dmstat"><div class="dk">Date range</div><div class="dv mono">${range}</div></div>`
     +`<div class="dmstat"><div class="dk">Day notes</div><div class="dv">${notes.length}</div></div>`
     +`<div class="dmstat"><div class="dk">Local size</div><div class="dv mono">${kb}</div></div>`;
 
   // Notes
-  $('dm_notes').innerHTML = notes.length
+  if($('dm_notes')) $('dm_notes').innerHTML = notes.length
     ? notes.map(j=>`<div class="dmrow"><span class="mono dmdate">${j.date}</span>
-        <span class="dmnote">${(j.text||'').replace(/[<>&]/g,s=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[s])).slice(0,120)}</span>
+        <span class="dmnote">${esc(j.text).slice(0,120)}</span>
         <button class="dmdel" data-note="${j.date}" title="Delete this note">Delete</button></div>`).join('')
     : '<div class="dmempty">No day notes saved.</div>';
 
   // Trades (filterable)
   const q=DM_SEARCH.trim().toLowerCase();
   const shown=q? trades.filter(t=>t.root.toLowerCase().includes(q)||t.date.includes(q)||(t.side||'').includes(q)) : trades;
-  $('dm_tcount').textContent = q? `${shown.length} / ${trades.length}` : `${trades.length}`;
-  $('dm_trades').innerHTML = shown.length
+  if($('dm_tcount')) $('dm_tcount').textContent = q? `${shown.length} / ${trades.length}` : `${trades.length}`;
+  if($('dm_trades')) $('dm_trades').innerHTML = shown.length
     ? shown.slice().reverse().map(t=>`<tr><td class="mono">${t.date}</td><td>${t.root}</td>
         <td>${t.side||'—'}</td><td class="num mono ${cls(t.pnl)}">${usd(t.pnl)}</td>
         <td><button class="dmdel" data-trade="${Store.tradeId(t)}" title="Delete this trade">Delete</button></td></tr>`).join('')
@@ -1024,8 +1094,10 @@ async function dmDeleteNote(date){
   await renderDataManager();
 }
 async function dmExport(){
-  const data=await Store.exportAll();
-  downloadFile(`blotterbook-backup-${fmtDate(new Date())}.json`, JSON.stringify(data,null,2));
+  try{
+    const data=await Store.exportAll();
+    downloadFile(`blotterbook-backup-${fmtDate(new Date())}.json`, JSON.stringify(data,null,2));
+  }catch(e){ console.error('backup export failed', e); alert('Could not create the backup file.'); }
 }
 async function dmImport(file){
   let data; try{ data=JSON.parse(await file.text()); }
@@ -1062,33 +1134,32 @@ $('prev').onclick=()=>{ if(!METRICS_ALL)return;
 $('next').onclick=()=>{ if(!METRICS_ALL)return;
   if(++calMonth>11){calMonth=0;calYear++;} renderCalendar(); if(SCOPE==='month') renderDash(); };
 on('file','change',e=>{ const f=e.target.files[0]; if(!f)return;
-  const r=new FileReader(); r.onload=()=>importCSV(r.result,f.name); r.readAsText(f);
-  e.target.value=''; });   // allow re-selecting the same file
+  const r=new FileReader(); r.onload=async()=>{ await importCSV(r.result,f.name);
+    // if the data manager is open (Load CSV came from there), refresh its lists
+    if($('dataModal') && $('dataModal').classList.contains('open')) renderDataManager();
+  };
+  r.readAsText(f); e.target.value=''; });   // allow re-selecting the same file
 document.querySelectorAll('#scope button').forEach(b=>b.onclick=()=>setScope(b.dataset.s));
 
-/* Demo lives on its own page (demo.html). On the main app the Demo button
-   opens it in a new tab; on the demo page an "End demo" button returns here. */
-on('demoBtn','click',()=>window.open('demo.html','_blank','noopener'));
+/* The demo lives on its own page (demo.html), reached from the homepage.
+   On the demo page an "End demo" button returns to the homepage. */
 on('endDemoBtn','click',()=>{ try{ window.close(); }catch(_){}
-  // window.close() only works for script-opened tabs; navigate back as a fallback
-  setTimeout(()=>{ location.href='index.html'; }, 60); });
+  // window.close() only works for script-opened tabs; navigate to the homepage as a fallback
+  setTimeout(()=>{ location.href='../index.html'; }, 60); });
 
 on('exportBtn','click',exportReport);
-on('purgeBtn','click',async()=>{
-  if(!confirm('Erase all trades and day-notes saved in this browser? This cannot be undone.')) return;
-  if(Store.available()) await Store.purge();
-  JOURNAL_DATES=new Set(); DEMO_MODE=false;
-  resetApp();
-});
 on('manageBtn','click',openDataManager);
 on('setupLoad','click',()=>$('file').click());
 on('setuphead','click',()=>$('setup').classList.toggle('collapsed'));
-// The loaded-CSV source text acts like the Load CSV button.
-on('srcname','click',()=>{ const f=$('file'); if(f && !f.disabled) f.click(); });
+// The loaded-source text opens the data manager (only once data is loaded).
+on('srcname','click',()=>{ if($('dataModal') && document.body.classList.contains('loaded')) openDataManager(); });
 
-// Performance overlays are toggle buttons (highlighted when active).
+// Performance overlays are toggle buttons — at least one must stay selected.
 document.querySelectorAll('.curvebtn').forEach(btn=>btn.addEventListener('click',()=>{
-  const k=btn.dataset.k; curveSel[k]=!curveSel[k];
+  const k=btn.dataset.k;
+  const selected=Object.keys(curveSel).filter(x=>curveSel[x]);
+  if(curveSel[k] && selected.length===1) return;   // can't deselect the last overlay
+  curveSel[k]=!curveSel[k];
   btn.classList.toggle('on',curveSel[k]);
   if(METRICS_ALL) renderCurve(activeMetrics());
 }));
@@ -1103,6 +1174,7 @@ if($('dataModal')){
   on('dm_close','click',closeDataManager);
   $('dataModal').addEventListener('click',e=>{ if(e.target.id==='dataModal') closeDataManager(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDataManager(); });
+  on('dm_load','click',()=>$('file').click());
   on('dm_export','click',dmExport);
   on('dm_importBtn','click',()=>$('dm_importFile').click());
   on('dm_importFile','change',e=>{ const f=e.target.files[0]; if(f) dmImport(f); e.target.value=''; });

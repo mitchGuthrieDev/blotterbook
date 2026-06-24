@@ -132,7 +132,8 @@
 
   /* ============ pricing ============ */
   .price-grid{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:16px;margin-top:34px;align-items:stretch}
-  @media(max-width:880px){.price-grid{grid-template-columns:1fr}}
+  .price-grid.two{grid-template-columns:1fr 1fr;max-width:760px;margin-left:auto;margin-right:auto}
+  @media(max-width:880px){.price-grid,.price-grid.two{grid-template-columns:1fr}}
   .plan{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px;
     display:flex;flex-direction:column}
   .plan.featured{border-color:rgba(106,160,255,.5);
@@ -156,11 +157,6 @@
     padding:4px 10px;border-radius:6px;margin-bottom:14px}
   .donate-row{margin:6px 0 16px}
   #donate-button-container{min-height:42px}
-  .founders{margin-top:26px;background:var(--panel);border:1px solid rgba(201,139,255,.32);
-    border-radius:12px;padding:18px 20px;display:flex;gap:14px;align-items:flex-start;max-width:760px}
-  .founders .star{flex:none;width:22px;height:22px;stroke:var(--take);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;margin-top:1px}
-  .founders p{margin:0;font-size:13.5px;color:var(--dim);line-height:1.6}
-  .founders b{color:var(--txt)}
 
   /* ============ FAQ ============ */
   .faq-list{margin-top:30px;max-width:840px;border-top:1px solid var(--line)}
@@ -201,7 +197,7 @@
       <a href="changelog.html">Changelog</a>
     </div>
     <div class="navcta">
-      <a class="btn-primary" href="/app/">Open App &rarr;</a>
+      <a class="btn-primary" href="/app/">Launch Blotterbook &rarr;</a>
     </div>
   </nav>
 </header>
@@ -216,8 +212,8 @@
     <p class="tag">A fast, private futures trading journal and true-cost dashboard.
       Import your broker CSV and see real, after-cost, after-tax performance — everything runs in your browser.</p>
     <div class="hero-ctas">
-      <a class="cta-lg" href="/app/">Open the App &rarr;</a>
-      <a class="cta-ghost" href="#features">See what it does</a>
+      <a class="cta-lg" href="/app/">Launch Blotterbook &rarr;</a>
+      <a class="cta-ghost" href="/app/demo.html">See Demo</a>
     </div>
     <div class="hero-strip">
       <div><b>Private by design</b>Your trades are parsed and stored locally. Nothing is uploaded.</div>
@@ -307,15 +303,15 @@
 <section id="pricing">
   <div class="inner reveal">
     <p class="eyebrow">Pricing</p>
-    <h2 class="h2">Donation-based today. Founder pricing forever.</h2>
-    <p class="lead">Blotterbook is free to use right now and supported by donations. If it saves you money, consider chipping in — early supporters lock in lifetime access to everything that comes next.</p>
-    <div class="price-grid">
+    <h2 class="h2">Free today. Free as long as it's CSV-driven.</h2>
+    <p class="lead">Blotterbook is free to use and kept going by donations. The app in its current form — CSV-driven and Cloudflare-hosted — stays free. A paid tier only arrives if and when we build direct connections to brokers and trading platforms; until then, there's nothing to buy.</p>
+    <div class="price-grid two">
 
       <div class="plan featured">
         <span class="ribbon">Available now</span>
-        <h3>Support Blotterbook</h3>
-        <p class="sub">Use the full app for free. Donate any amount to fund development.</p>
-        <div class="amt">Pay what you want</div>
+        <h3>Blotterbook</h3>
+        <p class="sub">The full app, free. Donate any amount if it saves you money and you want to fund development.</p>
+        <div class="amt">Free <small>· donations welcome</small></div>
         <div class="donate-row">
           <div id="donate-button-container"><div id="donate-button"></div></div>
         </div>
@@ -329,34 +325,16 @@
 
       <div class="plan soon">
         <span class="soon-badge">Planned</span>
-        <h3>Local app</h3>
-        <p class="sub">A self-contained offline build — your data stored and processed entirely on your machine.</p>
-        <div class="amt">$20 <small>one-time · lifetime</small></div>
-        <ul>
-          <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>Lifetime access, single download</li>
-          <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>Fully offline — no network needed</li>
-          <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>Manual rate updates (no live fetch)</li>
-        </ul>
-        <p class="foot-note">Coming later as a standalone app.</p>
-      </div>
-
-      <div class="plan soon">
-        <span class="soon-badge">Planned</span>
         <h3>Online app</h3>
-        <p class="sub">The hosted app you're using now, with commissions, fees, and rates fetched live.</p>
-        <div class="amt">$5 <small>/ month</small></div>
+        <p class="sub">A future tier that connects directly to your broker and trading platforms — no CSV exports.</p>
+        <div class="amt">$49 <small>/ month</small></div>
         <ul>
           <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>Always-current broker &amp; fee data</li>
           <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>Live data-feed and rate updates</li>
-          <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>CSV data still lives locally for now</li>
+          <li><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>Direct connection to brokers and trading platforms</li>
         </ul>
-        <p class="foot-note">Coming later as a subscription.</p>
+        <p class="foot-note">Only if and when direct-connect is built.</p>
       </div>
-    </div>
-
-    <div class="founders reveal">
-      <svg class="star" viewBox="0 0 24 24"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.2l5.9-.9z"/></svg>
-      <p><b>Founders get it all, free.</b> Anyone who donates while Blotterbook is in its donation phase is locked in as a founder — <b>lifetime access to both the online and local apps</b> when paid tiers launch. No subscription, no second purchase, ever.</p>
     </div>
   </div>
 </section>
@@ -398,7 +376,7 @@
       </details>
       <details>
         <summary><svg class="q-ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>What does it cost?</summary>
-        <p class="ans">It's free and donation-supported right now. Planned paid tiers are a $20 one-time lifetime local app and a $5/month online app — but anyone who donates during the donation phase becomes a founder with lifetime access to both, at no further cost.</p>
+        <p class="ans">It's free and donation-supported, and the current CSV-driven app stays free. The only planned paid tier is a future online app (around $49/month) that would connect directly to your broker and trading platforms instead of using CSV exports — and that only happens if and when direct-connect is built. Until then, there's nothing to buy.</p>
       </details>
     </div>
   </div>
@@ -413,7 +391,7 @@
       <a href="#pricing">Pricing</a>
       <a href="#faq">FAQ</a>
       <a href="changelog.html">Changelog</a>
-      <a href="/app/">Open App</a>
+      <a href="/app/">Launch Blotterbook</a>
       <a href="mailto:contact@scalineaudio.net?subject=Blotterbook">Contact</a>
     </div>
     <p class="legal">Blotterbook runs entirely in your browser — your trade data never leaves the page. Cost and tax figures are estimates, not financial or tax advice.</p>

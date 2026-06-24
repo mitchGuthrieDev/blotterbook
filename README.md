@@ -36,7 +36,8 @@ calls are loading the app's own reference-data JSON and an optional PayPal donat
 - [Managing local data](#managing-local-data) — edit, back up, and restore
 - [Filters & journal](#filters--journal)
 - [Architecture](#architecture)
-- [Storage tiers & payments (scaffold)](#storage-tiers--payments-scaffold)
+- [Pricing & tiers (scaffold)](#pricing--tiers-scaffold)
+- [Roadmap](#roadmap)
 - [Known limitations](#known-limitations)
 - [Privacy](#privacy)
 - [Development & deployment](#development--deployment)
@@ -77,28 +78,30 @@ anchor links that smooth-scroll to each full-height section:
 
 | Section | Purpose |
 | --- | --- |
-| **Home** | The hero (banner, tagline, CTAs) plus a **Live** status pill that pings `/app/` and reports whether the app is responding. |
+| **Home** | The hero (banner, tagline) with **Launch Blotterbook** and **See Demo** CTAs, plus a **Live** status pill that pings `/app/` and reports whether the app is responding. |
 | **Features** | A three-column grid of the app's capabilities (privacy, cost model, tax, broker comparison, curve/calendar, stats). |
 | **Use Cases** | The pitch — Blotterbook as both a profit/budgeting calculator and a private journal (broker comparison, tax planning, break-even, review). |
-| **Pricing** | Donation-based today (stylized PayPal donate button), with the planned **$20 one-time local** and **$5/mo online** tiers shown greyed-out and a founders blurb: donate now → lifetime access to both. |
+| **Pricing** | Two cards: **Blotterbook — Free** (donations welcome, PayPal button) and a greyed-out, planned **Online app (~$49/mo)** that would connect directly to brokers and trading platforms. The current CSV-driven app stays free. |
 | **FAQ** | Expandable (collapsed-by-default) questions covering supported data, cost/tax modeling, and limitations — a friendlier take on this README. |
 
 `changelog.html` ("**Blotterlog**") is a standalone, matching-styled page linked from the header
-and footer; it presents the project's commit history as a timeline. Both pages are static and have
-no build step or runtime dependencies (the donate button is the only external resource).
+and footer. It pulls the **live commit history from the GitHub API** on each load (newest first,
+with links to each commit) and falls back to a baked-in snapshot if the API is unreachable. Both
+pages are static with no build step (the donate button and the GitHub fetch are the only external
+calls).
 
 ## Quick start
 
 1. Serve the folder over http (see [Development](#development--deployment)) and open `/app/`.
-   The homepage at `/` links to it.
-2. In **Setup**, choose your **Broker**, **Data feed**, and **State**, and set the monthly
-   **Platform fee**. (Load CSV is disabled until broker, feed, and state are all chosen.)
+   The homepage at `/` links to it (**Launch Blotterbook**).
+2. In the centered **Broker & Costs** panel, choose your **Broker**, **Data feed**, and **State**,
+   and set the monthly **Platform fee**. (Load CSV is disabled until all three are chosen.)
 3. In TradingView, export your account balance history as CSV.
 4. Click **Load CSV** and select the file. Your data is saved locally — it's restored
-   automatically next time you open the app.
+   automatically next time you open the app. Load more CSVs later from **Manage data → Load CSV**.
 
-Prefer to look around first? Click **Demo** for a generated sample dataset (not saved). Use
-**Clear data** in the top bar to erase everything stored in your browser.
+Prefer to look around first? Open **See Demo** on the homepage for a generated, profitable sample
+month (not saved). To erase your data, use **Manage data → Erase all local data**.
 
 ## Input: the CSV
 
@@ -124,27 +127,30 @@ window each time without creating duplicates. The data summary shows `+N new · 
 
 | Section | What it shows |
 | --- | --- |
-| **Top bar** | The **Blotterbook** wordmark (links to the homepage) and the loaded-source text (click it to load a CSV, like the Load CSV button — it's truncated so long filenames don't bloat the bar). Actions: Load CSV, Demo (opens the demo in a new tab), **Export report**, **Manage data**, Clear data, Contact. |
-| **Landing (no data)** | The intro text sits at the top; the **Broker & Costs** module is centered in the page (like the homepage hero) until data loads. |
+| **Top bar** | The **Blotterbook** wordmark (links to the homepage) and the loaded-source text — once data is loaded, clicking it opens **Manage data** (it does nothing before load); it's truncated so long filenames don't bloat the bar. Actions: **Changelog**, **Export report**, **Manage data**, Contact. |
+| **Landing (no data)** | The intro text and the **Broker & Costs** module sit together, centered as a group in the viewport (like the homepage hero), until data loads. |
 | **Broker & Costs** | Broker / data feed / platform fee / state. Collapsible once loaded; selections persist. |
 | **Scope toggle** | Switches most views between *All time* and the *Selected month*. |
 | **Filters** | Date range, symbol, side, session (RTH/ETH), and day-of-week. Applies before everything. |
 | **Stat cards** | Net PnL (+ take-home), win rate, profit factor, avg win/loss, max drawdown. |
-| **Performance** | Cumulative PnL vs. date. Click the **Gross / Net / Take-home** buttons to toggle overlays (highlighted when active); hover for values; click a calendar day to mark it. |
+| **Performance** | Cumulative PnL vs. date, with stepped y-axis gridlines and a gradient area fill. Click the **Gross / Net / Take-home** buttons to toggle overlays (highlighted when active; at least one always stays on); hover for values; click a calendar day to mark it. |
 | **Trading Calendar** | Sunday-first month grid of daily PnL with weekly summaries; **day-notes** below. |
 | **Break-even & Cost Budget** | Per-symbol commission table and a full-width itemized waterfall — gross, commissions, subscriptions, net pre-tax, the folded-in **Section 1256** tax detail, take-home, and break-even/trade. |
 | **Advanced Statistics** | Daily averages, expectancy, long/short split, best/worst day & weekday, Sharpe, streaks. |
 | **Definitions & Caveats** | How each number is computed and where the data falls short. |
 
-**Demo (its own page).** The **Demo** button opens `app/demo.html` in a new tab with a generated,
-profitable month of sample data. It's the full app minus the Load CSV, Manage data, and Clear data
-controls; an **End demo** button returns you to the app (and closes the tab when the browser allows).
-Demo data is in-memory only and never persists.
+**Demo (its own page).** The demo lives at `app/demo.html` and is reached from the homepage
+(**See Demo**), not the app. It's the full app on a generated, profitable month of sample data,
+minus the Load CSV / Manage data controls; an **End demo** button returns to the homepage (closing
+the tab when the browser allows). The header shows a purple **DEMO** badge. Demo data is in-memory
+only and never persists.
 
-**Export report.** **Export report** opens a condensed, print-ready **performance report** in a new
-tab — period summary tiles, a cost &amp; tax breakdown, key statistics, and per-symbol commissions,
-in the Blotterbook palette — then prompts to print or save as PDF. It reads like a report rather than
-a screenshot of the dashboard. (Allow pop-ups for the report tab.)
+**Export report.** **Export report** opens a condensed **performance report** in a new tab — period
+summary tiles, a cost &amp; tax breakdown, key statistics, and per-symbol commissions, in the
+Blotterbook palette. It reads like a report rather than a screenshot of the dashboard, and does
+**not** auto-print. The report page has a **Download** button (saves a self-contained `.html` copy)
+and an **Email a copy** button (opens a mailto with a plaintext summary). (Allow pop-ups for the
+report tab.)
 
 **Manage data.** **Manage data** opens a local-data manager (see
 [Managing local data](#managing-local-data)).
@@ -222,19 +228,21 @@ automatically on return visits. Nothing is uploaded.
   selections).
 - **Delta merge:** `Store.addTrades()` skips ids already present, so re-imports only add new trades.
 - **Demo data is never persisted** — it lives in memory only.
-- **Clear data** (top bar) calls `Store.purge()` to wipe all three stores after a confirm.
+- **Erase all local data** (Manage data → Danger zone) calls `Store.purge()` to wipe all three stores after a confirm.
 
 The app never touches `indexedDB` directly — it goes through the `Store` interface. A future cloud
 backend implements the same interface, so adding cloud sync won't touch the rest of the app. See
-[storage tiers](#storage-tiers--payments-scaffold).
+[pricing & tiers](#pricing--tiers-scaffold).
 
 ## Managing local data
 
-**Manage data** (top bar) opens a modal for editing and managing everything saved in this browser —
-the recommended home for local-data control because it reuses the existing `Store` interface and
-keeps all destructive actions behind one clearly-labeled surface. It has four parts:
+**Manage data** (top bar, or click the loaded-source text) opens a modal — the single home for all
+local-data control. It reuses the existing `Store` interface and keeps loading, backup, and
+destructive actions behind one clearly-labeled surface. It has six parts:
 
 - **Overview** — trade count, date range, day-note count, and the approximate on-disk size.
+- **Load data** — *Load CSV* lives here now (moved out of the top bar). Imports merge — only new
+  trades are added. The first load is still done from the centered Broker & Costs panel on the landing.
 - **Backup &amp; restore** — *Download backup (.json)* writes a single file with your trades, day-notes,
   and setup (`Store.exportAll()`); *Restore from backup* merges one back in (`Store.importAll()`).
   Restores de-duplicate by the same stable trade id, so re-importing is always safe. This is the
@@ -242,7 +250,10 @@ keeps all destructive actions behind one clearly-labeled surface. It has four pa
 - **Day notes** — every dated note, each with a delete button.
 - **Trades** — a searchable (symbol / date / side), scrollable table with per-row delete. Deletions
   apply immediately across every view and recompute metrics live.
-- **Danger zone** — *Erase all local data* (`Store.purge()`), behind a confirm.
+- **Danger zone** — *Erase all local data* (`Store.purge()`), behind a confirm. (This replaced the
+  old top-bar Clear data button.)
+
+Each section renders independently (wrapped in try/catch), so a single failure can't blank the rest.
 
 The `Store` interface stays the single source of truth — the manager added `deleteTrade`,
 `getAllJournal`, `deleteJournal`, `getAllMeta`, `exportAll`, and `importAll` to it, so a future cloud
@@ -283,20 +294,41 @@ merged set), `METRICS_ALL` (metrics for the *filtered* set), `FILTERS`, `SCOPE`,
 `calYear`/`calMonth`, `selectedDate`, `JOURNAL_DATES`, `DEMO_MODE`, `DEMO_PAGE`. The boot sequence
 is async: `loadRefData()` → `Store.init()` → `restoreSession()` (or `runDemo()` on the demo page).
 
-## Storage tiers & payments (scaffold)
+## Pricing & tiers (scaffold)
 
-Accounts and payments are **not implemented in the app yet** — only scaffolded so the architecture
-is ready. The plan (see `functions/README.md`):
+**The current app — CSV-driven and Cloudflare-hosted — is free and stays free.** It's supported by
+optional donations (the PayPal button). There is **no one-time/local desktop app** planned; the
+hosted platform is the product.
 
-| Tier | Bought via | Storage | Status |
+The only planned paid tier is a future **online app (~$49/mo)** that would connect **directly to
+brokers and trading platforms** for data instead of importing CSVs. It's not built; pricing is
+indicative.
+
+| Tier | Bought via | Storage / data | Status |
 | --- | --- | --- | --- |
-| `local` | one-time payment | IndexedDB (this browser) | shipped |
-| `cloud` | subscription | IndexedDB + server | planned |
+| Free | donations | IndexedDB (this browser), CSV import | shipped |
+| Online (direct-connect) | subscription (~$49/mo) | server-side + live broker/platform feeds | planned |
 
 `/functions/api/{me,checkout,webhook}.js` are stubbed Cloudflare Pages Functions for Stripe
-checkout, webhook-driven account provisioning, and tier lookup. `app/entitlements.js` is the
-client resolver that will pick the matching `Store` implementation; today it always returns
-`local`.
+checkout, webhook-driven account provisioning, and tier lookup. `app/entitlements.js` is the client
+resolver that will pick the matching `Store` implementation; today it always returns `local`.
+
+## Roadmap
+
+Discussed / planned, roughly in order:
+
+- **Platform-agnostic CSV parsing** — support broker exports beyond TradingView (normalize varied
+  column names, symbol formats, and row semantics into the same trade shape).
+- **Stripe integration** — finish the checkout / webhook / entitlements flow scaffolded in
+  `/functions` so the online tier can be sold.
+- **Accounts + cloud sync** — a `CloudStore` implementing the same `Store` interface for
+  cross-device data (the current per-browser limitation).
+- **Direct broker / platform connections** — pull fills, commissions, and rates live (the basis of
+  the planned online tier), removing the CSV step.
+- **Reference-data upkeep** — keep `data/*.json` (broker/fee/feed/state) current; consider sourcing
+  some rates dynamically.
+- **Deeper analytics** — open-position drawdown (needs entry/exit pairing), holding-time stats,
+  per-strategy tagging, and richer report exports.
 
 ## Known limitations
 

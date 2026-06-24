@@ -49,6 +49,9 @@
   .entry .date{font-family:var(--mono);font-size:12.5px;color:var(--dim)}
   .entry .hash{font-family:var(--mono);font-size:11.5px;color:var(--faint);
     background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:2px 7px}
+  .entry .hash a{color:inherit;text-decoration:none}
+  .entry .hash a:hover{color:var(--accent)}
+  .clstatus{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin:0 0 6px}
   .entry .latest{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
     color:var(--green);background:rgba(63,185,80,.12);border-radius:5px;padding:2px 8px}
   .entry h3{font-size:16.5px;margin:0;font-weight:600;letter-spacing:-.01em;line-height:1.4}
@@ -69,60 +72,62 @@
 <div class="wrap">
   <p class="eyebrow">The Blotterlog</p>
   <h1>Changelog</h1>
-  <p class="blurb">A running history of how <b>Blotterbook</b> took shape — drawn straight from the project's
-    commit history. Newest changes first.</p>
+  <p class="blurb">A running history of how <b>Blotterbook</b> took shape — pulled live from the project's
+    GitHub commit history each time you open this page. Newest changes first.</p>
+  <p class="clstatus" id="clstatus">Loading the latest changes…</p>
 
-  <div class="log">
-    <div class="entry first">
-      <div class="meta">
-        <span class="date">2026-06-23</span>
-        <span class="hash">a48ab35</span>
-        <span class="latest">Latest</span>
-      </div>
-      <h3>Restructure into a multi-file app: JSON reference data, IndexedDB persistence, filters, and journal</h3>
-    </div>
-    <div class="entry">
-      <div class="meta">
-        <span class="date">2026-06-23</span>
-        <span class="hash">2e3db36</span>
-      </div>
-      <h3>Relocate load controls by state, add a collapsible setup bar, and a rich README</h3>
-    </div>
-    <div class="entry">
-      <div class="meta">
-        <span class="date">2026-06-23</span>
-        <span class="hash">3a7ce83</span>
-      </div>
-      <h3>Add broker selection, a date-based performance graph, the setup bar, and UX features</h3>
-    </div>
-    <div class="entry">
-      <div class="meta">
-        <span class="date">2026-06-23</span>
-        <span class="hash">7e0e9a6</span>
-      </div>
-      <h3>Calculation adjustments, code cleanup, and UI tweaks</h3>
-    </div>
-    <div class="entry">
-      <div class="meta">
-        <span class="date">2026-06-22</span>
-        <span class="hash">46a3e1b</span>
-      </div>
-      <h3>Add cost calculations to the dashboard</h3>
-    </div>
-    <div class="entry">
-      <div class="meta">
-        <span class="date">2026-06-22</span>
-        <span class="hash">93fc980</span>
-      </div>
-      <h3>Initial project commit</h3>
-    </div>
-  </div>
+  <div class="log" id="log"></div>
 </div>
 
 <footer>
-  Blotterbook &middot; <a href="index.html">Home</a> &middot; <a href="/app/">Open App</a> &middot;
+  Blotterbook &middot; <a href="index.html">Home</a> &middot; <a href="/app/">Launch Blotterbook</a> &middot;
   <a href="mailto:contact@scalineaudio.net?subject=Blotterbook">Contact</a>
 </footer>
+
+<script>
+(function(){
+  var REPO='mitchGuthrieDev/blotterbook';
+  var log=document.getElementById('log'), status=document.getElementById('clstatus');
+
+  /* Baked-in fallback shown if the GitHub API can't be reached (offline, rate limit, private). */
+  var FALLBACK=[
+    {sha:'816ea16',date:'2026-06-23',msg:'Rework app: shared CSS/JS, demo page, report export, data manager, UI fixes'},
+    {sha:'f657f8f',date:'2026-06-23',msg:'Add one-page Blotterbook homepage + Blotterlog changelog; rebrand'},
+    {sha:'a48ab35',date:'2026-06-23',msg:'Restructure into a multi-file app: JSON data, IndexedDB, filters, journal'},
+    {sha:'2e3db36',date:'2026-06-23',msg:'Relocate load controls by state, collapsible setup, and rich README'},
+    {sha:'3a7ce83',date:'2026-06-23',msg:'Add broker selection, date-based perf graph, setup bar, and UX features'},
+    {sha:'7e0e9a6',date:'2026-06-23',msg:'Calculation adjustments, code cleanup, UI tweaks'},
+    {sha:'46a3e1b',date:'2026-06-22',msg:'Add cost calculations to the dashboard'},
+    {sha:'93fc980',date:'2026-06-22',msg:'Initial project commit'}
+  ];
+
+  function esc(s){ return (s||'').replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];}); }
+  function render(items, live){
+    log.innerHTML=items.map(function(c,i){
+      var hash=c.url? '<a href="'+c.url+'" target="_blank" rel="noopener">'+c.sha+'</a>' : c.sha;
+      return '<div class="entry'+(i===0?' first':'')+'">'
+        +'<div class="meta"><span class="date">'+c.date+'</span><span class="hash">'+hash+'</span>'
+        +(i===0?'<span class="latest">Latest</span>':'')+'</div>'
+        +'<h3>'+esc(c.msg)+'</h3></div>';
+    }).join('');
+    if(status) status.textContent = live ? 'Synced from GitHub just now' : 'Showing the last saved snapshot';
+  }
+
+  render(FALLBACK, false);
+
+  fetch('https://api.github.com/repos/'+REPO+'/commits?per_page=40', {headers:{'Accept':'application/vnd.github+json'}})
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(data){
+      if(!Array.isArray(data) || !data.length) return;
+      render(data.map(function(c){
+        var cm=c.commit||{}, au=cm.author||{};
+        return { sha:(c.sha||'').slice(0,7), date:(au.date||'').slice(0,10),
+                 msg:(cm.message||'').split('\n')[0], url:c.html_url };
+      }), true);
+    })
+    .catch(function(){ /* keep the fallback already rendered */ });
+})();
+</script>
 
 </body>
 </html>

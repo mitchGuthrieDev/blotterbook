@@ -13,18 +13,14 @@
   <div class="top">
     <div class="brand">
       <a class="bwordmark" href="../index.html" title="Back to the Blotterbook homepage">Blotterbook</a>
-      <small id="srcname" title="Click to load a balance-history CSV">no data loaded</small>
+      <small id="srcname" title="Manage your local data">no data loaded</small>
     </div>
     <div class="topright">
       <div class="src" id="srcmeta"></div>
       <div class="topbtns">
-        <label class="loader disabled" id="loadlbl" title="Select broker, data feed, and state first">Load CSV
-          <input type="file" id="file" accept=".csv,text/csv" disabled>
-        </label>
-        <button class="btn" id="demoBtn" title="Open the demo dataset in a new tab">Demo</button>
-        <button class="btn" id="exportBtn" title="Generate a condensed performance report (print or save as PDF)">Export report</button>
-        <button class="btn" id="manageBtn" title="Edit, back up, and manage the data saved in this browser">Manage data</button>
-        <button class="btn" id="purgeBtn" title="Erase all trades and day-notes saved in this browser">Clear data</button>
+        <a class="btn" id="changelogBtn" href="../changelog.html" title="What's changed — the Blotterlog">Changelog</a>
+        <button class="btn" id="exportBtn" title="Generate a condensed performance report in a new tab">Export report</button>
+        <button class="btn" id="manageBtn" title="Load, edit, back up, and manage the data saved in this browser">Manage data</button>
         <a class="btn" id="contactBtn"
            href="mailto:contact@scalineaudio.net?subject=Blotterbook%20%E2%80%94%20support%20%2F%20feedback&body=Tell%20us%20what%20you%20need%20help%20with%20or%20what%20you%27d%20like%20to%20see%3A%0A%0A"
            title="Questions, support requests, or feedback — opens a draft in your email app">Contact</a>
@@ -39,7 +35,7 @@
       <h1 class="ltitle">Load a balance&#8209;history CSV to begin</h1>
       <p class="llead">Export your account balance history from TradingView as a CSV, choose your broker,
         data feed, and state below, then load the file. Re&#8209;uploads merge — only new trades are added,
-        and nothing ever leaves your browser. New here? Click <b>Demo</b> to explore with sample data.</p>
+        and nothing ever leaves your browser.</p>
       <p class="lmeta">Expected columns: Time · Realized PnL (value) · Action</p>
     </div>
 
@@ -59,7 +55,7 @@
           <div class="fld state"><label for="c_state_sel">State (tax)</label>
             <select id="c_state_sel"></select></div>
         </div>
-        <div class="hintline">Choose a broker, data feed, and state to enable <b>Load CSV</b>, then load your file below. Commission and feed rates follow the broker. Or click <b>Demo</b> to explore with sample data.</div>
+        <div class="hintline">Choose a broker, data feed, and state to enable <b>Load CSV</b>, then load your file below. Commission and feed rates follow the broker.</div>
         <button class="btn loadbtn disabled" id="setupLoad" title="Select broker, data feed, and state first" disabled>Load CSV</button>
       </div>
     </div>
@@ -233,6 +229,14 @@
     </div>
     <div class="dmbody">
       <div class="dmsec"><h3>Overview</h3><div class="dmgrid" id="dm_summary"></div></div>
+
+      <div class="dmsec"><h3>Load data</h3>
+        <div class="dmactions">
+          <button class="dmbtn" id="dm_load">Load CSV…</button>
+          <input type="file" id="file" accept=".csv,text/csv" hidden>
+        </div>
+        <p class="dmhint">Import another TradingView balance-history CSV. Re-uploads merge — only genuinely new trades are added, so importing an overlapping export is always safe.</p>
+      </div>
 
       <div class="dmsec"><h3>Backup &amp; restore</h3>
         <div class="dmactions">
