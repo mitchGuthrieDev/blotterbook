@@ -27,10 +27,11 @@
    ============================================================ */
 (function () {
   const DB_NAME = 'tradingJournal';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
   const TRADES = 'trades';
   const JOURNAL = 'journal';
   const META = 'meta';
+  const TRADEMETA = 'trademeta';   // per-trade tags / note / screenshots, keyed by trade id
 
   let dbp = null; // cached open-promise
 
@@ -43,6 +44,7 @@
         if (!db.objectStoreNames.contains(TRADES)) db.createObjectStore(TRADES, { keyPath: 'id' });
         if (!db.objectStoreNames.contains(JOURNAL)) db.createObjectStore(JOURNAL, { keyPath: 'date' });
         if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: 'key' });
+        if (!db.objectStoreNames.contains(TRADEMETA)) db.createObjectStore(TRADEMETA, { keyPath: 'id' });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -159,12 +161,37 @@
       return reqP(store.getAll());
     },
 
+    /* ---- per-trade metadata: { id, tags:[], note:'', shots:[dataURL], updated } ---- */
+    async getTradeMeta(id) {
+      const store = await tx(TRADEMETA, 'readonly');
+      const rec = await reqP(store.get(id));
+      return rec || { id, tags: [], note: '', shots: [] };
+    },
+    async saveTradeMeta(id, m) {
+      const store = await tx(TRADEMETA, 'readwrite');
+      const tags = (m.tags || []).filter(Boolean);
+      const note = (m.note || '').trim();
+      const shots = m.shots || [];
+      if (tags.length || note || shots.length) store.put({ id, tags, note, shots, updated: Date.now() });
+      else store.delete(id);   // empty → remove the record
+      return done(store);
+    },
+    async deleteTradeMeta(id) {
+      const store = await tx(TRADEMETA, 'readwrite');
+      store.delete(id);
+      return done(store);
+    },
+    async allTradeMeta() {
+      const store = await tx(TRADEMETA, 'readonly');
+      return reqP(store.getAll());
+    },
+
     /* Full local snapshot — for the data manager's backup/export. */
     async exportAll() {
-      const [trades, journal, meta] = await Promise.all([
-        this.getAllTrades(), this.getAllJournal(), this.getAllMeta()
+      const [trades, journal, meta, trademeta] = await Promise.all([
+        this.getAllTrades(), this.getAllJournal(), this.getAllMeta(), this.allTradeMeta()
       ]);
-      return { app: 'blotterbook', version: 1, exportedAt: new Date().toISOString(), trades, journal, meta };
+      return { app: 'blotterbook', version: 2, exportedAt: new Date().toISOString(), trades, journal, meta, trademeta };
     },
 
     /* Merge a backup back in: trades de-dupe, notes & meta upsert. */
@@ -186,6 +213,13 @@
         for (const mm of data.meta) { if (mm && mm.key != null) store.put({ key: mm.key, value: mm.value }); }
         await done(store);
       }
+      if (Array.isArray(data.trademeta) && data.trademeta.length) {
+        const store = await tx(TRADEMETA, 'readwrite');
+        for (const tm of data.trademeta) {
+          if (tm && tm.id) store.put({ id: tm.id, tags: tm.tags || [], note: tm.note || '', shots: tm.shots || [], updated: tm.updated || Date.now() });
+        }
+        await done(store);
+      }
       return { added, dup };
     },
 
@@ -203,7 +237,7 @@
 
     async purge() {
       const db = await open();
-      await Promise.all([TRADES, JOURNAL, META].map(name => {
+      await Promise.all([TRADES, JOURNAL, META, TRADEMETA].map(name => {
         const store = db.transaction(name, 'readwrite').objectStore(name);
         store.clear();
         return done(store);

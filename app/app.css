@@ -204,8 +204,11 @@
   /* ---- calendar ---- */
   .calnav{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-bottom:12px}
   .calnav button{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
-    width:30px;height:28px;border-radius:6px;cursor:pointer;font-size:15px;line-height:1}
+    width:30px;height:28px;border-radius:6px;cursor:pointer;font-size:15px;line-height:1;
+    display:inline-flex;align-items:center;justify-content:center}
   .calnav button:hover{border-color:var(--accent)}
+  .calnav button svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  #caltoday{margin-left:4px}
   .calnav .mlabel{font-family:var(--mono);min-width:130px;text-align:center;font-size:13px}
   /* minmax(0,1fr) keeps all 7 day columns equal width — without it, cells whose
      content is wider (days with trades) stretch their column and squeeze the
@@ -382,4 +385,57 @@
     text-transform:uppercase;color:var(--faint);text-align:left;font-weight:600;padding:9px 12px;border-bottom:1px solid var(--line)}
   .dmtab td{padding:7px 12px;border-bottom:1px solid var(--line)}
   .dmtab td.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
-  .dmtab td:last-child{text-align:right;width:1%;white-space:nowrap}
+  .dmtab td.dmrowact{text-align:right;width:1%;white-space:nowrap;display:flex;gap:6px;justify-content:flex-end}
+  .dmdel.alt{color:var(--accent)}
+  .dmdel.alt:hover{border-color:var(--accent);color:var(--accent)}
+  /* tag chips + markers on trade rows */
+  .dmtag{display:inline-block;font-family:var(--mono);font-size:10px;color:var(--take);
+    background:rgba(201,139,255,.12);border:1px solid rgba(201,139,255,.3);
+    border-radius:999px;padding:1px 7px;margin:0 3px 0 0;vertical-align:middle}
+  .dmmark{font-family:var(--mono);font-size:10px;color:var(--faint);margin-left:2px}
+  /* per-trade editor card */
+  .dmeditcard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+  .dmedit-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:13.5px}
+  .dmedit-head b{font-weight:600}
+  .dmedit-head .dmx{margin-left:auto;background:none;border:1px solid var(--line);color:var(--dim);
+    width:26px;height:26px;border-radius:6px;cursor:pointer;font-size:15px;line-height:1}
+  .dmedit-head .dmx:hover{border-color:var(--red);color:var(--red)}
+  .dmlbl{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:10px 0 5px}
+  .dmsublbl{text-transform:none;letter-spacing:0;color:var(--faint)}
+  .dminput,.dmtextarea{width:100%;background:var(--panel);border:1px solid var(--line);color:var(--txt);
+    font-family:var(--sans);font-size:13px;padding:8px 10px;border-radius:7px;outline:none}
+  .dminput:focus,.dmtextarea:focus{border-color:var(--accent)}
+  .dmtextarea{min-height:64px;resize:vertical;line-height:1.5}
+  .dmshots{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .dmshot{position:relative;width:72px;height:54px;border-radius:7px;overflow:hidden;border:1px solid var(--line)}
+  .dmshot img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
+  .dmshot button{position:absolute;top:2px;right:2px;width:18px;height:18px;border:none;border-radius:5px;
+    background:rgba(13,16,20,.8);color:#fff;cursor:pointer;font-size:12px;line-height:1}
+  .dmaddshot{display:inline-flex;align-items:center;justify-content:center;width:72px;height:54px;
+    border:1px dashed var(--line);border-radius:7px;cursor:pointer;color:var(--dim);font-size:11.5px;text-align:center;padding:4px}
+  .dmaddshot:hover{border-color:var(--accent);color:var(--txt)}
+  .dmedit-actions{display:flex;align-items:center;gap:10px;margin-top:14px}
+  .dmedit-actions .dmhint{margin:0;color:var(--green)}
+
+  /* ---- staging sandbox (data-mode="staging") ---- */
+  .demotag.staging{color:var(--warn);background:rgba(227,179,65,.12);border-color:rgba(227,179,65,.32)}
+  /* Experimental web-grid dashboard — the "Main-app web UI redesign" trial, staging-only.
+     Single column on mobile (default); a multi-column grid on wide screens with the
+     performance graph across the top, calendar + break-even side-by-side, and stats in a column. */
+  @media(min-width:1100px){
+    body[data-mode="staging"] .wrap{max-width:1480px}
+    body[data-mode="staging"] #dash{
+      display:grid;gap:14px;align-items:start;
+      grid-template-columns:minmax(0,1.3fr) minmax(0,1.3fr) minmax(0,1fr);
+      grid-template-areas:
+        "perf perf perf"
+        "cal  cost adv"
+        "defs defs adv";
+    }
+    body[data-mode="staging"] #dash .panel{margin-top:0}
+    body[data-mode="staging"] .panel[data-key="perf"]{grid-area:perf}
+    body[data-mode="staging"] .panel[data-key="cal"]{grid-area:cal}
+    body[data-mode="staging"] .panel[data-key="cost"]{grid-area:cost}
+    body[data-mode="staging"] .panel[data-key="adv"]{grid-area:adv}
+    body[data-mode="staging"] .panel[data-key="defs"]{grid-area:defs}
+  }

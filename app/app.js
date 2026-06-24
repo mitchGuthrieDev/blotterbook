@@ -3,8 +3,12 @@ const SVGNS='http://www.w3.org/2000/svg';
 const pad2 = n => String(n).padStart(2,'0');
 const fmtDate = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 const $ = id => document.getElementById(id);
-/* The demo runs on its own page (demo.html) with a trimmed top bar. */
-const DEMO_PAGE = !!(document.body && document.body.dataset.mode === 'demo');
+/* The demo and the staging sandbox run on their own pages with a trimmed top bar.
+   Both auto-load the sample dataset and never persist. STAGING_PAGE additionally
+   gets the experimental web-grid dashboard layout. */
+const PAGE_MODE = (document.body && document.body.dataset.mode) || '';
+const STAGING_PAGE = PAGE_MODE === 'staging';
+const DEMO_PAGE = PAGE_MODE === 'demo' || STAGING_PAGE;
 
 /* CSV parsing now lives in adapters.js (window.Adapters) — platform-specific
    format detection + normalization to the internal trade shape below. */
@@ -334,6 +338,16 @@ function renderCurve(m){
       `<div class="tr"><span class="sw" style="background:${s.color}"></span>${s.label} <b>${usd(best[s.key])}</b></div>`).join('');
   };
   svg.onmouseleave=()=>{ g.style.display='none'; tip.style.display='none'; };
+
+  // click the graph → select that date and jump the calendar to its month
+  svg.style.cursor='crosshair';
+  svg.onclick=ev=>{
+    const r=svg.getBoundingClientRect(); const mx=(ev.clientX-r.left)/r.width*W;
+    if(mx<padL-2 || mx>W-padR+2) return;
+    let best=disp[0], bd=1e9;
+    for(const p of disp){ const d=Math.abs(xOf(p)-mx); if(d<bd){bd=d;best=p;} }
+    selectFromGraph(best.date);
+  };
 }
 
 /* ============================================================
@@ -485,10 +499,18 @@ function renderCalc(m){
    ============================================================ */
 let TRADES=[], METRICS_ALL=null, SCOPE='all', calYear, calMonth;
 let JOURNAL_DATES=new Set();   // dates with a saved note (for calendar dots)
+let TRADE_META=new Map();      // trade id -> { id, tags:[], note, shots:[] }
 let DEMO_MODE=false;           // demo data is never persisted
 
-const FILTERS={from:'',to:'',symbol:'',side:'',session:'',dows:new Set()};
-function filtersActive(){ return !!(FILTERS.from||FILTERS.to||FILTERS.symbol||FILTERS.side||FILTERS.session||FILTERS.dows.size); }
+const tradeKey=t=> t.id || (window.Store ? Store.tradeId(t) : '');
+async function loadTradeMeta(){
+  if(!Store.available()){ TRADE_META=new Map(); return; }
+  try{ const all=await Store.allTradeMeta(); TRADE_META=new Map(all.map(m=>[m.id,m])); }
+  catch(_){ TRADE_META=new Map(); }
+}
+
+const FILTERS={from:'',to:'',symbol:'',side:'',session:'',tag:'',dows:new Set()};
+function filtersActive(){ return !!(FILTERS.from||FILTERS.to||FILTERS.symbol||FILTERS.side||FILTERS.session||FILTERS.tag||FILTERS.dows.size); }
 /* RTH = 09:30–16:00 by the timestamp's clock time as exported; everything else ETH. */
 function sessionOf(t){ const hm=t.time.slice(11,16); if(!hm) return 'eth';
   return (hm>='09:30' && hm<'16:00')?'rth':'eth'; }
@@ -499,6 +521,7 @@ function applyFilters(arr){
     if(FILTERS.symbol && t.root!==FILTERS.symbol) return false;
     if(FILTERS.side && t.side!==FILTERS.side) return false;
     if(FILTERS.session && sessionOf(t)!==FILTERS.session) return false;
+    if(FILTERS.tag){ const m=TRADE_META.get(tradeKey(t)); if(!m || !(m.tags||[]).includes(FILTERS.tag)) return false; }
     if(FILTERS.dows.size && !FILTERS.dows.has(new Date(t.date+'T00:00:00').getDay())) return false;
     return true;
   });
@@ -604,19 +627,31 @@ function stageText(text,name,ctx){
 }
 function reparseStage(ctx,isAuto){
   if(!PENDING || PENDING.ctx!==ctx){ return; }
-  const {sel,btn}=stageEls(ctx);
+  const {sel}=stageEls(ctx);
   const override = sel ? sel.value : '';
   let r;
   try{ r=Adapters.parse(PENDING.rawText, override||undefined); }
   catch(e){ r={ok:false,error:'Could not read that file.'}; }
   PENDING.result=r;
-  if(r.ok){
-    if(isAuto && !override && sel) sel.value=r.platform;     // reflect the auto-detected platform
-    setStageStatus(ctx, `Detected ${r.label}${r.beta?' (beta — verify the numbers)':''} · ${r.trades.length} trade${r.trades.length===1?'':'s'} ready to import`, 'ok');
-    if(btn) btn.disabled=false;
-  } else {
-    setStageStatus(ctx, r.error||'Could not parse this file.', 'err');
+  if(r.ok && isAuto && !override && sel) sel.value=r.platform;   // reflect the auto-detected platform
+  applyStageUI(ctx);
+}
+/* Update the status line + commit button from the current PENDING result.
+   On the landing, Start Blotterbook also requires broker/feed/state to be chosen
+   (Load CSV itself is never gated). */
+function applyStageUI(ctx){
+  const {btn}=stageEls(ctx);
+  const r=(PENDING && PENDING.ctx===ctx)?PENDING.result:null;
+  if(!r){ setStageStatus(ctx,''); if(btn) btn.disabled=true; return; }
+  if(!r.ok){ setStageStatus(ctx, r.error||'Could not parse this file.', 'err'); if(btn) btn.disabled=true; return; }
+  const n=r.trades.length, beta=r.beta?' (beta — verify the numbers)':'';
+  const base=`Detected ${r.label}${beta} · ${n} trade${n===1?'':'s'}`;
+  if(ctx==='landing' && !gateOk()){
+    setStageStatus(ctx, `${base} — choose broker, data feed & state to start`, 'ok');
     if(btn) btn.disabled=true;
+  } else {
+    setStageStatus(ctx, `${base} ready to import`, 'ok');
+    if(btn) btn.disabled=false;
   }
 }
 function onPlatformChange(ctx){ reparseStage(ctx,/*isAuto*/false); }
@@ -630,6 +665,7 @@ async function commitPending(ctx){
     const {added,duplicate,total}=await Store.addTrades(trades);
     TRADES=await Store.getAllTrades();
     JOURNAL_DATES=await Store.journalDates();
+    await loadTradeMeta();
     metaHtml=`<b>${total}</b> trades &nbsp;·&nbsp; +${added} new · ${duplicate} dup &nbsp;·&nbsp; ${TRADES[0].date} → ${TRADES[TRADES.length-1].date}`;
   } else {
     TRADES=trades;
@@ -714,11 +750,24 @@ function syncFilterOptions(){
   const roots=[...new Set(TRADES.map(t=>t.root))].sort();
   sel.innerHTML='<option value="">All</option>'+roots.map(r=>`<option value="${r}">${r}</option>`).join('');
   sel.value = roots.includes(cur)?cur:''; FILTERS.symbol=sel.value;
+  syncTagFilter();
   updateFilterCount();
 }
+/* Populate the Tag filter from every tag in use; hide the field when none exist. */
+function allTags(){
+  const s=new Set(); for(const m of TRADE_META.values()) (m.tags||[]).forEach(t=>s.add(t));
+  return [...s].sort();
+}
+function syncTagFilter(){
+  const sel=document.getElementById('f_tag'); if(!sel) return;
+  const tags=allTags(); const cur=sel.value;
+  const fld=sel.closest('.fld'); if(fld) fld.style.display = tags.length? '' : 'none';
+  sel.innerHTML='<option value="">All</option>'+tags.map(t=>`<option value="${t}">${t}</option>`).join('');
+  if(tags.includes(cur)) sel.value=cur; else { sel.value=''; FILTERS.tag=''; }
+}
 function resetFilters(){
-  FILTERS.from=FILTERS.to=FILTERS.symbol=FILTERS.side=FILTERS.session=''; FILTERS.dows.clear();
-  ['f_from','f_to','f_symbol','f_side','f_session'].forEach(id=>document.getElementById(id).value='');
+  FILTERS.from=FILTERS.to=FILTERS.symbol=FILTERS.side=FILTERS.session=FILTERS.tag=''; FILTERS.dows.clear();
+  ['f_from','f_to','f_symbol','f_side','f_session','f_tag'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   document.querySelectorAll('#f_dows button.on').forEach(b=>b.classList.remove('on'));
   onFiltersChanged();
 }
@@ -728,8 +777,8 @@ function initFilters(){
   dows.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return;
     const d=+b.dataset.d; if(FILTERS.dows.has(d)) FILTERS.dows.delete(d); else FILTERS.dows.add(d);
     b.classList.toggle('on'); onFiltersChanged(); });
-  const bind=(id,key)=>document.getElementById(id).addEventListener('change',e=>{ FILTERS[key]=e.target.value; onFiltersChanged(); });
-  bind('f_from','from'); bind('f_to','to'); bind('f_symbol','symbol'); bind('f_side','side'); bind('f_session','session');
+  const bind=(id,key)=>{ const el=document.getElementById(id); if(el) el.addEventListener('change',e=>{ FILTERS[key]=e.target.value; onFiltersChanged(); }); };
+  bind('f_from','from'); bind('f_to','to'); bind('f_symbol','symbol'); bind('f_side','side'); bind('f_session','session'); bind('f_tag','tag');
   document.getElementById('f_reset').addEventListener('click',resetFilters);
 }
 
@@ -743,6 +792,23 @@ async function selectDay(d){
   if(selectedDate){ const cell=document.querySelector(`#cal .cell[data-date="${selectedDate}"]`); if(cell) cell.classList.add('selday'); }
   await updateJournalEditor();
   if(METRICS_ALL) renderCurve(activeMetrics());
+}
+/* Jump the calendar to the most recent month that has data ("present"). */
+function jumpToLatest(){
+  if(!METRICS_ALL || METRICS_ALL.lastDate==='—') return;
+  const [yy,mm]=METRICS_ALL.lastDate.split('-').map(Number);
+  calYear=yy; calMonth=mm-1;
+  renderCalendar();
+  if(SCOPE==='month') renderDash();
+}
+/* Clicking the performance graph selects that date and jumps the calendar to its month. */
+function selectFromGraph(d){
+  if(!d || !METRICS_ALL) return;
+  selectedDate=d;
+  const [yy,mm]=d.split('-').map(Number); calYear=yy; calMonth=mm-1;
+  renderCalendar();
+  renderDash();             // re-renders the curve marker + cards, respecting scope
+  updateJournalEditor();
 }
 async function updateJournalEditor(){
   const ta=document.getElementById('j_text'), label=document.getElementById('j_date'),
@@ -794,6 +860,7 @@ async function restoreSession(){
     updateGate();
   }
   JOURNAL_DATES=await Store.journalDates();
+  await loadTradeMeta();
   const all=await Store.getAllTrades();
   if(all.length){
     TRADES=all;
@@ -836,13 +903,15 @@ function populateFeeds(brokerKey){
   }
   fSel.innerHTML=h;
 }
+function gateOk(){ return !!($('c_broker').value && $('c_feed').value && $('c_state_sel').value); }
 function updateGate(){
-  const ok = !!($('c_broker').value && $('c_feed').value && $('c_state_sel').value);
-  const inp=$('file'), lbl=$('loadlbl'), sbtn=$('setupLoad');
-  const title = ok? 'Load a balance-history CSV' : 'Select broker, data feed, and state first';
-  if(inp) inp.disabled=!ok;
-  if(lbl){ lbl.classList.toggle('disabled',!ok); lbl.title=title; }
-  if(sbtn){ sbtn.disabled=!ok; sbtn.classList.toggle('disabled',!ok); sbtn.title=title; }
+  // Load CSV is always available — a CSV can be parsed without cost settings.
+  // The Broker/Feed/State requirement gates the Start Blotterbook button instead.
+  const inp=$('file'); if(inp) inp.disabled=false;
+  const lbl=$('loadlbl'); if(lbl) lbl.classList.remove('disabled');
+  const sbtn=$('setupLoad'); if(sbtn){ sbtn.disabled=false; sbtn.classList.remove('disabled');
+    sbtn.title='Load a CSV exported from your trading platform'; }
+  if(PENDING && PENDING.ctx==='landing') applyStageUI('landing');   // re-evaluate Start vs. the gate
 }
 function recalc(){ if(METRICS_ALL) renderDash(); }
 function initSetup(){
@@ -1130,6 +1199,7 @@ async function renderDataManager(){
      `<div class="dmstat"><div class="dk">Trades</div><div class="dv">${trades.length}</div></div>`
     +`<div class="dmstat"><div class="dk">Date range</div><div class="dv mono">${range}</div></div>`
     +`<div class="dmstat"><div class="dk">Day notes</div><div class="dv">${notes.length}</div></div>`
+    +`<div class="dmstat"><div class="dk">Tagged trades</div><div class="dv">${TRADE_META.size}</div></div>`
     +`<div class="dmstat"><div class="dk">Local size</div><div class="dv mono">${kb}</div></div>`;
 
   // Notes
@@ -1139,15 +1209,95 @@ async function renderDataManager(){
         <button class="dmdel" data-note="${j.date}" title="Delete this note">Delete</button></div>`).join('')
     : '<div class="dmempty">No day notes saved.</div>';
 
+  // Per-trade editor (tags / note / screenshots)
+  renderTradeEditor();
+
   // Trades (filterable)
   const q=DM_SEARCH.trim().toLowerCase();
   const shown=q? trades.filter(t=>t.root.toLowerCase().includes(q)||t.date.includes(q)||(t.side||'').includes(q)) : trades;
   if($('dm_tcount')) $('dm_tcount').textContent = q? `${shown.length} / ${trades.length}` : `${trades.length}`;
   if($('dm_trades')) $('dm_trades').innerHTML = shown.length
-    ? shown.slice().reverse().map(t=>`<tr><td class="mono">${t.date}</td><td>${t.root}</td>
-        <td>${t.side||'—'}</td><td class="num mono ${cls(t.pnl)}">${usd(t.pnl)}</td>
-        <td><button class="dmdel" data-trade="${Store.tradeId(t)}" title="Delete this trade">Delete</button></td></tr>`).join('')
+    ? shown.slice().reverse().map(t=>{ const id=Store.tradeId(t);
+        return `<tr><td class="mono">${t.date}</td><td>${t.root}</td>
+        <td>${t.side||'—'}${metaChips(TRADE_META.get(id))}</td><td class="num mono ${cls(t.pnl)}">${usd(t.pnl)}</td>
+        <td class="dmrowact"><button class="dmdel alt" data-edit="${id}" title="Tags, note & screenshots">Edit</button>
+        <button class="dmdel" data-trade="${id}" title="Delete this trade">Delete</button></td></tr>`; }).join('')
     : '<tr><td colspan="5" class="dmempty">No matching trades.</td></tr>';
+}
+
+/* compact tag chips + note/image markers shown on a trade row */
+function metaChips(m){
+  if(!m) return '';
+  let s=' '+(m.tags||[]).map(t=>`<span class="dmtag">${esc(t)}</span>`).join('');
+  const extra=[]; if(m.note) extra.push('note'); if((m.shots||[]).length) extra.push(m.shots.length+' img');
+  if(extra.length) s+=`<span class="dmmark">${extra.join(' · ')}</span>`;
+  return s;
+}
+
+/* ---- per-trade editor ---- */
+let DM_EDIT=null;
+function renderTradeEditor(){
+  const box=$('dm_editor'); if(!box) return;
+  if(!DM_EDIT){ box.innerHTML=''; box.style.display='none'; return; }
+  box.style.display='';
+  const e=DM_EDIT, t=e.trade;
+  box.innerHTML=
+   `<div class="dmeditcard">
+      <div class="dmedit-head"><b>${t.date} · ${t.root} ${t.side||''}</b>
+        <span class="mono ${cls(t.pnl)}">${usd(t.pnl)}</span>
+        <button class="dmx" data-editclose title="Close">&times;</button></div>
+      <label class="dmlbl" for="dm_tags">Tags <span class="dmsublbl">comma-separated</span></label>
+      <input id="dm_tags" class="dminput" value="${esc(e.tags.join(', '))}" placeholder="breakout, A+, fomo">
+      <label class="dmlbl" for="dm_note">Note</label>
+      <textarea id="dm_note" class="dmtextarea" placeholder="What happened on this trade?">${esc(e.note)}</textarea>
+      <label class="dmlbl">Screenshots</label>
+      <div class="dmshots">
+        ${e.shots.map((s,i)=>`<div class="dmshot"><img src="${s}" alt="screenshot ${i+1}"><button data-rmshot="${i}" title="Remove">&times;</button></div>`).join('')}
+        <label class="dmaddshot">+ Add image<input type="file" accept="image/*" id="dm_shotinput" hidden></label>
+      </div>
+      <div class="dmedit-actions"><button class="dmbtn" data-editsave>Save</button>
+        <button class="dmdel" data-editclear title="Remove all metadata for this trade">Clear</button>
+        <span class="dmhint" id="dm_editmsg">${e._msg||''}</span></div>
+    </div>`;
+}
+async function dmOpenTradeEditor(id){
+  let trades=[]; try{ trades=await Store.getAllTrades(); }catch(_){}
+  const trade=trades.find(t=>Store.tradeId(t)===id) || {date:'?',root:'?',side:'',pnl:0};
+  const m=await Store.getTradeMeta(id);
+  DM_EDIT={ id, trade, tags:(m.tags||[]).slice(), note:m.note||'', shots:(m.shots||[]).slice(), _msg:'' };
+  renderTradeEditor();
+  const box=$('dm_editor'); if(box) box.scrollIntoView({block:'nearest'});
+}
+function dmCaptureEdit(){
+  if(!DM_EDIT) return;
+  const tg=$('dm_tags'), nt=$('dm_note');
+  if(tg) DM_EDIT.tags=[...new Set(tg.value.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean))];
+  if(nt) DM_EDIT.note=nt.value;
+}
+function dmAddShot(file){
+  if(!DM_EDIT || !file) return;
+  if(!/^image\//.test(file.type||'')){ alert('Please choose an image file.'); return; }
+  if(file.size>4*1024*1024 && !confirm('That image is over 4MB and will be stored as-is in your browser. Add it anyway?')) return;
+  const r=new FileReader();
+  r.onload=()=>{ dmCaptureEdit(); DM_EDIT.shots.push(String(r.result)); DM_EDIT._msg=''; renderTradeEditor(); };
+  r.onerror=()=>alert('Could not read that image.');
+  r.readAsDataURL(file);
+}
+async function dmSaveEdit(){
+  if(!DM_EDIT) return;
+  dmCaptureEdit();
+  await Store.saveTradeMeta(DM_EDIT.id, { tags:DM_EDIT.tags, note:DM_EDIT.note, shots:DM_EDIT.shots });
+  await loadTradeMeta();
+  if(METRICS_ALL){ syncTagFilter(); renderDash(); }
+  DM_EDIT._msg='Saved'; await renderDataManager();
+}
+async function dmClearEdit(){
+  if(!DM_EDIT) return;
+  if(!confirm('Remove all tags, note and screenshots for this trade?')) return;
+  await Store.deleteTradeMeta(DM_EDIT.id);
+  await loadTradeMeta();
+  if(METRICS_ALL){ syncTagFilter(); renderDash(); }
+  DM_EDIT=null; await renderDataManager();
 }
 
 async function dmDeleteTrade(id){
@@ -1183,6 +1333,7 @@ async function dmImport(file){
 async function reloadFromStore(){
   TRADES=await Store.getAllTrades();
   JOURNAL_DATES=await Store.journalDates();
+  await loadTradeMeta();
   if(TRADES.length){
     METRICS_ALL=compute(baseTrades());
     syncFilterOptions(); updateJournalEditor(); renderCalendar(); renderDash();
@@ -1201,6 +1352,7 @@ $('prev').onclick=()=>{ if(!METRICS_ALL)return;
   if(--calMonth<0){calMonth=11;calYear--;} renderCalendar(); if(SCOPE==='month') renderDash(); };
 $('next').onclick=()=>{ if(!METRICS_ALL)return;
   if(++calMonth>11){calMonth=0;calYear++;} renderCalendar(); if(SCOPE==='month') renderDash(); };
+on('caltoday','click',jumpToLatest);
 // A picked file is staged (parsed + platform-detected), not loaded immediately.
 on('file','change',e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return; stageFile(f, FILE_CTX); });
 on('c_platform','change',()=>onPlatformChange('landing'));
@@ -1248,13 +1400,24 @@ if($('dataModal')){
   on('dm_importFile','change',e=>{ const f=e.target.files[0]; if(f) dmImport(f); e.target.value=''; });
   on('dm_search','input',e=>{ DM_SEARCH=e.target.value; renderDataManager(); });
   on('dm_clear','click',async()=>{
-    if(!confirm('Erase ALL trades and day-notes saved in this browser? This cannot be undone.')) return;
-    await Store.purge(); JOURNAL_DATES=new Set(); resetApp(); renderDataManager();
+    if(!confirm('Erase ALL trades, day-notes and per-trade tags/notes saved in this browser? This cannot be undone.')) return;
+    await Store.purge(); JOURNAL_DATES=new Set(); TRADE_META=new Map(); DM_EDIT=null; resetApp(); renderDataManager();
   });
-  // delegated delete buttons (trades + notes)
-  on('dm_trades','click',e=>{ const b=e.target.closest('button[data-trade]'); if(b) dmDeleteTrade(b.dataset.trade); });
+  // delegated row actions: Edit opens the per-trade editor, Delete removes the trade
+  on('dm_trades','click',e=>{
+    const ed=e.target.closest('button[data-edit]'); if(ed){ dmOpenTradeEditor(ed.dataset.edit); return; }
+    const b=e.target.closest('button[data-trade]'); if(b) dmDeleteTrade(b.dataset.trade);
+  });
   on('dm_notes','click',e=>{ const b=e.target.closest('button[data-note]');
     if(b && confirm('Delete the note for '+b.dataset.note+'?')) dmDeleteNote(b.dataset.note); });
+  // per-trade editor controls
+  on('dm_editor','click',e=>{
+    if(e.target.closest('[data-editclose]')){ DM_EDIT=null; renderTradeEditor(); return; }
+    if(e.target.closest('[data-editsave]')){ dmSaveEdit(); return; }
+    if(e.target.closest('[data-editclear]')){ dmClearEdit(); return; }
+    const rm=e.target.closest('[data-rmshot]'); if(rm){ dmCaptureEdit(); DM_EDIT.shots.splice(+rm.dataset.rmshot,1); DM_EDIT._msg=''; renderTradeEditor(); }
+  });
+  on('dm_editor','change',e=>{ if(e.target.id==='dm_shotinput'){ const f=e.target.files[0]; if(f) dmAddShot(f); e.target.value=''; } });
 }
 
 /* ============================================================

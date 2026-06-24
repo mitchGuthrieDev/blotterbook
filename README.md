@@ -58,10 +58,11 @@ call is loading the app's own reference-data JSON.
 /app/                   the journal app
   index.html            app markup (links app.css + app.js)
   demo.html             the demo on its own page (shares app.css/app.js; opens in a new tab)
-  app.css               all app styles (shared by index.html and demo.html)
+  staging.html          1:1 sandbox copy of the demo (body[data-mode=staging]) for trialling changes
+  app.css               all app styles (shared by index.html / demo.html / staging.html)
   app.js                the main app script (shared; mode-aware via body[data-mode])
   adapters.js           platform CSV adapters + format auto-detection + fills matcher
-  store.js              IndexedDB persistence (swappable storage interface)
+  store.js              IndexedDB persistence (trades, journal, meta, per-trade trademeta)
   entitlements.js       storage-tier resolver (scaffold; always "local" today)
 /data/                  reference data, fetched at runtime
   brokers.json          broker commission tiers
@@ -79,6 +80,7 @@ call is loading the app's own reference-data JSON.
   build-manifest.mjs    regenerates data/manifest.json (Node built-ins only)
   test-adapters.cjs     synthetic tests for the platform adapters (node scripts/test-adapters.cjs)
 /assets/banner.svg
+/assets/favicon.svg     site favicon (the gradient square from the wordmark)
 LICENSE                 proprietary — all rights reserved
 ```
 
@@ -127,16 +129,45 @@ state and silently does nothing off-Cloudflare or outside the US.
 
 ### Admin page &amp; the Live indicator
 
-`admin.html` is an internal control page (and a `/api/status` Pages Function). The homepage's **Live**
-pill first reads `/api/status`: if an admin has set a fixed status (**Live**, **Offline**, or
-**Maintenance**, with an optional custom label) it shows that; otherwise (**Auto**) it falls back to
-pinging `/app/`. Setup on Cloudflare:
+`admin.html` is an internal control page (and a `/api/status` Pages Function). It can set the
+homepage's **Live** pill and **launch the staging sandbox**. The pill first reads `/api/status`: if an
+admin has set a fixed status (**Live**, **Offline**, or **Maintenance**, with an optional custom
+label) it shows that; otherwise (**Auto**) it falls back to pinging `/app/`. `GET /api/status` is
+public (the homepage needs it); writes are admin-only.
 
-1. Bind a **KV namespace** as `STATUS_KV` to the Pages project (stores the status).
-2. Set an **`ADMIN_KEY`** secret; `POST /api/status` requires a matching `x-admin-key` header.
-3. Gate `admin.html` (and ideally an `admin.blotterbook.com` custom domain) with **Cloudflare Access**.
+**Backend setup:** bind a **KV namespace** as `STATUS_KV` to the Pages project (stores the status),
+and set an **`ADMIN_KEY`** secret (`POST /api/status` requires a matching `x-admin-key` header).
 
-`GET /api/status` is public (the homepage needs it); writes are admin-only.
+**Serving admin at `admin.blotterbook.com` (not `blotterbook.com/admin`) behind Zero Trust:**
+
+1. **Add the subdomain to the Pages project.** Pages → your project → *Custom domains* → *Set up a
+   custom domain* → `admin.blotterbook.com` (Cloudflare creates the CNAME automatically since the zone
+   is on Cloudflare).
+2. **Point the subdomain root at `admin.html`.** A custom domain serves the whole site, so map the
+   subdomain's `/` to the admin page with a **Redirect Rule** (Rules → *Redirect Rules* → Create):
+   *When* `hostname equals admin.blotterbook.com` *and* `URI path equals /` → *Static redirect* to
+   `https://admin.blotterbook.com/admin.html` (302). (Or use a Transform/Rewrite rule to rewrite the
+   path without a visible redirect.)
+3. **Lock it down with Cloudflare Zero Trust (Access).** Zero Trust dashboard → *Access* →
+   *Applications* → *Add an application* → **Self-hosted** → Application domain `admin.blotterbook.com`
+   (add a second domain/path for `blotterbook.com/admin*` and `blotterbook.com/admin.html` so the page
+   can't be reached on the apex). Add a **policy**: action *Allow*, rule e.g. *Emails* = your address
+   (or a Google/GitHub identity provider). Optionally add `blotterbook.com/api/status` to require Access
+   on writes too. Save — Cloudflare now forces login before the admin page or its writes resolve.
+4. **Keep the `ADMIN_KEY` layer.** Even behind Access, the admin page still sends `x-admin-key`, so
+   `POST /api/status` is defended by both Access *and* the secret.
+
+The admin page degrades gracefully off Cloudflare (locally `/api/status` 404s and it shows
+"deploy on Cloudflare to use").
+
+### Staging sandbox
+
+`app/staging.html` (`body[data-mode="staging"]`) is a **1:1 copy of the demo** — full app on the
+generated sample dataset, never persisted — used to trial UI/behavior changes before they reach the
+main app. The admin page has a **Launch staging env** button. Staging additionally enables the
+experimental **web-grid dashboard** (the "Main-app web UI redesign" trial): single column on mobile,
+and at ≥1100px a multi-column grid with the performance graph across the top, the calendar and
+break-even side-by-side, and the statistics in a right-hand column.
 
 ### Mobile navigation
 
@@ -221,13 +252,13 @@ They're flagged *(beta — verify the numbers)* in the UI until validated agains
 | Section | What it shows |
 | --- | --- |
 | **Top bar** | The **Blotterbook** wordmark (links to the homepage) and the loaded-source text — once data is loaded, clicking it opens **Manage data** (it does nothing before load); it's truncated so long filenames don't bloat the bar. Actions: **Changelog**, **Export report**, **Manage data**, Contact. |
-| **Landing (no data)** | The intro and the **Broker & Costs** module sit centered as a group (like the homepage hero). After **Load CSV**, a **Platform** dropdown (auto-filled by the detector) and a parse-status line appear, then **Start Blotterbook** commits and enters the app. |
+| **Landing (no data)** | The intro and the **Broker & Costs** module sit centered as a group (like the homepage hero). **Load CSV** is always available — pick a file and a **Platform** dropdown (auto-filled by the detector) plus a parse-status line appear. **Start Blotterbook** commits and enters the app; it stays disabled until a CSV parses *and* broker/feed/state are chosen (the gate moved off Load CSV onto Start). |
 | **Broker & Costs** | Broker (incl. **TradingView PaperTrade**) / data feed / platform fee / state. Drives the cost model only — independent of the CSV's platform. **Starts minimized** once data is loaded (the load/Start controls are hidden); selections persist. |
 | **Scope toggle** | Switches most views between *All time* and the *Selected month*. |
-| **Filters** | Date range, symbol, side, session (RTH/ETH), and day-of-week. Applies before everything. |
+| **Filters** | Date range, symbol, side, session (RTH/ETH), **tag** (when any per-trade tags exist), and day-of-week. Applies before everything. |
 | **Stat cards** | Net PnL (+ take-home), win rate, profit factor, avg win/loss, max drawdown. |
-| **Performance** | Cumulative PnL vs. date, with stepped y-axis gridlines and a gradient area fill. Click the **Gross / Net / Take-home** buttons to toggle overlays (highlighted when active; at least one always stays on); hover for values; click a calendar day to mark it. |
-| **Trading Calendar** | Sunday-first month grid of daily PnL with weekly summaries; **day-notes** below. |
+| **Performance** | Cumulative PnL vs. date, with stepped y-axis gridlines and a gradient area fill. Click the **Gross / Net / Take-home** buttons to toggle overlays (at least one stays on); hover for values; **click anywhere on the graph to select that date and jump the calendar to its month**. |
+| **Trading Calendar** | Sunday-first month grid of daily PnL with weekly summaries and a **jump-to-latest** arrow (snaps to the most recent month of data); **day-notes** below. Clicking a day marks it on the graph. |
 | **Break-even & Cost Budget** | Per-symbol commission table and a full-width itemized waterfall — gross, commissions, subscriptions, net pre-tax, the folded-in **Section 1256** tax detail, take-home, and break-even/trade. |
 | **Advanced Statistics** | Daily averages, expectancy, long/short split, best/worst day & weekday, Sharpe, streaks, and **Avg Hold Time** (when the import was a fills export). |
 | **Definitions & Caveats** | How each number is computed and where the data falls short. |
@@ -335,7 +366,7 @@ backend implements the same interface, so adding cloud sync won't touch the rest
 local-data control. It reuses the existing `Store` interface and keeps loading, backup, and
 destructive actions behind one clearly-labeled surface. It has six parts:
 
-- **Overview** — trade count, date range, day-note count, and the approximate on-disk size.
+- **Overview** — trade count, date range, day-note count, **tagged-trade count**, and the approximate on-disk size.
 - **Load data** — *Load CSV* lives here (moved out of the top bar). Picking a file parses and
   auto-detects the platform into the **Platform** dropdown; you then confirm with **Import**, which
   merges only the new trades. The platform choice applies to that one upload — the dropdown resets to
@@ -347,16 +378,20 @@ destructive actions behind one clearly-labeled surface. It has six parts:
   Restores de-duplicate by the same stable trade id, so re-importing is always safe. This is the
   answer to "local storage is per-browser" — a portable snapshot you control.
 - **Day notes** — every dated note, each with a delete button.
-- **Trades** — a searchable (symbol / date / side), scrollable table with per-row delete. Deletions
-  apply immediately across every view and recompute metrics live.
+- **Trades** — a searchable (symbol / date / side), scrollable table with per-row **Edit** and
+  **Delete**. **Edit** opens a per-trade editor for **tags** (comma-separated), a free-text **note**,
+  and **screenshots** (image uploads stored as data URLs). Tags show as chips on the row and populate
+  the dashboard's **Tag** filter; deletions apply immediately and recompute metrics live.
 - **Danger zone** — *Erase all local data* (`Store.purge()`), behind a confirm. (This replaced the
   old top-bar Clear data button.)
 
 Each section renders independently (wrapped in try/catch), so a single failure can't blank the rest.
 
-The `Store` interface stays the single source of truth — the manager added `deleteTrade`,
-`getAllJournal`, `deleteJournal`, `getAllMeta`, `exportAll`, and `importAll` to it, so a future cloud
-backend gets the same management UI for free.
+Per-trade metadata lives in its own IndexedDB store (`trademeta`, keyed by trade id) added in DB
+**v2**; it's covered by backup/restore and `purge`. The `Store` interface stays the single source of
+truth — the manager added `deleteTrade`, `getAllJournal`, `deleteJournal`, `getAllMeta`,
+`getTradeMeta`/`saveTradeMeta`/`deleteTradeMeta`/`allTradeMeta`, `exportAll`, and `importAll`, so a
+future cloud backend gets the same management UI for free.
 
 ## Filters & journal
 
@@ -364,11 +399,15 @@ backend gets the same management UI for free.
 
 - **Date range**, **Symbol** (root), **Side** (long/short).
 - **Session** — RTH (09:30–16:00) vs. ETH, by the timestamp's clock time as exported.
+- **Tag** — appears once any trade is tagged (Manage data → Edit a trade); filters to trades carrying
+  that tag.
 - **Day of week** — toggle any subset of S M T W T F S.
 - A live `N / M trades` count and a **Reset filters** button.
 
 **Day-notes / journal:** click any calendar day to open a notes editor for that date. Notes
 auto-save to IndexedDB; days with a note get a small dot on the calendar. (Disabled for demo data.)
+**Per-trade tags, notes &amp; screenshots** are edited from Manage data → Trades → **Edit** (see
+[Managing local data](#managing-local-data)).
 
 ## Architecture
 
@@ -423,13 +462,13 @@ The live, prettier version is [`roadmap.html`](roadmap.html). Highlights, roughl
   [the note below](#sourcing-accurate-rate-data).
 - **Validate & harden platform adapters** — confirm the eight `beta` adapters against real exports,
   widen the futures point-value map, add a manual column-mapping fallback for unrecognized formats.
-- **Main-app web UI redesign** — the vertical stack is great on mobile but wastes desktop real
-  estate; a responsive multi-column dashboard for wide screens.
+- **Main-app web UI redesign** — *in trial:* a responsive multi-column dashboard for wide screens,
+  currently behind the [staging sandbox](#staging-sandbox); promote to the main app once validated.
 - **Code review & refactor pass** — a lot landed fast; a deliberate cleanup before the codebase grows.
 - **Compliance review session** — disclaimers, data handling, and any wording/registration needs as
   monetization approaches.
-- **Journal feature parity** — trade tags/setups, screenshots & richer notes, R-multiple & risk
-  tracking, MAE/MFE, saved filter views.
+- **Journal feature parity** — *started:* per-trade **tags, notes, and screenshots** plus a tag filter
+  now ship. *Next:* setups, R-multiple & risk tracking, MAE/MFE, and saved filter views.
 - **Accounts + cross-device sync (zero-knowledge)** — end-to-end-encrypted sync so data moves across
   devices without us ever seeing it (Obsidian-Sync-style); removes the re-upload-per-device pain while
   keeping the privacy promise. A `CloudStore` implementing the same `Store` interface.

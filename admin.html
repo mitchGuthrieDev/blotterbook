@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <title>Admin — Blotterbook</title>
 <link rel="stylesheet" href="site.css">
 <style>
@@ -75,6 +76,11 @@
     <button class="modebtn" data-mode="maintenance"><span class="d"></span>Maintenance</button>
   </div>
   <p class="amsg" id="amsg"></p>
+
+  <h2>Staging environment</h2>
+  <p>A 1:1 sandbox copy of the app on sample data, for trialling UI/behavior changes before they
+    reach the main app.</p>
+  <div class="modes"><a class="modebtn" href="/app/staging.html" target="_blank" rel="noopener"><span class="d" style="background:var(--warn)"></span>Launch staging env &rarr;</a></div>
 
   <h2>More controls</h2>
   <p>Additional admin configuration will live here (feature flags, reference-data refresh, etc.).</p>

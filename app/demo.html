@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <title>Blotterbook — Demo</title>
 <link rel="stylesheet" href="app.css">
 </head>
@@ -70,6 +71,7 @@
       <select id="f_side"><option value="">All</option><option value="long">Long</option><option value="short">Short</option></select></div>
     <div class="fld"><label for="f_session">Session</label>
       <select id="f_session"><option value="">All</option><option value="rth">RTH (09:30–16:00)</option><option value="eth">ETH (overnight)</option></select></div>
+    <div class="fld" style="display:none"><label for="f_tag">Tag</label><select id="f_tag"><option value="">All</option></select></div>
     <div class="fld"><label>Day of week</label>
       <div class="dows" id="f_dows"></div></div>
     <span class="fcount" id="f_count"></span>
@@ -111,6 +113,9 @@
           <button id="prev" title="Previous month">&#8249;</button>
           <span class="mlabel" id="mlabel"></span>
           <button id="next" title="Next month">&#8250;</button>
+          <button id="caltoday" title="Jump to the most recent month">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 6l6 6-6 6"/><path d="M19 5v14"/></svg>
+          </button>
         </div>
         <div class="calscroll"><div class="calgrid" id="cal"></div></div>
         <div class="journal" id="journal">
