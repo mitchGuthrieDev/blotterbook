@@ -14,13 +14,31 @@
   <!-- ============ top bar ============ -->
   <div class="top">
     <div class="brand">
+      <button class="sesspill online" id="sesspill" title="Session status — click for details" aria-haspopup="true" aria-expanded="false">
+        <span class="sessdot"></span><span class="sesstxt">Session</span>
+      </button>
       <a class="bwordmark" href="../index.html" title="Back to the Blotterbook homepage">Blotterbook</a>
+      <span class="ver" title="Staging version">v0.13</span>
       <small id="srcname" title="Manage your local data">no data loaded</small>
+    </div>
+    <div class="sesspop" id="sesspop" hidden>
+      <h4>Session status</h4>
+      <ul>
+        <li><span class="sessdot online"></span><b>Online</b> — connected; every module is available.</li>
+        <li><span class="sessdot offline"></span><b>Offline</b> — no internet. The journal keeps working locally; any module that needs the network is paused.</li>
+        <li><span class="sessdot degraded"></span><b>Degraded</b> — local data looks corrupted. Restore from a backup in Manage data.</li>
+      </ul>
+      <p class="muted">No module currently needs a connection — this indicator is forward-looking flair.</p>
     </div>
     <div class="topright">
       <div class="src" id="srcmeta"></div>
       <div class="topbtns">
         <span class="demotag staging">Staging</span>
+        <span class="wsbar" id="wsbar" title="Workspace templates — saves which modules are placed where and which are collapsed">
+          <select id="ws_tpl" aria-label="Workspace template"><option value="">— Workspace —</option></select>
+          <button class="btn" id="ws_save" title="Save the current layout as a named template">Save layout</button>
+          <button class="btn" id="ws_default" title="Revert to the default layout">Default</button>
+        </span>
         <button class="btn" id="exportBtn" title="Generate a condensed performance report in a new tab">Export report</button>
         <button class="btn" id="manageBtn" title="Load, edit, back up, and manage the data saved in this browser">Manage data</button>
         <a class="btn" href="/admin.html" title="Back to the admin panel">Exit staging</a>
@@ -204,6 +222,16 @@
             <dt>Calendar-day grouping</dt><dd>Days are grouped by the literal date in the Time column, not the CME session day. Sharpe uses daily PnL, population std, not annualized — near-meaningless on a handful of days.</dd>
           </dl>
         </div>
+      </div>
+    </section>
+
+    <!-- Activity terminal (staging flair — read-only live feed of platform actions) -->
+    <section class="panel term" data-key="term">
+      <div class="phead"><span class="grip" title="Drag to reorder">&#9776;</span>
+        <h2>Activity terminal</h2><button class="chev" aria-label="Collapse">&#9662;</button></div>
+      <div class="pbody">
+        <p class="hint">A live, read-only feed of actions on this workspace — CSV loads, edits, backups. Display only; it takes no input.</p>
+        <div class="termwin" id="termwin" aria-live="polite" role="log"></div>
       </div>
     </section>
 

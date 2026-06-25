@@ -7,3 +7,19 @@
 # Temp image conversions
 _shot*.png
 _a.heic
+
+# Cloudflare / Wrangler local secrets — NEVER commit (ADMIN_KEY etc.)
+.dev.vars
+.env
+.env.*
+.wrangler/
+
+# Dependencies / build output / logs
+node_modules/
+dist/
+build/
+*.log
+
+# Editor
+.vscode/
+.idea/

@@ -84,8 +84,24 @@
 
   <h2>Staging environment</h2>
   <p>A 1:1 sandbox copy of the app on sample data, for trialling UI/behavior changes before they
-    reach the main app.</p>
-  <div class="modes"><a class="modebtn" href="/app/staging.html" target="_blank" rel="noopener"><span class="d" style="background:var(--warn)"></span>Launch staging env &rarr;</a></div>
+    reach the main app. The page is gated by the admin key — this button carries it for you (sets a
+    short-lived <code>bb_staging</code> cookie, then opens staging).</p>
+  <div class="modes"><button class="modebtn" id="launchstaging"><span class="d" style="background:var(--warn)"></span>Launch staging env &rarr;</button></div>
+  <p class="amsg" id="stagemsg"></p>
+
+  <h2>Platform versions</h2>
+  <p>The live version recorded for each surface. The running apps display their own baked-in version;
+    this is the source-of-truth record in KV used to coordinate releases. Promoting staging to the main
+    app / demo is a code release (see the README) — set these to match after a promotion.</p>
+  <p class="curstate" id="verstate">Versions: loading…</p>
+  <div class="adminkeyrow">
+    <div class="fld"><label for="v_main">Main app</label><input type="text" id="v_main" maxlength="16" placeholder="v0.11"></div>
+    <div class="fld"><label for="v_demo">Demo</label><input type="text" id="v_demo" maxlength="16" placeholder="v0.11"></div>
+    <div class="fld"><label for="v_staging">Staging</label><input type="text" id="v_staging" maxlength="16" placeholder="v0.13"></div>
+    <div class="fld"><label for="v_platform">Platform label</label><input type="text" id="v_platform" maxlength="24" placeholder="Beta 1.0"></div>
+  </div>
+  <div class="modes"><button class="modebtn" id="saveversions"><span class="d" style="background:var(--accent)"></span>Save versions</button></div>
+  <p class="amsg" id="vermsg"></p>
 
   <h2>Feature flags</h2>
   <p>Server-side configuration stored in KV. (Scaffold — not yet consumed by the main app.)</p>
@@ -168,12 +184,20 @@
   var flagmsg=document.getElementById('flagmsg'), refmsg=document.getElementById('refmsg'), refstate=document.getElementById('refstate');
   function setFlagMsg(t,k){ flagmsg.textContent=t||''; flagmsg.className='amsg'+(k?' '+k:''); }
   function setRefMsg(t,k){ refmsg.textContent=t||''; refmsg.className='amsg'+(k?' '+k:''); }
+  var verstate=document.getElementById('verstate'), vermsg=document.getElementById('vermsg');
+  function setVerMsg(t,k){ vermsg.textContent=t||''; vermsg.className='amsg'+(k?' '+k:''); }
   function loadConfig(){
     fetch('/api/config',{cache:'no-store'}).then(function(r){return r.json();}).then(function(c){
       var f=c.flags||{};
       document.querySelectorAll('[data-flag]').forEach(function(el){ el.checked=!!f[el.dataset.flag]; });
       refstate.innerHTML='Cache version: <b>'+(c.refDataVersion?new Date(c.refDataVersion).toLocaleString():'never')+'</b>';
-    }).catch(function(){ refstate.textContent='Config unavailable (deploy on Cloudflare to use)'; });
+      var v=c.versions||{};
+      document.getElementById('v_main').value=v.main||'';
+      document.getElementById('v_demo').value=v.demo||'';
+      document.getElementById('v_staging').value=v.staging||'';
+      document.getElementById('v_platform').value=v.platform||'';
+      verstate.innerHTML='Main <b>'+(v.main||'—')+'</b> · Demo <b>'+(v.demo||'—')+'</b> · Staging <b>'+(v.staging||'—')+'</b> · Platform <b>'+(v.platform||'—')+'</b>';
+    }).catch(function(){ refstate.textContent='Config unavailable (deploy on Cloudflare to use)'; verstate.textContent='Versions: unavailable (deploy on Cloudflare to use)'; });
   }
   function postConfig(body,onMsg){
     var key=(keyInput.value||'').trim();
@@ -189,6 +213,26 @@
     postConfig({flags:flags}, setFlagMsg);
   });
   document.getElementById('bumpref').addEventListener('click',function(){ postConfig({bumpRefData:true}, setRefMsg); });
+  document.getElementById('saveversions').addEventListener('click',function(){
+    postConfig({versions:{
+      main:(document.getElementById('v_main').value||'').trim(),
+      demo:(document.getElementById('v_demo').value||'').trim(),
+      staging:(document.getElementById('v_staging').value||'').trim(),
+      platform:(document.getElementById('v_platform').value||'').trim()
+    }}, setVerMsg);
+  });
+
+  // Launch staging: carry the admin key as a short-lived cookie so the middleware gate passes,
+  // then open the gated page. (Browsers can't set request headers on a navigation; the Cookie
+  // header is the navigation-safe equivalent.)
+  document.getElementById('launchstaging').addEventListener('click',function(){
+    var key=(keyInput.value||'').trim();
+    var sm=document.getElementById('stagemsg');
+    if(key){ document.cookie='bb_staging='+encodeURIComponent(key)+';path=/app/;SameSite=Strict;max-age=3600';
+      sm.textContent=''; }
+    else { sm.textContent='No admin key — staging will only open if ADMIN_KEY is unset on the server.'; sm.className='amsg err'; }
+    window.open('/app/staging.html','_blank','noopener');
+  });
 
   autoKey();
   loadStatus();

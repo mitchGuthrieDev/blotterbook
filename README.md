@@ -58,7 +58,7 @@ call is loading the app's own reference-data JSON.
 /app/                   the journal app
   index.html            app markup (links app.css + app.js)
   demo.html             the demo on its own page (shares app.css/app.js; opens in a new tab)
-  staging.html          1:1 sandbox copy of the demo (body[data-mode=staging]) for trialling changes
+  staging.html          1:1 sandbox clone of the main app (body[data-mode=staging]; key-gated) for trialling changes
   app.css               all app styles (shared by index.html / demo.html / staging.html)
   app.js                the main app script (shared; mode-aware via body[data-mode])
   adapters.js           platform CSV adapters + format auto-detection + fills matcher
@@ -71,11 +71,11 @@ call is loading the app's own reference-data JSON.
   state-tax.json        Section 1256 model + per-state top rates
   manifest.json         content hashes for cache-busting (generated)
 /functions/             Cloudflare Pages Functions
-  _middleware.js        makes admin.blotterbook.com the only /admin entry point; gates admin API writes
+  _middleware.js        key-gates /app/staging.html (x-admin-key header / bb_staging cookie / ?k=)
   api/changelog.js      cached (1h) GitHub commit feed for the changelog page
   api/geo.js            visitor region (Cloudflare edge geo) → pre-fill the tax state
   api/status.js         homepage Live-indicator status (GET public; POST admin-only, KV-backed)
-  api/config.js         feature flags + reference-data cache version (KV; POST admin-only)
+  api/config.js         feature flags + reference-data cache version + platform versions (KV; POST admin-only)
   api/admin-key.js      returns ADMIN_KEY to Access-authenticated admins (key auto-fill)
   api/{me,checkout,webhook}.js   Stripe/accounts scaffold
   README.md             accounts/payments/storage-tier plan
@@ -133,10 +133,11 @@ state and silently does nothing off-Cloudflare or outside the US.
 ### Admin page &amp; the Live indicator
 
 `admin.html` is an internal control page. It can set the homepage's **Live** pill, manage **feature
-flags** + a **reference-data cache version**, auto-fill its own admin key, and **launch the staging
-sandbox**. The homepage pill reads `/api/status`: a fixed status (**Live** = green, **Maintenance** =
-yellow, **Offline** = red, with an optional label) wins; otherwise (**Auto**) it pings `/app/`.
-`GET /api/status` and `GET /api/config` are public; all writes are admin-only.
+flags** + a **reference-data cache version**, record the **platform versions** per surface, auto-fill
+its own admin key, and **launch the staging sandbox** (carrying the key for you). The homepage pill
+reads `/api/status`: a fixed status (**Live** = green, **Maintenance** = yellow, **Offline** = red,
+with an optional label) wins; otherwise (**Auto**) it pings `/app/`. `GET /api/status` and
+`GET /api/config` are public; all writes are admin-only.
 
 **Backend setup:** bind a **KV namespace** as `STATUS_KV` to the Pages project (stores status +
 config), and set an **`ADMIN_KEY`** secret (`POST /api/status` and `/api/config` require a matching
@@ -146,21 +147,41 @@ config), and set an **`ADMIN_KEY`** secret (`POST /api/status` and `/api/config`
 Access's `Cf-Access-Jwt-Assertion` header (i.e. an authenticated admin); the admin page fetches it on
 load and pre-fills the key, so you never type it. Off-Access it 401s and you enter the key manually.
 
-**Only `admin.blotterbook.com` (never `blotterbook.com/admin`).** `functions/_middleware.js` 404s
-`/admin*` and `/api/admin-key` on any host that isn't the admin subdomain, and 403s admin API writes
-off-host (localhost / `*.pages.dev` are allowed for dev). To serve it:
+**Protecting the admin panel.** The admin panel is protected by **Cloudflare Access** plus the
+**`ADMIN_KEY`** on writes — `functions/_middleware.js` no longer 404s `/admin` (an earlier version did,
+which blocked admin access; that was reverted). To lock it to its own subdomain:
 
 1. **Add the subdomain to the Pages project.** Pages → *Custom domains* → add `admin.blotterbook.com`.
 2. **Point the subdomain root at `admin.html`.** A custom domain serves the whole site, so add a
    **Redirect Rule** (Rules → *Redirect Rules*): *When* `hostname equals admin.blotterbook.com` *and*
    `URI path equals /` → redirect to `https://admin.blotterbook.com/admin.html` (or a Transform rewrite).
 3. **Cloudflare Zero Trust (Access).** Zero Trust → *Access* → *Applications* → **Self-hosted** →
-   domain `admin.blotterbook.com`; policy *Allow* your email/IdP. The middleware already blocks the apex
-   path, so a separate apex Access app is optional.
+   domain `admin.blotterbook.com`; policy *Allow* your email/IdP. Add the apex path too if you want to
+   block `blotterbook.com/admin`.
 4. **`ADMIN_KEY` stays as a second layer** — writes are defended by both Access *and* the key.
+
+**Staging is key-gated.** `functions/_middleware.js` now gates `/app/staging.html`: it requires the
+`ADMIN_KEY` via an `x-admin-key` header, a `bb_staging` cookie, or a `?k=` query param (if `ADMIN_KEY`
+isn't configured, staging stays open). Browsers can't set request headers on a navigation, so the admin
+panel's **Launch staging env** button sets the short-lived `bb_staging` cookie (the navigation-safe
+equivalent — the Cookie request header) before opening the page.
 
 The admin page degrades gracefully off Cloudflare (locally the APIs 404 and it shows "deploy on
 Cloudflare to use").
+
+### Versioning &amp; releases
+
+Each surface displays a **baked-in version** in its header — main app **v0.11**, demo **v0.11**,
+staging **v0.13** — and the platform label is **Beta 1.0**. Day-to-day development happens in
+**staging**; the main app and demo stay stable and lag staging by several versions until changes are
+promoted. The admin panel's **Platform versions** panel records the live version per surface in KV
+(`/api/config` → `versions`) as the source-of-truth.
+
+**Promoting staging → main app / demo** is a *code release*, not a config flip: static hosting serves
+whatever code is deployed, so you copy the validated staging markup/behavior into `index.html` /
+`demo.html`, remove the `STAGING_PAGE` gating, bump the version badges, and deploy. The planned upgrade
+(see the roadmap) is to serve **versioned app builds** and let the admin pick the live version per
+surface — enabling on-the-fly promote/rollback without a redeploy.
 
 ### Staging sandbox
 
@@ -182,6 +203,21 @@ Staging-only experiments (gated by `STAGING_PAGE` — the main app is unchanged)
 - **Note dots on the graph** — a small blue dot marks each date that has a day-note (like the calendar).
 - **Saved filters** — name and recall filter views from the filter bar (**Save filter** + a Saved
   dropdown), managed in **Manage data → Saved filters**; stored in the staging DB's meta.
+- **Note dots on no-trade days** — a day-note on a date with no trades now lands on the equity line
+  (interpolated/carried forward), not dropped to the baseline.
+- **Activity terminal** — a read-only, bottom-of-grid console that live-logs platform actions (CSV
+  imports, note saves, backups, deletes, connectivity changes). Display only; takes no input.
+- **Session-status pill** — a header indicator (green online / yellow offline / red degraded) that
+  follows connectivity; clicking it opens a legend. Forward-looking flair — no module needs a
+  connection yet.
+- **Workspace templates** — **Save layout** / load / **Default** controls in the header that capture
+  which modules are placed where and which are collapsed; stored in `localStorage` (`tj_ws_templates`).
+- **Equal-size modules** — calendar, break-even, and advanced-stats panels share row height (the grid
+  stretches them) so they no longer leave negative space.
+
+The **demo** also gains a preview-only **Manage data** panel: it renders the in-memory sample
+(overview + read-only trade list) with every action disabled and a "preview only" banner, so visitors
+can see the feature without touching the example data.
 
 ### Mobile navigation
 

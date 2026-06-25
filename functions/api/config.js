@@ -10,7 +10,14 @@
    Defaults: { flags: { showBetaAdapters:true, maintenanceBanner:false }, refDataVersion:null } */
 
 const KEY = 'config';
-const DEFAULTS = { flags: { showBetaAdapters: true, maintenanceBanner: false }, refDataVersion: null };
+const DEFAULTS = {
+  flags: { showBetaAdapters: true, maintenanceBanner: false },
+  refDataVersion: null,
+  // Live version per surface + the overall platform label. Admin-editable; the
+  // apps display their own baked-in version, this is the source-of-truth record
+  // used to coordinate staging -> prod promotions.
+  versions: { main: 'v0.11', demo: 'v0.11', staging: 'v0.13', platform: 'Beta 1.0' }
+};
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
@@ -36,6 +43,7 @@ export async function onRequest(context) {
     let body; try { body = await request.json(); } catch (_) { return json({ error: 'invalid JSON body' }, 400); }
     const cur = await read(kv);
     if (body && body.flags && typeof body.flags === 'object') cur.flags = { ...cur.flags, ...body.flags };
+    if (body && body.versions && typeof body.versions === 'object') cur.versions = { ...cur.versions, ...body.versions };
     if (body && body.bumpRefData) cur.refDataVersion = new Date().toISOString();
     cur.updatedAt = new Date().toISOString();
     await kv.put(KEY, JSON.stringify(cur));

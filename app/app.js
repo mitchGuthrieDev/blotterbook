@@ -319,8 +319,16 @@ function renderCurve(m){
       const t=new Date(nd+'T00:00:00').getTime();
       if(t<d0ms || t>d1ms) continue;
       const sp=disp.find(p=>p.date===nd);
-      const y = sp ? yPx(sp[prim.key]) : (H-padB);
-      noteDots+=`<circle class="notedot" cx="${xMs(t)}" cy="${y}" r="3" fill="var(--accent)" stroke="var(--bg)" stroke-width="1"><title>Note · ${nd}</title></circle>`;
+      let val;
+      if(sp){ val=sp[prim.key]; }
+      else { // no trade that day → put the dot on the carried/interpolated equity line
+        let prev=null;
+        for(const p of disp){ const pms=new Date(p.date+'T00:00:00').getTime();
+          if(pms>t){ if(prev){ const pp=new Date(prev.date+'T00:00:00').getTime(); const f=(t-pp)/((pms-pp)||1); val=prev[prim.key]+(p[prim.key]-prev[prim.key])*f; } else val=p[prim.key]; break; }
+          prev=p; val=p[prim.key];
+        }
+      }
+      noteDots+=`<circle class="notedot" cx="${xMs(t)}" cy="${yPx(val||0)}" r="3" fill="var(--accent)" stroke="var(--bg)" stroke-width="1"><title>Note · ${nd}</title></circle>`;
     }
   }
   // axis titles
@@ -699,6 +707,7 @@ async function commitPending(ctx){
     TRADES=trades;
     metaHtml=`<b>${TRADES.length}</b> trades &nbsp;·&nbsp; ${TRADES[0].date} → ${TRADES[TRADES.length-1].date}`;
   }
+  logAction('CSV imported · '+(name||'file')+' · now '+TRADES.length+' trades');
   const manage = ctx==='manage';
   resetStage(ctx);                       // clear the staging UI + platform select (per-upload only)
   if(manage){
@@ -901,6 +910,7 @@ function wireJournal(){
     document.getElementById('j_stat').textContent = ta.value.trim()?'saved':'';
     const cell=document.querySelector(`#cal .cell[data-date="${selectedDate}"]`);
     if(cell) cell.classList.toggle('hasnote', JOURNAL_DATES.has(selectedDate));
+    logAction('Day note saved · '+selectedDate);
     if(STAGING_PAGE && METRICS_ALL) renderCurve(curveMetrics());   // refresh note dots on the graph
   };
   ta.addEventListener('input',()=>{ clearTimeout(jSaveTimer); jSaveTimer=setTimeout(save,500); });
@@ -1046,6 +1056,82 @@ function initPanels(){
     const after=panelAfter(dash,e.clientY);
     if(after==null) dash.appendChild(dragging); else dash.insertBefore(dragging,after);
   });
+}
+
+/* ============================================================
+   Staging-only flair: activity terminal, session-status pill,
+   and save/load/revert workspace templates. logAction() is a no-op
+   on the main app and demo (those pages have no terminal element),
+   so it is safe to call from shared code paths.
+   ============================================================ */
+const WS_KEY='tj_ws_templates';
+const DEFAULT_DASH_ORDER=['perf','cal','cost','adv','defs','term'];
+function logAction(msg, kind){
+  const win=document.getElementById('termwin'); if(!win) return;   // staging only
+  const line=document.createElement('div');
+  line.className='tl'+(kind?(' evt-'+kind):'');
+  const ts=document.createElement('span'); ts.className='ts'; ts.textContent=new Date().toTimeString().slice(0,8)+'  ';
+  const tm=document.createElement('span'); tm.className='tm'; tm.textContent=msg;
+  line.appendChild(ts); line.appendChild(tm);
+  win.appendChild(line);
+  while(win.children.length>200) win.removeChild(win.firstChild);
+  win.scrollTop=win.scrollHeight;
+}
+function setSession(state){   // 'online' | 'offline' | 'degraded'
+  const pill=document.getElementById('sesspill'); if(!pill) return;
+  pill.classList.remove('online','offline','degraded'); pill.classList.add(state);
+  const txt=pill.querySelector('.sesstxt');
+  if(txt) txt.textContent={online:'Online',offline:'Offline',degraded:'Degraded'}[state]||'Session';
+}
+function currentWorkspace(){
+  const order=[...document.querySelectorAll('#dash .panel')].map(p=>p.dataset.key);
+  const collapsed={}; document.querySelectorAll('#dash .panel.collapsed').forEach(p=>collapsed[p.dataset.key]=1);
+  return { order, collapsed };
+}
+function applyWorkspace(tpl){
+  const dash=document.getElementById('dash'); if(!dash||!tpl) return;
+  (tpl.order||DEFAULT_DASH_ORDER).forEach(k=>{ const el=dash.querySelector(`.panel[data-key="${k}"]`); if(el) dash.appendChild(el); });
+  const col=tpl.collapsed||{};
+  dash.querySelectorAll('.panel').forEach(p=>p.classList.toggle('collapsed', !!col[p.dataset.key]));
+  saveOrder(); saveCollapsed();
+  if(METRICS_ALL) renderCurve(curveMetrics());
+}
+function readWsTemplates(){ try{ return JSON.parse(localStorage.getItem(WS_KEY)||'{}')||{}; }catch(e){ return {}; } }
+function writeWsTemplates(o){ try{ localStorage.setItem(WS_KEY,JSON.stringify(o)); }catch(e){} }
+function refreshWsSelect(sel){
+  const el=document.getElementById('ws_tpl'); if(!el) return;
+  const tpls=readWsTemplates();
+  el.innerHTML='<option value="">— Workspace —</option>'
+    + Object.keys(tpls).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  if(sel) el.value=sel;
+}
+function initStaging(){
+  if(!STAGING_PAGE) return;
+  // session pill: state follows connectivity; click toggles the legend popup
+  setSession(navigator.onLine===false ? 'offline' : 'online');
+  window.addEventListener('online', ()=>{ setSession('online'); logAction('Connection restored'); });
+  window.addEventListener('offline',()=>{ setSession('offline'); logAction('Connection lost — working offline','warn'); });
+  const pill=document.getElementById('sesspill'), pop=document.getElementById('sesspop');
+  if(pill && pop){
+    pill.addEventListener('click',e=>{ e.stopPropagation();
+      const willOpen=pop.hasAttribute('hidden');
+      pop.toggleAttribute('hidden', !willOpen);
+      pill.setAttribute('aria-expanded', willOpen?'true':'false'); });
+    document.addEventListener('click',e=>{ if(!pop.hasAttribute('hidden') && !pill.contains(e.target) && !pop.contains(e.target)){
+      pop.setAttribute('hidden',''); pill.setAttribute('aria-expanded','false'); } });
+  }
+  // workspace templates
+  refreshWsSelect();
+  on('ws_save','click',()=>{ const name=(prompt('Name this workspace layout:')||'').trim(); if(!name) return;
+    const t=readWsTemplates(); t[name]=currentWorkspace(); writeWsTemplates(t); refreshWsSelect(name);
+    logAction('Workspace template saved · '+name); });
+  on('ws_tpl','change',e=>{ const n=e.target.value; if(!n) return; const t=readWsTemplates()[n];
+    if(t){ applyWorkspace(t); logAction('Workspace template loaded · '+n); } });
+  on('ws_default','click',()=>{ try{ localStorage.removeItem(LS_ORDER); localStorage.removeItem(LS_COLLAPSE); }catch(e){}
+    applyWorkspace({ order:DEFAULT_DASH_ORDER, collapsed:{} });
+    const el=document.getElementById('ws_tpl'); if(el) el.value='';
+    logAction('Layout reverted to default'); });
+  logAction('Staging session ready · v0.13');
 }
 
 /* ============================================================
@@ -1248,10 +1334,11 @@ function exportReport(){
    ============================================================ */
 let DM_SEARCH='';
 function openDataManager(){
-  if(!Store.available()){ alert('Local storage is not available in this browser.'); return; }
+  const demo = PAGE_MODE==='demo';
+  if(!demo && !Store.available()){ alert('Local storage is not available in this browser.'); return; }
   const ov=$('dataModal'); if(!ov) return;
   ov.classList.add('open'); document.body.style.overflow='hidden';
-  resetStage('manage');     // platform select returns to "Auto-detect" each time it's opened
+  if(!demo) resetStage('manage');   // platform select returns to "Auto-detect" each time it's opened
   renderDataManager();
 }
 function closeDataManager(){ const ov=$('dataModal'); if(ov) ov.classList.remove('open'); document.body.style.overflow=''; }
@@ -1259,13 +1346,19 @@ function closeDataManager(){ const ov=$('dataModal'); if(ov) ov.classList.remove
 const esc=s=>(s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 async function renderDataManager(){
   // each section renders independently so one failure can't blank the rest
+  const demo = PAGE_MODE==='demo';   // demo is in-memory: read TRADES, never touch the Store
   let trades=[], notes=[];
-  try{ trades=await Store.getAllTrades(); }catch(e){ console.error('getAllTrades', e); }
-  try{ notes=await Store.getAllJournal(); }catch(e){ console.error('getAllJournal', e); }
+  if(demo){ trades=TRADES.slice(); }
+  else {
+    try{ trades=await Store.getAllTrades(); }catch(e){ console.error('getAllTrades', e); }
+    try{ notes=await Store.getAllJournal(); }catch(e){ console.error('getAllJournal', e); }
+  }
 
   // Overview
   const range = trades.length ? `${trades[0].date} → ${trades[trades.length-1].date}` : '—';
-  let kb='—'; try{ kb=(new Blob([JSON.stringify(await Store.exportAll())]).size/1024).toFixed(1)+' KB'; }catch(e){ console.error('size', e); }
+  let kb='—';
+  if(demo){ try{ kb=(new Blob([JSON.stringify(trades)]).size/1024).toFixed(1)+' KB'; }catch(e){} }
+  else { try{ kb=(new Blob([JSON.stringify(await Store.exportAll())]).size/1024).toFixed(1)+' KB'; }catch(e){ console.error('size', e); } }
   if($('dm_summary')) $('dm_summary').innerHTML=
      `<div class="dmstat"><div class="dk">Trades</div><div class="dv">${trades.length}</div></div>`
     +`<div class="dmstat"><div class="dk">Date range</div><div class="dv mono">${range}</div></div>`
@@ -1288,12 +1381,15 @@ async function renderDataManager(){
   const shown=q? trades.filter(t=>t.root.toLowerCase().includes(q)||t.date.includes(q)||(t.side||'').includes(q)) : trades;
   if($('dm_tcount')) $('dm_tcount').textContent = q? `${shown.length} / ${trades.length}` : `${trades.length}`;
   if($('dm_trades')) $('dm_trades').innerHTML = shown.length
-    ? shown.slice().reverse().map(t=>{ const id=Store.tradeId(t);
-        return `<tr><td class="mono">${t.date}</td><td>${t.root}</td>
-        <td>${t.side||'—'}${metaChips(TRADE_META.get(id))}</td><td class="num mono ${cls(t.pnl)}">${usd(t.pnl)}</td>
-        <td class="dmrowact"><button class="dmdel alt" data-edit="${id}" title="Tags, note & screenshots">Edit</button>
-        <button class="dmdel" data-trade="${id}" title="Delete this trade">Delete</button></td></tr>`; }).join('')
-    : '<tr><td colspan="5" class="dmempty">No matching trades.</td></tr>';
+    ? (demo
+        ? shown.slice().reverse().map(t=>`<tr><td class="mono">${t.date}</td><td>${t.root}</td>
+            <td>${t.side||'—'}</td><td class="num mono ${cls(t.pnl)}">${usd(t.pnl)}</td></tr>`).join('')
+        : shown.slice().reverse().map(t=>{ const id=Store.tradeId(t);
+            return `<tr><td class="mono">${t.date}</td><td>${t.root}</td>
+            <td>${t.side||'—'}${metaChips(TRADE_META.get(id))}</td><td class="num mono ${cls(t.pnl)}">${usd(t.pnl)}</td>
+            <td class="dmrowact"><button class="dmdel alt" data-edit="${id}" title="Tags, note & screenshots">Edit</button>
+            <button class="dmdel" data-trade="${id}" title="Delete this trade">Delete</button></td></tr>`; }).join(''))
+    : `<tr><td colspan="${demo?4:5}" class="dmempty">No matching trades.</td></tr>`;
 
   // Saved filters (staging — section only exists there)
   if($('dm_filters')) $('dm_filters').innerHTML = SAVED_FILTERS.length
@@ -1383,6 +1479,7 @@ async function dmDeleteTrade(id){
   await Store.deleteTrade(id);
   await reloadFromStore();
   await renderDataManager();
+  logAction('Trade deleted · '+id, 'warn');
 }
 async function dmDeleteNote(date){
   await Store.deleteJournal(date);
@@ -1394,6 +1491,7 @@ async function dmExport(){
   try{
     const data=await Store.exportAll();
     downloadFile(`blotterbook-backup-${fmtDate(new Date())}.json`, JSON.stringify(data,null,2));
+    logAction('Session backup created');
   }catch(e){ console.error('backup export failed', e); alert('Could not create the backup file.'); }
 }
 async function dmImport(file){
@@ -1486,6 +1584,7 @@ if($('dataModal')){
   on('dm_clear','click',async()=>{
     if(!confirm('Erase ALL trades, day-notes and per-trade tags/notes saved in this browser? This cannot be undone.')) return;
     await Store.purge(); JOURNAL_DATES=new Set(); TRADE_META=new Map(); DM_EDIT=null; resetApp(); renderDataManager();
+    logAction('All local data erased', 'err');
   });
   // delegated row actions: Edit opens the per-trade editor, Delete removes the trade
   on('dm_trades','click',e=>{
@@ -1529,6 +1628,7 @@ if($('dataModal')){
   initPanels();
   initFilters();
   wireJournal();
+  initStaging();
   // Reflect the initial overlay selection on the toggle buttons.
   document.querySelectorAll('.curvebtn').forEach(b=>b.classList.toggle('on',!!curveSel[b.dataset.k]));
 

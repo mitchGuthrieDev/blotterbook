@@ -14,12 +14,14 @@
   <div class="top">
     <div class="brand">
       <a class="bwordmark" href="../index.html" title="Back to the Blotterbook homepage">Blotterbook</a>
+      <span class="ver" title="Demo version">v0.11</span>
       <small id="srcname"></small>
     </div>
     <div class="topright">
       <div class="src" id="srcmeta"></div>
       <div class="topbtns">
         <span class="demotag">Demo</span>
+        <button class="btn" id="manageBtn" title="See how Manage data works — preview only in the demo">Manage data</button>
         <button class="btn" id="exportBtn" title="Generate a condensed performance report (print or save as PDF)">Export report</button>
         <button class="btn" id="endDemoBtn" title="Close the demo and return to the homepage">End demo</button>
         <a class="btn" id="contactBtn"
@@ -196,6 +198,58 @@
     <div class="fnote">
       This is a generated sample dataset — it is never saved. Click <b>End demo</b> to return to the
       Blotterbook homepage.
+    </div>
+  </div>
+</div>
+
+<!-- ============ data manager modal (demo: preview only — actions disabled) ============ -->
+<div class="modal" id="dataModal" data-demo="1" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Manage local data (demo preview)">
+    <div class="dmhead">
+      <div><h2>Manage local data</h2><div class="dmsub">A preview of the real app's data manager.</div></div>
+      <button class="dmx" id="dm_close" title="Close">&times;</button>
+    </div>
+    <div class="dmbody">
+      <div class="dmnote-demo">Preview only — in the demo, data actions are disabled so the sample dataset stays intact. In the real app these load, edit, back up, and erase your local data.</div>
+
+      <div class="dmsec"><h3>Overview</h3><div class="dmgrid" id="dm_summary"></div></div>
+
+      <div class="dmsec"><h3>Load data</h3>
+        <div class="dmactions">
+          <button class="dmbtn" disabled>Load CSV…</button>
+          <div class="fld plat"><label for="dm_platform">Platform</label>
+            <select id="dm_platform" disabled></select></div>
+          <button class="dmbtn" disabled>Import</button>
+        </div>
+        <p class="dmhint">In the real app, pick a CSV exported from your trading platform — Blotterbook detects the format and merges it in.</p>
+      </div>
+
+      <div class="dmsec"><h3>Backup &amp; restore</h3>
+        <div class="dmactions">
+          <button class="dmbtn" disabled>Download backup (.json)</button>
+          <button class="dmbtn" disabled>Restore from backup…</button>
+        </div>
+        <p class="dmhint">A backup is a single JSON file holding your trades, day-notes, and setup. Restoring merges it back in safely.</p>
+      </div>
+
+      <div class="dmsec"><h3>Trades</h3>
+        <div class="dmsearchrow">
+          <input type="text" id="dm_search" placeholder="Filter by symbol, date, or side…">
+          <span class="dmcount" id="dm_tcount"></span>
+        </div>
+        <div class="dmscroll">
+          <table class="dmtab">
+            <thead><tr><th>Date</th><th>Symbol</th><th>Side</th><th class="num">PnL</th></tr></thead>
+            <tbody id="dm_trades"></tbody>
+          </table>
+        </div>
+        <p class="dmhint">In the real app, <b>Edit</b> a trade to add tags, a note, and screenshots, or delete it.</p>
+      </div>
+
+      <div class="dmsec"><h3>Danger zone</h3>
+        <div class="dmactions"><button class="dmbtn danger" disabled>Erase all local data</button></div>
+        <p class="dmhint">Wipes every trade, day-note, and saved setup from this browser. Disabled in the demo.</p>
+      </div>
     </div>
   </div>
 </div>

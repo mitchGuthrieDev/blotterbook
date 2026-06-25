@@ -427,8 +427,10 @@
   body[data-mode="staging"] .wrap{max-width:1480px}
   @media(min-width:1100px){
     body[data-mode="staging"] .wrap{max-width:none;padding-left:26px;padding-right:26px}
-    body[data-mode="staging"] #dash{display:grid;gap:14px;align-items:start;
+    body[data-mode="staging"] #dash{display:grid;gap:14px;align-items:stretch;
       grid-template-columns:repeat(2,minmax(0,1fr))}
+    /* panels in a row share height so calendar / advanced-stats match break-even (no negative space) */
+    body[data-mode="staging"] #dash .panel{height:100%;display:flex;flex-direction:column}
     body[data-mode="staging"] #dash .panel{margin-top:0}
     body[data-mode="staging"] #dash .panel[data-key="perf"]{grid-column:1 / -1}
     body[data-mode="staging"] .adv{grid-template-columns:1fr}
@@ -437,3 +439,44 @@
     body[data-mode="staging"] #dash{grid-template-columns:repeat(3,minmax(0,1fr))}
     body[data-mode="staging"] .adv{grid-template-columns:1fr 1fr}
   }
+
+  /* version badge in the app header */
+  .ver{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--muted);
+    border:1px solid var(--line);border-radius:5px;padding:1px 6px;align-self:center}
+
+  /* ---- staging: session-status pill + popup ---- */
+  body[data-mode="staging"] .top{position:relative}
+  .sesspill{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-family:var(--mono);
+    font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+    border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:transparent}
+  .sessdot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+  .sessdot.online,.sesspill.online .sessdot{background:var(--green)}
+  .sessdot.offline,.sesspill.offline .sessdot{background:var(--warn)}
+  .sessdot.degraded,.sesspill.degraded .sessdot{background:var(--red,#e0564d)}
+  .sesspop{position:absolute;z-index:60;top:100%;left:0;margin-top:6px;max-width:340px;
+    background:var(--panel,#11151b);border:1px solid var(--line);border-radius:10px;
+    padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.45)}
+  .sesspop h4{margin:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .sesspop ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+  .sesspop li{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.4}
+  .sesspop li .sessdot{margin-top:4px;flex:0 0 auto}
+  .sesspop .muted{margin:9px 0 0;font-size:11.5px;color:var(--muted)}
+
+  /* ---- staging: workspace-template controls ---- */
+  .wsbar{display:inline-flex;align-items:center;gap:6px}
+  .wsbar select{font-family:inherit;font-size:12px;color:var(--text);background:var(--field,#10141a);
+    border:1px solid var(--line);border-radius:7px;padding:5px 8px;max-width:150px}
+
+  /* ---- staging: activity terminal ---- */
+  .panel.term .termwin{font-family:var(--mono);font-size:11.5px;line-height:1.55;
+    background:#0a0d12;border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+    height:160px;overflow:auto;color:#9fb4c7;white-space:pre-wrap;flex:1 1 auto}
+  .panel.term .termwin .tl{display:block}
+  .panel.term .termwin .tl .ts{color:#5c7186}
+  .panel.term .termwin .tl .tm{color:#cde0ef}
+  .panel.term .termwin .tl.evt-warn .tm{color:var(--warn)}
+  .panel.term .termwin .tl.evt-err .tm{color:var(--red,#e0564d)}
+
+  /* demo data-manager: "preview only" banner */
+  .dmnote-demo{margin:0 0 16px;padding:10px 13px;border:1px solid rgba(227,179,65,.32);
+    background:rgba(227,179,65,.10);border-radius:9px;color:var(--text);font-size:12.5px;line-height:1.5}
