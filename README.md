@@ -61,11 +61,17 @@ call is loading the app's own reference-data JSON.
   nav.html              the info-site nav (changelog / roadmap / legal / howto)
   footer.html           the info-site footer
 /app/                   the journal app
-  index.html            app markup (links app.css + app.js)
-  demo.html             the demo on its own page (shares app.css/app.js; opens in a new tab)
+  index.html            app markup (links app.css + the app scripts below)
+  demo.html             the demo on its own page (shares app.css + the app scripts; opens in a new tab)
   staging.html          1:1 sandbox clone of the main app (body[data-mode=staging]; key-gated) for trialling changes
   app.css               all app styles (shared by index.html / demo.html / staging.html)
-  app.js                the main app script (shared; mode-aware via body[data-mode])
+  core.js               globals, DOM helpers, metrics, formatting, cost model, reference-data loading
+  render.js             dashboard rendering (cards, curve, calendar, advanced, break-even) + scope/filter driver
+  data.js               CSV import, demo data, filters, day-notes journal, session restore, setup controls
+  ui.js                 collapsible/drag panels, staging flair (terminal/session/workspaces), file download
+  export.js             condensed performance report (print → PDF)
+  datamanager.js        Manage-data modal + per-trade editor + backup/restore
+  main.js               DOM event wiring + boot() — loaded LAST (core→render→data→ui→export→datamanager→main)
   adapters.js           platform CSV adapters + format auto-detection + fills matcher
   store.js              IndexedDB persistence (trades, journal, meta, per-trade trademeta)
   entitlements.js       storage-tier resolver (scaffold; always "local" today)
@@ -482,13 +488,19 @@ CSV text
   → render*()       → cards / curve / calendar / advanced / break-even
 ```
 
-`app/app.css` and `app/app.js` are shared by `index.html`, `demo.html`, and `staging.html`; `app.js`
-adapts via `document.body.dataset.mode` (`PAGE_MODE`). **Demo** (`data-mode="demo"`) is in-memory and
+`app/app.css` and the app scripts are shared by `index.html`, `demo.html`, and `staging.html`, all
+adapting via `document.body.dataset.mode` (`PAGE_MODE`). **Demo** (`data-mode="demo"`) is in-memory and
 never persists; **Staging** (`data-mode="staging"`, `STAGING_PAGE`) uses an isolated IndexedDB and
 enables the experimental features above. Key globals: `TRADES`, `METRICS_ALL`, `FILTERS`, `SCOPE`,
 `calYear`/`calMonth`, `selectedDate`, `JOURNAL_DATES`, `TRADE_META`, `SAVED_FILTERS`, `DEMO_MODE`,
 `PAGE_MODE`/`STAGING_PAGE`. Boot: `loadRefData()` → `Store.init()` → `restoreSession()` (demo runs
 `runDemo()`; staging seeds its DB first).
+
+The former monolithic `app.js` is split (A2) into ordered, concern-scoped classic scripts —
+**core → render → data → ui → export → datamanager → main** — loaded in that sequence (see the layout
+above). They're plain `<script>`s sharing one global scope, not ES modules: `main.js` (loaded last) holds
+all the event wiring + the boot IIFE, so every function/state it calls is already defined. No bundler,
+no build step.
 
 ### Shared chrome: tokens + partials (no bundler)
 
