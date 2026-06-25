@@ -210,7 +210,7 @@
       <div class="pbody">
         <div class="defbody">
           <dl>
-            <dt>Trade = one row</dt><dd>Each CSV row is a position-<em>close</em> event with its own realized PnL, exactly as TradingView exported it.</dd>
+            <dt>Trade = one closed position</dt><dd>Each trade is one realized-PnL event. Depending on the platform Blotterbook auto-detects, that's either one row per closed position (close-event exports like TradingView) or entry/exit fills paired into round-trips by a FIFO matcher (which also recovers hold time). TradingView is verified; the other eight adapters are beta &mdash; verify the parsed numbers against your statement.</dd>
             <dt>Win / Loss / Scratch</dt><dd>Win = realized PnL &gt; 0, Loss = &lt; 0, Scratch = exactly 0. Win Rate = wins ÷ total trades (scratches stay in the denominator).</dd>
             <dt>Net PnL &amp; take-home</dt><dd>Net PnL = gross &minus; per-symbol commissions &minus; full-month subscriptions. Take-home is Net PnL after the estimated Section&nbsp;1256 tax, shown on the Net&nbsp;PnL card and in the Break-even panel.</dd>
             <dt>Performance graph</dt><dd>X axis is the calendar date (the selected month's first to last day, or the full sample in All-time scope); Y axis is cumulative PnL. The Gross, Net, and Take-home overlays can be toggled. Clicking a calendar day marks it on the graph.</dd>
