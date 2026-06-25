@@ -82,6 +82,7 @@ call is loading the app's own reference-data JSON.
   feeds.json            per-broker market-data feed options
   state-tax.json        Section 1256 model + per-state top rates
   manifest.json         content hashes for cache-busting (generated)
+  backlog.json          engineering backlog — committed source of truth (rendered read-only in admin.html)
 /functions/             Cloudflare Pages Functions
   _middleware.js        key-gates /app/staging.html (x-admin-key header / bb_staging cookie / ?k=)
   api/changelog.js      cached (1h) GitHub commit feed for the changelog page
@@ -146,7 +147,9 @@ state and silently does nothing off-Cloudflare or outside the US.
 ### Admin page &amp; the Live indicator
 
 `admin.html` is an internal control page. It can set the homepage's **Live** pill, manage **feature
-flags** + a **reference-data cache version**, record the **platform versions** per surface, auto-fill
+flags** + a **reference-data cache version**, record the **platform versions** per surface, show a
+read-only **Backlog** view (per-category completed/remaining counts + the item list from
+[`data/backlog.json`](data/backlog.json) — titles/effort/status only, prompts stay in the file), auto-fill
 its own admin key, and **launch the staging sandbox** (carrying the key for you). The homepage pill
 reads `/api/status`: a fixed status (**Live** = green, **Maintenance** = yellow, **Offline** = red,
 with an optional label) wins; otherwise (**Auto**) it pings `/app/`. `GET /api/status` and

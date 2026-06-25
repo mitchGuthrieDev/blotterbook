@@ -32,6 +32,28 @@
   .flagrow{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--txt);cursor:pointer}
   .flagrow input{width:16px;height:16px;accent-color:var(--accent)}
   .authnote{font-family:var(--mono);font-size:11.5px;color:var(--green);margin:0 0 10px;min-height:14px}
+  /* backlog module */
+  .bkcounts{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin:12px 0}
+  .bkcount{border:1px solid var(--line);background:var(--panel2);border-radius:9px;padding:10px 12px}
+  .bkcount .bk-cat{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+  .bkcount .bk-nums{display:flex;align-items:baseline;gap:7px;font-family:var(--mono)}
+  .bkcount .bk-done{color:var(--green);font-size:18px;font-weight:600}
+  .bkcount .bk-of{color:var(--dim);font-size:12.5px}
+  .bkcount .bk-rem{color:var(--warn);font-size:11.5px;margin-left:auto}
+  .bkbar{height:5px;border-radius:3px;background:var(--line);margin-top:8px;overflow:hidden}
+  .bkbar i{display:block;height:100%;background:var(--green)}
+  .bktotal{margin:4px 0 16px;font-family:var(--mono);font-size:13px;color:var(--dim)}
+  .bktotal b{color:var(--txt)}
+  .bkgroup{margin:16px 0 4px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .bkrow{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--line);font-size:13.5px}
+  .bkrow .bk-id{font-family:var(--mono);font-size:11.5px;color:var(--dim);min-width:36px}
+  .bkrow .bk-title{color:var(--txt);flex:1}
+  .bkrow.is-done .bk-title{color:var(--dim)}
+  .bk-eff{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .bk-badge{font-family:var(--mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+  .bk-badge.done{color:var(--green);border-color:rgba(63,185,80,.4)}
+  .bk-badge.open{color:var(--warn);border-color:rgba(227,179,65,.4)}
+  .bk-badge.guardrail{color:var(--accent);border-color:rgba(106,160,255,.4)}
 </style>
 </head>
 <body>
@@ -117,6 +139,14 @@
   <p class="curstate" id="refstate">Version: loading…</p>
   <div class="modes"><button class="modebtn" id="bumpref"><span class="d" style="background:var(--green)"></span>Bump cache version</button></div>
   <p class="amsg" id="refmsg"></p>
+
+  <h2>Backlog</h2>
+  <p>Read-only view of the engineering backlog (<code>data/backlog.json</code> — the committed source of
+    truth). Per-item prompts and done-notes live in the file but are not shown here.</p>
+  <div class="bkcounts" id="bk_counts"></div>
+  <div class="bktotal" id="bk_total"></div>
+  <div class="bklist" id="bk_list"></div>
+  <p class="amsg" id="bk_msg"></p>
 </div>
 
 <footer class="site">
@@ -234,9 +264,49 @@
     window.open('/app/staging.html','_blank','noopener');
   });
 
+  // ---- backlog (read-only view of data/backlog.json) ----
+  function bkesc(s){ return (s||'').replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];}); }
+  function loadBacklog(){
+    var counts=document.getElementById('bk_counts'), total=document.getElementById('bk_total'),
+        list=document.getElementById('bk_list'), bmsg=document.getElementById('bk_msg');
+    fetch('/data/backlog.json',{cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }).then(function(b){
+      var items=b.items||[], cats=b.categories||[];
+      var tDone=0, tOpen=0, tGuard=0;
+      // per-category counts (prompt/doneNote intentionally NOT rendered)
+      counts.innerHTML=cats.map(function(c){
+        var its=items.filter(function(i){return i.category===c;});
+        var done=its.filter(function(i){return i.status==='done';}).length;
+        var open=its.filter(function(i){return i.status==='open';}).length;
+        var guard=its.filter(function(i){return i.status==='guardrail';}).length;
+        var tot=done+open; tDone+=done; tOpen+=open; tGuard+=guard;
+        var pct= tot? Math.round(100*done/tot):0;
+        return '<div class="bkcount"><div class="bk-cat">'+bkesc(c)+'</div>'
+          +'<div class="bk-nums"><span class="bk-done">'+done+'</span><span class="bk-of">/ '+tot+' done</span>'
+          +'<span class="bk-rem">'+open+' left'+(guard?(' · '+guard+' guard'):'')+'</span></div>'
+          +'<div class="bkbar"><i style="width:'+pct+'%"></i></div></div>';
+      }).join('');
+      var grand=tDone+tOpen;
+      total.innerHTML='Overall: <b>'+tDone+'</b> done · <b>'+tOpen+'</b> remaining'
+        +(tGuard?(' · '+tGuard+' guardrail'):'')+' · <b>'+(grand?Math.round(100*tDone/grand):0)+'%</b> complete ('+items.length+' items)';
+      list.innerHTML=cats.map(function(c){
+        var its=items.filter(function(i){return i.category===c;});
+        if(!its.length) return '';
+        return '<div class="bkgroup">'+bkesc(c)+'</div>'+its.map(function(i){
+          var badge=i.status==='done'?'done':(i.status==='guardrail'?'guard':'open');
+          return '<div class="bkrow is-'+i.status+'"><span class="bk-id">'+bkesc(i.id)+'</span>'
+            +'<span class="bk-title">'+bkesc(i.title)+'</span>'
+            +'<span class="bk-eff">'+bkesc(i.effort)+'</span>'
+            +'<span class="bk-badge '+i.status+'">'+badge+'</span></div>';
+        }).join('');
+      }).join('');
+      bmsg.textContent='';
+    }).catch(function(){ bmsg.textContent='Could not load data/backlog.json.'; bmsg.className='amsg err'; });
+  }
+
   autoKey();
   loadStatus();
   loadConfig();
+  loadBacklog();
 })();
 </script>
 
