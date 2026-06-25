@@ -15,6 +15,32 @@ const $ = id => document.getElementById(id);
 const PAGE_MODE = (document.body && document.body.dataset.mode) || '';
 const STAGING_PAGE = PAGE_MODE === 'staging';
 
+/* ------------------------------------------------------------------
+   Orientation — how the split scripts fit together (read this first)
+
+   Load order (plain <script>s sharing ONE global scope — not ES modules):
+     core         this file: state, DOM helpers, metrics, formatting, cost model, refdata
+     render       cards, equity curve, calendar, advanced stats, break-even +
+                  the scope/filter/render driver
+     data         CSV import, demo data, filters, day-notes journal, session, setup
+     ui           collapsible/drag panels, staging flair, file download
+     export       performance report
+     datamanager  Manage-data modal + per-trade editor
+     main         DOM event wiring + boot() — runs LAST, so everything it calls exists
+
+   Mode flags (derived from document.body[data-mode] above):
+     STAGING_PAGE  gates the staging-only UI (web-grid dashboard, graph-only filters,
+                   note dots, saved filters, activity terminal, session pill, workspace
+                   templates). The main app and demo never render these.
+     DEMO_MODE     (declared in render.js) true while the demo's in-memory dataset is
+                   loaded; suppresses ALL persistence (nothing is written to IndexedDB).
+
+   Shared mutable state (globals, mostly first assigned in render.js / data.js):
+     TRADES, METRICS_ALL, FILTERS, SCOPE, calYear/calMonth, selectedDate,
+     JOURNAL_DATES, TRADE_META, SAVED_FILTERS. Persistence is ALWAYS via Store
+     (store.js) — never call indexedDB directly from app/render code.
+   ------------------------------------------------------------------ */
+
 /* CSV parsing now lives in adapters.js (window.Adapters) — platform-specific
    format detection + normalization to the internal trade shape below. */
 
@@ -30,6 +56,7 @@ function compute(tr){
   const avgW= wins.length? gp/wins.length : 0;
   const avgL= losses.length? gl/losses.length : 0;
   const wl= losses.length? avgW/Math.abs(avgL) : Infinity;
+  // equity curve + REALIZED max drawdown: walk closed-trade PnL, track running peak and the largest peak-to-trough drop
   let eq=0,peak=0,maxDD=0; const curve=[0];
   for(const p of pnls){ eq+=p; peak=Math.max(peak,eq); maxDD=Math.max(maxDD,peak-eq); curve.push(eq); }
   const dayMap=new Map();
@@ -38,8 +65,10 @@ function compute(tr){
       trades:arr.length,wins:arr.filter(p=>p>0).length})).sort((a,b)=>a.date<b.date?-1:1);
   const active=days.length;
   const winDays=days.filter(d=>d.pnl>0).length;
+  // longest run of consecutive winning (mcw) / losing (mcl) trades; a scratch (0) breaks both runs
   let mcw=0,mcl=0,cw=0,cl=0;
   for(const p of pnls){ if(p>0){cw++;cl=0;} else if(p<0){cl++;cw=0;} else {cw=0;cl=0;} mcw=Math.max(mcw,cw); mcl=Math.max(mcl,cl); }
+  // daily-PnL dispersion → Sharpe: population std of per-day PnL (NOT annualized — see Definitions panel caveat)
   const dv=days.map(d=>d.pnl);
   const mean=dv.reduce((a,b)=>a+b,0)/(dv.length||1);
   const variance=dv.length? dv.reduce((a,b)=>a+(b-mean)**2,0)/dv.length : 0;

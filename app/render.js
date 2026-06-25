@@ -95,6 +95,8 @@ function renderCurve(m){
   const yticks=niceTicks(min,max,5);
   min=Math.min(min,yticks[0]); max=Math.max(max,yticks[yticks.length-1]);
 
+  // linear scales mapping data → SVG pixels inside the padded plot box. yPx inverts
+  // (1 - …) because SVG y grows downward, so a larger cumulative PnL sits higher up.
   const xMs=ms=> padL+((ms-d0ms)/(d1ms-d0ms))*(W-padL-padR);
   const xOf=p=> xMs(new Date(p.date+'T00:00:00').getTime());
   const yPx=v=> padT+(1-(v-min)/((max-min)||1))*(H-padT-padB);
