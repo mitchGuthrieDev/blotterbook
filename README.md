@@ -71,9 +71,12 @@ call is loading the app's own reference-data JSON.
   state-tax.json        Section 1256 model + per-state top rates
   manifest.json         content hashes for cache-busting (generated)
 /functions/             Cloudflare Pages Functions
+  _middleware.js        makes admin.blotterbook.com the only /admin entry point; gates admin API writes
   api/changelog.js      cached (1h) GitHub commit feed for the changelog page
   api/geo.js            visitor region (Cloudflare edge geo) → pre-fill the tax state
   api/status.js         homepage Live-indicator status (GET public; POST admin-only, KV-backed)
+  api/config.js         feature flags + reference-data cache version (KV; POST admin-only)
+  api/admin-key.js      returns ADMIN_KEY to Access-authenticated admins (key auto-fill)
   api/{me,checkout,webhook}.js   Stripe/accounts scaffold
   README.md             accounts/payments/storage-tier plan
 /scripts/
@@ -129,45 +132,56 @@ state and silently does nothing off-Cloudflare or outside the US.
 
 ### Admin page &amp; the Live indicator
 
-`admin.html` is an internal control page (and a `/api/status` Pages Function). It can set the
-homepage's **Live** pill and **launch the staging sandbox**. The pill first reads `/api/status`: if an
-admin has set a fixed status (**Live**, **Offline**, or **Maintenance**, with an optional custom
-label) it shows that; otherwise (**Auto**) it falls back to pinging `/app/`. `GET /api/status` is
-public (the homepage needs it); writes are admin-only.
+`admin.html` is an internal control page. It can set the homepage's **Live** pill, manage **feature
+flags** + a **reference-data cache version**, auto-fill its own admin key, and **launch the staging
+sandbox**. The homepage pill reads `/api/status`: a fixed status (**Live** = green, **Maintenance** =
+yellow, **Offline** = red, with an optional label) wins; otherwise (**Auto**) it pings `/app/`.
+`GET /api/status` and `GET /api/config` are public; all writes are admin-only.
 
-**Backend setup:** bind a **KV namespace** as `STATUS_KV` to the Pages project (stores the status),
-and set an **`ADMIN_KEY`** secret (`POST /api/status` requires a matching `x-admin-key` header).
+**Backend setup:** bind a **KV namespace** as `STATUS_KV` to the Pages project (stores status +
+config), and set an **`ADMIN_KEY`** secret (`POST /api/status` and `/api/config` require a matching
+`x-admin-key` header). Detailed click-paths are in [`functions/README.md`](functions/README.md).
 
-**Serving admin at `admin.blotterbook.com` (not `blotterbook.com/admin`) behind Zero Trust:**
+**Admin key auto-fill.** `/api/admin-key` returns `ADMIN_KEY` only to requests that carry Cloudflare
+Access's `Cf-Access-Jwt-Assertion` header (i.e. an authenticated admin); the admin page fetches it on
+load and pre-fills the key, so you never type it. Off-Access it 401s and you enter the key manually.
 
-1. **Add the subdomain to the Pages project.** Pages → your project → *Custom domains* → *Set up a
-   custom domain* → `admin.blotterbook.com` (Cloudflare creates the CNAME automatically since the zone
-   is on Cloudflare).
-2. **Point the subdomain root at `admin.html`.** A custom domain serves the whole site, so map the
-   subdomain's `/` to the admin page with a **Redirect Rule** (Rules → *Redirect Rules* → Create):
-   *When* `hostname equals admin.blotterbook.com` *and* `URI path equals /` → *Static redirect* to
-   `https://admin.blotterbook.com/admin.html` (302). (Or use a Transform/Rewrite rule to rewrite the
-   path without a visible redirect.)
-3. **Lock it down with Cloudflare Zero Trust (Access).** Zero Trust dashboard → *Access* →
-   *Applications* → *Add an application* → **Self-hosted** → Application domain `admin.blotterbook.com`
-   (add a second domain/path for `blotterbook.com/admin*` and `blotterbook.com/admin.html` so the page
-   can't be reached on the apex). Add a **policy**: action *Allow*, rule e.g. *Emails* = your address
-   (or a Google/GitHub identity provider). Optionally add `blotterbook.com/api/status` to require Access
-   on writes too. Save — Cloudflare now forces login before the admin page or its writes resolve.
-4. **Keep the `ADMIN_KEY` layer.** Even behind Access, the admin page still sends `x-admin-key`, so
-   `POST /api/status` is defended by both Access *and* the secret.
+**Only `admin.blotterbook.com` (never `blotterbook.com/admin`).** `functions/_middleware.js` 404s
+`/admin*` and `/api/admin-key` on any host that isn't the admin subdomain, and 403s admin API writes
+off-host (localhost / `*.pages.dev` are allowed for dev). To serve it:
 
-The admin page degrades gracefully off Cloudflare (locally `/api/status` 404s and it shows
-"deploy on Cloudflare to use").
+1. **Add the subdomain to the Pages project.** Pages → *Custom domains* → add `admin.blotterbook.com`.
+2. **Point the subdomain root at `admin.html`.** A custom domain serves the whole site, so add a
+   **Redirect Rule** (Rules → *Redirect Rules*): *When* `hostname equals admin.blotterbook.com` *and*
+   `URI path equals /` → redirect to `https://admin.blotterbook.com/admin.html` (or a Transform rewrite).
+3. **Cloudflare Zero Trust (Access).** Zero Trust → *Access* → *Applications* → **Self-hosted** →
+   domain `admin.blotterbook.com`; policy *Allow* your email/IdP. The middleware already blocks the apex
+   path, so a separate apex Access app is optional.
+4. **`ADMIN_KEY` stays as a second layer** — writes are defended by both Access *and* the key.
+
+The admin page degrades gracefully off Cloudflare (locally the APIs 404 and it shows "deploy on
+Cloudflare to use").
 
 ### Staging sandbox
 
-`app/staging.html` (`body[data-mode="staging"]`) is a **1:1 copy of the demo** — full app on the
-generated sample dataset, never persisted — used to trial UI/behavior changes before they reach the
-main app. The admin page has a **Launch staging env** button. Staging additionally enables the
-experimental **web-grid dashboard** (the "Main-app web UI redesign" trial): single column on mobile,
-and at ≥1100px a multi-column grid with the performance graph across the top, the calendar and
-break-even side-by-side, and the statistics in a right-hand column.
+`app/staging.html` (`body[data-mode="staging"]`) is now a **clone of the main app**, not the demo —
+launched from the admin page (**Launch staging env**) to trial changes before they reach the main app.
+It uses an **isolated IndexedDB** (`blotterbookStaging`, set in `store.js`) so testing never touches
+real data, and **seeds the sample dataset once** so it opens in the loaded state (Erase all local data
+→ the initial state, matching the main app). It has the full top bar including **Manage data** and the
+**Load CSV** landing; notes/tags/filters persist to its own DB.
+
+Staging-only experiments (gated by `STAGING_PAGE` — the main app is unchanged):
+
+- **Web-grid dashboard** — fills the window (edge-to-edge, `max-width:none`) at ≥1100px with a grid
+  placed by DOM order so **drag-to-reorder** keeps working; the performance graph spans full width,
+  the rest flow into 2–3 columns, and the stats panel stacks for readability.
+- **Filters affect the graph only** — the calendar, cards, cost, and stats always use the full dataset;
+  filters (incl. a date range) re-draw the **performance graph** alone.
+- **Sharper graph** — the curve renders at its real pixel width so labels aren't horizontally stretched.
+- **Note dots on the graph** — a small blue dot marks each date that has a day-note (like the calendar).
+- **Saved filters** — name and recall filter views from the filter bar (**Save filter** + a Saved
+  dropdown), managed in **Manage data → Saved filters**; stored in the staging DB's meta.
 
 ### Mobile navigation
 
@@ -426,30 +440,30 @@ CSV text
   → render*()       → cards / curve / calendar / advanced / break-even
 ```
 
-The styles and script live in `app/app.css` and `app/app.js`, shared by both `index.html` and
-`demo.html`; `app.js` adapts to the page via `document.body.dataset.mode` (the demo sets
-`data-mode="demo"`, auto-loads sample data, and skips persistence). Key globals: `TRADES` (full
-merged set), `METRICS_ALL` (metrics for the *filtered* set), `FILTERS`, `SCOPE`,
-`calYear`/`calMonth`, `selectedDate`, `JOURNAL_DATES`, `DEMO_MODE`, `DEMO_PAGE`. The boot sequence
-is async: `loadRefData()` → `Store.init()` → `restoreSession()` (or `runDemo()` on the demo page).
+`app/app.css` and `app/app.js` are shared by `index.html`, `demo.html`, and `staging.html`; `app.js`
+adapts via `document.body.dataset.mode` (`PAGE_MODE`). **Demo** (`data-mode="demo"`) is in-memory and
+never persists; **Staging** (`data-mode="staging"`, `STAGING_PAGE`) uses an isolated IndexedDB and
+enables the experimental features above. Key globals: `TRADES`, `METRICS_ALL`, `FILTERS`, `SCOPE`,
+`calYear`/`calMonth`, `selectedDate`, `JOURNAL_DATES`, `TRADE_META`, `SAVED_FILTERS`, `DEMO_MODE`,
+`PAGE_MODE`/`STAGING_PAGE`. Boot: `loadRefData()` → `Store.init()` → `restoreSession()` (demo runs
+`runDemo()`; staging seeds its DB first).
 
 ## Pricing & tiers (scaffold)
 
-**The current app — CSV-driven and Cloudflare-hosted — is free and stays free.** There is **no
-one-time/local desktop app** planned; the hosted platform is the product.
+An **Obsidian-style** model: the app is **free for everyone** and stays free. Support is optional, and
+the only planned paid feature is cross-device sync.
 
-The only planned paid tier is a future **online app (~$49/mo)** that would connect **directly to
-brokers and trading platforms** for data instead of importing CSVs. It's not built; pricing is
-indicative.
-
-| Tier | Bought via | Storage / data | Status |
+| Tier | Price | What | Status |
 | --- | --- | --- | --- |
-| Free | free to use | IndexedDB (this browser), CSV import | shipped |
-| Online (direct-connect) | subscription (~$49/mo) | server-side + live broker/platform feeds | planned |
+| Blotterbook | Free | the full app — CSV import, journal, cost/tax model | shipped |
+| Back the project | $25 one-time **or** $50/year | optional donation that keeps it free & funds features | checkout pending (Stripe) |
+| Synced workspaces | ~$5/mo | end-to-end-encrypted cross-device sync of trades/notes/tags/filters | planned |
 
-`/functions/api/{me,checkout,webhook}.js` are stubbed Cloudflare Pages Functions for Stripe
-checkout, webhook-driven account provisioning, and tier lookup. `app/entitlements.js` is the client
-resolver that will pick the matching `Store` implementation; today it always returns `local`.
+There is **no one-time/local desktop app** and no "direct-connect online tier" — the hosted platform
+is the product, and sync is the one add-on. `/functions/api/{me,checkout,webhook}.js` are stubbed
+Cloudflare Pages Functions for the Stripe checkout / webhook / entitlements flow (donations +
+subscription). `app/entitlements.js` is the client resolver that will pick the matching `Store`
+implementation; today it always returns `local`.
 
 ## Roadmap
 

@@ -3,12 +3,13 @@ const SVGNS='http://www.w3.org/2000/svg';
 const pad2 = n => String(n).padStart(2,'0');
 const fmtDate = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 const $ = id => document.getElementById(id);
-/* The demo and the staging sandbox run on their own pages with a trimmed top bar.
-   Both auto-load the sample dataset and never persist. STAGING_PAGE additionally
-   gets the experimental web-grid dashboard layout. */
+/* Page modes (document.body[data-mode]):
+     ''        — the main app
+     'demo'    — in-memory sample data, never persists (its own trimmed top bar)
+     'staging' — a clone of the main app on an ISOLATED IndexedDB, plus experimental
+                 features (web-grid dashboard, graph-only filters, note dots, saved filters) */
 const PAGE_MODE = (document.body && document.body.dataset.mode) || '';
 const STAGING_PAGE = PAGE_MODE === 'staging';
-const DEMO_PAGE = PAGE_MODE === 'demo' || STAGING_PAGE;
 
 /* CSV parsing now lives in adapters.js (window.Adapters) — platform-specific
    format detection + normalization to the internal trade shape below. */
@@ -241,7 +242,10 @@ function axMoney(v){ const a=Math.abs(v), s=v<0?'-':'';
 
 function renderCurve(m){
   const svg=document.getElementById('curve'), tip=document.getElementById('curvetip');
-  const W=1000,H=260,padL=62,padR=20,padT=18,padB=46;
+  // staging draws at the SVG's real pixel width (viewBox = pixel width) so labels aren't
+  // horizontally stretched on a wide grid column; elsewhere keep the fixed 1000-unit box.
+  const W = STAGING_PAGE ? Math.max(600, Math.round((svg.getBoundingClientRect().width)||1000)) : 1000;
+  const H=260,padL=62,padR=20,padT=18,padB=46;
   if(!m || !m.n){ svg.innerHTML=''; if(tip)tip.style.display='none'; return; }
 
   const [rd0,rd1]=dateRange(m);
@@ -308,6 +312,17 @@ function renderCurve(m){
       if(sp) sel+=series.map(s=>`<circle cx="${x}" cy="${yPx(sp[s.key])}" r="3.5" fill="${s.color}"/>`).join('');
     }
   }
+  // day-note indicators: a small blue dot on the curve at each date that has a note (staging)
+  let noteDots='';
+  if(STAGING_PAGE && JOURNAL_DATES && JOURNAL_DATES.size){
+    for(const nd of JOURNAL_DATES){
+      const t=new Date(nd+'T00:00:00').getTime();
+      if(t<d0ms || t>d1ms) continue;
+      const sp=disp.find(p=>p.date===nd);
+      const y = sp ? yPx(sp[prim.key]) : (H-padB);
+      noteDots+=`<circle class="notedot" cx="${xMs(t)}" cy="${y}" r="3" fill="var(--accent)" stroke="var(--bg)" stroke-width="1"><title>Note · ${nd}</title></circle>`;
+    }
+  }
   // axis titles
   const axis=`<text class="axt" x="${padL+(W-padL-padR)/2}" y="${H-4}" text-anchor="middle">Date</text>
     <text class="axt" transform="rotate(-90)" x="${-(padT+(H-padB)/2)}" y="15" text-anchor="middle">Cumulative PnL ($)</text>`;
@@ -315,7 +330,7 @@ function renderCurve(m){
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
   svg.innerHTML=defs+grid+area+band
     +`<line class="zero" x1="${padL}" x2="${W-padR}" y1="${zeroY}" y2="${zeroY}"/>`
-    +lines+endDots+endLabels+sel+axis;
+    +lines+endDots+noteDots+endLabels+sel+axis;
 
   // hover guide
   const g=document.createElementNS(SVGNS,'g'); g.style.display='none';
@@ -526,7 +541,10 @@ function applyFilters(arr){
     return true;
   });
 }
-function baseTrades(){ return applyFilters(TRADES); }
+/* In STAGING, filters apply to the performance graph ONLY — the calendar, cards, cost,
+   and stats always use the full (unfiltered) dataset. Elsewhere filters apply to all. */
+function graphBase(){ return applyFilters(TRADES); }
+function baseTrades(){ return STAGING_PAGE ? TRADES.slice() : applyFilters(TRADES); }
 
 function scopeLabel(){ return SCOPE==='all' ? 'all time' : `${MON[calMonth]} ${calYear}`; }
 function activeMetrics(){
@@ -534,10 +552,20 @@ function activeMetrics(){
   const mk=`${calYear}-${pad2(calMonth+1)}`;
   return compute(baseTrades().filter(t=>t.date.startsWith(mk)));
 }
+/* Filtered metrics for the staging performance graph (scope + filters). */
+function activeGraphMetrics(){
+  const arr=graphBase();
+  if(SCOPE==='all') return compute(arr);
+  const mk=`${calYear}-${pad2(calMonth+1)}`;
+  return compute(arr.filter(t=>t.date.startsWith(mk)));
+}
+/* Metrics the performance graph should draw — filtered in staging, scoped elsewhere. */
+function curveMetrics(){ return STAGING_PAGE ? activeGraphMetrics() : activeMetrics(); }
 function renderDash(){
   if(!METRICS_ALL) return;
   const m=activeMetrics();
-  renderCards(m); renderCurve(m); renderAdv(m); renderCalc(m);
+  renderCards(m); renderAdv(m); renderCalc(m);
+  renderCurve(STAGING_PAGE ? activeGraphMetrics() : m);
   document.getElementById('scopenote').textContent =
     SCOPE==='all' ? `all ${METRICS_ALL.n} trades` : `${MON[calMonth]} ${calYear}`;
 }
@@ -736,6 +764,12 @@ function runDemo(){
    ============================================================ */
 function onFiltersChanged(){
   if(!TRADES.length){ updateFilterCount(); return; }
+  if(STAGING_PAGE){
+    // filters only re-render the performance graph; dashboard/calendar stay full
+    updateFilterCount();
+    if(METRICS_ALL) renderCurve(activeGraphMetrics());
+    return;
+  }
   METRICS_ALL=compute(baseTrades());
   updateFilterCount();
   renderCalendar();
@@ -743,7 +777,8 @@ function onFiltersChanged(){
 }
 function updateFilterCount(){
   const el=document.getElementById('f_count'); if(!el) return;
-  el.textContent = filtersActive() ? `${baseTrades().length} / ${TRADES.length} trades` : `${TRADES.length} trades`;
+  const base = STAGING_PAGE ? graphBase() : baseTrades();
+  el.textContent = filtersActive() ? `${base.length} / ${TRADES.length} trades` : `${TRADES.length} trades`;
 }
 function syncFilterOptions(){
   const sel=document.getElementById('f_symbol'); const cur=sel.value;
@@ -767,7 +802,7 @@ function syncTagFilter(){
 }
 function resetFilters(){
   FILTERS.from=FILTERS.to=FILTERS.symbol=FILTERS.side=FILTERS.session=FILTERS.tag=''; FILTERS.dows.clear();
-  ['f_from','f_to','f_symbol','f_side','f_session','f_tag'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+  ['f_from','f_to','f_symbol','f_side','f_session','f_tag','f_saved'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   document.querySelectorAll('#f_dows button.on').forEach(b=>b.classList.remove('on'));
   onFiltersChanged();
 }
@@ -780,7 +815,41 @@ function initFilters(){
   const bind=(id,key)=>{ const el=document.getElementById(id); if(el) el.addEventListener('change',e=>{ FILTERS[key]=e.target.value; onFiltersChanged(); }); };
   bind('f_from','from'); bind('f_to','to'); bind('f_symbol','symbol'); bind('f_side','side'); bind('f_session','session'); bind('f_tag','tag');
   document.getElementById('f_reset').addEventListener('click',resetFilters);
+  // saved filters (staging — controls only exist there)
+  on('f_save','click',saveCurrentFilter);
+  on('f_saved','change',e=>{ const s=SAVED_FILTERS.find(x=>x.id===e.target.value); if(s) applyFilterObj(s.f); });
 }
+
+/* ---- saved filters (name, recall, manage) — staging-only UI ---- */
+let SAVED_FILTERS=[];
+async function loadSavedFilters(){
+  if(!Store.available()){ SAVED_FILTERS=[]; return; }
+  try{ SAVED_FILTERS=(await Store.getMeta('savedFilters'))||[]; }catch(_){ SAVED_FILTERS=[]; }
+  syncSavedFilterSelect();
+}
+async function persistSavedFilters(){ if(Store.available()){ try{ await Store.setMeta('savedFilters', SAVED_FILTERS); }catch(_){} } }
+function currentFilterObj(){ return { from:FILTERS.from, to:FILTERS.to, symbol:FILTERS.symbol, side:FILTERS.side, session:FILTERS.session, tag:FILTERS.tag, dows:[...FILTERS.dows] }; }
+function syncSavedFilterSelect(){
+  const sel=$('f_saved'); if(!sel) return; const cur=sel.value;
+  sel.innerHTML='<option value="">— Saved filters —</option>'+SAVED_FILTERS.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  sel.value=SAVED_FILTERS.some(s=>s.id===cur)?cur:'';
+}
+function applyFilterObj(f){
+  FILTERS.from=f.from||''; FILTERS.to=f.to||''; FILTERS.symbol=f.symbol||''; FILTERS.side=f.side||''; FILTERS.session=f.session||''; FILTERS.tag=f.tag||'';
+  FILTERS.dows=new Set(f.dows||[]);
+  const setv=(id,v)=>{ const e=$(id); if(e) e.value=v||''; };
+  setv('f_from',FILTERS.from); setv('f_to',FILTERS.to); setv('f_symbol',FILTERS.symbol); setv('f_side',FILTERS.side); setv('f_session',FILTERS.session); setv('f_tag',FILTERS.tag);
+  document.querySelectorAll('#f_dows button').forEach(b=>b.classList.toggle('on', FILTERS.dows.has(+b.dataset.d)));
+  onFiltersChanged();
+}
+async function saveCurrentFilter(){
+  const name=(prompt('Name this filter:')||'').trim(); if(!name) return;
+  SAVED_FILTERS.push({ id:Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36), name, f:currentFilterObj() });
+  await persistSavedFilters(); syncSavedFilterSelect();
+}
+async function deleteSavedFilter(id){ SAVED_FILTERS=SAVED_FILTERS.filter(s=>s.id!==id); await persistSavedFilters(); syncSavedFilterSelect(); }
+async function renameSavedFilter(id){ const s=SAVED_FILTERS.find(x=>x.id===id); if(!s) return;
+  const n=(prompt('Rename filter:', s.name)||'').trim(); if(!n) return; s.name=n; await persistSavedFilters(); syncSavedFilterSelect(); }
 
 /* ============================================================
    Day-notes / journal (per-day, click a calendar day)
@@ -791,7 +860,7 @@ async function selectDay(d){
   document.querySelectorAll('#cal .cell.selday').forEach(c=>c.classList.remove('selday'));
   if(selectedDate){ const cell=document.querySelector(`#cal .cell[data-date="${selectedDate}"]`); if(cell) cell.classList.add('selday'); }
   await updateJournalEditor();
-  if(METRICS_ALL) renderCurve(activeMetrics());
+  if(METRICS_ALL) renderCurve(curveMetrics());
 }
 /* Jump the calendar to the most recent month that has data ("present"). */
 function jumpToLatest(){
@@ -832,6 +901,7 @@ function wireJournal(){
     document.getElementById('j_stat').textContent = ta.value.trim()?'saved':'';
     const cell=document.querySelector(`#cal .cell[data-date="${selectedDate}"]`);
     if(cell) cell.classList.toggle('hasnote', JOURNAL_DATES.has(selectedDate));
+    if(STAGING_PAGE && METRICS_ALL) renderCurve(curveMetrics());   // refresh note dots on the graph
   };
   ta.addEventListener('input',()=>{ clearTimeout(jSaveTimer); jSaveTimer=setTimeout(save,500); });
   ta.addEventListener('blur',()=>{ clearTimeout(jSaveTimer); save(); });
@@ -841,7 +911,7 @@ function wireJournal(){
    Session restore (setup selections + persisted trades)
    ============================================================ */
 async function persistSetup(){
-  if(DEMO_PAGE || !Store.available()) return;   // demo shares the DB but must not overwrite real setup
+  if(PAGE_MODE==='demo' || !Store.available()) return;   // demo is in-memory; staging persists to its own DB
   try{ await Store.setMeta('setup',{
     broker:document.getElementById('c_broker').value,
     feed:document.getElementById('c_feed').value,
@@ -861,6 +931,7 @@ async function restoreSession(){
   }
   JOURNAL_DATES=await Store.journalDates();
   await loadTradeMeta();
+  await loadSavedFilters();
   const all=await Store.getAllTrades();
   if(all.length){
     TRADES=all;
@@ -1223,6 +1294,14 @@ async function renderDataManager(){
         <td class="dmrowact"><button class="dmdel alt" data-edit="${id}" title="Tags, note & screenshots">Edit</button>
         <button class="dmdel" data-trade="${id}" title="Delete this trade">Delete</button></td></tr>`; }).join('')
     : '<tr><td colspan="5" class="dmempty">No matching trades.</td></tr>';
+
+  // Saved filters (staging — section only exists there)
+  if($('dm_filters')) $('dm_filters').innerHTML = SAVED_FILTERS.length
+    ? SAVED_FILTERS.map(s=>`<div class="dmrow"><span class="dmnote">${esc(s.name)}</span>
+        <button class="dmdel alt" data-filterapply="${s.id}" title="Apply this filter">Apply</button>
+        <button class="dmdel" data-filterrename="${s.id}" title="Rename">Rename</button>
+        <button class="dmdel" data-filterdel="${s.id}" title="Delete">Delete</button></div>`).join('')
+    : '<div class="dmempty">No saved filters yet — set filters and click “Save filter”.</div>';
 }
 
 /* compact tag chips + note/image markers shown on a trade row */
@@ -1334,6 +1413,7 @@ async function reloadFromStore(){
   TRADES=await Store.getAllTrades();
   JOURNAL_DATES=await Store.journalDates();
   await loadTradeMeta();
+  await loadSavedFilters();
   if(TRADES.length){
     METRICS_ALL=compute(baseTrades());
     syncFilterOptions(); updateJournalEditor(); renderCalendar(); renderDash();
@@ -1373,6 +1453,10 @@ on('setuphead','click',()=>$('setup').classList.toggle('collapsed'));
 // The loaded-source text opens the data manager (only once data is loaded).
 on('srcname','click',()=>{ if($('dataModal') && document.body.classList.contains('loaded')) openDataManager(); });
 
+// Staging redraws the performance graph on resize so it re-measures its (grid) width.
+if(STAGING_PAGE){ let _rsz=null; window.addEventListener('resize',()=>{ clearTimeout(_rsz);
+  _rsz=setTimeout(()=>{ if(METRICS_ALL) renderCurve(curveMetrics()); }, 160); }); }
+
 // Performance overlays are toggle buttons — at least one must stay selected.
 document.querySelectorAll('.curvebtn').forEach(btn=>btn.addEventListener('click',()=>{
   const k=btn.dataset.k;
@@ -1380,7 +1464,7 @@ document.querySelectorAll('.curvebtn').forEach(btn=>btn.addEventListener('click'
   if(curveSel[k] && selected.length===1) return;   // can't deselect the last overlay
   curveSel[k]=!curveSel[k];
   btn.classList.toggle('on',curveSel[k]);
-  if(METRICS_ALL) renderCurve(activeMetrics());
+  if(METRICS_ALL) renderCurve(curveMetrics());
 }));
 
 on('cal','click',e=>{
@@ -1410,6 +1494,12 @@ if($('dataModal')){
   });
   on('dm_notes','click',e=>{ const b=e.target.closest('button[data-note]');
     if(b && confirm('Delete the note for '+b.dataset.note+'?')) dmDeleteNote(b.dataset.note); });
+  // saved-filter controls (staging)
+  on('dm_filters','click',e=>{
+    const ap=e.target.closest('[data-filterapply]'); if(ap){ const s=SAVED_FILTERS.find(x=>x.id===ap.dataset.filterapply); if(s){ applyFilterObj(s.f); closeDataManager(); } return; }
+    const rn=e.target.closest('[data-filterrename]'); if(rn){ renameSavedFilter(rn.dataset.filterrename).then(renderDataManager); return; }
+    const dl=e.target.closest('[data-filterdel]'); if(dl){ if(confirm('Delete this saved filter?')) deleteSavedFilter(dl.dataset.filterdel).then(renderDataManager); }
+  });
   // per-trade editor controls
   on('dm_editor','click',e=>{
     if(e.target.closest('[data-editclose]')){ DM_EDIT=null; renderTradeEditor(); return; }
@@ -1442,12 +1532,32 @@ if($('dataModal')){
   // Reflect the initial overlay selection on the toggle buttons.
   document.querySelectorAll('.curvebtn').forEach(b=>b.classList.toggle('on',!!curveSel[b.dataset.k]));
 
-  if(DEMO_PAGE){ runDemo(); return; }   // demo page: load sample data, never persist
+  if(PAGE_MODE==='demo'){ runDemo(); return; }   // demo: in-memory sample data, never persists
 
+  // Main app AND staging use IndexedDB. Staging uses an isolated DB (set in store.js)
+  // and seeds the sample dataset once so it opens in the loaded state.
   if(Store.available()){
-    try{ await Store.init(); await restoreSession(); return; }
+    try{
+      await Store.init();
+      if(STAGING_PAGE) await seedStagingIfEmpty();
+      await restoreSession();
+      return;
+    }
     catch(err){ console.error('IndexedDB unavailable — running in-memory', err); }
   }
   resetApp();
   autoSelectState();   // in-memory fallback: still pre-fill the state from region
 })();
+
+/* Staging sandbox: if its isolated DB is empty, seed the demo dataset + default
+   setup so it lands in the loaded state. Erase all local data → initial state. */
+async function seedStagingIfEmpty(){
+  try{
+    if(await Store.tradeCount() > 0) return;
+    const r=Adapters.parse(demoCSV(),'tradingview');
+    if(r.ok && r.trades.length){
+      await Store.addTrades(r.trades);
+      await Store.setMeta('setup',{ broker:DEMO_BROKER, feed:DEMO_FEED, state:DEMO_STATE, platform:'35' });
+    }
+  }catch(e){ console.error('staging seed failed', e); }
+}

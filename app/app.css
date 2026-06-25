@@ -419,23 +419,21 @@
 
   /* ---- staging sandbox (data-mode="staging") ---- */
   .demotag.staging{color:var(--warn);background:rgba(227,179,65,.12);border-color:rgba(227,179,65,.32)}
-  /* Experimental web-grid dashboard — the "Main-app web UI redesign" trial, staging-only.
-     Single column on mobile (default); a multi-column grid on wide screens with the
-     performance graph across the top, calendar + break-even side-by-side, and stats in a column. */
+  /* Experimental web-grid dashboard — staging-only trial of the "Main-app web UI redesign".
+     Single column on mobile; on wide screens a grid placed by DOM ORDER (so the existing
+     drag-to-reorder keeps working). Performance spans full width; the rest flow into 2–3
+     columns. The stats panel stacks so it stays readable in a narrow column. The wrap goes
+     edge-to-edge so the dashboard fills a fullscreen window on a large display. */
+  body[data-mode="staging"] .wrap{max-width:1480px}
   @media(min-width:1100px){
-    body[data-mode="staging"] .wrap{max-width:1480px}
-    body[data-mode="staging"] #dash{
-      display:grid;gap:14px;align-items:start;
-      grid-template-columns:minmax(0,1.3fr) minmax(0,1.3fr) minmax(0,1fr);
-      grid-template-areas:
-        "perf perf perf"
-        "cal  cost adv"
-        "defs defs adv";
-    }
+    body[data-mode="staging"] .wrap{max-width:none;padding-left:26px;padding-right:26px}
+    body[data-mode="staging"] #dash{display:grid;gap:14px;align-items:start;
+      grid-template-columns:repeat(2,minmax(0,1fr))}
     body[data-mode="staging"] #dash .panel{margin-top:0}
-    body[data-mode="staging"] .panel[data-key="perf"]{grid-area:perf}
-    body[data-mode="staging"] .panel[data-key="cal"]{grid-area:cal}
-    body[data-mode="staging"] .panel[data-key="cost"]{grid-area:cost}
-    body[data-mode="staging"] .panel[data-key="adv"]{grid-area:adv}
-    body[data-mode="staging"] .panel[data-key="defs"]{grid-area:defs}
+    body[data-mode="staging"] #dash .panel[data-key="perf"]{grid-column:1 / -1}
+    body[data-mode="staging"] .adv{grid-template-columns:1fr}
+  }
+  @media(min-width:1700px){
+    body[data-mode="staging"] #dash{grid-template-columns:repeat(3,minmax(0,1fr))}
+    body[data-mode="staging"] .adv{grid-template-columns:1fr 1fr}
   }

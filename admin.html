@@ -28,6 +28,10 @@
   .curstate b{color:var(--txt)}
   .amsg{font-family:var(--mono);font-size:12.5px;margin-top:10px;min-height:16px}
   .amsg.ok{color:var(--green)} .amsg.err{color:var(--red)}
+  .flags{display:flex;flex-direction:column;gap:9px;margin:10px 0}
+  .flagrow{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--txt);cursor:pointer}
+  .flagrow input{width:16px;height:16px;accent-color:var(--accent)}
+  .authnote{font-family:var(--mono);font-size:11.5px;color:var(--green);margin:0 0 10px;min-height:14px}
 </style>
 </head>
 <body>
@@ -62,6 +66,7 @@
 
   <p class="curstate" id="curstate">Current: loading…</p>
 
+  <p class="authnote" id="authnote"></p>
   <div class="adminkeyrow">
     <div class="fld"><label for="adminkey">Admin key</label>
       <input type="password" id="adminkey" placeholder="ADMIN_KEY" autocomplete="off"></div>
@@ -82,8 +87,20 @@
     reach the main app.</p>
   <div class="modes"><a class="modebtn" href="/app/staging.html" target="_blank" rel="noopener"><span class="d" style="background:var(--warn)"></span>Launch staging env &rarr;</a></div>
 
-  <h2>More controls</h2>
-  <p>Additional admin configuration will live here (feature flags, reference-data refresh, etc.).</p>
+  <h2>Feature flags</h2>
+  <p>Server-side configuration stored in KV. (Scaffold — not yet consumed by the main app.)</p>
+  <div class="flags" id="flags">
+    <label class="flagrow"><input type="checkbox" data-flag="showBetaAdapters"><span>Show beta platform adapters</span></label>
+    <label class="flagrow"><input type="checkbox" data-flag="maintenanceBanner"><span>Show a maintenance banner</span></label>
+  </div>
+  <div class="modes"><button class="modebtn" id="saveflags"><span class="d" style="background:var(--accent)"></span>Save flags</button></div>
+  <p class="amsg" id="flagmsg"></p>
+
+  <h2>Reference data</h2>
+  <p>Bump the cache version to force clients to re-fetch broker / fee / feed / tax data on next load.</p>
+  <p class="curstate" id="refstate">Version: loading…</p>
+  <div class="modes"><button class="modebtn" id="bumpref"><span class="d" style="background:var(--green)"></span>Bump cache version</button></div>
+  <p class="amsg" id="refmsg"></p>
 </div>
 
 <footer class="site">
@@ -105,10 +122,19 @@
   var labelInput=document.getElementById('label');
   var msg=document.getElementById('amsg');
   var cur=document.getElementById('curstate');
+  var authnote=document.getElementById('authnote');
   try{ keyInput.value=localStorage.getItem(KEYLS)||''; }catch(_){}
 
   function setMsg(t,kind){ msg.textContent=t||''; msg.className='amsg'+(kind?' '+kind:''); }
   function mark(mode){ document.querySelectorAll('.modebtn').forEach(function(b){ b.classList.toggle('on', b.dataset.mode===mode); }); }
+
+  // Auto-populate the admin key when reached through Cloudflare Access (no typing).
+  function autoKey(){
+    fetch('/api/admin-key',{cache:'no-store'}).then(function(r){ return r.ok?r.json():null; }).then(function(d){
+      if(d && d.key){ keyInput.value=d.key; try{ localStorage.setItem(KEYLS,d.key); }catch(_){}
+        authnote.textContent='Authenticated'+(d.email?(' as '+d.email):'')+' — admin key auto-filled.'; }
+    }).catch(function(){});
+  }
 
   function loadStatus(){
     fetch('/api/status',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
@@ -134,10 +160,39 @@
       .catch(function(){ setMsg('Network error — is this deployed on Cloudflare?','err'); });
   }
 
-  document.querySelectorAll('.modebtn').forEach(function(b){
-    b.addEventListener('click',function(){ save(b.dataset.mode); });
+  document.querySelectorAll('#modes .modebtn').forEach(function(b){
+    if(b.dataset.mode) b.addEventListener('click',function(){ save(b.dataset.mode); });
   });
+
+  // ---- feature flags + reference data (/api/config) ----
+  var flagmsg=document.getElementById('flagmsg'), refmsg=document.getElementById('refmsg'), refstate=document.getElementById('refstate');
+  function setFlagMsg(t,k){ flagmsg.textContent=t||''; flagmsg.className='amsg'+(k?' '+k:''); }
+  function setRefMsg(t,k){ refmsg.textContent=t||''; refmsg.className='amsg'+(k?' '+k:''); }
+  function loadConfig(){
+    fetch('/api/config',{cache:'no-store'}).then(function(r){return r.json();}).then(function(c){
+      var f=c.flags||{};
+      document.querySelectorAll('[data-flag]').forEach(function(el){ el.checked=!!f[el.dataset.flag]; });
+      refstate.innerHTML='Cache version: <b>'+(c.refDataVersion?new Date(c.refDataVersion).toLocaleString():'never')+'</b>';
+    }).catch(function(){ refstate.textContent='Config unavailable (deploy on Cloudflare to use)'; });
+  }
+  function postConfig(body,onMsg){
+    var key=(keyInput.value||'').trim();
+    if(!key){ onMsg('Enter the admin key first.','err'); return; }
+    onMsg('Saving…');
+    fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json','x-admin-key':key},body:JSON.stringify(body)})
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+      .then(function(res){ if(res.ok){ onMsg('Saved','ok'); loadConfig(); } else onMsg('Error: '+(res.d.error||'request failed'),'err'); })
+      .catch(function(){ onMsg('Network error — is this deployed on Cloudflare?','err'); });
+  }
+  document.getElementById('saveflags').addEventListener('click',function(){
+    var flags={}; document.querySelectorAll('[data-flag]').forEach(function(el){ flags[el.dataset.flag]=el.checked; });
+    postConfig({flags:flags}, setFlagMsg);
+  });
+  document.getElementById('bumpref').addEventListener('click',function(){ postConfig({bumpRefData:true}, setRefMsg); });
+
+  autoKey();
   loadStatus();
+  loadConfig();
 })();
 </script>
 
