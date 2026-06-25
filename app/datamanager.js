@@ -123,13 +123,45 @@ function dmCaptureEdit(){
   if(tg) DM_EDIT.tags=[...new Set(tg.value.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean))];
   if(nt) DM_EDIT.note=nt.value;
 }
+/* Screenshots are stored as data-URLs in IndexedDB, so a few raw phone-camera
+   images would bloat the local DB fast. Downscale (longest side ≤ MAX_DIM) and
+   re-encode to JPEG once an image is large, keeping each stored shot bounded. */
+const SHOT_MAX_DIM = 1600, SHOT_SOFT_BYTES = 600 * 1024;
 function dmAddShot(file){
   if(!DM_EDIT || !file) return;
   if(!/^image\//.test(file.type||'')){ alert('Please choose an image file.'); return; }
-  if(file.size>4*1024*1024 && !confirm('That image is over 4MB and will be stored as-is in your browser. Add it anyway?')) return;
+  const sizeLabel = n => n>=1048576 ? (n/1048576).toFixed(1)+' MB' : Math.round(n/1024)+' KB';
+  const pushShot = (url, optimizedFromBytes) => {
+    dmCaptureEdit();
+    DM_EDIT.shots.push(url);
+    DM_EDIT._msg = optimizedFromBytes
+      ? `Image optimized for local storage (${sizeLabel(optimizedFromBytes)} → ~${sizeLabel(url.length*0.75)}).`
+      : '';
+    renderTradeEditor();
+  };
   const r=new FileReader();
-  r.onload=()=>{ dmCaptureEdit(); DM_EDIT.shots.push(String(r.result)); DM_EDIT._msg=''; renderTradeEditor(); };
   r.onerror=()=>alert('Could not read that image.');
+  r.onload=()=>{
+    const dataUrl=String(r.result);
+    const small = file.size<=SHOT_SOFT_BYTES;
+    const img=new Image();
+    // if the browser can't decode it (e.g. some SVGs), just store the original
+    img.onerror=()=>pushShot(dataUrl, 0);
+    img.onload=()=>{
+      const longest=Math.max(img.width,img.height);
+      if(small && longest<=SHOT_MAX_DIM){ pushShot(dataUrl, 0); return; }   // already compact
+      const scale=longest>SHOT_MAX_DIM ? SHOT_MAX_DIM/longest : 1;
+      const w=Math.round(img.width*scale), h=Math.round(img.height*scale);
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      const ctx=c.getContext('2d');
+      ctx.fillStyle='#0d1014'; ctx.fillRect(0,0,w,h);   // flatten transparency so JPEG looks right
+      ctx.drawImage(img,0,0,w,h);
+      let out; try{ out=c.toDataURL('image/jpeg',0.82); }catch(_){ out=dataUrl; }
+      if(out.length>=dataUrl.length) pushShot(dataUrl, 0);   // re-encode didn't help → keep original
+      else pushShot(out, file.size);
+    };
+    img.src=dataUrl;
+  };
   r.readAsDataURL(file);
 }
 async function dmSaveEdit(){
