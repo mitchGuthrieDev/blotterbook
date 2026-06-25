@@ -13,12 +13,19 @@ _a.heic
 .env
 .env.*
 .wrangler/
+.mf/
 
 # Dependencies / build output / logs
 node_modules/
 dist/
 build/
 *.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Local-only overrides & caches
+*.local
+.cache/
 
 # Editor
 .vscode/
