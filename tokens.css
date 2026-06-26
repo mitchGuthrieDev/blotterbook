@@ -2,8 +2,9 @@
    Imported by site.css (info/admin pages) and app/app.css (the app), and linked
    directly by the bespoke homepage (index.html). Edit values ONLY here. */
 :root{
-  --bg:#0d1014; --panel:#151a21; --panel2:#1b212a; --line:#262d38;
-  --txt:#d6dde6; --dim:#8a94a3; --faint:#5b6470;
+  --bg:#0d1014; --panel:#151a21; --panel2:#1b212a; --line:#262d38; --hover-line:#33405a;
+  /* --faint bumped from #5b6470 (3.18:1, failed WCAG AA) to clear 4.5:1 on --bg (L5). */
+  --txt:#d6dde6; --dim:#8a94a3; --faint:#767f8c;
   --green:#3fb950; --green-bg:rgba(63,185,80,.14);
   --red:#f04a4a;   --red-bg:rgba(240,74,74,.14);
   --accent:#6aa0ff; --take:#c98bff; --warn:#e3b341;
