@@ -16,9 +16,9 @@ function logAction(msg, kind){
   const ts=document.createElement('span'); ts.className='ts'; ts.textContent=new Date().toTimeString().slice(0,8)+'  ';
   const tm=document.createElement('span'); tm.className='tm'; tm.textContent=msg;
   line.appendChild(ts); line.appendChild(tm);
-  win.appendChild(line);
-  while(win.children.length>200) win.removeChild(win.firstChild);
-  win.scrollTop=win.scrollHeight;
+  win.insertBefore(line, win.firstChild);                      // newest on top (F12)
+  while(win.children.length>200) win.removeChild(win.lastChild);   // trim oldest (now last)
+  win.scrollTop=0;                                             // keep the newest line in view
 }
 function setSession(state){   // 'online' | 'offline' | 'degraded'
   const pill=document.getElementById('sesspill'); if(!pill) return;

@@ -863,11 +863,11 @@
       "category": "FEATURES",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "In the staging Break-even & Cost Budget module, refactor the Section-1256 tax presentation in the cost waterfall (`renderCalc` → `c_rows`/`c_head` in `app/render.js`) to mirror the existing <b>Commissions (all-in)</b> pattern: a single headline line item <b>Est. 1256 Tax (net profit only)</b> showing the total, with the <em>State top rate</em> and <em>Blended 1256 rate</em> lines moved into a collapsible <em>Tax breakdown</em> subsection beneath it — the same `<details>`/collapsible treatment used for the per-symbol commission table (F6). Keep the computed values identical (`stateRate()`, `c.tEff`, `c.tax`); this is presentation only. Staging-scoped (gate behind `STAGING_PAGE` like the F6 commission subsection). Done when: the live Break-even module shows one Est. 1256 Tax line with a collapsible breakdown holding State top rate + Blended 1256 rate, matching the Commissions item's styling, and the numbers are unchanged.",
-      "doneNote": null
+      "doneNote": "**Shipped:** in staging, the Break-even module now shows one **Est. 1256 tax (net profit only)** headline line with the total, and the State top rate + Blended 1256 rate moved into a collapsible **Tax breakdown** details element (mirrors the F6 commission subsection). Main app + demo keep the inline rows. Values unchanged (gated on STAGING_PAGE in renderCalc)."
     },
     {
       "id": "F11",
@@ -875,11 +875,11 @@
       "category": "FEATURES",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "The Day-notes editor (`#journal`: `j_date`/`j_stat`/`j_text` in `partials/app-dash.html`) is always shown even when no calendar day is selected. Make it appear only while a day is actively selected (`selectedDate` set) and hide it otherwise, and make a click anywhere OUTSIDE the Trading Calendar module deselect the active day — clear `selectedDate`, remove `.selday`, drop the graph marker, and hide the notes box. Touches `selectedDate`/`selectDay()` (`app/render.js`/`app/data.js`) and a document-level click handler in `app/main.js` (ignore clicks inside `#cal`/the calendar panel and inside the notes editor itself). Lives in shared dashboard code, so verify on app/demo/staging (demo keeps its 'notes disabled' hint). Done when: the notes box is hidden until a day is clicked, clicking outside the calendar module deselects the day and hides the box, and selecting a day still loads/saves its note.",
-      "doneNote": null
+      "doneNote": "**Shipped:** the Day-notes editor (#journal) is hidden until a day is actively selected and reappears on selection; a click outside the Trading Calendar module (and outside the equity curve, the other date-selection surface) deselects the day — clears the highlight, drops the graph marker, hides the box. Capture-phase document handler so a curve re-render cannot detach the target. Verified on app/demo/staging."
     },
     {
       "id": "F12",
@@ -887,11 +887,11 @@
       "category": "FEATURES",
       "priority": "P3",
       "effort": "trivial",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "The staging Activity Terminal (`app/staging.js`, the `#termwin` feed) appends new lines at the bottom (oldest-first). Reverse it so the most recent entry is at the TOP of the terminal — prepend each new line (or reverse render order) and adjust any autoscroll (newest is now always visible at the top, so scroll-to-bottom logic should become scroll-to-top or be removed). Keep the timestamp/line formatting and the line cap unchanged. Done when: the latest activity line appears at the top of the terminal and older lines flow downward.",
-      "doneNote": null
+      "doneNote": "**Shipped:** the staging Activity Terminal now prepends new lines so the most recent entry is at the TOP; the line cap trims the oldest (now last) and the view scrolls to top. Formatting/cap unchanged."
     },
     {
       "id": "CH12",

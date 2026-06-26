@@ -256,6 +256,15 @@ async function selectDay(d){
   await updateJournalEditor();
   if(METRICS_ALL) renderCurve(curveMetrics());
 }
+/* Clear any active calendar selection (F11): drop the highlight, hide the notes box, and
+   remove the graph marker. No-op when nothing is selected. */
+function deselectDay(){
+  if(!selectedDate) return;
+  selectedDate=null;
+  document.querySelectorAll('#cal .cell.selday').forEach(c=>c.classList.remove('selday'));
+  updateJournalEditor();
+  if(METRICS_ALL) renderCurve(curveMetrics());
+}
 /* Jump the calendar to the most recent month that has data ("present"). */
 function jumpToLatest(){
   if(!METRICS_ALL || METRICS_ALL.lastDate==='—') return;
@@ -274,13 +283,17 @@ function selectFromGraph(d){
   updateJournalEditor();
 }
 async function updateJournalEditor(){
-  const ta=document.getElementById('j_text'), label=document.getElementById('j_date'),
+  const journal=document.getElementById('journal'),
+        ta=document.getElementById('j_text'), label=document.getElementById('j_date'),
         hint=document.getElementById('j_hint'), stat=document.getElementById('j_stat');
   if(!ta) return;
-  if(!selectedDate || DEMO_MODE || !Store.available()){
+  // F11: the notes block only appears while a day is actively selected.
+  if(journal) journal.style.display = selectedDate ? '' : 'none';
+  if(!selectedDate){ ta.value=''; ta.disabled=true; stat.textContent=''; return; }
+  if(DEMO_MODE || !Store.available()){
     ta.value=''; ta.disabled=true; label.textContent='Day notes'; stat.textContent='';
     hint.style.display=''; hint.textContent = DEMO_MODE ? 'Day-notes are disabled for the demo dataset.'
-      : 'Click a day on the calendar to add or read notes for that date. Notes are saved in this browser.';
+      : 'Local storage is unavailable in this browser, so notes can’t be saved.';
     return;
   }
   hint.style.display='none'; ta.disabled=false; label.textContent='Notes — '+selectedDate;

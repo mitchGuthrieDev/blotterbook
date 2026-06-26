@@ -276,6 +276,9 @@ function renderCalendar(){
   }
   calEl.innerHTML=html;
   if(refocusDate){ const c=calEl.querySelector(`.cell[data-date="${refocusDate}"]`); if(c) c.focus(); }
+  // F11: keep the notes box hidden unless a day is selected (without touching its text).
+  const journal=document.getElementById('journal');
+  if(journal) journal.style.display = selectedDate ? '' : 'none';
 }
 function isoWeek(d){ const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
   const dn=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-dn+3);
@@ -372,10 +375,19 @@ function renderCalc(m, c=costModel(m)){
     +(STAGING_PAGE ? `<details class="csubtable"><summary>Per-symbol breakdown</summary><div class="csubbody">${commHtml}</div></details>` : '')
     +row('Subscriptions ('+money(c.fixedMo)+'/mo &times; '+c.months+')', `<span class="neg">${money(-c.fixedPeriod)}</span>`)
     +row('Net P&L (pre-tax)', `<span class="${cls(c.netPreTax)}">${money(c.netPreTax)}</span>`,'tot')
-    +`<div class="csub">Tax — Section 1256</div>`
-    +row('State top rate', stateRate().toFixed(2)+'%','sub')
-    +row('Blended 1256 rate', (c.tEff*100).toFixed(1)+'%','sub')
-    +row('Est. 1256 tax (net profit only)', `<span class="neg">${money(-c.tax)}</span>`,'sub')
+    // 1256 tax — staging mirrors the "Commissions (all-in)" pattern (F10): one headline line
+    // with the total, and the rate detail tucked into a collapsible breakdown (like F6). Main
+    // app + demo keep the inline sub-rows.
+    +(STAGING_PAGE
+        ? row('Est. 1256 tax (net profit only)', `<span class="neg">${money(-c.tax)}</span>`)
+          + `<details class="csubtable"><summary>Tax breakdown</summary><div class="csubbody">`
+          +   row('State top rate', stateRate().toFixed(2)+'%','sub')
+          +   row('Blended 1256 rate', (c.tEff*100).toFixed(1)+'%','sub')
+          + `</div></details>`
+        : `<div class="csub">Tax — Section 1256</div>`
+          + row('State top rate', stateRate().toFixed(2)+'%','sub')
+          + row('Blended 1256 rate', (c.tEff*100).toFixed(1)+'%','sub')
+          + row('Est. 1256 tax (net profit only)', `<span class="neg">${money(-c.tax)}</span>`,'sub'))
     +row('After-tax take-home', `<span class="${cls(c.afterTax)}">${money(c.afterTax)}</span>`,'tot');
 }
 

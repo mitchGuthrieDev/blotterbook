@@ -58,6 +58,16 @@ on('cal','keydown',e=>{   // keyboard parity for day cells (B10)
   const cell=e.target.closest('.cell[data-date]'); if(!cell)return;
   e.preventDefault(); selectDay(cell.dataset.date);
 });
+// F11: a click outside the Trading Calendar module deselects the active day. The calendar
+// module (cells + notes editor) and the equity curve (the other day-selection surface) keep
+// the selection; clicking anywhere else dismisses it. Runs in the CAPTURE phase so it reads
+// the click target while it's still attached — selectFromGraph re-renders the curve on click,
+// which would otherwise detach the target and make the in-curve check miss.
+document.addEventListener('click',e=>{
+  if(!selectedDate) return;
+  if(e.target.closest('.panel[data-key="cal"]') || e.target.closest('#curve')) return;
+  deselectDay();
+}, true);
 
 /* ---- data manager modal controls ---- */
 if($('dataModal')){
