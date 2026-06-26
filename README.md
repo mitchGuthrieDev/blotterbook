@@ -53,7 +53,7 @@ call is loading the app's own reference-data JSON.
   index.html            homepage: hero + features + use cases + platforms + pricing + FAQ
   howto.html            "How To" wiki: getting-started walkthrough + per-platform import guides
   roadmap.html          shipped vs. planned checklist (styled like the changelog)
-  changelog.html        "Blotterlog" — commit history (reads the cached /api/changelog endpoint)
+  changelog.html        "Blotterlog" — versioned release notes (reads curated data/changelog.json)
   legal.html            disclaimers, terms of use, privacy summary
   admin.html            internal admin controls (Cloudflare Access–gated; sets the Live indicator)
   site.css              shared styles for howto / roadmap / changelog / legal / admin (@imports tokens.css)
@@ -83,9 +83,9 @@ call is loading the app's own reference-data JSON.
   state-tax.json        Section 1256 model + per-state top rates
   manifest.json         content hashes for cache-busting (generated)
   backlog.json          engineering backlog — committed source of truth (rendered read-only in admin.html)
+  changelog.json        curated, version-keyed release notes for changelog.html (prod track)
 /functions/             Cloudflare Pages Functions
   _middleware.js        key-gates /app/staging.html (x-admin-key header / bb_staging cookie / ?k=)
-  api/changelog.js      cached (1h) GitHub commit feed for the changelog page
   api/geo.js            visitor region (Cloudflare edge geo) → pre-fill the tax state
   api/status.js         homepage Live-indicator status (GET public; POST admin-only, KV-backed)
   api/config.js         feature flags + reference-data cache version + platform versions (KV; POST admin-only)
@@ -123,19 +123,24 @@ anchor links plus links to the standalone info pages:
   export, each marked verified vs. synthetic-tested.
 - **`roadmap.html`** — a shipped-vs-planned checklist (shipped items crossed off; planned items
   flagged with priority), styled like the changelog.
-- **`changelog.html`** ("**Blotterlog**") — the commit history. It now reads our own cached
-  **`/api/changelog`** endpoint (see [below](#changelog-caching)) instead of calling GitHub on every
-  visit, and falls back to a baked-in snapshot if the endpoint is unavailable.
+- **`changelog.html`** ("**Blotterlog**") — versioned, user-facing release notes (see
+  [below](#changelog-release-notes)). Reads the curated **`data/changelog.json`**, not raw commits.
 - **`legal.html`** — disclaimers (not a broker, estimates only), terms of use, and a privacy summary,
   linked from every footer alongside a one-line disclaimer.
 
-### Changelog caching
+### Changelog release notes
 
-`functions/api/changelog.js` is a Cloudflare Pages Function that fetches the repo's recent commits
-and caches the response at the edge for **one hour** (Cache API + `Cache-Control`). GitHub is hit at
-most ~once/hour per edge location regardless of traffic, and the data still updates **without a
-redeploy** — it's fetched live, just cached. (A single global once-an-hour refresh would use a
-Cron-Triggered Worker writing to KV; the Cache-API version is the Pages-native equivalent.)
+`changelog.html` → `assets/changelog.js` renders **`data/changelog.json`** (F13): a curated,
+version-keyed release-notes file for the **prod** (main + demo) track, newest first. Each entry has a
+prod `version` (the CH12 two-track version — `chore(release)` commits mark version boundaries on
+`main`), a `date`, a friendly `title`/`summary`, and optional `highlights`. Everything before
+automated versioning is rolled up into a single `beta: true` "Beta released" entry.
+
+It is **manually curated** — add a new entry at the top of `releases` each time the prod version
+bumps. This deliberately replaces the old raw-commit feed (the retired `/api/changelog` Function) so
+the page reads as release notes, not a git log. The file is hash-cache-busted by `build-manifest`
+like other `data/*.json`; `assets/changelog.js` keeps a tiny inline fallback for local dev / a failed
+fetch.
 
 ### Location-based tax state
 
@@ -632,8 +637,8 @@ All parsing, computation, and storage happen locally in your browser; **trade da
 uploaded**. No accounts, no tracking, no advertising cookies — the local storage that holds your data
 and settings is first-party and essential (so **no GDPR cookie banner is needed**). The only outbound
 calls, none of which carry your trades: the app's own `/data/*.json`; `/api/geo` to pre-fill the tax
-state from your coarse region (nothing stored); and the changelog reading public commit data via the
-cached `/api/changelog` endpoint. The full statement is on [`legal.html`](legal.html).
+state from your coarse region (nothing stored); and the changelog reading the static
+`/data/changelog.json`. The full statement is on [`legal.html`](legal.html).
 
 ## Development & deployment
 

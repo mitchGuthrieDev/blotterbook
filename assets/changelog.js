@@ -1,37 +1,51 @@
 (function(){
   var log=document.getElementById('log'), status=document.getElementById('clstatus');
 
-  /* Baked-in fallback if our cached endpoint is unavailable (e.g. local dev). */
+  /* F13: the changelog now reads from a curated, version-keyed release-notes file
+     (data/changelog.json, prod track) instead of raw commit titles. The small inline
+     fallback below covers local dev / a failed fetch with the latest couple of releases. */
   var FALLBACK=[
-    {sha:'',date:'2026-06-24',msg:'Format auto-detection phase 1: platform adapters, detection, fills matcher'},
-    {sha:'',date:'2026-06-23',msg:'UI/UX pass: landing, graph, data manager, report, demo, homepage, changelog'},
-    {sha:'',date:'2026-06-23',msg:'Rework app: shared CSS/JS, demo page, report export, data manager, UI fixes'},
-    {sha:'',date:'2026-06-23',msg:'Add one-page Blotterbook homepage + Blotterlog changelog; rebrand'},
-    {sha:'',date:'2026-06-23',msg:'Restructure into a multi-file app: JSON data, IndexedDB, filters, journal'},
-    {sha:'',date:'2026-06-22',msg:'Add cost calculations to the dashboard'},
-    {sha:'',date:'2026-06-22',msg:'Initial project commit'}
+    {version:'0.14.2',date:'2026-06-26',title:'Stability & security pass',
+      summary:'A sweep of fixes from an internal audit — tightening up the calendar, your data, and the behind-the-scenes release machinery.'},
+    {version:'0.12.0',date:'2026-06-24',beta:true,title:'Beta released',
+      summary:'The first public Beta of Blotterbook — a fast, private, browser-based futures-trading journal.'}
   ];
 
-  function render(items, live){
-    log.innerHTML=items.map(function(c,i){
-      var hash=c.sha ? (c.url? '<a href="'+c.url+'" target="_blank" rel="noopener">'+c.sha+'</a>' : c.sha) : '';
-      return '<div class="entry'+(i===0?' first':'')+'">'
-        +'<div class="meta"><span class="date">'+c.date+'</span>'
-        +(hash?'<span class="hash">'+hash+'</span>':'')
-        +(i===0?'<span class="latest">Latest</span>':'')+'</div>'
-        +'<h3>'+esc(c.msg)+'</h3></div>';
+  /* Render an ISO date (YYYY-MM-DD) as "Jun 26, 2026" without pulling in a tz/locale
+     surprise — parse the parts directly so it reads the same everywhere. */
+  var MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function fmtDate(s){
+    var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||''));
+    if(!m) return String(s||'');
+    return MONTHS[(+m[2])-1]+' '+(+m[3])+', '+m[1];
+  }
+
+  function render(releases, live){
+    log.innerHTML=releases.map(function(r,i){
+      var hl=(r.highlights&&r.highlights.length)
+        ? '<ul class="highlights">'+r.highlights.map(function(h){return '<li>'+esc(h)+'</li>';}).join('')+'</ul>'
+        : '';
+      return '<div class="entry'+(i===0?' first':'')+(r.beta?' beta':'')+'">'
+        +'<div class="meta">'
+        +'<span class="ver">v'+esc(r.version)+'</span>'
+        +'<span class="date">'+esc(fmtDate(r.date))+'</span>'
+        +(i===0?'<span class="latest">Latest</span>':'')
+        +'</div>'
+        +'<h3>'+esc(r.title)+'</h3>'
+        +(r.summary?'<p class="summary">'+esc(r.summary)+'</p>':'')
+        +hl
+        +'</div>';
     }).join('');
-    if(status) status.textContent = live ? 'Synced from GitHub (cached hourly)' : 'Showing the last saved snapshot';
+    if(status) status.textContent = live ? 'Release notes · prod track' : 'Showing the last saved snapshot';
   }
 
   render(FALLBACK, false);
 
-  /* Read our own cached endpoint — it shields GitHub from per-visit traffic and
-     refreshes about once an hour at the edge, with no redeploy. */
-  fetch('/api/changelog', {headers:{'Accept':'application/json'}})
+  /* Curated release notes — a static, hash-cache-busted data file (no GitHub API). */
+  fetch('/data/changelog.json', {headers:{'Accept':'application/json'}})
     .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
     .then(function(d){
-      if(d && d.ok && Array.isArray(d.commits) && d.commits.length) render(d.commits, true);
+      if(d && Array.isArray(d.releases) && d.releases.length) render(d.releases, true);
     })
     .catch(function(){ /* keep the fallback already rendered */ });
 })();

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "track": "prod",
+  "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
+  "releases": [
+    {
+      "version": "0.14.2",
+      "date": "2026-06-26",
+      "title": "Stability & security pass",
+      "summary": "A sweep of fixes from an internal audit — tightening up the calendar, your data, and the behind-the-scenes release machinery.",
+      "highlights": [
+        "Clicking inside the data-manager or export popup no longer clears the calendar day you had selected.",
+        "Your journal note is saved the instant you switch days, closing a rare window where a quick edit could be dropped.",
+        "Imported backup screenshots are now validated before they're shown, and release versioning is hardened against edge cases."
+      ]
+    },
+    {
+      "version": "0.14.1",
+      "date": "2026-06-26",
+      "title": "Admin & launch reliability",
+      "summary": "A maintenance release fixing the internal admin tools.",
+      "highlights": [
+        "The admin version panel no longer hangs on load, and launching the staging environment is more reliable."
+      ]
+    },
+    {
+      "version": "0.14.0",
+      "date": "2026-06-26",
+      "title": "Calendar notes & cost polish",
+      "summary": "Quality-of-life improvements to day-by-day journaling and the cost estimates that power your P&L.",
+      "highlights": [
+        "Smoother editing of per-day notes straight from the calendar.",
+        "Refinements to commission, fee, and terminal-cost calculations."
+      ]
+    },
+    {
+      "version": "0.13.0",
+      "date": "2026-06-26",
+      "title": "Automated release versioning",
+      "summary": "Every release now carries a real version number, derived automatically when changes ship — so this changelog and the in-app badge always agree on what you're running.",
+      "highlights": [
+        "Version badge in the app header reflects the live release.",
+        "Separate prod and staging tracks behind the scenes."
+      ]
+    },
+    {
+      "version": "0.12.0",
+      "date": "2026-06-24",
+      "beta": true,
+      "title": "Beta released",
+      "summary": "The first public Beta of Blotterbook — a fast, private, browser-based futures-trading journal. Everything before automated versioning is rolled up here: the dashboard and equity curve, the demo, the marketing site, broker/platform format auto-detection, a CSV importer, an IndexedDB-backed data manager, filters, the day journal, and report export."
+    }
+  ]
+}

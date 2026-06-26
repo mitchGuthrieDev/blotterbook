@@ -923,11 +923,11 @@
       "category": "FEATURES",
       "priority": "P2",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "DISCUSSION → then build. Today the changelog (`changelog.html` / `assets/changelog.js` / `functions/api/changelog.js`) just lists raw commit/merge titles pulled from the GitHub API, with no version linkage. Revamp it into a user-approachable, VERSIONED changelog: each entry keyed by the platform/app version (the CH12 two-track versions; `chore(release)` commits mark version boundaries in history), with a friendly sub-detail under it — the merge title or a snippet of the PR description/notes. Truncate everything before versioning was introduced into a single generic \"Beta released\" entry, then continue from the first versioned release. Propose the approach FIRST (how to map commits→versions via the chore(release) boundaries; where the human-readable blurb comes from — PR body vs a curated release-notes file; prod vs staging track on the public page) and surface it before implementing. Done when: the changelog reads as versioned release notes (\"Beta released\" → each subsequent version with a readable summary), distinct from the raw git log.",
-      "doneNote": null
+      "doneNote": "Discussed and agreed three decisions (curated source / prod track only / manual maintenance), then built. New source of truth: curated, version-keyed data/changelog.json (prod track, newest first) — each release has version, date, friendly title/summary, optional highlights; pre-versioning rolled into one beta:true 'Beta released' entry. assets/changelog.js now fetches the static file and renders versioned timeline cards (version badge, formatted date, Latest pill, summary, highlight bullets) with a small inline fallback; retired the raw-commit functions/api/changelog.js entirely. Seeded from the real chore(release) history: 0.13.0→0.14.2 plus the Beta floor. Added .entry .ver/.summary/.highlights styles to site.css; excluded changelog.json from build-manifest (fetched directly, like backlog/versions). Updated README, legal.html, and changelog.html copy off 'commit history'. Verified in-browser: 5 entries render from the live fetch, no console errors; tests 62/27/13 green, builds idempotent. Future releases: add a top entry to data/changelog.json each prod bump."
     },
     {
       "id": "A10",
