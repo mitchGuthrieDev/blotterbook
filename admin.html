@@ -48,7 +48,20 @@
   .bkrow{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--line);font-size:13.5px}
   .bkrow .bk-id{font-family:var(--mono);font-size:11.5px;color:var(--dim);min-width:36px}
   .bkrow .bk-title{color:var(--txt);flex:1}
-  .bkrow.is-done .bk-title{color:var(--dim)}
+  .bkrow.is-done .bk-title{color:var(--dim);text-decoration:line-through}
+  /* backlog filters (F9) */
+  .bkfilters{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin:14px 0 6px}
+  .bkfilters .fld{display:flex;flex-direction:column;gap:5px}
+  .bkfilters label.lbl{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  .bkfilters select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    font-family:inherit;font-size:13px;padding:7px 9px;border-radius:7px;outline:none;min-width:150px}
+  .bkfilters select:focus{border-color:var(--accent)}
+  .bkfilters .bkclear{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--dim);
+    font-family:inherit;font-size:12.5px;padding:8px 12px;border-radius:7px}
+  .bkfilters .bkclear:hover{border-color:var(--accent);color:var(--txt)}
+  .bkfilters .bkfnote{font-family:var(--mono);font-size:11px;color:var(--faint);margin-left:auto;align-self:center}
+  .bkrow.bk-hidden{display:none}
+  .bkgroup.bk-hidden{display:none}
   .bk-eff{font-family:var(--mono);font-size:11px;color:var(--faint)}
   .bk-badge{font-family:var(--mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
   .bk-badge.done{color:var(--green);border-color:rgba(63,185,80,.4)}
@@ -145,6 +158,14 @@
     truth). Per-item prompts and done-notes live in the file but are not shown here.</p>
   <div class="bkcounts" id="bk_counts"></div>
   <div class="bktotal" id="bk_total"></div>
+  <div class="bkfilters" id="bk_filters">
+    <div class="fld"><label class="lbl" for="bk_fstatus">Status</label>
+      <select id="bk_fstatus"><option value="">All</option></select></div>
+    <div class="fld"><label class="lbl" for="bk_feffort">Effort</label>
+      <select id="bk_feffort"><option value="">All</option></select></div>
+    <button type="button" class="bkclear" id="bk_fclear">Clear filters</button>
+    <span class="bkfnote">Counts above are full totals; filters narrow the list only.</span>
+  </div>
   <div class="bklist" id="bk_list"></div>
   <p class="amsg" id="bk_msg"></p>
 </div>
@@ -266,10 +287,44 @@
 
   // ---- backlog (read-only view of data/backlog.json) ----
   function bkesc(s){ return (s||'').replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];}); }
+  var bkData=null;
+  var bkFStatus=document.getElementById('bk_fstatus'), bkFEffort=document.getElementById('bk_feffort');
+
+  // Renders only the item LIST, honoring the status + effort filters. The per-category
+  // counts above always reflect full totals (project health), not the active filter.
+  function bkRenderList(){
+    var list=document.getElementById('bk_list');
+    if(!bkData){ list.innerHTML=''; return; }
+    var fs=bkFStatus.value, fe=bkFEffort.value;
+    var cats=bkData.categories||[], items=bkData.items||[];
+    var html=cats.map(function(c){
+      var its=items.filter(function(i){return i.category===c
+        && (!fs || i.status===fs) && (!fe || i.effort===fe);});
+      if(!its.length) return '';
+      return '<div class="bkgroup">'+bkesc(c)+'</div>'+its.map(function(i){
+        var badge=i.status==='done'?'done':(i.status==='guardrail'?'guard':'open');
+        return '<div class="bkrow is-'+i.status+'"><span class="bk-id">'+bkesc(i.id)+'</span>'
+          +'<span class="bk-title">'+bkesc(i.title)+'</span>'
+          +'<span class="bk-eff">'+bkesc(i.effort)+'</span>'
+          +'<span class="bk-badge '+i.status+'">'+badge+'</span></div>';
+      }).join('');
+    }).join('');
+    list.innerHTML=html || '<div class="bktotal">No items match these filters.</div>';
+  }
+  function bkFillOptions(items){
+    var statuses={}, efforts={};
+    items.forEach(function(i){ if(i.status) statuses[i.status]=1; if(i.effort) efforts[i.effort]=1; });
+    function fill(sel,vals){ var keep=sel.value;
+      sel.innerHTML='<option value="">All</option>'+Object.keys(vals).sort().map(function(k){
+        return '<option value="'+bkesc(k)+'">'+bkesc(k)+'</option>'; }).join('');
+      sel.value=keep; }
+    fill(bkFStatus,statuses); fill(bkFEffort,efforts);
+  }
   function loadBacklog(){
     var counts=document.getElementById('bk_counts'), total=document.getElementById('bk_total'),
-        list=document.getElementById('bk_list'), bmsg=document.getElementById('bk_msg');
+        bmsg=document.getElementById('bk_msg');
     fetch('/data/backlog.json',{cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }).then(function(b){
+      bkData=b;
       var items=b.items||[], cats=b.categories||[];
       var tDone=0, tOpen=0, tGuard=0;
       // per-category counts (prompt/doneNote intentionally NOT rendered)
@@ -288,20 +343,14 @@
       var grand=tDone+tOpen;
       total.innerHTML='Overall: <b>'+tDone+'</b> done · <b>'+tOpen+'</b> remaining'
         +(tGuard?(' · '+tGuard+' guardrail'):'')+' · <b>'+(grand?Math.round(100*tDone/grand):0)+'%</b> complete ('+items.length+' items)';
-      list.innerHTML=cats.map(function(c){
-        var its=items.filter(function(i){return i.category===c;});
-        if(!its.length) return '';
-        return '<div class="bkgroup">'+bkesc(c)+'</div>'+its.map(function(i){
-          var badge=i.status==='done'?'done':(i.status==='guardrail'?'guard':'open');
-          return '<div class="bkrow is-'+i.status+'"><span class="bk-id">'+bkesc(i.id)+'</span>'
-            +'<span class="bk-title">'+bkesc(i.title)+'</span>'
-            +'<span class="bk-eff">'+bkesc(i.effort)+'</span>'
-            +'<span class="bk-badge '+i.status+'">'+badge+'</span></div>';
-        }).join('');
-      }).join('');
+      bkFillOptions(items);
+      bkRenderList();
       bmsg.textContent='';
     }).catch(function(){ bmsg.textContent='Could not load data/backlog.json.'; bmsg.className='amsg err'; });
   }
+  bkFStatus.addEventListener('change',bkRenderList);
+  bkFEffort.addEventListener('change',bkRenderList);
+  document.getElementById('bk_fclear').addEventListener('click',function(){ bkFStatus.value=''; bkFEffort.value=''; bkRenderList(); });
 
   autoKey();
   loadStatus();
