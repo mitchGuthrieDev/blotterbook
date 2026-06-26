@@ -263,6 +263,56 @@ The **demo** also gains a preview-only **Manage data** panel: it renders the in-
 (overview + read-only trade list) with every action disabled and a "preview only" banner, so visitors
 can see the feature without touching the example data.
 
+### Promoting a feature from staging → prod
+
+Staging (`STAGING_PAGE`) runs ahead of the main app + demo; **promotion** is the deliberate step of
+moving a proven feature onto the prod surfaces. The surface a feature ships to is decided by **where its
+code lives and how it's gated** — not by one flag you flip — so promotion is a short checklist, not a
+one-liner.
+
+**The model in one breath.** The **demo mirrors prod 1:1**: every feature the main app has, the demo
+has too — just with data-mutating controls **greyed out/disabled** and persistence blocked
+(`DEMO_MODE`), so a visitor sees the real surface on sample data they can't alter. **Staging is a
+superset** that stays permanently ahead. The two version tracks in `data/versions.json` are
+**independent counters** (staging accrues more bumps because it receives shared *and* staging-only
+changes); a promotion does **not** sync the numbers — it bumps `prod` by the commit-type level and lets
+the changelog (the Blotterlog) record "shipped to prod in v`X`".
+
+**Gate layers a feature can hide behind** — promote each that applies:
+
+- **JS in `app/staging.js`** (loaded only on staging) → move the logic into the relevant shared
+  `app/*.js` module. If it must stay its own file, add its `<script>` to the non-staging branch of
+  `partials/app-scripts.html` too.
+- **JS in a shared module behind `if(!STAGING_PAGE) return` / `if(STAGING_PAGE)`** → remove the runtime
+  guard so the code runs on every surface.
+- **HTML inline in `app/staging.html`** (hand-maintained, e.g. the activity terminal) → move the markup
+  into the right `partials/app-*.html` so all three pages get it.
+- **HTML in a partial behind `<!--IF mode=staging-->`** → widen the conditional (see the demo step).
+
+**Not everything promotes.** The staging *dev tools* — activity terminal, session-status pill,
+workspace templates — are scaffolding for trialing changes, not product. Leave them staging-only.
+
+**Promotion checklist** (one feature at a time):
+
+1. **Find every gate.** Grep the feature for `STAGING_PAGE`, `mode=staging`, and references in
+   `app/staging.js` / inline markup in `app/staging.html`. List each gate layer from above.
+2. **Un-gate the JS** — move shared logic out of `staging.js` into its module, or delete the
+   `STAGING_PAGE` runtime guard, so the code runs on app + demo + staging.
+3. **Un-gate the HTML** — move inline staging markup into a partial, or widen the partial's
+   `<!--IF mode=staging-->` to the modes it should reach (normally all three).
+4. **Preserve demo restrictions (never skip).** Demo mirrors prod, so the feature **must** appear on
+   demo — but every data-mutating control needs the demo treatment: add `disabled` in the
+   `<!--IF mode=demo-->` variant **and** guard any write path with `DEMO_MODE` (the data layer already
+   blocks persistence when it's set). Confirm no new write can run under `DEMO_MODE`.
+5. **Rebuild** — `node scripts/build-includes.mjs` regenerates `app/app.html`, `demo.html`, and
+   `staging.html` from the partials; the diff shows exactly what each surface gained.
+6. **Verify all three surfaces.** App: feature works and persists. Demo: feature visible, mutating
+   controls greyed out, nothing saved. Staging: unchanged.
+7. **Title the PR `feat:` (or `fix:`)** so CH12 bumps **prod** by the right level. Both tracks move and
+   staging keeps its lead — no manual version edit, and never hand-set `prod` to the staging number.
+8. **Add a changelog entry** for the new prod version in `data/changelog.json` (F13) — this is where
+   prod-vs-staging feature parity becomes legible to users.
+
 ### Mobile navigation
 
 On narrow screens the header's nav links collapse behind a **hamburger menu** that replaces the

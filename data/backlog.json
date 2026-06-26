@@ -869,11 +869,10 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P2",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "DISCUSSION → then document. Staging runs many features ahead of the main app + demo (gated on `STAGING_PAGE`), and promoting a feature to prod has several moving parts that need a repeatable process: (a) shared dashboard code already ships to all surfaces, so promotion means removing/flipping the `STAGING_PAGE` gates for that feature; (b) DEMO must KEEP its restrictions (day-notes disabled, preview-only data manager, sample-only data) even as new features land — promotion can't blindly enable everything on demo; (c) the prod (main+demo) version must reconcile to the staging version of the feature set being ported (CH12 two-track); (d) the partial/build + mode-conditional system (A6) is the mechanism. Analyze the current gating + version model and PROPOSE a documented, repeatable promotion checklist before changing anything. Done when: an agreed promotion workflow is documented (README + checklist) covering gate removal, demo-restriction preservation, and version reconciliation.",
-      "doneNote": null
+      "doneNote": "**Discussed, then documented.** Agreed three decisions: (1) version model stays independent counters — a promotion bumps prod by the commit-type level and staging keeps its lead, no numeric sync; (2) lives in README as a section + copy-pasteable checklist; (3) demo mirrors prod 1:1, with data-mutating UI greyed out/disabled and persistence blocked (DEMO_MODE), so a promoted feature MUST appear on demo with its restrictions applied, not be excluded. Added a 'Promoting a feature from staging → prod' subsection to README.md: the surface-by-gate model, the four gate layers (staging.js / STAGING_PAGE runtime guard / inline staging HTML / mode=staging partial conditional) and how to un-gate each, a note that staging dev-tools (activity terminal, session pill, workspace templates) never promote, and an 8-step checklist covering gate removal, demo-restriction preservation, build-includes regeneration, three-surface verification, conventional-commit titling for the CH12 bump, and a changelog (F13) entry."
     },
     {
       "id": "F14",
