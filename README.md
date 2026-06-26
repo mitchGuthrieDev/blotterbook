@@ -61,10 +61,10 @@ call is loading the app's own reference-data JSON.
   nav.html              the info-site nav (changelog / roadmap / legal / howto)
   footer.html           the info-site footer
 /app/                   the journal app
-  index.html            app markup (links app.css + the app scripts below)
+  app.html              app markup (links app.css + the app scripts below); served at /app/ via a _redirects rewrite
   demo.html             the demo on its own page (shares app.css + the app scripts; opens in a new tab)
   staging.html          1:1 sandbox clone of the main app (body[data-mode=staging]; key-gated) for trialling changes
-  app.css               all app styles (shared by index.html / demo.html / staging.html)
+  app.css               all app styles (shared by app.html / demo.html / staging.html)
   core.js               globals, DOM helpers, metrics, formatting, cost model, reference-data loading
   render.js             dashboard rendering (cards, curve, calendar, advanced, break-even) + scope/filter driver
   data.js               CSV import, demo data, filters, day-notes journal, session restore, setup controls
@@ -194,7 +194,7 @@ promoted. The admin panel's **Platform versions** panel records the live version
 (`/api/config` → `versions`) as the source-of-truth.
 
 **Promoting staging → main app / demo** is a *code release*, not a config flip: static hosting serves
-whatever code is deployed, so you copy the validated staging markup/behavior into `index.html` /
+whatever code is deployed, so you copy the validated staging markup/behavior into `app.html` /
 `demo.html`, remove the `STAGING_PAGE` gating, bump the version badges, and deploy. The planned upgrade
 (see the roadmap) is to serve **versioned app builds** and let the admin pick the live version per
 surface — enabling on-the-fly promote/rollback without a redeploy.
@@ -243,8 +243,10 @@ CSS-only checkbox toggle on every page (homepage + the shared `site.css` pages).
 
 ## Quick start
 
-1. Serve the folder over http (see [Development](#development--deployment)) and open `/app/`.
-   The homepage at `/` links to it (**Launch Blotterbook**).
+1. Serve the folder over http (see [Development](#development--deployment)) and open `/app/`
+   (in production a `_redirects` rewrite maps `/app/` → `/app/app.html`; opening `/app/app.html`
+   directly works everywhere, including the local static preview). The homepage at `/` links to it
+   (**Launch Blotterbook**).
 2. In the centered **Broker & Costs** panel, choose your **Broker**, **Data feed**, and **State**,
    and set the monthly **Platform fee**. (Load CSV is disabled until all three are chosen.)
 3. In TradingView, export your account balance history as CSV.
@@ -492,7 +494,7 @@ CSV text
   → render*()       → cards / curve / calendar / advanced / break-even
 ```
 
-`app/app.css` and the app scripts are shared by `index.html`, `demo.html`, and `staging.html`, all
+`app/app.css` and the app scripts are shared by `app.html`, `demo.html`, and `staging.html`, all
 adapting via `document.body.dataset.mode` (`PAGE_MODE`). **Demo** (`data-mode="demo"`) is in-memory and
 never persists; **Staging** (`data-mode="staging"`, `STAGING_PAGE`) uses an isolated IndexedDB and
 enables the experimental features above. Key globals: `TRADES`, `METRICS_ALL`, `FILTERS`, `SCOPE`,
@@ -617,7 +619,7 @@ http(s)** — don't open the files from disk.
 
 ```
 # any static server works, e.g.
-python3 -m http.server 8000      # then visit http://localhost:8000/app/
+python3 -m http.server 8000      # then visit http://localhost:8000/app/app.html  (/app/ rewrite is Pages-only)
 ```
 
 The repo deploys to **Cloudflare Pages** as static files; `/functions/*` are served as edge

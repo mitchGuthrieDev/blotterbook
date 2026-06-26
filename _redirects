@@ -1,0 +1,6 @@
+# Cloudflare Pages redirects/rewrites.
+# The app entry was renamed app/index.html -> app/app.html (CH1). Keep the
+# clean /app/ URL working by rewriting it to the renamed file (200 = rewrite,
+# URL stays /app/). Internal "Launch" links can keep pointing at /app/.
+/app/   /app/app.html   200
+/app    /app/app.html   200
