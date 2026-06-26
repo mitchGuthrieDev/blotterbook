@@ -3,7 +3,7 @@
   "title": "Blotterbook — improvement backlog (paste-ready prompts)",
   "intro": "From the 2026-06-25 audit. Each item is a self-contained prompt: scope, goal, constraints, \"done when\".",
   "tags": "Tags: P1 do-soon · P2 durable win · P3 polish. Send them one at a time (one surface/concern per turn).",
-  "updated": "2026-06-25",
+  "updated": "2026-06-26",
   "note": "Committed source of truth for the engineering backlog (replaces the retired .claude/backlog.md). The admin panel shows category/effort/status only; prompt + doneNote stay here.",
   "categories": [
     "SECURITY",
@@ -470,6 +470,30 @@
       "completedDate": null,
       "partial": false,
       "prompt": "Review `.claude/change-plan.md` — it predates the backlog and is now redundant (we track work in `data/backlog.json`). Confirm nothing in it is still needed, then remove it (or reduce it to a one-line pointer to the backlog) so there's a single planning source. Note: it's gitignored, so this is local cleanup. Done when: change-plan.md is gone or a stub, and the backlog is the sole planning source.",
+      "doneNote": null
+    },
+    {
+      "id": "B3",
+      "title": "(staging) Debug why the Activity Terminal module won't collapse properly",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "In staging, the Activity Terminal module doesn't collapse like the other dashboard modules (its collapse toggle / panel-header click doesn't hide the body the way the rest do). Debug the cause — a likely suspect is the fill-the-panel layout from B2 (`.panel.term .pbody` set to a growing flex column with a `min-height`) fighting the shared module-collapse mechanism, so the collapsed-state class/height never takes on the terminal panel. Fix it so the Activity Terminal collapses and expands exactly like every other module while keeping its filled-panel behavior + scroll/autoscroll when expanded. Touch `app.css` (`.panel.term` / collapse rules) and the collapse wiring if needed (`render.js`/`staging.js`). Staging-only; main app + demo unchanged. Done when: collapsing the Activity Terminal hides its body like the other modules and expanding restores the filled terminal with working scroll/autoscroll; the collapsed/expanded state persists with the saved workspace.",
+      "doneNote": null
+    },
+    {
+      "id": "CH4",
+      "title": "Add per-effort model-routing instructions to the top of data/backlog.json",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "trivial",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Add a top-level instruction field near the top of `data/backlog.json` (e.g. a `modelGuidance` string alongside `intro`/`note`/`tags`) that tells Claude which model to use per effort tier when working a backlog item: Haiku 4.5 (`claude-haiku-4-5`) for `small`-effort items, Sonnet 4.6 (`claude-sonnet-4-6`) for `medium`-effort items, and Opus 4.8 (`claude-opus-4-8`) for high/`large`-effort items. Keep the file valid JSON and the wording unambiguous. Done when: the backlog file carries a clearly-worded model-by-effort instruction at the top mapping small→Haiku 4.5, medium→Sonnet 4.6, large/high→Opus 4.8.",
       "doneNote": null
     }
   ],
