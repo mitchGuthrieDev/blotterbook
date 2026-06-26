@@ -93,15 +93,23 @@
     tradeId,
 
     async addTrades(trades) {
-      const store = await tx(TRADES, 'readwrite');
+      // Read every existing id up front (one request), then issue all puts in a single
+      // synchronous loop. The previous version awaited a get() per trade inside one
+      // readwrite transaction; on a large import the transaction would auto-commit while a
+      // get() promise was still settling, throwing TransactionInactiveError on the next put
+      // (B6). With no awaits between puts the transaction stays live to completion. The id
+      // Set also dedupes rows repeated within the same batch.
+      const ro = await tx(TRADES, 'readonly');
+      const existing = new Set(await reqP(ro.getAllKeys()));
       let added = 0, duplicate = 0;
-      await Promise.all(trades.map(async t => {
+      const store = await tx(TRADES, 'readwrite');
+      for (const t of trades) {
         const id = tradeId(t);
-        const existing = await reqP(store.get(id));
-        if (existing) { duplicate++; return; }
+        if (existing.has(id)) { duplicate++; continue; }
+        existing.add(id);
         store.put({ id, ...t });
         added++;
-      }));
+      }
       await done(store);
       const total = await this.tradeCount();
       return { added, duplicate, total };
