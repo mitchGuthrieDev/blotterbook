@@ -65,7 +65,9 @@ on('cal','keydown',e=>{   // keyboard parity for day cells (B10)
 // which would otherwise detach the target and make the in-curve check miss.
 document.addEventListener('click',e=>{
   if(!selectedDate) return;
-  if(e.target.closest('.panel[data-key="cal"]') || e.target.closest('#curve')) return;
+  // also ignore clicks inside any open modal (data-manager / export) — interacting there
+  // shouldn't drop the selected day, which is exactly where you delete that day's note (B18).
+  if(e.target.closest('.panel[data-key="cal"]') || e.target.closest('#curve') || e.target.closest('.modal')) return;
   deselectDay();
 }, true);
 

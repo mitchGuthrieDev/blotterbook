@@ -2,6 +2,14 @@
 /* Shared tiny utilities, loaded as a classic global script before any page's own scripts.
    Single source for HTML escaping across the app, the info pages, and the admin panel (A7). */
 
+/* S14: the staging-launch link may carry a short-lived admin token as ?k=<token>. Strip it
+   from the URL on load so it doesn't linger in the address bar or browser history. (The
+   middleware already consumed it on the initial request; staging.html also sends no Referer.) */
+(function(){
+  if (typeof location === 'undefined' || !/[?&]k=/.test(location.search)) return;
+  try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+})();
+
 /* Escape text for safe interpolation into HTML — including BOTH quote characters, so a value
    placed inside a "double-" or 'single-quoted' attribute can't break out of it. */
 function esc(s){

@@ -260,6 +260,11 @@ async function selectDay(d){
    remove the graph marker. No-op when nothing is selected. */
 function deselectDay(){
   if(!selectedDate) return;
+  // Flush any unsaved note before clearing the day (B18): a keyboard/synthetic deselect can
+  // fire without a prior textarea blur, so cancel the pending debounce and persist now.
+  clearTimeout(jSaveTimer);
+  if(!DEMO_MODE && Store.available()){ const ta=document.getElementById('j_text'), d=selectedDate;
+    if(ta) Store.saveJournal(d, ta.value); }
   selectedDate=null;
   document.querySelectorAll('#cal .cell.selday').forEach(c=>c.classList.remove('selday'));
   updateJournalEditor();

@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <meta name="robots" content="noindex, nofollow">
+<!-- S14: never send a Referer (the launch URL may carry a ?k= admin token); the token is
+     also stripped from the address bar on load (assets/util.js). -->
+<meta name="referrer" content="no-referrer">
 <title>Blotterbook — Staging</title>
 <link rel="stylesheet" href="app.css">
 </head>
