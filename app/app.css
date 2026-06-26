@@ -1,4 +1,19 @@
 @import "../tokens.css";   /* design tokens (colors + fonts) — single source */
+/* ============================================================================
+   Breakpoint scale (L1) — a small named scale shared across app.css, site.css,
+   and the homepage's inline <style>. Media queries can't read CSS variables, so
+   the scale is a convention: use these canonical widths, not ad-hoc ones.
+     xs   460   single-column phones (.adv, .plat-grid)
+     sm   560   small phones (.cards, .grid3, .mcards)
+     cal  620   dense grids switch to scroll / 2-col (.calgrid, .dmgrid)
+     md   760   tablet (nav → hamburger, .uc-grid, .plat-grid 2-col, .wiki*, .adv 2-col)
+     lg   900   small laptop (.cards 2-col, .grid3 2-col, .price-grid)
+   Wide (min-width) tiers, each a distinct purpose (kept, not merged):
+     1100  staging dashboard → 2 columns
+     1480  main .wrap → 1360px
+     1700  staging dashboard → 3 columns
+     1920  main .wrap → 1520px
+   ============================================================================ */
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);
     -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.4;
@@ -136,8 +151,8 @@
 
   /* ---- stat cards ---- */
   .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
-  @media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}}
-  @media(max-width:520px){.cards{grid-template-columns:1fr}}
+  @media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}}   /* lg */
+  @media(max-width:560px){.cards{grid-template-columns:1fr}}            /* sm (was 520) */
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 14px}
   .card .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
   .card .v{font-family:var(--mono);font-size:26px;font-weight:600;margin-top:7px;

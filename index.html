@@ -113,9 +113,10 @@
   @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}
 
   /* ============ features grid ============ */
+  /* Breakpoint scale (L1): xs 460 · sm 560 · cal 620 · md 760 · lg 900 — full table in app/app.css. */
   .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:34px}
-  @media(max-width:880px){.grid3{grid-template-columns:repeat(2,1fr)}}
-  @media(max-width:560px){.grid3{grid-template-columns:1fr}}
+  @media(max-width:900px){.grid3{grid-template-columns:repeat(2,1fr)}}   /* lg (was 880) */
+  @media(max-width:560px){.grid3{grid-template-columns:1fr}}            /* sm */
   .fcard{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:22px;
     transition:border-color .2s,transform .2s,background .2s}
   .fcard:hover{border-color:#33405a;transform:translateY(-3px);background:var(--panel2)}
@@ -164,7 +165,7 @@
   /* ============ pricing ============ */
   .price-grid{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:16px;margin-top:34px;align-items:stretch}
   .price-grid.two{grid-template-columns:1fr 1fr;max-width:760px;margin-left:auto;margin-right:auto}
-  @media(max-width:880px){.price-grid,.price-grid.two{grid-template-columns:1fr}}
+  @media(max-width:900px){.price-grid,.price-grid.two{grid-template-columns:1fr}}   /* lg (was 880) */
   .plan{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px;
     display:flex;flex-direction:column}
   .plan.featured{border-color:rgba(106,160,255,.5);
