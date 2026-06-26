@@ -43,60 +43,49 @@
 <div class="wrap">
   <p class="eyebrow">The Plan</p>
   <h1>Roadmap</h1>
-  <p class="blurb">Where <b>Blotterbook</b> is headed. The reporting and cost/tax engine is solid —
-    the focus now shifts to the features traders expect from a journal, trustworthy live data, and a
-    bigger-screen UI. For the commit-by-commit history, see the <a href="changelog.html">Changelog</a>.</p>
+  <p class="blurb">Where <b>Blotterbook</b> is headed — the big picture, not a task list. You already get a
+    full futures journal with a true-cost &amp; tax dashboard; next come numbers you can trust to the
+    cent, deeper journaling, and sync across your devices — all built privacy-first. For the per-release
+    detail, see the <a href="changelog.html">Changelog</a>.</p>
 
-  <h2>Shipped</h2>
+  <h2>Available now</h2>
   <ul class="checks">
-    <li class="done"><span class="ck">&#10003;</span><div class="ctxt"><b>Dependency-free app core</b>
-      <p>Multi-file static app, IndexedDB persistence, filters, day-notes journal, calendar, equity curve, advanced stats.</p></div></li>
-    <li class="done"><span class="ck">&#10003;</span><div class="ctxt"><b>True-cost &amp; tax model</b>
-      <p>Per-symbol broker-aware commissions, data-feed &amp; platform subscriptions, Section&nbsp;1256 tax estimate, break-even budget.</p></div></li>
-    <li class="done"><span class="ck">&#10003;</span><div class="ctxt"><b>Performance graph &amp; reporting</b>
-      <p>Gross/Net/Take-home overlays, stepped axis, gradient fill; condensed printable/downloadable performance report with email.</p></div></li>
-    <li class="done"><span class="ck">&#10003;</span><div class="ctxt"><b>Data manager</b>
-      <p>Load, search, per-trade delete, JSON backup/restore, and clear-all — all local.</p></div></li>
-    <li class="done"><span class="ck">&#10003;</span><div class="ctxt"><b>Platform CSV auto-detection (Phase&nbsp;1)</b>
-      <p>Adapter registry, header sniffing, normalization, and a fills round-trip matcher that unlocks hold time. TradingView verified; eight more in beta.</p></div></li>
-    <li class="done"><span class="ck">&#10003;</span><div class="ctxt"><b>Marketing site</b>
-      <p>One-page homepage, How-To wiki, this roadmap, a self-updating changelog, and legal/disclaimer pages.</p></div></li>
+    <li class="done"><span class="ck">&#10003;</span><div class="ctxt"><b>Import from your platform in seconds</b>
+      <p>Drop in a CSV from TradingView, Tradovate, Rithmic, Sierra&nbsp;Chart, TradeStation, MotiveWave, Webull, IBKR or Schwab/thinkorswim — the format is auto-detected, and re-uploads merge so only new trades are added.</p></div></li>
+    <li class="done"><span class="ck">&#10003;</span><div class="ctxt"><b>Your <i>true</i> P&amp;L, not just gross</b>
+      <p>Every trade is costed with broker commissions, exchange &amp; NFA fees, your data-feed and platform subscriptions, and a Section&nbsp;1256 tax estimate — so you see net and real take-home, plus the break-even you need per trade.</p></div></li>
+    <li class="done"><span class="ck">&#10003;</span><div class="ctxt"><b>A dashboard that fills the screen</b>
+      <p>An equity curve with gross / net / take-home overlays, a P&amp;L calendar, win rate, profit factor, drawdown and more — edge-to-edge on a wide monitor, single column on your phone.</p></div></li>
+    <li class="done"><span class="ck">&#10003;</span><div class="ctxt"><b>Arrange it your way</b>
+      <p>Drag to reorder the modules, collapse what you don't need, and save named workspace layouts to switch between views.</p></div></li>
+    <li class="done"><span class="ck">&#10003;</span><div class="ctxt"><b>Filter, focus, and journal</b>
+      <p>Slice by date range, symbol, side, session or weekday and save the filter views you reuse; keep day-by-day notes plus per-trade tags, notes, and screenshots.</p></div></li>
+    <li class="done"><span class="ck">&#10003;</span><div class="ctxt"><b>Reports worth sharing</b>
+      <p>A clean, condensed performance report you can preview and download as PDF, image, or Markdown — or email to yourself.</p></div></li>
+    <li class="done"><span class="ck">&#10003;</span><div class="ctxt"><b>Private by default</b>
+      <p>Everything runs and stays in your browser — no account, nothing uploaded. Back up or restore your entire journal as a single file anytime, and try it first on the live sample-data demo.</p></div></li>
   </ul>
 
-  <h2>In progress &amp; next</h2>
+  <h2>In progress</h2>
   <ul class="checks">
-    <li class="now"><span class="ck">&#9679;</span><div class="ctxt"><b>Trustworthy live tax rates &amp; data-feed costs<span class="tagchip prio">High priority</span></b>
-      <p>Today these are hand-maintained estimates (effectively web-scraped). This is the platform's selling point, so it needs real sources: official CME/exchange fee schedules, per-broker data-feed price lists, and per-state tax tables — pulled on a schedule into our reference JSON rather than guessed.</p></div></li>
-    <li class="now"><span class="ck">&#9679;</span><div class="ctxt"><b>Validate &amp; harden platform adapters</b>
-      <p>Confirm the eight beta adapters against real exports, widen the futures point-value map, and add a manual column-mapping fallback when no format is detected.</p></div></li>
-    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Main-app web UI redesign</b>
-      <p>The vertical stack is great on mobile but wastes desktop real estate — a responsive multi-column dashboard layout for wide screens.</p></div></li>
-    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Code review &amp; refactor pass</b>
-      <p>A lot landed fast; a deliberate review/refactor to keep the codebase clean before it grows further.</p></div></li>
-    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Compliance review session</b>
-      <p>A dedicated pass on disclaimers, data handling, and any registrations/wording needed as the product approaches monetization.</p></div></li>
-    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Journal feature parity</b>
-      <p>The table-stakes traders expect: trade tags/setups, screenshots &amp; richer notes, R-multiple &amp; risk tracking, MAE/MFE, and saved filter views.</p></div></li>
+    <li class="now"><span class="ck">&#9679;</span><div class="ctxt"><b>Numbers you can trust to the cent<span class="tagchip prio">High priority</span></b>
+      <p>Today's fees and tax rates are careful estimates. We're wiring them to official sources — CME/exchange fee schedules, per-broker data-feed price lists, and per-state tax tables, refreshed on a schedule — so your cost and take-home figures are exact, not approximate.</p></div></li>
+    <li class="now"><span class="ck">&#9679;</span><div class="ctxt"><b>Broader, verified platform coverage</b>
+      <p>Confirming each importer against real exports, widening the contract/point-value coverage, and adding a manual column-mapping fallback for any format we don't yet recognize.</p></div></li>
+    <li class="now"><span class="ck">&#9679;</span><div class="ctxt"><b>Deeper journaling</b>
+      <p>The analytics serious traders expect: R-multiple and risk tracking, MAE/MFE (how far each trade ran for and against you), and setup tagging — toward full journal parity.</p></div></li>
   </ul>
 
-  <h2>Later</h2>
+  <h2>Planned</h2>
   <ul class="checks">
-    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Synced workspaces — cross-device sync (zero-knowledge)<span class="tagchip stretch">$5/mo</span></b>
-      <p>End-to-end-encrypted sync of trades, notes, tags &amp; saved filters across devices without us ever seeing the data — Obsidian-Sync-style. This is the one planned <b>paid add-on</b> ($5/month); it removes the "re-upload on every device" pain while keeping the privacy promise.</p></div></li>
-    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Stripe integration</b>
-      <p>Wire up checkout, webhooks, and entitlements (scaffolded in <code>/functions</code>) for the optional donation tiers ($25 one-time / $50 a year) and the synced-workspaces subscription.</p></div></li>
-    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Direct platform &amp; broker connections</b>
-      <p>Optionally pull fills, commissions, and rates live, removing the CSV step entirely.</p></div></li>
-    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Recreate trade charts from CSV<span class="tagchip stretch">Stretch</span></b>
-      <p>Reconstruct a price/entry-exit chart per trade from the imported data for visual review.</p></div></li>
-    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Resizable, snapping dashboard modules<span class="tagchip stretch">Staging</span></b>
-      <p>A module system where panels can be resized from their corners and snap into a grid, emulating Quantower's workspace feel. Builds on the staging web-grid dashboard.</p></div></li>
-    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Multi-workspace tabs<span class="tagchip stretch">Staging</span></b>
-      <p>An in-app tab bar to keep several independent workspaces (each with its own module layout) side by side, extending the save/load/revert workspace templates already in staging.</p></div></li>
-    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Portfolios &amp; advanced config menu<span class="tagchip stretch">Staging</span></b>
-      <p>A file / hamburger menu for power-user configuration — including creating and loading <b>Portfolios</b>: a saved capture of every workspace, its templates, and its data.</p></div></li>
-    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Versioned releases &amp; admin promotion<span class="tagchip stretch">Infra</span></b>
-      <p>Serve versioned app builds and let the admin panel pick the live version for the main app and demo (promote from staging, roll back on the fly) without a redeploy — see the README's versioning notes.</p></div></li>
+    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Sync across your devices<span class="tagchip stretch">$5/mo</span></b>
+      <p>End-to-end-encrypted sync of your trades, notes, tags, and saved views, so your journal follows you to any device — and we never see your data. The one optional paid add-on; everything else stays free.</p></div></li>
+    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Connect your broker directly</b>
+      <p>Optionally pull fills, commissions, and live rates straight from your platform — and skip the CSV step entirely.</p></div></li>
+    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>Replay any trade on a chart<span class="tagchip stretch">Stretch</span></b>
+      <p>Reconstruct a price chart with your entry and exit for each trade, straight from the imported data, for visual review.</p></div></li>
+    <li class="next"><span class="ck">&#9633;</span><div class="ctxt"><b>A power-user workspace</b>
+      <p>Resizable, snapping modules; multiple tabbed workspaces; and Portfolios that capture a full set of layouts and data — a trading-terminal feel for traders who want it.</p></div></li>
   </ul>
 
   <div class="note"><b>Have an idea or a bug?</b> Tell us what would make Blotterbook more useful —

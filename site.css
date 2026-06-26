@@ -104,7 +104,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel);border:1px s
 .checks li.next .ck{color:var(--faint)}
 .checks .ctxt{flex:1}
 .checks .ctxt b{color:var(--txt)}
-.checks li.done .ctxt b{text-decoration:line-through;text-decoration-color:rgba(63,185,80,.5);color:var(--dim)}
+/* shipped items read as available (not crossed-off tasks) — the green check carries the status */
+.checks li.done .ctxt b{color:var(--txt)}
 .checks .ctxt p{margin:3px 0 0;font-size:13.5px;color:var(--dim);line-height:1.5}
 .tagchip{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
   padding:2px 8px;border-radius:999px;margin-left:8px;vertical-align:middle}

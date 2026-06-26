@@ -268,11 +268,10 @@
       "category": "REVIEW / AUDIT",
       "priority": "P3",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Rework `roadmap.html` for a CUSTOMER audience evaluating the product — not us tracking tasks. Today it mirrors this backlog (granular/internal). Reframe into big-picture, benefit-oriented themes: shipped capabilities, what's in progress, and what's planned — feature-level, no infra/engineering minutiae. Keep the shared nav/footer/tokens (it uses the partials + `tokens.css`). The engineering backlog stays separate (this file / the F1 admin module). Done when: roadmap.html reads as a customer-facing shipped / in-progress / planned feature story, distinct from the engineering backlog.",
-      "doneNote": null
+      "doneNote": "Rewrote roadmap.html as a customer-facing shipped/in-progress/planned feature story (it had become a stale internal-backlog mirror). Available now: 7 benefit-framed capabilities (multi-platform CSV auto-import, true cost+tax P&L, the edge-to-edge dashboard, drag/collapse/save-layout, filter+journal with tags/screenshots, downloadable/emailable reports, privacy/local + demo). In progress: trustworthy live rates [High priority], broader verified platform coverage, deeper journaling (R-multiple / MAE-MFE / setup tags). Planned: device sync [$5/mo], direct broker connections, per-trade chart replay [Stretch], power-user workspace. Dropped all engineering/infra minutiae (code-review pass, compliance session, Stripe wiring, versioned-releases infra, staging chips) and refreshed for everything shipped since it was written. Removed the strikethrough on shipped items in site.css so they read as available, not crossed-off tasks (.checks is roadmap-only). Verified in-browser: 3 sections (7/3/4 items), zero engineering-jargon leak, nav/footer/tokens intact, no errors."
     },
     {
       "id": "R3",
