@@ -18,6 +18,22 @@
 
       <span class="ver" title="Main app version">v0.16.0</span>
 
+      <!-- session-status pill — promoted to all surfaces (CH16) -->
+      <span class="sesswrap">
+        <button class="sesspill online" id="sesspill" title="Session status — click for details" aria-haspopup="true" aria-expanded="false">
+          <span class="sessdot"></span><span class="sesstxt">Session</span>
+        </button>
+        <div class="sesspop" id="sesspop" hidden>
+          <h4>Session status</h4>
+          <ul>
+            <li><span class="sessdot online"></span><b>Online</b> — connected; every module is available.</li>
+            <li><span class="sessdot offline"></span><b>Offline</b> — no internet. The journal keeps working locally; any module that needs the network is paused.</li>
+            <li><span class="sessdot degraded"></span><b>Degraded</b> — local data looks corrupted. Restore from a backup in Manage data.</li>
+          </ul>
+          <p class="muted">No module currently needs a connection — this indicator is forward-looking flair.</p>
+        </div>
+      </span>
+
       <small id="srcname" title="Manage your local data">no data loaded</small>
 
     </div>
@@ -25,9 +41,18 @@
       <div class="src" id="srcmeta"></div>
       <div class="topbtns">
 
+        <!-- workspace templates — promoted to all surfaces (CH16) -->
+        <span class="wsbar" id="wsbar" title="Workspace templates — saves which modules are placed where and which are collapsed; pick “— Default —” to reset the layout">
+          <select id="ws_tpl" aria-label="Workspace template"><option value="">— Default —</option></select>
+          <button class="btn" id="ws_save" title="Save the current layout as a named template">Save layout</button>
+        </span>
+
         <a class="btn" id="changelogBtn" href="../changelog.html" title="What's changed — the Blotterlog">Changelog</a>
-        <button class="btn" id="exportBtn" title="Generate a condensed performance report in a new tab">Export report</button>
+
+        <button class="btn" id="exportBtn" title="Generate a condensed performance report">Export report</button>
         <button class="btn" id="manageBtn" title="Load, edit, back up, and manage the data saved in this browser">Manage data</button>
+
+
         <a class="btn" id="contactBtn"
            href="mailto:contact@blotterbook.com?subject=Blotterbook%20%E2%80%94%20support%20%2F%20feedback&body=Tell%20us%20what%20you%20need%20help%20with%20or%20what%20you%27d%20like%20to%20see%3A%0A%0A"
            title="Questions, support requests, or feedback — opens a draft in your email app">Contact</a>
@@ -107,11 +132,12 @@
     <div class="fld" style="display:none"><label for="f_tag">Tag</label><select id="f_tag"><option value="">All</option></select></div>
     <div class="fld"><label>Day of week</label>
       <div class="dows" id="f_dows"></div></div>
-
-
-    <span class="fcount" id="f_count"></span>
-    <button class="btn fbtn" id="f_reset" title="Clear all filters">Reset filters</button>
-
+    <!-- Saved filters — promoted to all surfaces (CH16). On demo, Save is disabled (no Store). -->
+    <div class="fld"><label for="f_saved">Saved filter</label>
+      <select id="f_saved"><option value="">— Saved filters —</option></select></div>
+    <button class="btn" id="f_save" title="Save the current filters as a named view">Save filter</button>
+    <button class="btn" id="f_reset" title="Clear all filters">Reset filters</button>
+    <span class="fcount fpush" id="f_count"></span>
   </div>
   <!-- /include:app-filters -->
 
@@ -226,6 +252,16 @@
         </div>
       </div>
     </section>
+
+    <!-- Activity terminal — read-only live feed of platform actions (promoted from staging, CH16) -->
+    <section class="panel term" data-key="term">
+      <div class="phead"><span class="grip" title="Drag to reorder">&#9776;</span>
+        <h2>Activity terminal</h2><button class="chev" aria-label="Collapse">&#9662;</button></div>
+      <div class="pbody">
+        <p class="hint">A live, read-only feed of actions on this workspace — CSV loads, edits, backups. Display only; it takes no input.</p>
+        <div class="termwin" id="termwin" aria-live="polite" role="log"></div>
+      </div>
+    </section>
   <!-- /include:app-dash -->
   </div>
 
@@ -290,11 +326,39 @@
         </div>
         <p class="dmhint"><b>Edit</b> a trade to add tags, a note, and screenshots — tags also power the Tag filter. Deleting a trade can't be undone (re-load the CSV or a backup to restore it).</p>
       </div>
-
+      <div class="dmsec"><h3>Saved filters</h3>
+        <div class="dmnotescroll" id="dm_filters"></div>
+        <p class="dmhint">Apply, rename, or delete the filter views you saved from the filter bar (<b>Save filter</b>).</p>
+      </div>
       <div class="dmsec"><h3>Danger zone</h3>
         <div class="dmactions"><button class="dmbtn danger" id="dm_clear">Erase all local data</button></div>
         <p class="dmhint">Wipes every trade, day-note, and saved setup from this browser. Export a backup first if you might want it back.</p>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ export-report modal — preview + multi-format download + email (F3, promoted
+     from staging to all surfaces, CH16) ============ -->
+<div class="modal" id="exportModal" aria-hidden="true">
+  <div class="sheet expsheet" role="dialog" aria-modal="true" aria-label="Export report">
+    <div class="dmhead">
+      <div><h2>Export report</h2><div class="dmsub">Preview, then download in your chosen format or email a copy.</div></div>
+      <button class="dmx" data-expclose title="Close">&times;</button>
+    </div>
+    <div class="expbody"><iframe id="exp_preview" title="Performance report preview"></iframe></div>
+    <div class="exptools">
+      <select id="exp_format" aria-label="Download format">
+        <option value="">Choose format…</option>
+        <option value="pdf">PDF (print)</option>
+        <option value="png">PNG image</option>
+        <option value="jpeg">JPEG image</option>
+        <option value="md">Markdown (.md)</option>
+      </select>
+      <button class="btn" id="exp_download" disabled title="Pick a format first">Download</button>
+      <button class="btn" id="exp_email">Email a copy</button>
+      <button class="btn" data-expclose>Close</button>
+      <span class="parsestatus" id="exp_msg"></span>
     </div>
   </div>
 </div>
@@ -311,6 +375,7 @@
 <script src="ui.js"></script>
 <script src="export.js"></script>
 <script src="datamanager.js"></script>
+<script src="widgets.js"></script>
 <script src="main.js"></script>
   <!-- /include:app-scripts -->
 </body>

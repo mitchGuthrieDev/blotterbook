@@ -181,35 +181,12 @@ function exportReport(){
     +mdRow('Break-even / trade', money(bePer))
     +`\n_Estimates only — not financial or tax advice._\n`;
 
-  // F3 (staging): preview + multi-format download + email in an in-page modal,
-  // instead of auto-opening a new tab. Main app + demo keep the new-tab report.
-  if(STAGING_PAGE){
-    const docNoBar=`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+  // F3 (CH16): preview + multi-format download + email in an in-page modal on every surface
+  // (replaces the old new-tab report). The report renders in an isolated iframe in #exportModal.
+  const docNoBar=`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <title>Blotterbook — Performance Report</title>
 <style>${reportCss}</style></head><body>${sheetHtml}</body></html>`;
-    openExportReportModal(docNoBar, { mailto, fname, md:reportMd });
-    return;
-  }
-
-  // The report opens via window.open()+document.write, so it inherits the app's strict
-  // CSP (script-src 'self'): no inline script / on*= handlers. Behavior lives in the
-  // external /assets/report.js; per-report data rides in a non-executable JSON block.
-  const html=`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<title>Blotterbook — Performance Report</title>
-<style>${reportCss}</style></head><body>
-  <div class="bar">
-    <button id="r_download" class="pri">Download</button>
-    <button id="r_email">Email a copy</button>
-    <button id="r_close">Close</button>
-  </div>
-  ${sheetHtml}
-  <script type="application/json" id="rdata">${JSON.stringify({ fname, mailto })}</script>
-  <script src="${location.origin}/assets/report.js"><\/script>
-</body></html>`;
-
-  const w=window.open('', '_blank');
-  if(!w){ alert('Allow pop-ups for this site to generate the report.'); return; }
-  w.document.open(); w.document.write(html); w.document.close();
+  openExportReportModal(docNoBar, { mailto, fname, md:reportMd });
 }
 
 /* ============================================================

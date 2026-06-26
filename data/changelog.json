@@ -4,6 +4,28 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.17.0",
+      "date": "2026-06-26",
+      "title": "The full dashboard, everywhere",
+      "summary": "Every feature that was being trialed in the staging sandbox is now live on the main app and the demo — the journal you use day-to-day gets the whole redesigned dashboard.",
+      "highlights": [
+        "New edge-to-edge web-grid dashboard on wide screens, with drag-to-reorder modules and a full-width performance graph.",
+        "Activity terminal, a session-status pill, and saveable workspace layouts.",
+        "Saved filter views, an in-app export-report modal (PDF / PNG / JPEG / Markdown + email), collapsible per-symbol cost & tax breakdowns, and day-note dots on the equity curve.",
+        "Filters now refine the performance graph, while the calendar, cards, cost, and stats always reflect your full history."
+      ]
+    },
+    {
+      "version": "0.16.0",
+      "date": "2026-06-26",
+      "title": "Demo matches the app",
+      "summary": "The demo is now a faithful 1:1 mirror of the real app: every panel and control is present, just with data-changing actions disabled on the sample data.",
+      "highlights": [
+        "Restored the Changelog link and the Day-notes section in the demo.",
+        "Data-mutating controls (load, import, backup, edit, delete) are clearly disabled rather than missing."
+      ]
+    },
+    {
       "version": "0.15.0",
       "date": "2026-06-26",
       "title": "Versioned release notes",

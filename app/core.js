@@ -29,9 +29,11 @@ const STAGING_PAGE = PAGE_MODE === 'staging';
      main         DOM event wiring + boot() — runs LAST, so everything it calls exists
 
    Mode flags (derived from document.body[data-mode] above):
-     STAGING_PAGE  gates the staging-only UI (web-grid dashboard, graph-only filters,
-                   note dots, saved filters, activity terminal, session pill, workspace
-                   templates). The main app and demo never render these.
+     STAGING_PAGE  marks the staging sandbox. Its former feature set (web-grid dashboard,
+                   graph-only filters, note dots, saved filters, activity terminal, session
+                   pill, workspace templates) was promoted to all surfaces (CH16); this flag
+                   now gates only the staging ENVIRONMENT — the isolated DB, the one-time
+                   sample seeding, and the F5 "open on the initial state" landing flow.
      DEMO_MODE     (declared in render.js) true while the demo's in-memory dataset is
                    loaded; suppresses ALL persistence (nothing is written to IndexedDB).
 

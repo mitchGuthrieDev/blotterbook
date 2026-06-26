@@ -51,16 +51,39 @@
         </div>
         <p class="dmhint"><b>Edit</b> a trade to add tags, a note, and screenshots — tags also power the Tag filter. Deleting a trade can't be undone (re-load the CSV or a backup to restore it).</p>
       </div>
-<!--IF mode=staging-->
       <div class="dmsec"><h3>Saved filters</h3>
         <div class="dmnotescroll" id="dm_filters"></div>
         <p class="dmhint">Apply, rename, or delete the filter views you saved from the filter bar (<b>Save filter</b>).</p>
       </div>
-<!--ENDIF-->
       <div class="dmsec"><h3>Danger zone</h3>
         <div class="dmactions"><button class="dmbtn danger" id="dm_clear"<!--IF mode=demo--> disabled<!--ENDIF-->>Erase all local data</button></div>
         <p class="dmhint">Wipes every trade, day-note, and saved setup from this browser. Export a backup first if you might want it back.</p>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ export-report modal — preview + multi-format download + email (F3, promoted
+     from staging to all surfaces, CH16) ============ -->
+<div class="modal" id="exportModal" aria-hidden="true">
+  <div class="sheet expsheet" role="dialog" aria-modal="true" aria-label="Export report">
+    <div class="dmhead">
+      <div><h2>Export report</h2><div class="dmsub">Preview, then download in your chosen format or email a copy.</div></div>
+      <button class="dmx" data-expclose title="Close">&times;</button>
+    </div>
+    <div class="expbody"><iframe id="exp_preview" title="Performance report preview"></iframe></div>
+    <div class="exptools">
+      <select id="exp_format" aria-label="Download format">
+        <option value="">Choose format…</option>
+        <option value="pdf">PDF (print)</option>
+        <option value="png">PNG image</option>
+        <option value="jpeg">JPEG image</option>
+        <option value="md">Markdown (.md)</option>
+      </select>
+      <button class="btn" id="exp_download" disabled title="Pick a format first">Download</button>
+      <button class="btn" id="exp_email">Email a copy</button>
+      <button class="btn" data-expclose>Close</button>
+      <span class="parsestatus" id="exp_msg"></span>
     </div>
   </div>
 </div>

@@ -10,7 +10,7 @@
      • level: feat → minor; feat!/BREAKING → major; anything else typed or untyped → patch.
      • surfaces (path-based):
          - a PROD-shipping file changed → bump BOTH prod and staging (shared code ships to both)
-         - only staging-specific files (app/staging.js|html) → bump staging alone
+         - only the staging-environment page (app/staging.html) → bump staging alone
          - only non-app files → bump nothing
 */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -27,7 +27,9 @@ export function bumpLevel(message) {
   return (m && m[1].toLowerCase() === 'feat') ? 'minor' : 'patch';
 }
 
-const STAGING_ONLY = new Set(['app/staging.js', 'app/staging.html']);
+// After CH16 the staging FEATURES were promoted to all surfaces (the old app/staging.js became
+// app/widgets.js, shared). Only the staging ENVIRONMENT page itself is staging-exclusive now.
+const STAGING_ONLY = new Set(['app/staging.html']);
 
 // Production-only surfaces: the public marketing homepage + info pages + their CSS ship to
 // prod (main+demo deployment) but are NOT part of the staging sandbox, so they bump PROD only
@@ -38,7 +40,7 @@ const PROD_ONLY = new Set(['index.html', 'site.css', 'howto.html', 'roadmap.html
    shells, partials, assets, tokens, and reference data — but NOT versions.json/backlog.json. */
 export function isProdShipping(f) {
   if (f === 'app/app.html' || f === 'app/demo.html' || f === 'app/app.css' || f === 'tokens.css') return true;
-  if (/^app\/[^/]+\.js$/.test(f) && f !== 'app/staging.js') return true;   // shared app modules
+  if (/^app\/[^/]+\.js$/.test(f)) return true;   // shared app modules (all app JS ships to every surface)
   if (/^partials\//.test(f) || /^assets\//.test(f)) return true;
   if (/^data\//.test(f) && f !== 'data/versions.json' && f !== 'data/backlog.json') return true;
   return false;

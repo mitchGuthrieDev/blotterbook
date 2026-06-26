@@ -1,10 +1,9 @@
 "use strict";
-/* Blotterbook app · staging — staging-ONLY flair, loaded only by staging.html.
-   Activity terminal, session-status pill, and save/load/revert workspace
-   templates, plus the subscriptions that turn shared app events into terminal
-   log lines. Nothing here loads on the main app or demo, so the main app can't
-   be affected by staging experiments. Loaded AFTER datamanager.js and BEFORE
-   main.js, so its event subscriptions are registered before boot() emits. */
+/* Blotterbook app · widgets — activity terminal, session-status pill, and save/load/revert
+   workspace templates, plus the subscriptions that turn shared app events into terminal log
+   lines. Promoted from the staging sandbox to every surface (CH16) — loaded on app, demo, and
+   staging. Loaded AFTER datamanager.js and BEFORE main.js, so its event subscriptions are
+   registered before boot() emits app:ready. */
 
 const WS_KEY='tj_ws_templates';
 const DEFAULT_DASH_ORDER=['perf','cal','cost','adv','defs','term'];
@@ -48,8 +47,7 @@ function refreshWsSelect(sel){
     + Object.keys(tpls).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
   if(sel) el.value=sel;
 }
-function initStaging(){
-  if(!STAGING_PAGE) return;
+function initWidgets(){
   // session pill: state follows connectivity; click toggles the legend popup
   setSession(navigator.onLine===false ? 'offline' : 'online');
   window.addEventListener('online', ()=>{ setSession('online'); logAction('Connection restored'); });
@@ -84,12 +82,12 @@ function initStaging(){
   // shows the live version, not the baked offline fallback.
   Promise.resolve(window.__versionsReady).then(()=>{
     const ver=(document.querySelector('.ver')||{}).textContent||'';
-    logAction('Staging session ready'+(ver?' · '+ver.trim():''));
+    logAction('Session ready'+(ver?' · '+ver.trim():''));
   });
 }
 
-/* Subscribe to shared app-action events → terminal log lines (staging-only). */
-onEvent('app:ready',     initStaging);
+/* Subscribe to shared app-action events → terminal log lines (all surfaces, CH16). */
+onEvent('app:ready',     initWidgets);
 onEvent('data:imported', d=>logAction('CSV imported · '+((d&&d.name)||'file')+' · now '+(d&&d.count)+' trades'));
 onEvent('note:saved',    d=>logAction('Day note saved · '+(d&&d.date)));
 onEvent('trade:deleted', d=>logAction('Trade deleted · '+(d&&d.id), 'warn'));

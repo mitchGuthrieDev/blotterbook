@@ -434,25 +434,25 @@
 
   /* ---- staging sandbox (data-mode="staging") ---- */
   .demotag.staging{color:var(--warn);background:rgba(227,179,65,.12);border-color:rgba(227,179,65,.32)}
-  /* Experimental web-grid dashboard — staging-only trial of the "Main-app web UI redesign".
-     Single column on mobile; on wide screens a grid placed by DOM ORDER (so the existing
-     drag-to-reorder keeps working). Performance spans full width; the rest flow into 2–3
-     columns. The stats panel stacks so it stays readable in a narrow column. The wrap goes
-     edge-to-edge so the dashboard fills a fullscreen window on a large display. */
-  body[data-mode="staging"] .wrap{max-width:1480px}
+  /* Web-grid dashboard — promoted from staging to all surfaces (CH16). Single column on
+     mobile; on wide screens a grid placed by DOM ORDER (so the existing drag-to-reorder keeps
+     working). Performance spans full width; the rest flow into 2–3 columns. The stats panel
+     stacks so it stays readable in a narrow column. The wrap goes edge-to-edge so the dashboard
+     fills a fullscreen window on a large display. */
+  .wrap{max-width:1480px}
   @media(min-width:1100px){
-    body[data-mode="staging"] .wrap{max-width:none;padding-left:26px;padding-right:26px}
-    body[data-mode="staging"] #dash{display:grid;gap:14px;align-items:stretch;
+    .wrap{max-width:none;padding-left:26px;padding-right:26px}
+    #dash{display:grid;gap:14px;align-items:stretch;
       grid-template-columns:repeat(2,minmax(0,1fr))}
     /* panels in a row share height so calendar / advanced-stats match break-even (no negative space) */
-    body[data-mode="staging"] #dash .panel{height:100%;display:flex;flex-direction:column}
-    body[data-mode="staging"] #dash .panel{margin-top:0}
-    body[data-mode="staging"] #dash .panel[data-key="perf"]{grid-column:1 / -1}
-    body[data-mode="staging"] .adv{grid-template-columns:1fr}
+    #dash .panel{height:100%;display:flex;flex-direction:column}
+    #dash .panel{margin-top:0}
+    #dash .panel[data-key="perf"]{grid-column:1 / -1}
+    .adv{grid-template-columns:1fr}
   }
   @media(min-width:1700px){
-    body[data-mode="staging"] #dash{grid-template-columns:repeat(3,minmax(0,1fr))}
-    body[data-mode="staging"] .adv{grid-template-columns:1fr 1fr}
+    #dash{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .adv{grid-template-columns:1fr 1fr}
   }
 
   /* version badge in the app header */
@@ -501,25 +501,19 @@
   .dmnote-demo{margin:0 0 16px;padding:10px 13px;border:1px solid rgba(227,179,65,.32);
     background:rgba(227,179,65,.10);border-radius:9px;color:var(--text);font-size:12.5px;line-height:1.5}
 
-  /* wide displays: let the main app + demo use more horizontal space so the
-     dashboard isn't stranded in a narrow column (staging already goes edge-to-edge
-     above 1100px). Kept moderate to avoid over-stretching the curve / tables. */
-  @media(min-width:1480px){ body:not([data-mode="staging"]) .wrap{max-width:1360px} }
-  @media(min-width:1920px){ body:not([data-mode="staging"]) .wrap{max-width:1520px} }
-
   /* ============================================================
-     Staging-only experiments (gated by body[data-mode="staging"])
+     Pinned Broker & Costs setup — promoted from staging (CH16)
      ============================================================ */
 
   /* F4 — pin the expanded Broker & Costs panel while scrolling the dashboard.
      display:contents lifts #setup out of the short #landing box so position:sticky
      has the full .wrap height to work within; collapsing it releases the pin;
      non-sticky on narrow screens so it never overlaps content. */
-  body[data-mode="staging"].loaded #landing{display:contents}
-  body[data-mode="staging"].loaded #setup:not(.collapsed){
+  .loaded #landing{display:contents}
+  .loaded #setup:not(.collapsed){
     position:sticky;top:8px;z-index:6;box-shadow:0 14px 34px rgba(0,0,0,.45)}
   @media(max-width:760px){
-    body[data-mode="staging"].loaded #setup:not(.collapsed){position:static;box-shadow:none}
+    .loaded #setup:not(.collapsed){position:static;box-shadow:none}
   }
 
   /* F6 — per-symbol commission table as a collapsible subsection nested under the

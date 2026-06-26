@@ -8,6 +8,8 @@
       <span class="ver" title="Demo version">v0.16.0</span>
 <!--ENDIF--><!--IF mode=staging-->
       <span class="ver" title="Staging version">v0.26.0</span>
+<!--ENDIF-->
+      <!-- session-status pill — promoted to all surfaces (CH16) -->
       <span class="sesswrap">
         <button class="sesspill online" id="sesspill" title="Session status — click for details" aria-haspopup="true" aria-expanded="false">
           <span class="sessdot"></span><span class="sesstxt">Session</span>
@@ -22,7 +24,7 @@
           <p class="muted">No module currently needs a connection — this indicator is forward-looking flair.</p>
         </div>
       </span>
-<!--ENDIF--><!--IF mode!=demo-->
+<!--IF mode!=demo-->
       <small id="srcname" title="Manage your local data">no data loaded</small>
 <!--ENDIF--><!--IF mode=demo-->
       <small id="srcname"></small>
@@ -31,31 +33,30 @@
     <div class="topright">
       <div class="src" id="srcmeta"></div>
       <div class="topbtns">
-<!--IF mode=app-->
-        <a class="btn" id="changelogBtn" href="../changelog.html" title="What's changed — the Blotterlog">Changelog</a>
-        <button class="btn" id="exportBtn" title="Generate a condensed performance report in a new tab">Export report</button>
-        <button class="btn" id="manageBtn" title="Load, edit, back up, and manage the data saved in this browser">Manage data</button>
-        <a class="btn" id="contactBtn"
-           href="mailto:contact@blotterbook.com?subject=Blotterbook%20%E2%80%94%20support%20%2F%20feedback&body=Tell%20us%20what%20you%20need%20help%20with%20or%20what%20you%27d%20like%20to%20see%3A%0A%0A"
-           title="Questions, support requests, or feedback — opens a draft in your email app">Contact</a>
-<!--ENDIF--><!--IF mode=demo-->
+<!--IF mode=demo-->
         <span class="demotag">Demo</span>
-        <a class="btn" id="changelogBtn" href="../changelog.html" title="What's changed — the Blotterlog">Changelog</a>
-        <button class="btn" id="exportBtn" title="Generate a condensed performance report (print or save as PDF)">Export report</button>
-        <button class="btn" id="manageBtn" title="See how Manage data works — preview only in the demo">Manage data</button>
-        <button class="btn" id="endDemoBtn" title="Close the demo and return to the homepage">End demo</button>
-        <a class="btn" id="contactBtn"
-           href="mailto:contact@blotterbook.com?subject=Blotterbook%20%E2%80%94%20support%20%2F%20feedback&body=Tell%20us%20what%20you%20need%20help%20with%20or%20what%20you%27d%20like%20to%20see%3A%0A%0A"
-           title="Questions, support requests, or feedback — opens a draft in your email app">Contact</a>
 <!--ENDIF--><!--IF mode=staging-->
         <span class="demotag staging">Staging</span>
+<!--ENDIF-->
+        <!-- workspace templates — promoted to all surfaces (CH16) -->
         <span class="wsbar" id="wsbar" title="Workspace templates — saves which modules are placed where and which are collapsed; pick “— Default —” to reset the layout">
           <select id="ws_tpl" aria-label="Workspace template"><option value="">— Default —</option></select>
           <button class="btn" id="ws_save" title="Save the current layout as a named template">Save layout</button>
         </span>
-        <button class="btn" id="exportBtn" title="Generate a condensed performance report in a new tab">Export report</button>
+<!--IF mode!=staging-->
+        <a class="btn" id="changelogBtn" href="../changelog.html" title="What's changed — the Blotterlog">Changelog</a>
+<!--ENDIF-->
+        <button class="btn" id="exportBtn" title="Generate a condensed performance report">Export report</button>
         <button class="btn" id="manageBtn" title="Load, edit, back up, and manage the data saved in this browser">Manage data</button>
+<!--IF mode=demo-->
+        <button class="btn" id="endDemoBtn" title="Close the demo and return to the homepage">End demo</button>
+<!--ENDIF--><!--IF mode=staging-->
         <a class="btn" href="/admin.html" title="Back to the admin panel">Exit staging</a>
+<!--ENDIF-->
+<!--IF mode!=staging-->
+        <a class="btn" id="contactBtn"
+           href="mailto:contact@blotterbook.com?subject=Blotterbook%20%E2%80%94%20support%20%2F%20feedback&body=Tell%20us%20what%20you%20need%20help%20with%20or%20what%20you%27d%20like%20to%20see%3A%0A%0A"
+           title="Questions, support requests, or feedback — opens a draft in your email app">Contact</a>
 <!--ENDIF-->
       </div>
     </div>

@@ -71,7 +71,7 @@ call is loading the app's own reference-data JSON.
   ui.js                 collapsible/drag panels + file-download / setup-label helpers
   export.js             condensed performance report (print → PDF)
   datamanager.js        Manage-data modal + per-trade editor + backup/restore
-  staging.js            staging-ONLY flair (activity terminal, session pill, workspace templates) — loaded only by staging.html
+  widgets.js            activity terminal, session pill, workspace templates — loaded on every app page (CH16)
   main.js               DOM event wiring + boot() — loaded LAST (core→render→data→ui→export→datamanager→[staging]→main)
   adapters.js           platform CSV adapters + format auto-detection + fills matcher
   store.js              IndexedDB persistence (trades, journal, meta, per-trade trademeta)
@@ -207,10 +207,11 @@ The platform **phase** is *derived*, not stored: while the prod major is `0` the
 1. **Level** from the conventional-commit type in the squash-merge title — `feat:` → minor, `fix:`/
    `chore:`/`refactor:`/etc → patch, `feat!:` or a `BREAKING CHANGE:` footer → major, untyped → patch.
    (See the `commitConvention` field in `data/backlog.json`.)
-2. **Which track** from the changed paths — any **prod-shipping** file (shared `app/*.js` except
-   `staging.js`, `app/app.html`/`demo.html`/`app.css`, `partials/*`, `assets/*`, `tokens.css`, `data/*`
-   except versions/backlog json) bumps **both** prod and staging; **only** `app/staging.{js,html}` bumps
-   staging alone; non-app changes (info pages, README, `.github`) bump nothing.
+2. **Which track** from the changed paths — any **prod-shipping** file (shared `app/*.js`,
+   `app/app.html`/`demo.html`/`app.css`, `partials/*`, `assets/*`, `tokens.css`, `data/*`
+   except versions/backlog json) bumps **both** prod and staging; **only** `app/staging.html` (the
+   staging-environment page) bumps staging alone; non-app changes (info pages, README, `.github`)
+   bump nothing.
 
 It writes `data/versions.json` and commits it back to `main` as `chore(release): … [skip ci]` (so it
 doesn't re-trigger itself). **Requires** the GitHub Actions bot to be allowed to push to `main`; if the
@@ -236,7 +237,8 @@ real data, and **seeds the sample dataset once** so it opens in the loaded state
 → the initial state, matching the main app). It has the full top bar including **Manage data** and the
 **Load CSV** landing; notes/tags/filters persist to its own DB.
 
-Staging-only experiments (gated by `STAGING_PAGE` — the main app is unchanged):
+Dashboard features that staging incubated — **all promoted to every surface (CH16)**, so they now
+ship on the main app and demo too (the demo mirrors them with data-mutating actions disabled):
 
 - **Web-grid dashboard** — fills the window (edge-to-edge, `max-width:none`) at ≥1100px with a grid
   placed by DOM order so **drag-to-reorder** keeps working; the performance graph spans full width,
@@ -259,9 +261,10 @@ Staging-only experiments (gated by `STAGING_PAGE` — the main app is unchanged)
 - **Equal-size modules** — calendar, break-even, and advanced-stats panels share row height (the grid
   stretches them) so they no longer leave negative space.
 
-The **demo** also gains a preview-only **Manage data** panel: it renders the in-memory sample
-(overview + read-only trade list) with every action disabled and a "preview only" banner, so visitors
-can see the feature without touching the example data.
+After CH16, `STAGING_PAGE` no longer gates any of these features — it marks only the staging
+**environment**: the isolated `blotterbookStaging` DB, the one-time sample seed, the F5 "open on the
+initial state" landing, and the **Exit staging** affordance. The promoted widgets live in
+`app/widgets.js` (renamed from the old `app/staging.js`), now loaded on every app page.
 
 ### Promoting a feature from staging → prod
 
@@ -280,9 +283,9 @@ the changelog (the Blotterlog) record "shipped to prod in v`X`".
 
 **Gate layers a feature can hide behind** — promote each that applies:
 
-- **JS in `app/staging.js`** (loaded only on staging) → move the logic into the relevant shared
-  `app/*.js` module. If it must stay its own file, add its `<script>` to the non-staging branch of
-  `partials/app-scripts.html` too.
+- **JS in a staging-only file** (a script loaded only by `staging.html` — there is none today after
+  CH16, but a future trial may add one) → move the logic into the relevant shared `app/*.js` module,
+  or load the file on every page via `partials/app-scripts.html` (as `app/widgets.js` now is).
 - **JS in a shared module behind `if(!STAGING_PAGE) return` / `if(STAGING_PAGE)`** → remove the runtime
   guard so the code runs on every surface.
 - **HTML inline in `app/staging.html`** (hand-maintained, e.g. the activity terminal) → move the markup
@@ -589,12 +592,12 @@ above). They're plain `<script>`s sharing one global scope, not ES modules: `mai
 all the event wiring + the boot IIFE, so every function/state it calls is already defined. No bundler,
 no build step.
 
-Staging is isolated (A3): all the experimental flair lives in `app/staging.js`, which **only**
-`staging.html` loads (inserted just before `main.js`). Shared code never names a staging symbol — instead
-`core.js` exposes a tiny event bus (`emit`/`onEvent` over an `EventTarget`), and shared actions fire
-events (`app:ready`, `data:imported`, `note:saved`, `trade:deleted`, `backup:created`, `data:erased`)
-that `staging.js` subscribes to for its activity terminal. On the main app and demo there are no
-subscribers, so `emit()` is a no-op — removing `staging.js` leaves them fully working.
+The activity terminal, session pill, and workspace templates live in `app/widgets.js` (inserted just
+before `main.js`, loaded on every app page since CH16). Shared code never names a widget symbol —
+instead `core.js` exposes a tiny event bus (`emit`/`onEvent` over an `EventTarget`), and shared actions
+fire events (`app:ready`, `data:imported`, `note:saved`, `trade:deleted`, `backup:created`,
+`data:erased`) that `widgets.js` subscribes to for its activity terminal. The bus stays a no-op when a
+page has no subscriber, so the decoupling holds even as surfaces diverge.
 
 ### Shared chrome: tokens + partials (no bundler)
 

@@ -75,9 +75,9 @@ function axMoney(v){ const a=Math.abs(v), s=v<0?'-':'';
 
 function renderCurve(m){
   const svg=document.getElementById('curve'), tip=document.getElementById('curvetip');
-  // staging draws at the SVG's real pixel width (viewBox = pixel width) so labels aren't
-  // horizontally stretched on a wide grid column; elsewhere keep the fixed 1000-unit box.
-  const W = STAGING_PAGE ? Math.max(600, Math.round((svg.getBoundingClientRect().width)||1000)) : 1000;
+  // Draw at the SVG's real pixel width (viewBox = pixel width) so labels aren't horizontally
+  // stretched on a wide grid column (promoted from staging, CH16).
+  const W = Math.max(600, Math.round((svg.getBoundingClientRect().width)||1000));
   const H=260,padL=62,padR=20,padT=18,padB=46;
   if(!m || !m.n){ svg.innerHTML=''; if(tip)tip.style.display='none'; return; }
 
@@ -148,9 +148,9 @@ function renderCurve(m){
       if(sp) sel+=series.map(s=>`<circle cx="${x}" cy="${yPx(sp[s.key])}" r="3.5" fill="${s.color}"/>`).join('');
     }
   }
-  // day-note indicators: a small blue dot on the curve at each date that has a note (staging)
+  // day-note indicators: a small blue dot on the curve at each date that has a note (CH16)
   let noteDots='';
-  if(STAGING_PAGE && JOURNAL_DATES && JOURNAL_DATES.size){
+  if(JOURNAL_DATES && JOURNAL_DATES.size){
     for(const nd of JOURNAL_DATES){
       const t=new Date(nd+'T00:00:00').getTime();
       if(t<d0ms || t>d1ms) continue;
@@ -358,9 +358,9 @@ function renderCalc(m, c=costModel(m)){
     `<table class="commtab"><thead><tr><th>Symbol</th><th>Trades</th><th>Cts</th><th>$/side</th><th>$/RT</th><th>Commission</th></tr></thead>
      <tbody>${body}<tr class="tot"><td>Total</td><td>${c.n}</td><td>${c.contracts}</td><td></td><td></td><td>${money(c.totalComm)}</td></tr></tbody></table>`
     + (anyUnknown?`<div class="cnote"><span class="flag">*</span> No published exchange fee on file — priced with a fallback estimate. Add the symbol to <code>data/exchange-fees.json</code> for an exact figure.</div>`:'');
-  // F6 (staging): the per-symbol table moves into a collapsible subsection nested under the
-  // "Commissions (all-in)" line below; main app + demo keep it as the standalone table here.
-  tbl.innerHTML = STAGING_PAGE ? '' : commHtml;
+  // F6 (CH16): the per-symbol table lives in a collapsible subsection nested under the
+  // "Commissions (all-in)" line below, so the standalone table here is empty.
+  tbl.innerHTML = '';
 
   head.innerHTML=
     `<div class="k">Net P&L after costs &middot; ${scopeLabel()}</div>
@@ -372,22 +372,16 @@ function renderCalc(m, c=costModel(m)){
   rowsEl.innerHTML=
      row('Gross P&L', `<span class="${cls(c.gross)}">${money(c.gross)}</span>`)
     +row('Commissions (all-in)', `<span class="neg">${money(-c.totalComm)}</span>`)
-    +(STAGING_PAGE ? `<details class="csubtable"><summary>Per-symbol breakdown</summary><div class="csubbody">${commHtml}</div></details>` : '')
+    +`<details class="csubtable"><summary>Per-symbol breakdown</summary><div class="csubbody">${commHtml}</div></details>`
     +row('Subscriptions ('+money(c.fixedMo)+'/mo &times; '+c.months+')', `<span class="neg">${money(-c.fixedPeriod)}</span>`)
     +row('Net P&L (pre-tax)', `<span class="${cls(c.netPreTax)}">${money(c.netPreTax)}</span>`,'tot')
-    // 1256 tax — staging mirrors the "Commissions (all-in)" pattern (F10): one headline line
-    // with the total, and the rate detail tucked into a collapsible breakdown (like F6). Main
-    // app + demo keep the inline sub-rows.
-    +(STAGING_PAGE
-        ? row('Est. 1256 tax (net profit only)', `<span class="neg">${money(-c.tax)}</span>`)
-          + `<details class="csubtable"><summary>Tax breakdown</summary><div class="csubbody">`
-          +   row('State top rate', stateRate().toFixed(2)+'%','sub')
-          +   row('Blended 1256 rate', (c.tEff*100).toFixed(1)+'%','sub')
-          + `</div></details>`
-        : `<div class="csub">Tax — Section 1256</div>`
-          + row('State top rate', stateRate().toFixed(2)+'%','sub')
-          + row('Blended 1256 rate', (c.tEff*100).toFixed(1)+'%','sub')
-          + row('Est. 1256 tax (net profit only)', `<span class="neg">${money(-c.tax)}</span>`,'sub'))
+    // 1256 tax (F10/CH16): one headline line with the total, the rate detail tucked into a
+    // collapsible breakdown (like the per-symbol commissions above).
+    +row('Est. 1256 tax (net profit only)', `<span class="neg">${money(-c.tax)}</span>`)
+    +`<details class="csubtable"><summary>Tax breakdown</summary><div class="csubbody">`
+    +  row('State top rate', stateRate().toFixed(2)+'%','sub')
+    +  row('Blended 1256 rate', (c.tEff*100).toFixed(1)+'%','sub')
+    +`</div></details>`
     +row('After-tax take-home', `<span class="${cls(c.afterTax)}">${money(c.afterTax)}</span>`,'tot');
 }
 
@@ -423,10 +417,10 @@ function applyFilters(arr){
     return true;
   });
 }
-/* In STAGING, filters apply to the performance graph ONLY — the calendar, cards, cost,
-   and stats always use the full (unfiltered) dataset. Elsewhere filters apply to all. */
+/* Filters apply to the performance graph ONLY — the calendar, cards, cost, and stats always
+   use the full (unfiltered) dataset (promoted from staging, CH16). */
 function graphBase(){ return applyFilters(TRADES); }
-function baseTrades(){ return STAGING_PAGE ? TRADES.slice() : applyFilters(TRADES); }
+function baseTrades(){ return TRADES.slice(); }
 
 function scopeLabel(){ return SCOPE==='all' ? 'all time' : `${MON[calMonth]} ${calYear}`; }
 function activeMetrics(){
@@ -441,13 +435,13 @@ function activeGraphMetrics(){
   const mk=`${calYear}-${pad2(calMonth+1)}`;
   return compute(arr.filter(t=>t.date.startsWith(mk)));
 }
-/* Metrics the performance graph should draw — filtered in staging, scoped elsewhere. */
-function curveMetrics(){ return STAGING_PAGE ? activeGraphMetrics() : activeMetrics(); }
+/* Metrics the performance graph should draw — filtered (scope + filter bar), CH16. */
+function curveMetrics(){ return activeGraphMetrics(); }
 function renderDash(){
   if(!METRICS_ALL) return;
   const m=activeMetrics(), c=costModel(m);   // compute the cost model once, share it (CH11)
   renderCards(m,c); renderAdv(m,c); renderCalc(m,c);
-  renderCurve(STAGING_PAGE ? activeGraphMetrics() : m);
+  renderCurve(activeGraphMetrics());
   document.getElementById('scopenote').textContent =
     SCOPE==='all' ? `all ${METRICS_ALL.n} trades` : `${MON[calMonth]} ${calYear}`;
 }

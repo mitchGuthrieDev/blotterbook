@@ -158,20 +158,13 @@ function runDemo(){
    ============================================================ */
 function onFiltersChanged(){
   if(!TRADES.length){ updateFilterCount(); return; }
-  if(STAGING_PAGE){
-    // filters only re-render the performance graph; dashboard/calendar stay full
-    updateFilterCount();
-    if(METRICS_ALL) renderCurve(activeGraphMetrics());
-    return;
-  }
-  METRICS_ALL=compute(baseTrades());
+  // Filters only re-render the performance graph; the dashboard/calendar stay full (CH16).
   updateFilterCount();
-  renderCalendar();
-  renderDash();
+  if(METRICS_ALL) renderCurve(activeGraphMetrics());
 }
 function updateFilterCount(){
   const el=document.getElementById('f_count'); if(!el) return;
-  const base = STAGING_PAGE ? graphBase() : baseTrades();
+  const base = graphBase();
   el.textContent = filtersActive() ? `${base.length} / ${TRADES.length} trades` : `${TRADES.length} trades`;
 }
 function syncFilterOptions(){
@@ -317,7 +310,7 @@ function wireJournal(){
     const cell=document.querySelector(`#cal .cell[data-date="${d}"]`);
     if(cell) cell.classList.toggle('hasnote', JOURNAL_DATES.has(d));
     emit('note:saved', { date: d });
-    if(STAGING_PAGE && METRICS_ALL) renderCurve(curveMetrics());   // refresh note dots on the graph
+    if(METRICS_ALL) renderCurve(curveMetrics());   // refresh note dots on the graph (CH16)
   };
   ta.addEventListener('input',()=>{ clearTimeout(jSaveTimer); const d=selectedDate, v=ta.value; jSaveTimer=setTimeout(()=>save(d,v),500); });
   ta.addEventListener('blur',()=>{ clearTimeout(jSaveTimer); save(selectedDate, ta.value); });
