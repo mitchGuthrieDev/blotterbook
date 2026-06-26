@@ -214,6 +214,11 @@
       const cleanSym = s => (window.Adapters && Adapters.rootSym) ? Adapters.rootSym(String(s || ''))
         : String(s || '').toUpperCase().replace(/[^A-Z0-9._-]/g, '');
       const cleanTag = s => String(s == null ? '' : s).replace(/[<>&"']/g, '');
+      // Screenshots are inlined data: URIs rendered straight into an <img src>. A backup is
+      // untrusted, so keep ONLY well-formed base64 image data URIs (S15) — this drops any
+      // `javascript:`/`data:text/html` payload before it can reach a render sink.
+      const SHOT_RE = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+      const cleanShots = a => (Array.isArray(a) ? a.filter(s => typeof s === 'string' && SHOT_RE.test(s)) : []);
       if (Array.isArray(data.trades) && data.trades.length) {
         for (const t of data.trades) { if (t && t.root != null) t.root = cleanSym(t.root); }
         const r = await this.addTrades(data.trades);
@@ -234,7 +239,7 @@
       if (Array.isArray(data.trademeta) && data.trademeta.length) {
         const store = await tx(TRADEMETA, 'readwrite');
         for (const tm of data.trademeta) {
-          if (tm && tm.id) store.put({ id: tm.id, tags: (tm.tags || []).map(cleanTag).filter(Boolean), note: tm.note || '', shots: tm.shots || [], updated: tm.updated || Date.now() });
+          if (tm && tm.id) store.put({ id: tm.id, tags: (tm.tags || []).map(cleanTag).filter(Boolean), note: tm.note || '', shots: cleanShots(tm.shots), updated: tm.updated || Date.now() });
         }
         await done(store);
       }

@@ -101,7 +101,7 @@ function renderTradeEditor(){
       <textarea id="dm_note" class="dmtextarea" placeholder="What happened on this trade?">${esc(e.note)}</textarea>
       <label class="dmlbl">Screenshots</label>
       <div class="dmshots">
-        ${e.shots.map((s,i)=>`<div class="dmshot"><img src="${s}" alt="screenshot ${i+1}"><button data-rmshot="${i}" title="Remove">&times;</button></div>`).join('')}
+        ${e.shots.map((s,i)=>`<div class="dmshot"><img src="${esc(s)}" alt="screenshot ${i+1}"><button data-rmshot="${i}" title="Remove">&times;</button></div>`).join('')}
         <label class="dmaddshot">+ Add image<input type="file" accept="image/*" id="dm_shotinput" hidden></label>
       </div>
       <div class="dmedit-actions"><button class="dmbtn" data-editsave>Save</button>

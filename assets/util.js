@@ -18,6 +18,14 @@ function esc(s){
   }[c]));
 }
 
+/* Platform phase label derived from the prod major: 0.x → "Beta x", ≥1 → just the version.
+   Browser-shared single source for the admin panel (A11); MIRROR of platformLabel() in
+   scripts/bump-version.mjs (the Node/CI side — keep the two in sync if the rule changes). */
+function platformLabel(prod){
+  var major = parseInt(String(prod).split('.')[0], 10) || 0;
+  return (major < 1 ? 'Beta ' : '') + prod;
+}
+
 /* CH12 — populate the version badge(s) at runtime from data/versions.json, so all surfaces
    read one source of truth without a rebuild. The baked `.ver` literal stays as the offline
    fallback. Two tracks: staging page → `staging`, app + demo → `prod`. Exposes

@@ -171,7 +171,9 @@
   <p class="amsg" id="flagmsg"></p>
 
   <h2>Reference data</h2>
-  <p>Bump the cache version to force clients to re-fetch broker / fee / feed / tax data on next load.</p>
+  <p>Records a server-side timestamp in KV. (Scaffold — not yet consumed by the main app: clients
+    cache-bust reference data via per-file hashes in <code>data/manifest.json</code>, so bumping this
+    has no effect on what they re-fetch yet.)</p>
   <p class="curstate" id="refstate">Version: loading…</p>
   <div class="modes"><button class="modebtn" id="bumpref"><span class="d" style="background:var(--green)"></span>Bump cache version</button></div>
   <p class="amsg" id="refmsg"></p>

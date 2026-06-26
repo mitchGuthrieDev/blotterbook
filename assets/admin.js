@@ -75,8 +75,7 @@
   // hung GET /api/config behind Access). Platform phase derived from the prod major (0.x → Beta).
   function loadVersions(){
     fetchT('/data/versions.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(v){
-      var major=parseInt(String(v.prod||'0').split('.')[0],10)||0;
-      var platform=(major<1?'Beta ':'')+(v.prod||'—');
+      var platform=platformLabel(v.prod||'—');   // shared helper (A11)
       verstate.innerHTML='Prod (main + demo) <b>'+esc(v.prod||'—')+'</b> · Staging <b>'+esc(v.staging||'—')+'</b> · Platform <b>'+esc(platform)+'</b>';
     }).catch(function(){ verstate.textContent='Versions: unavailable'; });
   }
