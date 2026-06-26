@@ -42,16 +42,21 @@ function dailySeries(m){
   const broker=curBroker(), map=new Map();
   for(const t of m.trades){
     if(!map.has(t.date)) map.set(t.date,{gross:0,comm:0});
-    const e=map.get(t.date); e.gross+=t.pnl; e.comm+=rateFor(broker,t.root).rate*2;
+    const e=map.get(t.date); e.gross+=t.pnl; e.comm+=rateFor(broker,t.root).rate*2*(t.qty||1);  // per-contract (B4)
   }
-  const c=costModel(m), subs=c.fixedPeriod, tEff=c.tEff;
-  let cg=0,cn=0; const pts=[];
+  const c=costModel(m), tEff=c.tEff, fixedMo=c.fixedMo;
+  // Accrue the monthly subscription as each new calendar month is entered (B8), instead of
+  // dropping the whole period's subscriptions at day 0. The endpoint still equals
+  // costModel.fixedPeriod (fixedMo × distinct months), so totals are unchanged.
+  let cg=0,cn=0,subAcc=0; const pts=[], seenMonths=new Set();
   for(const d of [...map.keys()].sort()){
+    const mo=d.slice(0,7);
+    if(!seenMonths.has(mo)){ seenMonths.add(mo); subAcc+=fixedMo; }
     const e=map.get(d); cg+=e.gross; cn+=e.gross-e.comm;
-    const net=cn-subs, take=net-(net>0?net*tEff:0);
+    const net=cn-subAcc, take=net-(net>0?net*tEff:0);
     pts.push({date:d,gross:cg,net,take});
   }
-  return {pts,subs,tEff};
+  return {pts,subs:c.fixedPeriod,tEff};
 }
 /* "nice" axis ticks spanning [min,max] with ~count steps, always including 0. */
 function niceTicks(min,max,count){
@@ -79,8 +84,9 @@ function renderCurve(m){
 
   const [rd0,rd1]=dateRange(m);
   const d0ms=rd0.getTime(), d1ms=Math.max(rd1.getTime(), d0ms+864e5);
-  const {pts,subs}=dailySeries(m);
-  const disp=[{date:fmtDate(rd0),gross:0,net:-subs,take:-subs}, ...pts];
+  const {pts}=dailySeries(m);
+  // Curve starts at the origin; subscriptions accrue month-by-month across pts (B8).
+  const disp=[{date:fmtDate(rd0),gross:0,net:0,take:0}, ...pts];
 
   const series=[];
   if(curveSel.gross) series.push({key:'gross',color:'var(--green)',label:'Gross'});
@@ -289,7 +295,7 @@ function renderAdv(m){
     ['Worst Weekday', m.worstDow?`<span class="av ${cls(m.worstDow.pnl)}">${usd(m.worstDow.pnl)}</span> <span class="av na">· ${DOW_LABEL[m.worstDow.i]}</span>`:`<span class="av na">—</span>`],
     ['head','Trading Patterns'],
     ['Avg Trades/Day', `<span class="av">${m.avgTrades.toFixed(1)}</span>`],
-    ['Recovery Factor', `<span class="av ${cls(m.recovery)}">${isNaN(m.recovery)?'—':m.recovery.toFixed(2)}</span>`],
+    ['Recovery Factor', `<span class="av ${cls(m.recovery)}">${m.recovery===Infinity?'∞':(isNaN(m.recovery)?'—':m.recovery.toFixed(2))}</span>`],
     ['Max Consecutive Wins', `<span class="av pos">${m.mcw}</span>`],
     ['Max Consecutive Losses', `<span class="av neg">${m.mcl}</span>`],
     ['head','Account Information'],
@@ -322,11 +328,11 @@ function renderCalc(m){
 
   const body=c.bySym.map(s=>
     `<tr><td>${esc(s.root)}${s.known?'':' <span class="flag">*</span>'}</td>
-      <td>${s.count}</td><td>${money(s.rate)}</td><td>${money(s.rate*2)}</td><td>${money(s.total)}</td></tr>`).join('');
+      <td>${s.count}</td><td>${s.qty}</td><td>${money(s.rate)}</td><td>${money(s.rate*2)}</td><td>${money(s.total)}</td></tr>`).join('');
   const anyUnknown=c.bySym.some(s=>!s.known);
   const commHtml=
-    `<table class="commtab"><thead><tr><th>Symbol</th><th>Trades</th><th>$/side</th><th>$/RT</th><th>Commission</th></tr></thead>
-     <tbody>${body}<tr class="tot"><td>Total</td><td>${c.n}</td><td></td><td></td><td>${money(c.totalComm)}</td></tr></tbody></table>`
+    `<table class="commtab"><thead><tr><th>Symbol</th><th>Trades</th><th>Cts</th><th>$/side</th><th>$/RT</th><th>Commission</th></tr></thead>
+     <tbody>${body}<tr class="tot"><td>Total</td><td>${c.n}</td><td>${c.contracts}</td><td></td><td></td><td>${money(c.totalComm)}</td></tr></tbody></table>`
     + (anyUnknown?`<div class="cnote"><span class="flag">*</span> No published exchange fee on file — priced with a fallback estimate. Add the symbol to <code>data/exchange-fees.json</code> for an exact figure.</div>`:'');
   // F6 (staging): the per-symbol table moves into a collapsible subsection nested under the
   // "Commissions (all-in)" line below; main app + demo keep it as the standalone table here.

@@ -95,6 +95,33 @@ ok('ibkr uses Realized P/L = $120', r.ok && r.trades.length === 1 && Math.abs(r.
 r = A.parse(C.schwab);
 ok('schwab 1 long, +$60 (MES pt=5, 12pt)', r.ok && r.trades.length === 1 && Math.abs(r.trades[0].pnl - 60) < 1e-6, JSON.stringify(r.trades));
 
+console.log('\nB7 robustness:');
+// (1) Schwab: a blank optional Pos Effect cell must not truncate later trades.
+const schwabBlank =
+`Account Statement for 12345678
+Account Trade History
+Exec Time,Side,Qty,Pos Effect,Symbol,Price
+06/02/2026 09:31:00,BUY,1,,/MESM25,5300.00
+06/02/2026 09:48:00,SELL,1,TO CLOSE,/MESM25,5312.00`;
+r = A.parse(schwabBlank);
+ok('schwab keeps trades past a blank Pos Effect cell', r.ok && r.trades.length === 1 && Math.abs(r.trades[0].pnl - 60) < 1e-6, JSON.stringify(r));
+// (2) parseCSV drops all-empty lines.
+ok('parseCSV skips all-empty rows', A.parseCSV('a,b\n,\n1,2').length === 2, JSON.stringify(A.parseCSV('a,b\n,\n1,2')));
+// (3) Flip fill attributes its FULL realized PnL (close 1 + open 1 in one sell of qty 2).
+const flip =
+`Symbol,DateTime,Buy/Sell,Quantity,TradePrice,Realized P/L
+TSLA,2026-06-02 09:31:00,BUY,1,250.00,0
+TSLA,2026-06-02 14:00:00,SELL,2,255.00,500.00
+TSLA,2026-06-02 15:00:00,BUY,1,256.00,0`;
+r = A.parse(flip);
+// The SELL qty 2 closes the 1 long (realized $500) and opens 1 short; the $500 must land
+// fully on the closed contract, not be diluted to $250 by the new lot (500 * 1/2).
+ok('flip fill attributes full $500 realized', r.ok && Math.abs(r.trades[0].pnl - 500) < 1e-6, JSON.stringify(r.trades));
+
+console.log('\nB5 date format:');
+ok('M/D/Y stays US (06/02 → Jun 2)', A.normTime('06/02/2026 09:31:00').slice(0, 10) === '2026-06-02', A.normTime('06/02/2026 09:31:00'));
+ok('D/M/Y detected when day>12 (25/06 → Jun 25)', A.normTime('25/06/2026 09:31:00').slice(0, 10) === '2026-06-25', A.normTime('25/06/2026 09:31:00'));
+
 console.log('\nError handling:');
 ok('empty file', !A.parse('').ok);
 ok('garbage', !A.parse('foo,bar,baz\n1,2,3').ok);

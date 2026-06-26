@@ -31,7 +31,7 @@
     }
     const rows = []; let i = 0, field = '', row = [], q = false; const n = text.length;
     const push = () => { row.push(field); field = ''; };
-    const eol = () => { push(); if (row.length > 1 || row[0] !== '') rows.push(row); row = []; };
+    const eol = () => { push(); if (row.some(c => c !== '')) rows.push(row); row = []; }; // drop all-empty lines
     while (i < n) { const c = text[i];
       if (q) { if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; } else field += c; }
       else { if (c === '"') q = true; else if (c === delim) push(); else if (c === '\n') eol(); else if (c === '\r') {} else field += c; }
@@ -74,7 +74,10 @@
     if (m) { let h = +(m[4] || 0); const ap = (m[7] || '').toUpperCase();
       if (ap === 'PM' && h < 12) h += 12; if (ap === 'AM' && h === 12) h = 0;
       const Y = m[3].length === 2 ? '20' + m[3] : m[3];
-      return `${Y}-${pad2(m[1])}-${pad2(m[2])} ${pad2(h)}:${pad2(m[5] || 0)}:${pad2(m[6] || 0)}`;
+      // Default to US M/D/Y; if the first field can't be a month (>12) but the second can, treat as D/M/Y.
+      let mo = +m[1], day = +m[2];
+      if (mo > 12 && day <= 12) { const t = mo; mo = day; day = t; }
+      return `${Y}-${pad2(mo)}-${pad2(day)} ${pad2(h)}:${pad2(m[5] || 0)}:${pad2(m[6] || 0)}`;
     }
     const d = new Date(s);
     if (!isNaN(d.getTime())) return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
@@ -119,12 +122,18 @@
       for (const f of arr) {
         const dir = f.side === 'buy' ? 1 : -1;
         let remaining = f.qty;
+        // Portion of this fill that closes opposing lots (the rest opens a new lot on a flip).
+        // Realized PnL is apportioned over this closed qty, NOT f.qty, so a flip fill's full
+        // realized PnL is attributed to the closed contracts instead of diluted by the new lot.
+        let closeQty = 0;
+        for (const lot of open) if (lot.dir !== dir) closeQty += lot.qty;
+        closeQty = Math.min(f.qty, closeQty);
         while (remaining > 0 && open.length && open[0].dir !== dir) {
           const lot = open[0];
           const m = Math.min(lot.qty, remaining);
           const long = lot.dir === 1;
           let pnl;
-          if (f.realized != null && f.qty > 0) pnl = f.realized * (m / f.qty);
+          if (f.realized != null && closeQty > 0) pnl = f.realized * (m / closeQty);
           else pnl = (f.price - lot.price) * m * pv * (long ? 1 : -1);
           trades.push({
             time: f.time, date: f.time.slice(0, 10), symbol: sym, root,
@@ -385,7 +394,9 @@
       const ncol = rows[hr].length;
       const fills = [];
       for (let r = hr + 1; r < rows.length; r++) {
-        const row = rows[r]; if (!row || row.length < ncol - 1 || !row[cSide]) break; // section ends
+        const row = rows[r];
+        if (!row || row.length < ncol - 1) break; // fewer columns ⇒ we've left the trade-history table
+        if (!row[cSide]) continue; // a blank optional Side cell shouldn't truncate the rest of the section
         const side = sideWord(row[cSide]); const price = num(row[cPx]);
         const qty = cQty >= 0 ? Math.abs(num(row[cQty])) : 1;
         if (!side || isNaN(price) || !(qty > 0)) continue;
