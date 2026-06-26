@@ -239,7 +239,8 @@
 </div>
 
 <!-- include:app-modal mode=app -->
-  <!-- ============ data manager modal ============ -->
+  <!-- ============ data manager modal (single source — demo is the SAME modal with data
+     actions disabled, so the two can't drift apart) ============ -->
 <div class="modal" id="dataModal" aria-hidden="true">
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Manage local data">
     <div class="dmhead">
@@ -247,6 +248,7 @@
       <button class="dmx" id="dm_close" title="Close">&times;</button>
     </div>
     <div class="dmbody">
+
       <div class="dmsec"><h3>Overview</h3><div class="dmgrid" id="dm_summary"></div></div>
 
       <div class="dmsec"><h3>Load data</h3>

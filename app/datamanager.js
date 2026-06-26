@@ -54,16 +54,16 @@ async function renderDataManager(){
   const q=DM_SEARCH.trim().toLowerCase();
   const shown=q? trades.filter(t=>t.root.toLowerCase().includes(q)||t.date.includes(q)||(t.side||'').includes(q)) : trades;
   if($('dm_tcount')) $('dm_tcount').textContent = q? `${shown.length} / ${trades.length}` : `${trades.length}`;
+  // Same 5-column row everywhere; in demo the Edit/Delete controls render disabled (the demo
+  // mirrors prod 1:1, with data-mutating actions greyed out) — `dis` is the demo lock-down.
+  const dis = demo ? ' disabled' : '';
   if($('dm_trades')) $('dm_trades').innerHTML = shown.length
-    ? (demo
-        ? shown.slice().reverse().map(t=>`<tr><td class="mono">${t.date}</td><td>${esc(t.root)}</td>
-            <td>${esc(t.side||'—')}</td><td class="num mono ${cls(t.pnl)}">${usd(t.pnl)}</td></tr>`).join('')
-        : shown.slice().reverse().map(t=>{ const id=Store.tradeId(t);
-            return `<tr><td class="mono">${t.date}</td><td>${esc(t.root)}</td>
-            <td>${esc(t.side||'—')}${metaChips(TRADE_META.get(id))}</td><td class="num mono ${cls(t.pnl)}">${usd(t.pnl)}</td>
-            <td class="dmrowact"><button class="dmdel alt" data-edit="${id}" title="Tags, note & screenshots">Edit</button>
-            <button class="dmdel" data-trade="${id}" title="Delete this trade">Delete</button></td></tr>`; }).join(''))
-    : `<tr><td colspan="${demo?4:5}" class="dmempty">No matching trades.</td></tr>`;
+    ? shown.slice().reverse().map(t=>{ const id=Store.tradeId(t);
+        return `<tr><td class="mono">${t.date}</td><td>${esc(t.root)}</td>
+        <td>${esc(t.side||'—')}${metaChips(TRADE_META.get(id))}</td><td class="num mono ${cls(t.pnl)}">${usd(t.pnl)}</td>
+        <td class="dmrowact"><button class="dmdel alt" data-edit="${id}"${dis} title="Tags, note & screenshots">Edit</button>
+        <button class="dmdel" data-trade="${id}"${dis} title="Delete this trade">Delete</button></td></tr>`; }).join('')
+    : `<tr><td colspan="5" class="dmempty">No matching trades.</td></tr>`;
 
   // Saved filters (staging — section only exists there)
   if($('dm_filters')) $('dm_filters').innerHTML = SAVED_FILTERS.length
