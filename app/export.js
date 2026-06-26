@@ -79,11 +79,14 @@ function exportReport(){
   const mailto='mailto:?subject='+encodeURIComponent(`Blotterbook Performance Report — ${range}`)
     +'&body='+encodeURIComponent(reportText);
 
+  // The report is a standalone document (it can't @import app.css/tokens.css), so bake the
+  // CURRENT token values into its :root at export time instead of hand-copying hexes that
+  // silently drift from tokens.css (A8). One source of truth = the live design tokens.
+  const cs=getComputedStyle(document.documentElement);
+  const tokenVars=['--bg','--panel','--panel2','--line','--txt','--dim','--faint','--green','--red','--accent','--take','--mono','--sans'];
+  const rootBlock=':root{'+tokenVars.map(n=>`${n}:${cs.getPropertyValue(n).trim()}`).join(';')+';}';
   const reportCss=`
-  :root{--bg:#0d1014;--panel:#151a21;--panel2:#1b212a;--line:#262d38;--txt:#d6dde6;
-    --dim:#8a94a3;--faint:#5b6470;--green:#3fb950;--red:#f04a4a;--accent:#6aa0ff;--take:#c98bff;
-    --mono:"SF Mono",SFMono-Regular,ui-monospace,Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  ${rootBlock}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:13px;line-height:1.5;
     -webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -116,7 +119,7 @@ function exportReport(){
     padding:10px 14px;display:flex;gap:10px;justify-content:flex-end}
   .bar button{font-family:inherit;font-size:12.5px;cursor:pointer;border:1px solid var(--line);
     background:var(--panel2);color:var(--txt);padding:7px 14px;border-radius:7px}
-  .bar button.pri{background:var(--accent);color:#0d1014;border-color:var(--accent);font-weight:600}
+  .bar button.pri{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:600}
   @media print{.bar{display:none}.sheet{padding:0 6mm}@page{margin:12mm}}`;
 
   const sheetHtml=`<div class="sheet">
@@ -291,7 +294,9 @@ function rasterizeReport(iframe, type){
           const sc=2, cv=document.createElement('canvas');
           cv.width=w*sc; cv.height=h*sc;
           const ctx=cv.getContext('2d'); ctx.scale(sc,sc);
-          ctx.fillStyle='#0d1014'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0);
+          // raster background = the live --bg token (A8), not a hardcoded hex
+          ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0d1014';
+          ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0);
           cv.toBlob(b=> b?resolve(b):reject(new Error('toBlob returned null')), type, type==='image/jpeg'?0.92:undefined);
         }catch(e){ reject(e); }
       };

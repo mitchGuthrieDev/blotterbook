@@ -18,7 +18,6 @@ function openDataManager(){
 }
 function closeDataManager(){ const ov=$('dataModal'); if(!ov||!ov.classList.contains('open')) return; ov.classList.remove('open'); document.body.style.overflow=''; modalClosed(ov); }
 
-const esc=s=>(s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 async function renderDataManager(){
   // each section renders independently so one failure can't blank the rest
   const demo = PAGE_MODE==='demo';   // demo is in-memory: read TRADES, never touch the Store
