@@ -964,6 +964,102 @@
       "partial": false,
       "prompt": "DESIGN DISCUSSION → then build. On staging, panel collapsibility (the chevron) makes sense for full-width modules (e.g. Performance) but is arguably noise on modules that don't span the page horizontally on WIDE layouts (Trading Calendar, Break-even, Advanced Stats, Definitions & Caveats sit in the multi-column grid). Make it DYNAMIC by available width: on narrow/mobile widths those modules span full width and MUST stay collapsible; on wide multi-column layouts, hide the collapse control for non-full-width modules. Think through detection — CSS container/grid state vs a JS measure on resize — and whether to drive it purely via CSS (a container/media query that hides `.chev`) or JS. Propose the approach before building. Done when: there's an agreed rule for when the collapse control appears, the chevron is hidden for non-full-width modules on wide layouts, and collapsibility still works for every module when it spans full width (mobile/narrow).",
       "doneNote": null
+    },
+    {
+      "id": "B18",
+      "title": "F11: clicking inside a modal deselects the calendar day",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "The F11 capture-phase deselect handler (`app/main.js` ~66) only retains the calendar selection for `.panel[data-key=\"cal\"]` and `#curve`. The data-manager (`#dataModal`) and export (`#exportModal`) modals are top-level `.modal` siblings OUTSIDE both, so with a day selected, opening Manage-data and clicking anything in it (search, Edit, Delete-note, a format select) fires `deselectDay()` — clearing the day, hiding the journal, and re-rendering the curve under the open modal. Especially confusing since the modal is where you delete the selected day's note. Fix: add `|| e.target.closest('.modal')` to the early-return guard. Also (P3) `deselectDay()` should flush a pending journal save before nulling selectedDate (`clearTimeout(jSaveTimer); if(selectedDate) Store.saveJournal(selectedDate, j_text.value)`), to close a narrow keyboard/synthetic-click data-loss window where the debounced note is dropped. Done when: interacting with either modal keeps the selected day, and no unsaved note is lost on deselect.",
+      "doneNote": null
+    },
+    {
+      "id": "S14",
+      "title": "Admin token leaks via the ?k= staging-launch URL (Referer/history)",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "The PR #11 staging-launch hardening appends the live short-lived admin token to the URL: `/app/staging.html?k=<token>` (`assets/admin.js` ~109). The page never scrubs it, and the global `Referrer-Policy: strict-origin-when-cross-origin` (`_headers`) sends the FULL URL (token included) as the `Referer` on every same-origin subresource fetch staging makes (util.js, store.js, /data/versions.json), so the token lands in Cloudflare access logs, browser history, and the address bar — replayable for its 2h TTL against /api/status, /api/config, and the staging gate. The `bb_staging` cookie set by the same launch is the safe channel. Fix: drop `?k=` and rely on the cookie (now SameSite=Lax, which already survives the window.open navigation); OR if `?k=` is kept as a fallback, have staging.html `history.replaceState` to strip it immediately on load AND add `<meta name=\"referrer\" content=\"no-referrer\">` to staging.html. Done when: the admin token no longer appears in the staging URL after load or in any Referer header.",
+      "doneNote": null
+    },
+    {
+      "id": "CH14",
+      "title": "Harden the version-bump workflow (race, merge commits, edge cases)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Robustness fixes for the CH12 automation (`.github/workflows/version-bump.yml` + `scripts/bump-version.mjs`): (1) CONCURRENCY — two merges landing close together each compute a bump from the same versions.json and race `git push`; the loser is rejected and the `|| echo warning` swallows it, silently LOSING that bump. Add `concurrency: {group: version-bump-main, cancel-in-progress: false}` and make the push `git pull --rebase && git push` with retry. (2) MERGE COMMITS — `git diff HEAD~1 HEAD` assumes a linear squash history; a true (non-squash) merge commit makes HEAD~1 the old main tip and misclassifies, and fetch-depth:2 may lack the parent. Detect merge commits (diff `HEAD^1 HEAD^2`) or use the PR file list. (3) FIRST-COMMIT/SHALLOW — the local CLI `execSync('git diff HEAD~1 HEAD')` (`bump-version.mjs` ~85) throws when HEAD~1 doesn't exist; guard with a tree-hash fallback or try/catch. (4) PUSH RANGE — the `[skip ci]` guard + COMMIT_MSG read only `github.event.head_commit`; a multi-commit direct push can skip/misclassify. Optionally compute over `github.event.before..github.sha`. (5) Minor: set `window.__versionsReady = Promise.resolve(null)` before util.js's early return so the contract holds for future consumers. Done when: concurrent merges don't lose bumps, the script is safe on the first commit, and merge-commit pushes classify correctly.",
+      "doneNote": null
+    },
+    {
+      "id": "B16",
+      "title": "Prod version never bumps on homepage / info-page changes",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "`isProdShipping` (`scripts/bump-version.mjs` ~34) does NOT classify `index.html` (the live marketing landing), `site.css`, or the root info pages (howto/roadmap/legal/changelog) as prod-shipping, so real user-facing production changes produce NO version bump (`classifySurfaces(['index.html'])` → neither track). The 'prod' track currently tracks only the app shell, not the deployed site. Decide intent: if prod means 'what users see at blotterbook.com', add `index.html`/`site.css`/the info `*.html` to `isProdShipping` (update the unit tests); if it deliberately means 'the app only', rename/clarify the track so the semantics aren't misleading. Done when: the prod-track definition is intentional and documented, and the bump tests cover homepage/info-page changes.",
+      "doneNote": null
+    },
+    {
+      "id": "B17",
+      "title": "Baked .ver fallback literals drift behind the live version",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "The offline fallback `.ver` literals (`partials/app-topbar.html` ~6-10 → baked into app/app.html, demo.html, staging.html) are frozen at v0.12.0/v0.22.0 while `data/versions.json` is several releases ahead, and nothing (no script, no CI step) regenerates them — so an offline/error user (when the runtime `/data/versions.json` fetch fails, `assets/util.js`) sees a stale version. Fix: have `bump-version.mjs` also rewrite the baked literals in `partials/app-topbar.html` and run `build-includes` as part of the bump commit, so the fallback tracks the live version; or at minimum document that the literal is a best-effort floor. Done when: the offline fallback version stays current with data/versions.json (or the limitation is explicitly documented).",
+      "doneNote": null
+    },
+    {
+      "id": "S15",
+      "title": "Imported screenshot data URLs are unsanitized at the <img src> sink",
+      "category": "SECURITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "`importAll` (`app/store.js` ~237) passes a backup's `trademeta.shots` through untouched (it sanitizes `root` and `tags` but not `shots`), and the editor interpolates each into `<img src=\"${s}\">` without `esc()` (`app/datamanager.js` ~104). A crafted backup (`shots:['x\" onerror=\"…']`) breaks out of the attribute. NOT currently exploitable (the strict `script-src 'self'` CSP blocks the inline handler), but it contradicts the store.js sanitizer comment that claims protection for 'any current or future render sink' and would matter if CSP ever loosens. Fix: in importAll, keep only `shots` entries matching `^data:image/(png|jpe?g|webp|gif);base64,`, and `esc()` the value at the render site. Done when: a backup with a malformed shot URL is dropped/inert and the render site escapes it.",
+      "doneNote": null
+    },
+    {
+      "id": "CH15",
+      "title": "Wire or clearly disable the dead admin config controls",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "The admin panel can toggle `flags.showBetaAdapters`, `flags.maintenanceBanner`, and bump `refDataVersion` (`functions/api/config.js`, `assets/admin.js`, `admin.html`), and the Function persists them — but NO app surface or info page ever reads them (config.js even self-describes flags as a scaffold; the app cache-busts via manifest.json hashes, not refDataVersion). So an admin flipping 'maintenance banner' or 'show beta adapters' sees zero effect — misleading, and dangerous if an admin believes maintenance mode is engaged. Fix: either wire one real consumer (e.g. `assets/home.js` shows a banner when `maintenanceBanner` is set; the app gates beta adapters on `showBetaAdapters`) or relabel the controls 'not yet wired' / hide them until consumed. Done when: each admin control either has a real effect or is clearly marked inert.",
+      "doneNote": null
+    },
+    {
+      "id": "A11",
+      "title": "Single-source the platform-phase (0.x→Beta) derivation",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "The '0.x → Beta' phase derivation exists twice: the canonical, tested `platformLabel()` in `scripts/bump-version.mjs` (covered by test-version.mjs) and an untested inline re-implementation in `assets/admin.js` (`var major=parseInt(...); (major<1?'Beta ':'')+...`). If the phase rule changes (e.g. add 'RC', or <1→<2), admin.js drifts silently. admin.js is a classic browser script and can't import the .mjs, so factor the one-liner into a shared classic helper — e.g. add `platformLabel()` to `assets/util.js` (loads first everywhere) and call it from admin.js — keeping the .mjs export for the Node/CI side with a 'keep in sync' note, or covering both with the same rule. (Optional adjacent: move the load-order-duplicated `pad2` into util.js too.) Done when: the phase rule lives in one browser-shared place consumed by the admin panel.",
+      "doneNote": null
     }
   ],
   "howToDrive": [
