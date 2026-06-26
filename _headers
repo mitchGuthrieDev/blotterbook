@@ -1,20 +1,20 @@
 # Cloudflare Pages — security headers applied to every response.
 #
 # CSP notes:
-# - script-src/style-src keep 'unsafe-inline' because a few pages (homepage, admin,
-#   changelog) ship inline <script>, and inline style="" attributes are used throughout.
-#   There is no build step to add per-response nonces/hashes yet. The policy still blocks
-#   external script/style, eval (no 'unsafe-eval'), framing, plugins, and any non-self
-#   network connection — so a stray <script src=evil> or fetch() to another origin is denied.
-# - No external origins are needed today: every fetch is same-origin (/api/*, /data/*,
-#   /app/), and per-trade screenshots are data: URLs (hence img-src 'self' data:).
-# - Tighten script-src to hashes/nonces (drop 'unsafe-inline') after the inline scripts
-#   move to their own files — see backlog A1/A2. When Stripe checkout lands, it redirects
-#   (full navigation), so no CSP change is needed; embedded Stripe would need frame-src.
+# - script-src is 'self' (NO 'unsafe-inline') — every page's JS now lives in its own file
+#   (S9: homepage -> /assets/home.js, admin -> /assets/admin.js, changelog ->
+#   /assets/changelog.js; the app pages already load external scripts). So an injected
+#   inline <script> or onX= handler will not execute, even if markup escaping ever slips.
+# - style-src keeps 'unsafe-inline' because inline <style> blocks and style="" attributes
+#   are still used throughout and there is no build step for per-response style hashes yet.
+# - No external origins are needed: every fetch is same-origin (/api/*, /data/*, /app/),
+#   and per-trade screenshots are data: URLs (hence img-src 'self' data:). No 'unsafe-eval'.
+# - When Stripe checkout lands it redirects (full navigation), so no CSP change is needed;
+#   embedded Stripe would need frame-src.
 
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'

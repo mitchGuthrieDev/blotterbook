@@ -189,29 +189,20 @@ function exportReport(){
     return;
   }
 
+  // The report opens via window.open()+document.write, so it inherits the app's strict
+  // CSP (script-src 'self'): no inline script / on*= handlers. Behavior lives in the
+  // external /assets/report.js; per-report data rides in a non-executable JSON block.
   const html=`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <title>Blotterbook — Performance Report</title>
 <style>${reportCss}</style></head><body>
   <div class="bar">
-    <button onclick="dlReport()" class="pri">Download</button>
-    <button onclick="emailReport()">Email a copy</button>
-    <button onclick="window.close()">Close</button>
+    <button id="r_download" class="pri">Download</button>
+    <button id="r_email">Email a copy</button>
+    <button id="r_close">Close</button>
   </div>
   ${sheetHtml}
-  <script id="rscript">
-    var RFNAME=${JSON.stringify(fname)}, RMAILTO=${JSON.stringify(mailto)};
-    function dlReport(){
-      var clone=document.documentElement.cloneNode(true);
-      var b=clone.querySelector('.bar'); if(b) b.remove();
-      var s=clone.querySelector('#rscript'); if(s) s.remove();
-      var html='<!DOCTYPE html>\\n'+clone.outerHTML;
-      var a=document.createElement('a');
-      a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));
-      a.download=RFNAME; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function(){URL.revokeObjectURL(a.href);},1500);
-    }
-    function emailReport(){ window.location.href=RMAILTO; }
-  <\/script>
+  <script type="application/json" id="rdata">${JSON.stringify({ fname, mailto })}</script>
+  <script src="${location.origin}/assets/report.js"><\/script>
 </body></html>`;
 
   const w=window.open('', '_blank');
