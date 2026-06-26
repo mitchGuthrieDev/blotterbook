@@ -8,10 +8,12 @@
    ============================================================ */
 const on=(id,ev,fn)=>{ const el=$(id); if(el) el.addEventListener(ev,fn); };
 
-$('prev').onclick=()=>{ if(!METRICS_ALL)return;
-  if(--calMonth<0){calMonth=11;calYear--;} renderCalendar(); if(SCOPE==='month') renderDash(); };
-$('next').onclick=()=>{ if(!METRICS_ALL)return;
-  if(++calMonth>11){calMonth=0;calYear++;} renderCalendar(); if(SCOPE==='month') renderDash(); };
+// Route through the null-safe on() like every other handler — a direct $('prev').onclick
+// throws at module load if the id is ever absent, which would kill boot() entirely (B12).
+on('prev','click',()=>{ if(!METRICS_ALL)return;
+  if(--calMonth<0){calMonth=11;calYear--;} renderCalendar(); if(SCOPE==='month') renderDash(); });
+on('next','click',()=>{ if(!METRICS_ALL)return;
+  if(++calMonth>11){calMonth=0;calYear++;} renderCalendar(); if(SCOPE==='month') renderDash(); });
 on('caltoday','click',jumpToLatest);
 // A picked file is staged (parsed + platform-detected), not loaded immediately.
 on('file','change',e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return; stageFile(f, FILE_CTX); });

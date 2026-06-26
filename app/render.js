@@ -234,6 +234,10 @@ function renderCurve(m){
 const MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
 function renderCalendar(){
   const m=METRICS_ALL; if(!m) return;
+  // Preserve keyboard focus across the wholesale innerHTML rebuild: if a day cell is focused,
+  // remember its date and restore focus to the same cell afterwards (B10 follow-on, B15).
+  const calEl=document.getElementById('cal'), ae=document.activeElement;
+  const refocusDate=(ae && calEl && calEl.contains(ae) && ae.dataset)?ae.dataset.date:null;
   const byDate=new Map(m.days.map(d=>[d.date,d]));
   document.getElementById('mlabel').textContent=`${MON[calMonth]} ${calYear}`;
   let html='<div class="dow wk">Week</div>'+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div class="dow">${d}</div>`).join('');
@@ -271,7 +275,8 @@ function renderCalendar(){
         <div class="wp ${cls(weekPnl)}">${weekDays?usd(weekPnl):'$0.00'}</div>
         <div class="wd">${weekDays} day${weekDays===1?'':'s'}</div></div>`+weekCells.join('');
   }
-  document.getElementById('cal').innerHTML=html;
+  calEl.innerHTML=html;
+  if(refocusDate){ const c=calEl.querySelector(`.cell[data-date="${refocusDate}"]`); if(c) c.focus(); }
 }
 function isoWeek(d){ const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
   const dn=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-dn+3);
