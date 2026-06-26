@@ -82,6 +82,20 @@ function initWidgets(){
   // redraw the performance graph on resize so it re-measures its (grid) width
   let _rsz=null; window.addEventListener('resize',()=>{ clearTimeout(_rsz);
     _rsz=setTimeout(()=>{ if(METRICS_ALL) renderCurve(curveMetrics()); }, 160); });
+  // F14: headline stat cards open metric-detail modals (delegated — cards re-render each pass).
+  // Inert on app/demo (cards carry no data-card there, and #cardModal is staging-only).
+  const cardsEl=document.getElementById('cards');
+  if(cardsEl){
+    cardsEl.addEventListener('click',e=>{ const c=e.target.closest('.card[data-card]'); if(c) openCardModal(c.dataset.card); });
+    cardsEl.addEventListener('keydown',e=>{ if(e.key!=='Enter'&&e.key!==' ')return;
+      const c=e.target.closest('.card[data-card]'); if(c){ e.preventDefault(); openCardModal(c.dataset.card); } });
+  }
+  const cmEl=document.getElementById('cardModal');
+  if(cmEl){
+    on('cm_close','click',closeCardModal);
+    cmEl.addEventListener('click',e=>{ if(e.target===cmEl) closeCardModal(); });
+    document.addEventListener('keydown',e=>{ if(e.key==='Escape' && cmEl.classList.contains('open')) closeCardModal(); });
+  }
   // Read the version from the page badge rather than hardcoding it (single source — CH8).
   // Wait for the runtime version fetch to populate the badge first (CH12) so the log line
   // shows the live version, not the baked offline fallback.
@@ -90,6 +104,120 @@ function initWidgets(){
     logAction('Session ready'+(ver?' · '+ver.trim():''));
   });
 }
+
+/* ============================================================
+   F14 (staging) — stat-card metric-detail modals. Each headline card opens a reusable
+   #cardModal populated with a metric-specific breakdown + a focused inline-SVG chart.
+   All data comes from the active metrics object (compute()); no new persistence.
+   ============================================================ */
+function cmColor(x){ return x>0?'var(--green)':x<0?'var(--red)':'var(--accent)'; }
+function cmStats(pairs){
+  return '<div class="cm-stats">'+pairs.map(([l,v,cl])=>
+    `<div class="cm-stat"><div class="cl">${esc(l)}</div><div class="cv ${cl||''}">${v}</div></div>`).join('')+'</div>';
+}
+function cmChart(title, inner){ return `<div class="cmchart"><h4>${esc(title)}</h4>${inner}</div>`; }
+function cmBars(rows){   // rows: {label, value, color?, display?}
+  const max=Math.max(1, ...rows.map(r=>Math.abs(r.value)));
+  return '<div class="cmbars">'+rows.map(r=>{
+    const w=Math.round(100*Math.abs(r.value)/max), col=r.color||cmColor(r.value);
+    return `<div class="cmbar"><span class="cmbl">${esc(r.label)}</span>`
+      +`<span class="cmbt"><span class="cmbf" style="width:${w}%;background:${col}"></span></span>`
+      +`<span class="cmbv">${r.display!=null?r.display:usd(r.value)}</span></div>`;
+  }).join('')+'</div>';
+}
+function cmSplit(segs){   // proportional stacked bar; segs: {value,color,label}
+  const tot=Math.max(1, segs.reduce((a,s)=>a+s.value,0));
+  return '<div class="cmsplit">'+segs.filter(s=>s.value>0).map(s=>
+    `<span style="width:${(100*s.value/tot).toFixed(2)}%;background:${s.color}" title="${esc(s.label)}: ${s.value}">${s.value}</span>`).join('')+'</div>';
+}
+function cmCurve(curve, marks){
+  const W=620,H=150,pad=8;
+  if(!curve||curve.length<2) return '<svg class="cmcurve" viewBox="0 0 '+W+' '+H+'"></svg>';
+  const lo=Math.min(...curve), hi=Math.max(...curve), span=(hi-lo)||1;
+  const x=i=>pad+(W-2*pad)*i/(curve.length-1), y=v=>H-pad-(H-2*pad)*(v-lo)/span;
+  const d=curve.map((v,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)).join(' ');
+  const zero=(lo<0&&hi>0)?`<line x1="${pad}" y1="${y(0).toFixed(1)}" x2="${W-pad}" y2="${y(0).toFixed(1)}" stroke="var(--line)" stroke-dasharray="3 3"/>`:'';
+  let mk='';
+  if(marks){
+    if(marks.peakIdx!=null) mk+=`<circle cx="${x(marks.peakIdx).toFixed(1)}" cy="${y(curve[marks.peakIdx]).toFixed(1)}" r="4" fill="var(--green)"/>`;
+    if(marks.troughIdx!=null) mk+=`<circle cx="${x(marks.troughIdx).toFixed(1)}" cy="${y(curve[marks.troughIdx]).toFixed(1)}" r="4" fill="var(--red)"/>`;
+  }
+  return `<svg class="cmcurve" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${zero}`
+    +`<path d="${d}" fill="none" stroke="${cmColor(curve[curve.length-1])}" stroke-width="2"/>${mk}</svg>`;
+}
+function cmHist(values, color){
+  const W=620,H=120,pad=8,bins=14;
+  if(!values.length) return '<svg class="cmhist" viewBox="0 0 '+W+' '+H+'"></svg>';
+  const lo=Math.min(...values), hi=Math.max(...values), span=(hi-lo)||1;
+  const counts=new Array(bins).fill(0);
+  for(const v of values){ let b=Math.floor(bins*(v-lo)/span); if(b>=bins)b=bins-1; if(b<0)b=0; counts[b]++; }
+  const mx=Math.max(...counts)||1, bw=(W-2*pad)/bins;
+  const bars=counts.map((ct,i)=>{ const h=(H-2*pad)*ct/mx;
+    return `<rect x="${(pad+i*bw).toFixed(1)}" y="${(H-pad-h).toFixed(1)}" width="${(bw-1).toFixed(1)}" height="${h.toFixed(1)}" fill="${color}"/>`; }).join('');
+  return `<svg class="cmhist" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${bars}</svg>`;
+}
+function cmDow(trades){
+  const names=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const d=Array.from({length:7},()=>({pnl:0,n:0}));
+  for(const t of trades){ const wd=new Date(t.date+'T00:00:00').getDay(); d[wd].pnl+=t.pnl; d[wd].n++; }
+  return d.map((x,i)=>({label:names[i]+' ('+x.n+')',value:x.pnl,n:x.n})).filter(x=>x.n);
+}
+function cmSymPf(trades){
+  const map=new Map();
+  for(const t of trades){ const r=t.root||'?'; if(!map.has(r))map.set(r,{gp:0,gl:0,n:0});
+    const o=map.get(r); o.n++; if(t.pnl>0)o.gp+=t.pnl; else o.gl+=t.pnl; }
+  const rows=[...map.entries()].map(([r,o])=>({root:r,n:o.n,pf:o.gl!==0?o.gp/Math.abs(o.gl):Infinity,net:o.gp+o.gl}))
+    .sort((a,b)=>b.net-a.net);
+  return '<table class="cmtab"><thead><tr><th>Symbol</th><th>Trades</th><th>PF (gross)</th><th>Net</th></tr></thead><tbody>'
+    +rows.map(r=>`<tr><td>${esc(r.root)}</td><td>${r.n}</td><td>${r.pf===Infinity?'∞':r.pf.toFixed(2)}</td><td class="${cls(r.net)}">${usd(r.net)}</td></tr>`).join('')
+    +'</tbody></table>';
+}
+function cmDDMarks(curve){
+  let peak=-Infinity,peakIdx=0,bestDD=-1,res={peakIdx:null,troughIdx:null};
+  for(let i=0;i<curve.length;i++){ if(curve[i]>peak){peak=curve[i];peakIdx=i;} const dd=peak-curve[i];
+    if(dd>bestDD){bestDD=dd;res={peakIdx,troughIdx:i};} }
+  return res;
+}
+const CARD_VIEWS={
+  net:(m,c)=>({ title:'Net PnL', sub:`${m.n} trades`,
+    html: cmStats([['Gross',usd(m.net),cls(m.net)],['Net (pre-tax)',usd(c.netPreTax),cls(c.netPreTax)],['Take-home',usd(c.afterTax),cls(c.afterTax)]])
+      + cmChart('Cumulative PnL (gross)', cmCurve(m.curve))
+      + cmChart('Gross → net → take-home', cmBars([
+          {label:'Gross',value:m.net},{label:'− Commissions',value:-c.totalComm},
+          {label:'− Subscriptions',value:-c.fixedPeriod},{label:'Net (pre-tax)',value:c.netPreTax},
+          {label:'− 1256 tax',value:-c.tax},{label:'Take-home',value:c.afterTax}])) }),
+  win:(m)=>({ title:'Win Rate', sub:`${(m.n?100*m.wins/m.n:0).toFixed(1)}% · ${m.n} trades`,
+    html: cmSplit([{value:m.wins,color:'var(--green)',label:'Wins'},{value:m.losses,color:'var(--red)',label:'Losses'},{value:m.scratch,color:'var(--faint)',label:'Break-even'}])
+      + cmStats([['Wins',m.wins],['Losses',m.losses],['Break-even',m.scratch]])
+      + cmChart('PnL by weekday', cmBars(cmDow(m.trades)))
+      + cmChart('Long vs short (net PnL)', cmBars([{label:`Long (${m.long.n})`,value:m.long.pnl},{label:`Short (${m.short.n})`,value:m.short.pnl}])) }),
+  pf:(m,c)=>({ title:'Profit Factor', sub:`${c.pf===Infinity?'∞':c.pf.toFixed(2)} · gross profit ÷ gross loss (net of commissions)`,
+    html: cmChart('Gross profit vs gross loss', cmBars([{label:'Gross profit',value:c.pfGP,color:'var(--green)'},{label:'Gross loss',value:c.pfGL,color:'var(--red)'}]))
+      + cmChart('By symbol', cmSymPf(m.trades)) }),
+  wl:(m)=>({ title:'Avg Win / Loss', sub:`ratio ${m.wl===Infinity?'∞':m.wl.toFixed(2)}`,
+    html: cmStats([['Avg win',usd(m.avgW),'pos'],['Avg loss',usd(m.avgL),'neg'],['Ratio',m.wl===Infinity?'∞':m.wl.toFixed(2)]])
+      + cmChart('Win distribution', cmHist(m.pnls.filter(p=>p>0),'var(--green)'))
+      + cmChart('Loss distribution (absolute)', cmHist(m.pnls.filter(p=>p<0).map(p=>-p),'var(--red)')) }),
+  dd:(m)=>({ title:'Max Drawdown', sub:`${usd(-m.maxDD)} · realized, closed-trade`,
+    html: cmStats([['Max drawdown',usd(-m.maxDD),'neg'],['Recovery factor',m.recovery===Infinity?'∞':(isNaN(m.recovery)?'—':m.recovery.toFixed(2))],['Net PnL',usd(m.net),cls(m.net)]])
+      + cmChart('Equity curve · peak → trough', cmCurve(m.curve, cmDDMarks(m.curve))) }),
+};
+function openCardModal(key){
+  const ov=document.getElementById('cardModal'); if(!ov) return;
+  const m=(typeof activeMetrics==='function' && METRICS_ALL)?activeMetrics():METRICS_ALL;
+  if(!m || !m.n) return;
+  const view=CARD_VIEWS[key]; if(!view) return;
+  const v=view(m, costModel(m));
+  document.getElementById('cm_title').textContent=v.title;
+  document.getElementById('cm_sub').textContent=v.sub||'';
+  document.getElementById('cm_body').innerHTML=v.html;
+  ov.classList.add('open'); document.body.style.overflow='hidden';
+  modalOpened(ov);
+  logAction('Opened '+v.title+' details');
+}
+function closeCardModal(){ const ov=document.getElementById('cardModal');
+  if(!ov || !ov.classList.contains('open')) return;
+  ov.classList.remove('open'); document.body.style.overflow=''; modalClosed(ov); }
 
 /* Subscribe to shared app-action events → terminal log lines (all surfaces, CH16). */
 onEvent('app:ready',     initWidgets);

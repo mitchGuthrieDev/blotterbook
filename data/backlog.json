@@ -880,11 +880,10 @@
       "category": "FEATURES",
       "priority": "P2",
       "effort": "large",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "(staging) Make the five headline stat cards — Net PnL, Win Rate, Profit Factor, Avg Win/Loss, Max Drawdown (`#cards`, built by `renderCards` in app/render.js) — clickable. Each opens its OWN modal (reuse the `.modal`/`.sheet` pattern and the B9 `modalOpened`/`modalClosed` focus-trap helpers) showing deeper, interactive graphics/data specific to that metric — e.g. Net PnL → cumulative + gross/net/take component breakdown; Win Rate → win/loss/scratch split, by session/weekday; Profit Factor → gross profit vs gross loss, per-symbol; Avg Win/Loss → win & loss distributions; Max Drawdown → the equity curve with peak/trough markers. Staging-scoped (gate on `STAGING_PAGE`); cards stay non-interactive on app/demo. Cards must be keyboard-accessible (role=button/tabindex/Enter, per B10) and the modals accessible (per B9). Done when: activating each of the five staging cards opens a metric-specific, interactive, focus-managed, keyboard-operable detail modal, with app/demo unchanged.",
-      "doneNote": null
+      "doneNote": "Built staging-only (gate on STAGING_PAGE) per the proving-ground model. renderCards (app/render.js) makes the five headline cards role=button/tabindex=0/data-card with an aria-label only on staging; app/demo cards stay plain. A single reusable #cardModal shell (partials/app-modal.html, <!--IF mode=staging-->) is populated per metric by widgets.js openCardModal() + CARD_VIEWS, with inline-SVG helpers (cmCurve/cmHist/cmBars/cmSplit) and aggregators (cmDow/cmSymPf/cmDDMarks) over the active compute() metrics — no new persistence. Net PnL → equity curve + gross→take-home component bars; Win Rate → W/L/BE split + by-weekday + long/short; Profit Factor → gross-profit vs gross-loss + per-symbol PF table; Avg Win/Loss → win & loss distribution histograms; Max Drawdown → equity curve with peak/trough markers. Reuses the .modal/.sheet pattern + B9 modalOpened/modalClosed focus trap; cards are keyboard-operable (Enter/Space, B10) and Escape/click-outside/✕ close. Verified: all five open metric-specific modals with focus moving into the dialog, keyboard open/close works, and app/demo cards remain non-interactive (no data-card, no #cardModal)."
     },
     {
       "id": "L6",
@@ -892,11 +891,10 @@
       "category": "LAYOUT (web vs mobile)",
       "priority": "P3",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "DESIGN DISCUSSION → then build. On staging, panel collapsibility (the chevron) makes sense for full-width modules (e.g. Performance) but is arguably noise on modules that don't span the page horizontally on WIDE layouts (Trading Calendar, Break-even, Advanced Stats, Definitions & Caveats sit in the multi-column grid). Make it DYNAMIC by available width: on narrow/mobile widths those modules span full width and MUST stay collapsible; on wide multi-column layouts, hide the collapse control for non-full-width modules. Think through detection — CSS container/grid state vs a JS measure on resize — and whether to drive it purely via CSS (a container/media query that hides `.chev`) or JS. Propose the approach before building. Done when: there's an agreed rule for when the collapse control appears, the chevron is hidden for non-full-width modules on wide layouts, and collapsibility still works for every module when it spans full width (mobile/narrow).",
-      "doneNote": null
+      "doneNote": "Built all-surfaces via a pure CSS media query (no JS) — the web-grid is universal since CH16, so gating to staging would have re-added the body[data-mode=staging] CSS that CH16 removed. In app/app.css's ≥1100px grid block, the chevron is hidden for every panel except the full-width Performance panel, and a non-perf .collapsed panel's body is forced visible (so a panel collapsed on a narrow screen can't get stuck collapsed-with-no-control after the window widens; the term panel keeps its flex body). Below 1100px every panel is single-column/full-width and stays collapsible exactly as before. Verified in-browser: at 1400px the calendar chevron computes display:none while Performance's shows; at 820px the calendar chevron returns."
     },
     {
       "id": "B18",

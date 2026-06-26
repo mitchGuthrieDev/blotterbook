@@ -7,21 +7,26 @@
    Rendering — cards
    ============================================================ */
 function renderCards(m, c=costModel(m)){   // c may be passed in to avoid recomputing per render (CH11)
+  // F14 (staging): the five headline cards open metric-detail modals. They become keyboard-
+  // operable buttons only on staging; on app/demo they stay plain, non-interactive cards.
+  const co = STAGING_PAGE
+    ? (key,label)=>`<div class="card clickable" role="button" tabindex="0" data-card="${key}" aria-label="${label} — open details">`
+    : ()=>`<div class="card">`;
   document.getElementById('cards').innerHTML=`
-   <div class="card"><div class="k">Net PnL</div>
+   ${co('net','Net PnL')}<div class="k">Net PnL</div>
      <div class="v ${cls(c.netPreTax)}">${usd(c.netPreTax)}</div>
      <div class="sub">${m.n} trades · gross ${usd(m.net)}</div>
      <div class="sub">take-home ${usd(c.afterTax)} · after 1256 tax</div></div>
-   <div class="card"><div class="k">Win Rate</div>
+   ${co('win','Win Rate')}<div class="k">Win Rate</div>
      <div class="v">${(m.n?100*m.wins/m.n:0).toFixed(1)}%</div>
      <div class="sub">${m.wins} W / ${m.losses} L${m.scratch?` / ${m.scratch} BE`:''}</div></div>
-   <div class="card"><div class="k">Profit Factor</div>
+   ${co('pf','Profit Factor')}<div class="k">Profit Factor</div>
      <div class="v ${c.pf>=1?'pos':'neg'}">${c.pf===Infinity?'∞':c.pf.toFixed(2)}</div>
      <div class="sub">${usd(c.pfGP)} / ${usd(Math.abs(c.pfGL),false)} · net of comm</div></div>
-   <div class="card"><div class="k">Avg Win/Loss</div>
+   ${co('wl','Avg Win/Loss')}<div class="k">Avg Win/Loss</div>
      <div class="v">${m.wl===Infinity?'∞':m.wl.toFixed(2)}</div>
      <div class="sub"><span class="pos">${usd(m.avgW)}</span> / <span class="neg">${usd(m.avgL)}</span></div></div>
-   <div class="card"><div class="k">Max Drawdown</div>
+   ${co('dd','Max Drawdown')}<div class="k">Max Drawdown</div>
      <div class="v neg">${usd(-m.maxDD)}</div>
      <div class="sub">realized, closed-trade</div></div>`;
 }
