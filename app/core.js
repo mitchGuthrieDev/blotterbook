@@ -68,8 +68,11 @@ function compute(tr){
   const avgL= losses.length? gl/losses.length : 0;
   const wl= losses.length? avgW/Math.abs(avgL) : Infinity;
   // equity curve + REALIZED max drawdown: walk closed-trade PnL, track running peak and the largest peak-to-trough drop
-  let eq=0,peak=0,maxDD=0; const curve=[0];
-  for(const p of pnls){ eq+=p; peak=Math.max(peak,eq); maxDD=Math.max(maxDD,peak-eq); curve.push(eq); }
+  // Track best/worst here (running, not Math.max(...pnls) — spreading a large array as
+  // args overflows the call stack on big fills exports, blanking the whole dashboard).
+  let eq=0,peak=0,maxDD=0,best=n?-Infinity:0,worst=n?Infinity:0; const curve=[0];
+  for(const p of pnls){ eq+=p; peak=Math.max(peak,eq); maxDD=Math.max(maxDD,peak-eq); curve.push(eq);
+    if(p>best)best=p; if(p<worst)worst=p; }
   const dayMap=new Map();
   for(const t of tr){ if(!dayMap.has(t.date))dayMap.set(t.date,[]); dayMap.get(t.date).push(t.pnl); }
   const days=[...dayMap.entries()].map(([d,arr])=>({date:d,pnl:arr.reduce((a,b)=>a+b,0),
@@ -102,7 +105,7 @@ function compute(tr){
   const worstDow= dowActive.length? dowActive.reduce((a,b)=>b.pnl<a.pnl?b:a) : null;
   return {n,trades:tr,wins:wins.length,losses:losses.length,scratch:scratch.length,
     net,gp,gl,pf,avgW,avgL,wl,maxDD,curve,pnls,months,
-    best:n?Math.max(...pnls):0, worst:n?Math.min(...pnls):0,
+    best, worst,
     days,active,winDays,avgDaily:active?net/active:0,avgTrades:active?n/active:0,
     winDayPct:active?100*winDays/active:0, mcw,mcl,
     recovery: maxDD>0 ? net/maxDD : (net>0?Infinity:NaN), sharpe,
@@ -196,7 +199,9 @@ function rateFor(brokerKey, root){
   return {rate:+(b.comm[tier]+exch).toFixed(4), known:EXCH[root]!=null};
 }
 
-function numIn(id){ const e=document.getElementById(id); const v=e?parseFloat(e.value):NaN; return isNaN(v)?0:v; }
+// Empty/NaN → 0 (an empty field shows its "0" placeholder, so it reads as 0, not a typed value);
+// clamp negatives so a typed "-5" can't manufacture a negative cost that inflates net (B13).
+function numIn(id){ const e=document.getElementById(id); const v=e?parseFloat(e.value):NaN; return isNaN(v)?0:Math.max(0,v); }
 function feedCost(){ const o=document.getElementById('c_feed'); const x=o&&o.selectedOptions[0]?parseFloat(o.selectedOptions[0].dataset.cost):NaN; return isNaN(x)?0:x; }
 function feedName(){ const o=document.getElementById('c_feed'); return (o&&o.value)?o.value.split('|')[0]:'—'; }
 function stateRate(){ const o=document.getElementById('c_state_sel'); const x=o&&o.selectedOptions[0]?parseFloat(o.selectedOptions[0].dataset.rate):NaN; return isNaN(x)?0:x; }

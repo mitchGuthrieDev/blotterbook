@@ -10,7 +10,8 @@
    header) before opening the page; we also accept an `x-admin-key` header (for fetch)
    and a `?k=` query param. The credential is a short-lived signed token (S3); the raw
    ADMIN_KEY still works as a server-side fallback. If neither a TOKEN_SECRET nor an
-   ADMIN_KEY is configured, staging is left open so nobody gets locked out. */
+   ADMIN_KEY is configured, staging fails CLOSED (403) so a misconfigured deploy can't
+   expose the sandbox — set ALLOW_PRESENCE_AUTH=1 for local/preview to allow it (S12). */
 
 import { isAdminAuthorized } from './_lib/auth.js';
 
@@ -21,16 +22,19 @@ export async function onRequest(context) {
 
   if (path === '/app/staging.html' || path === '/app/staging') {
     const secret = env.TOKEN_SECRET || env.ADMIN_KEY;
+    const block = () => new Response('Staging is restricted — open it from the admin panel.', {
+      status: 403, headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+    });
     if (secret) {
       const hdr = request.headers.get('x-admin-key');
       const m = (request.headers.get('Cookie') || '').match(/(?:^|;\s*)bb_staging=([^;]+)/);
       const cookieKey = m ? decodeURIComponent(m[1]) : null;
       const provided = hdr || cookieKey || url.searchParams.get('k');
-      if (!(await isAdminAuthorized(request, env, provided))) {
-        return new Response('Staging is restricted — open it from the admin panel.', {
-          status: 403, headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-        });
-      }
+      if (!(await isAdminAuthorized(request, env, provided))) return block();
+    } else if (env.ALLOW_PRESENCE_AUTH !== '1') {
+      // Fail closed (S12): no credential configured ⇒ we can't gate the sandbox, so block
+      // it rather than leave it open. Set ALLOW_PRESENCE_AUTH=1 for local/preview.
+      return block();
     }
   }
 

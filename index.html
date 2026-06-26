@@ -243,6 +243,11 @@
 </head>
 <body>
 
+<!-- A9: the homepage keeps a BESPOKE nav + footer (and their inline CSS), intentionally NOT
+     fed by partials/nav.html · partials/footer.html. It's a marketing landing page: section
+     anchors (#features/#platforms/#pricing), the launch CTA + hamburger, and a fuller legal
+     paragraph differ structurally from the info-site chrome. It links tokens.css for shared
+     colors but not site.css, so its nav/footer CSS lives inline by design. Edit here. -->
 <header id="hdr">
   <nav class="nav">
     <a class="wordmark" href="#home"><span class="dot"></span>Blotterbook</a>

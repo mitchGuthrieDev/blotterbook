@@ -466,9 +466,9 @@
   .sessdot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
   .sessdot.online,.sesspill.online .sessdot{background:var(--green)}
   .sessdot.offline,.sesspill.offline .sessdot{background:var(--warn)}
-  .sessdot.degraded,.sesspill.degraded .sessdot{background:var(--red,#e0564d)}
+  .sessdot.degraded,.sesspill.degraded .sessdot{background:var(--red)}
   .sesspop{position:absolute;z-index:60;top:100%;left:0;margin-top:6px;max-width:340px;
-    background:var(--panel,#11151b);border:1px solid var(--line);border-radius:10px;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
     padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.45)}
   .sesspop h4{margin:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
   .sesspop ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
@@ -494,7 +494,7 @@
   .panel.term .termwin .tl .ts{color:#5c7186}
   .panel.term .termwin .tl .tm{color:#cde0ef}
   .panel.term .termwin .tl.evt-warn .tm{color:var(--warn)}
-  .panel.term .termwin .tl.evt-err .tm{color:var(--red,#e0564d)}
+  .panel.term .termwin .tl.evt-err .tm{color:var(--red)}
 
   /* demo data-manager: "preview only" banner */
   .dmnote-demo{margin:0 0 16px;padding:10px 13px;border:1px solid rgba(227,179,65,.32);

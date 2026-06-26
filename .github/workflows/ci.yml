@@ -20,6 +20,9 @@ jobs:
       - name: Adapter tests
         run: node scripts/test-adapters.cjs
 
+      - name: Auth tests (tokens + Stripe signature)
+        run: node scripts/test-auth.mjs
+
       - name: Regenerate partials + data manifest
         run: |
           node scripts/build-includes.mjs
@@ -27,8 +30,9 @@ jobs:
 
       - name: Fail if generated outputs are not committed
         run: |
-          if ! git diff --quiet; then
-            echo "::error::Generated files are stale. Run 'node scripts/build-includes.mjs && node scripts/build-manifest.mjs' and commit the result."
-            git --no-pager diff --stat
+          # Catch both modified tracked files and NEW untracked outputs (CH11).
+          if ! git diff --quiet || [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Generated files are stale or untracked. Run 'node scripts/build-includes.mjs && node scripts/build-manifest.mjs' and commit the result."
+            git --no-pager status --short
             exit 1
           fi

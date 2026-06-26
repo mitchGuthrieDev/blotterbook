@@ -300,7 +300,12 @@
   const tradestation = {
     id: 'tradestation', label: 'TradeStation', kind: 'fills', beta: true,
     sniff(text, rows) { const h = lc(rows[0] || []);
-      return (hasAny(h, ['symbol']) && hasAny(h, ['type', 'side', 'action']) && hasAny(h, ['shares', 'contracts', 'quantity', 'qty']) && hasAny(h, ['price']) && hasAny(h, ['time', 'date'])) ? 2 : 0; },
+      // Require the combined 'date/time' column — the TradeStation-distinctive signal. Without it
+      // the bare symbol+side+qty+price+time match is too generic and scored at the detect floor,
+      // letting TradeStation auto-claim other brokers' fills exports (B14). Score 3 like the other
+      // beta fills adapters so a real TS file still wins; an undetected file falls to manual pick.
+      const distinctive = hasAny(h, ['date/time']);
+      return (distinctive && hasAny(h, ['symbol']) && hasAny(h, ['type', 'side', 'action']) && hasAny(h, ['shares', 'contracts', 'quantity', 'qty']) && hasAny(h, ['price']) && hasAny(h, ['time', 'date'])) ? 3 : 0; },
     toTrades(text, rows) {
       const head = lc(rows[0]); const ix = finder(head);
       const cSym = ix('symbol');

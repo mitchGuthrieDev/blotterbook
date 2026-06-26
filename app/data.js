@@ -289,17 +289,20 @@ async function updateJournalEditor(){
 }
 function wireJournal(){
   const ta=document.getElementById('j_text'); if(!ta) return;
-  const save=async()=>{ if(!selectedDate||DEMO_MODE||!Store.available()) return;
-    await Store.saveJournal(selectedDate, ta.value);
+  // Capture the date + text at schedule time (CH11): the debounce/blur can fire after the
+  // user has switched days, so binding to live selectedDate/ta.value would write the notes
+  // to the wrong date. Save to the captured `d` instead.
+  const save=async(d, v)=>{ if(d==null||DEMO_MODE||!Store.available()) return;
+    await Store.saveJournal(d, v);
     JOURNAL_DATES=await Store.journalDates();
-    document.getElementById('j_stat').textContent = ta.value.trim()?'saved':'';
-    const cell=document.querySelector(`#cal .cell[data-date="${selectedDate}"]`);
-    if(cell) cell.classList.toggle('hasnote', JOURNAL_DATES.has(selectedDate));
-    emit('note:saved', { date: selectedDate });
+    if(d===selectedDate) document.getElementById('j_stat').textContent = v.trim()?'saved':'';  // only if still viewing it
+    const cell=document.querySelector(`#cal .cell[data-date="${d}"]`);
+    if(cell) cell.classList.toggle('hasnote', JOURNAL_DATES.has(d));
+    emit('note:saved', { date: d });
     if(STAGING_PAGE && METRICS_ALL) renderCurve(curveMetrics());   // refresh note dots on the graph
   };
-  ta.addEventListener('input',()=>{ clearTimeout(jSaveTimer); jSaveTimer=setTimeout(save,500); });
-  ta.addEventListener('blur',()=>{ clearTimeout(jSaveTimer); save(); });
+  ta.addEventListener('input',()=>{ clearTimeout(jSaveTimer); const d=selectedDate, v=ta.value; jSaveTimer=setTimeout(()=>save(d,v),500); });
+  ta.addEventListener('blur',()=>{ clearTimeout(jSaveTimer); save(selectedDate, ta.value); });
 }
 
 /* ============================================================

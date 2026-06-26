@@ -6,8 +6,7 @@
 /* ============================================================
    Rendering — cards
    ============================================================ */
-function renderCards(m){
-  const c=costModel(m);
+function renderCards(m, c=costModel(m)){   // c may be passed in to avoid recomputing per render (CH11)
   document.getElementById('cards').innerHTML=`
    <div class="card"><div class="k">Net PnL</div>
      <div class="v ${cls(c.netPreTax)}">${usd(c.netPreTax)}</div>
@@ -234,6 +233,10 @@ function renderCurve(m){
 const MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
 function renderCalendar(){
   const m=METRICS_ALL; if(!m) return;
+  // Preserve keyboard focus across the wholesale innerHTML rebuild: if a day cell is focused,
+  // remember its date and restore focus to the same cell afterwards (B10 follow-on, B15).
+  const calEl=document.getElementById('cal'), ae=document.activeElement;
+  const refocusDate=(ae && calEl && calEl.contains(ae) && ae.dataset)?ae.dataset.date:null;
   const byDate=new Map(m.days.map(d=>[d.date,d]));
   document.getElementById('mlabel').textContent=`${MON[calMonth]} ${calYear}`;
   let html='<div class="dow wk">Week</div>'+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div class="dow">${d}</div>`).join('');
@@ -271,7 +274,8 @@ function renderCalendar(){
         <div class="wp ${cls(weekPnl)}">${weekDays?usd(weekPnl):'$0.00'}</div>
         <div class="wd">${weekDays} day${weekDays===1?'':'s'}</div></div>`+weekCells.join('');
   }
-  document.getElementById('cal').innerHTML=html;
+  calEl.innerHTML=html;
+  if(refocusDate){ const c=calEl.querySelector(`.cell[data-date="${refocusDate}"]`); if(c) c.focus(); }
 }
 function isoWeek(d){ const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
   const dn=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-dn+3);
@@ -290,8 +294,7 @@ function fmtDur(ms){
   if(h<24) return h+'h'+(rem?' '+rem+'m':'');
   const d=Math.floor(h/24); return d+'d'+(h%24?' '+(h%24)+'h':'');
 }
-function renderAdv(m){
-  const c=costModel(m);
+function renderAdv(m, c=costModel(m)){
   // hold time is only available for fills-based platform exports (round-trip matched)
   const held=(m.trades||[]).filter(t=>t.holdMs!=null && t.holdMs>0);
   const avgHold=held.length? held.reduce((a,t)=>a+t.holdMs,0)/held.length : null;
@@ -334,13 +337,12 @@ function renderAdv(m){
 /* ============================================================
    Rendering — break-even / cost budget
    ============================================================ */
-function renderCalc(m){
+function renderCalc(m, c=costModel(m)){
   const tbl=document.getElementById('c_comm_table'),
         head=document.getElementById('c_head'),
         rowsEl=document.getElementById('c_rows'),
         cap=document.getElementById('c_cap');
   if(!m || !m.n){ tbl.innerHTML=''; head.innerHTML=''; rowsEl.innerHTML=''; cap.innerHTML=''; return; }
-  const c=costModel(m);
   const bePer= c.n>0 ? (c.totalComm+c.fixedPeriod)/c.n : 0;
 
   cap.innerHTML=`Broker: <b>${BROKERS[c.broker].name}</b> &nbsp;·&nbsp; Feed: ${feedName()} &nbsp;·&nbsp; Platform $${c.platform}/mo`;
@@ -431,8 +433,8 @@ function activeGraphMetrics(){
 function curveMetrics(){ return STAGING_PAGE ? activeGraphMetrics() : activeMetrics(); }
 function renderDash(){
   if(!METRICS_ALL) return;
-  const m=activeMetrics();
-  renderCards(m); renderAdv(m); renderCalc(m);
+  const m=activeMetrics(), c=costModel(m);   // compute the cost model once, share it (CH11)
+  renderCards(m,c); renderAdv(m,c); renderCalc(m,c);
   renderCurve(STAGING_PAGE ? activeGraphMetrics() : m);
   document.getElementById('scopenote').textContent =
     SCOPE==='all' ? `all ${METRICS_ALL.n} trades` : `${MON[calMonth]} ${calYear}`;

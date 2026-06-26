@@ -29,9 +29,11 @@
    rendered partials — the deploy works with or without running this. It can also
    be wired up as the Cloudflare Pages build command for belt-and-suspenders sync.
 
-   NOTE: the homepage and admin keep their own bespoke nav/footer by design; they
-   still share colors via tokens.css. app/demo.html uses the shared dashboard but
-   keeps its own trimmed top bar, landing, and (preview-only) data manager. */
+   NOTE: the homepage (index.html) and admin panel (admin.html) keep their own bespoke
+   nav/footer + inline CSS BY DESIGN (A9) — they're a marketing landing page and an
+   internal tool, structurally distinct from the info-site chrome; the rationale is
+   documented inline in each file. They still share colors via tokens.css. app/demo.html
+   now consumes the shared app-topbar/app-landing/app-modal partials via mode=demo (A6). */
 
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

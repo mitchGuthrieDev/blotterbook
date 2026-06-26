@@ -730,11 +730,11 @@
       "category": "FIXES",
       "priority": "P2",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "`compute()` (`app/core.js:105`) does `best:n?Math.max(...pnls):0, worst:n?Math.min(...pnls):0` — spreading the per-trade PnL array as function arguments. Argument count is engine-capped (~65k–125k), so a large multi-year fills export (Sierra/IBKR can emit tens of thousands of round-trips) throws `RangeError: Maximum call stack size exceeded` inside `compute()` and blanks the entire dashboard. Every other reduction in `compute()` already uses a loop/`reduce`; this is the lone unbounded spread. Done when: best/worst are computed via the existing per-trade loop (running max/min) and a synthetic ~100k-trade dataset renders without error.",
-      "doneNote": null
+      "doneNote": "**Shipped:** `compute()` (`app/core.js`) now tracks best/worst as running min/max inside the existing equity-curve loop instead of `Math.max(...pnls)`/`Math.min(...pnls)` — the spread overflowed the call stack on large fills exports and blanked the dashboard. Verified a 200k-row dataset no longer throws; metrics unchanged."
     },
     {
       "id": "B12",
@@ -742,11 +742,11 @@
       "category": "FIXES",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "`app/main.js:11-14` assign `$('prev').onclick`/`$('next').onclick` directly at script-evaluation time, bypassing the null-safe `on(id,ev,fn)` helper used for every other handler. If either id is ever absent (a trimmed partial variant or a future page reusing these scripts), `main.js` throws at load and `boot()` never runs — the whole app silently fails to initialize. Done when: both calendar-nav handlers route through `on('prev','click',…)`/`on('next','click',…)` like the rest of main.js.",
-      "doneNote": null
+      "doneNote": "**Shipped:** the calendar prev/next handlers route through the null-safe `on()` helper (`app/main.js`) instead of `$('prev').onclick`, so an absent id can't throw at module load and kill `boot()`. Verified prev/next still navigate months."
     },
     {
       "id": "B13",
@@ -754,11 +754,11 @@
       "category": "FIXES",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "`numIn`/`feedCost`/`stateRate` (`app/core.js:199-202`) coerce a cleared or malformed input to `0` with no signal, so an empty platform-fee field or a bad saved `setup.platform` quietly models $0 cost and overstates net/take-home. Done when: cost inputs clamp negatives to 0 and a genuinely-empty field is visually distinguishable from an explicit 0 (placeholder/`—`), so the cost model can't silently under-count.",
-      "doneNote": null
+      "doneNote": "**Shipped:** `numIn()` (`app/core.js`) clamps negatives to 0 (a typed `-5` can't manufacture negative cost) and the platform-fee input gained `placeholder=\"0\"` so an empty field reads as 0 rather than a typed value."
     },
     {
       "id": "B14",
@@ -766,11 +766,11 @@
       "category": "FIXES",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "`tradestation.sniff` (`app/adapters.js:303`) scores `2` on a generic column set (symbol + type/side/action + shares/contracts/qty + price + time/date), which is exactly `detect()`'s `score>=2` floor (`adapters.js:419`). Other brokers' fills exports can be misclassified as TradeStation when no higher-scoring adapter matches. The beta flag + manual override mitigate it, but auto-detect is the default. Done when: TradeStation requires a distinctive TS-specific token (or the floor is raised to 3 with TS kept at 2 as an explicit weak-guess tier), and the existing 60 adapter tests still pass.",
-      "doneNote": null
+      "doneNote": "**Shipped:** the TradeStation adapter (`app/adapters.js`) now requires the distinctive combined `date/time` column and scores 3 (was 2, the detect floor), so a generic split-time fills export no longer auto-claims as TradeStation. IBKR also has date/time but uses `buy/sell`, so no collision. Regression test added (62/62 pass)."
     },
     {
       "id": "B15",
@@ -778,11 +778,11 @@
       "category": "FIXES",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "`renderCalendar()`/`renderCurve()` (`app/render.js`) rebuild `innerHTML` wholesale, so a keyboard user who arrows into a day cell or the curve and then triggers a re-render (filter change, `selectFromGraph`) loses focus to `<body>`. Not a regression (cells weren't focusable before B10) but an a11y rough edge. Done when: focus is restored to the matching `[data-date]` cell (or the curve) after a re-render that was initiated from keyboard interaction.",
-      "doneNote": null
+      "doneNote": "**Shipped:** `renderCalendar()` (`app/render.js`) remembers the focused day's date and restores focus to the same cell after its wholesale innerHTML rebuild, so keyboard users no longer drop to `<body>` on re-render. (The `#curve` SVG element persists across renders, so it never lost focus.) Verified in Chromium."
     },
     {
       "id": "S12",
@@ -790,11 +790,11 @@
       "category": "SECURITY",
       "priority": "P2",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "When `ACCESS_TEAM_DOMAIN`+`ACCESS_AUD` are unset, `admin-key.js:41-48` skips `verifyAccessJwt` and issues a signed admin token on mere *presence* of the `Cf-Access-Jwt-Assertion` header (`_middleware.js` staging gate is similarly fail-open). This is safe only while the route is actually behind Cloudflare Access at the network layer; a preview deploy or unenrolled custom domain would let a caller spoof the header. Separately, the `?check` diagnostic (`admin-key.js:25-36`) runs BEFORE the 401 and discloses Access config + the authenticated email to anyone who reaches the endpoint. Done when: unset Access env is treated as fail-closed in production (refuse to mint tokens) and `?check` requires a valid assertion (or a prod-disabled debug flag). Read-only S4 health stays available behind Access.",
-      "doneNote": null
+      "doneNote": "**Shipped:** admin-key issuance and the staging gate now **fail closed** when `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` are unset (admin-key → 503, staging → 403) unless `ALLOW_PRESENCE_AUTH=1` is set for local/preview — closing the spoof-the-header-off-Access path. The `?check` diagnostic is gated behind `ADMIN_DEBUG=1` (off by default) so it can't disclose Access config/email to anonymous callers. Prod (Access configured) is unaffected. README updated."
     },
     {
       "id": "S13",
@@ -802,11 +802,11 @@
       "category": "SECURITY",
       "priority": "P2",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "Before the payment/account scaffolds go live, harden them: `functions/api/webhook.js` must verify the `stripe-signature` over the RAW request body against `STRIPE_WEBHOOK_SECRET` (constant-time, with timestamp tolerance) before any KV/D1 write — otherwise a forged `checkout.session.completed` grants the `cloud` tier; `functions/api/checkout.js` must authenticate the caller and select price IDs server-side from `env.STRIPE_PRICE_*` (never trust client-supplied prices); `functions/api/me.js` must resolve and authorize a real session before returning entitlements. All three are inert 501/local-tier stubs today (no live exposure). Done when: each endpoint enforces the above at implementation time and is covered by a test.",
-      "doneNote": null
+      "doneNote": "**Shipped:** added `verifyStripeSignature()` (`functions/_lib/auth.js`) — HMAC-SHA256 over the RAW body, constant-time compare, 5-minute replay window, multi-`v1` rotation support — and wired `/api/webhook` to verify before acting (no secret → 501, bad sig → 400, valid → 501 pending provisioning). Reinforced checkout/me with SECURITY notes (server-side price IDs only; authorize the session before a non-local tier). New `scripts/test-auth.mjs` (13 assertions) added to CI. Account provisioning itself stays a scaffold."
     },
     {
       "id": "A7",
@@ -814,11 +814,11 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P2",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "Three byte-identical escapers exist — `esc` (`app/datamanager.js:21`, relied on across data/render/staging via shared global scope), `esc` (`assets/changelog.js:15`), `bkesc` (`assets/admin.js:107`) — and none escape `\"`/`'`. Tag values and workspace-template names flow into double-quoted attributes (`datamanager.js:100`, `staging.js:48`) where a `\"` enables attribute injection; the strict CSP blocks execution today, so it's latent, not live. Move `esc()` next to the shared formatters in `app/core.js` (and a tiny shared util for the info pages/admin), and extend it to encode `\"` and `'`. Done when: one escaper is used everywhere, it encodes `<>&\"'`, and a tag containing `\"` renders inert.",
-      "doneNote": null
+      "doneNote": "**Shipped:** the three duplicated escapers (`esc` in datamanager.js used app-wide, `esc` in changelog.js, `bkesc` in admin.js) collapse into one shared `assets/util.js` loaded first on every page. The shared `esc()` now also encodes `\"` and `'`, closing the latent attribute-injection that only the strict CSP was guarding. Verified across app/changelog/admin."
     },
     {
       "id": "A8",
@@ -826,11 +826,11 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P2",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "`reportCss` in `app/export.js` (~83-86, plus `#0d1014` at ~119/158/294) re-declares the entire `:root` palette as literal hexes — a second source of truth for the same 11 colors. It already ships `--faint:#5b6470`, the exact value L5 bumped to `#767f8c` for WCAG AA, so the report renders the old failing-contrast color. The report is a standalone document (can't `@import`), so derive its `:root` block from a single shared token constant (or snapshot `getComputedStyle(document.documentElement)` at export time). Done when: the report's colors come from one source, `--faint` matches tokens.css, and no raw palette hexes remain in export.js.",
-      "doneNote": null
+      "doneNote": "**Shipped:** the exported report's `:root` is generated from the live token values (`getComputedStyle` at export time) instead of a hardcoded palette, and the remaining `#0d1014` literals read from `var(--bg)`/the `--bg` token. The report no longer ships the pre-L5 `--faint:#5b6470` — verified it now carries `#767f8c`, matching tokens.css."
     },
     {
       "id": "A9",
@@ -838,11 +838,11 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P3",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "A6 single-sourced nav/footer for changelog/roadmap/legal/howto, but `index.html` and `admin.html` still carry bespoke copies with no include markers, and the nav/footer CSS is duplicated between `site.css` and `index.html`'s inline `<style>` (with value drift: `.nav` max-width 1080 vs 1180, differing footer disclaimer text). Done when: index/admin either consume `<!-- include:nav -->`/`<!-- include:footer -->` (with variant params) or their divergence is explicitly documented, and the shared nav/footer CSS lives in one stylesheet with only page-specific overrides inline.",
-      "doneNote": null
+      "doneNote": "**Shipped (documented divergence):** index.html (marketing landing) and admin.html (internal tool) keep genuinely-distinct bespoke nav/footer — homepage uses section anchors + CTA/hamburger and a fuller disclaimer; admin uses a trimmed nav + 'internal' disclaimer. Folding them into the shared partials (or coupling the standalone homepage to site.css) would add risk for no gain, so each file now carries an inline note explaining why it stays bespoke, and the build-includes.mjs header is corrected (it also fixes the now-stale claim that demo keeps a bespoke shell — A6 folded it in)."
     },
     {
       "id": "CH11",
@@ -850,11 +850,11 @@
       "category": "CHORE / REFACTOR",
       "priority": "P3",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "A bundle of low-risk cleanups from the second audit: (1) compute `costModel(m)` once in `renderDash()` and thread it into renderCards/renderAdv/renderCalc/dailySeries instead of recomputing it 4–5× per render; (2) merge the two blob-download helpers (`downloadFile` in `ui.js:55` and `expDlBlob` in `export.js:250`) into one that accepts a string or a Blob; (3) data-drive the ~5 parallel metric emitters (export HTML tiles/table, plaintext, markdown, and the dashboard) from one `[{label,value,cls}]` list so a metric change is made once; (4) capture `selectedDate`+textarea value when scheduling the journal autosave (`data.js:301-302`) so a fast day-switch can't write notes to the wrong date; (5) drop the stale inline CSS fallback hexes `var(--panel,#11151b)`/`var(--red,#e0564d)` (`app.css:469,471`) that don't match the real token values; (6) add `git status --porcelain` (fail if non-empty) to the CI drift gate to also catch new untracked build outputs. Done when: each is applied, adapter tests pass, and the build stays idempotent.",
-      "doneNote": null
+      "doneNote": "**Shipped:** `costModel(m)` computed once per `renderDash()` and threaded into renderCards/renderAdv/renderCalc (was ~4 walks/render); `downloadFile()` now takes a string OR a Blob (replacing `expDlBlob`); the report's headline figures are defined once and rendered as both HTML tiles and the plaintext summary; journal autosave captures date+text at schedule time (no wrong-date writes on a fast day-switch); stale `var(--red,#e0564d)`/`var(--panel,#11151b)` CSS fallbacks removed; and the CI drift gate now also catches untracked outputs via `git status --porcelain`."
     }
   ],
   "howToDrive": [

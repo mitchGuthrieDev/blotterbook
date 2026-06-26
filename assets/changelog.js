@@ -12,7 +12,6 @@
     {sha:'',date:'2026-06-22',msg:'Initial project commit'}
   ];
 
-  function esc(s){ return (s||'').replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];}); }
   function render(items, live){
     log.innerHTML=items.map(function(c,i){
       var hash=c.sha ? (c.url? '<a href="'+c.url+'" target="_blank" rel="noopener">'+c.sha+'</a>' : c.sha) : '';

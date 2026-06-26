@@ -24,15 +24,19 @@ function exportReport(){
       <td class="num">${money(s.rate)}</td><td class="num">${money(s.rate*2)}</td>
       <td class="num">${money(s.total)}</td></tr>`).join('');
 
-  const tiles =
-      tile('Net P&L (pre-tax)', money(c.netPreTax), cls(c.netPreTax))
-    + tile('Take-home (post-tax)', money(c.afterTax), cls(c.afterTax))
-    + tile('Gross P&L', money(c.gross), cls(c.gross))
-    + tile('Win rate', (m.n?100*m.wins/m.n:0).toFixed(1)+'%')
-    + tile('Profit factor', c.pf===Infinity?'∞':c.pf.toFixed(2))
-    + tile('Max drawdown', money(-m.maxDD), 'neg')
-    + tile('Trades', String(m.n))
-    + tile('Active days', String(m.active));
+  // Headline figures defined once, then rendered as HTML tiles AND as the plaintext email
+  // summary below — so the two can't drift (CH11). [label, value, className].
+  const headline = [
+    ['Net P&L (pre-tax)', money(c.netPreTax), cls(c.netPreTax)],
+    ['Take-home (post-tax)', money(c.afterTax), cls(c.afterTax)],
+    ['Gross P&L', money(c.gross), cls(c.gross)],
+    ['Win rate', (m.n?100*m.wins/m.n:0).toFixed(1)+'%', ''],
+    ['Profit factor', c.pf===Infinity?'∞':c.pf.toFixed(2), ''],
+    ['Max drawdown', money(-m.maxDD), 'neg'],
+    ['Trades', String(m.n), ''],
+    ['Active days', String(m.active), '']
+  ];
+  const tiles = headline.map(([k,v,cl])=>tile(k,v,cl)).join('');
 
   const costTbl =
      crow('Gross P&L', `<span class="${cls(c.gross)}">${money(c.gross)}</span>`)
@@ -65,12 +69,7 @@ function exportReport(){
     +`Period: ${range} (${scopeLabel()})\n`
     +`Generated: ${fmtDate(gen)} ${pad2(gen.getHours())}:${pad2(gen.getMinutes())}\n`
     +`Broker: ${BROKERS[c.broker]?BROKERS[c.broker].name:c.broker} · Feed: ${feedName()} · State: ${stateLabel()}\n\n`
-    +`Net P&L (pre-tax): ${money(c.netPreTax)}\n`
-    +`Take-home (post-tax): ${money(c.afterTax)}\n`
-    +`Gross P&L: ${money(c.gross)}\n`
-    +`Win rate: ${(m.n?100*m.wins/m.n:0).toFixed(1)}%\n`
-    +`Profit factor: ${c.pf===Infinity?'∞':c.pf.toFixed(2)}\n`
-    +`Max drawdown: ${money(-m.maxDD)}\n`
+    +headline.slice(0,6).map(([k,v])=>`${k}: ${v}`).join('\n')+'\n'
     +`Trades: ${m.n} · Active days: ${m.active}\n\n`
     +`Commissions: ${money(c.totalComm)} · Subscriptions: ${money(c.fixedPeriod)} · Est. 1256 tax: ${money(c.tax)}\n`
     +`Break-even / trade: ${money(bePer)}\n\n`
@@ -79,11 +78,14 @@ function exportReport(){
   const mailto='mailto:?subject='+encodeURIComponent(`Blotterbook Performance Report — ${range}`)
     +'&body='+encodeURIComponent(reportText);
 
+  // The report is a standalone document (it can't @import app.css/tokens.css), so bake the
+  // CURRENT token values into its :root at export time instead of hand-copying hexes that
+  // silently drift from tokens.css (A8). One source of truth = the live design tokens.
+  const cs=getComputedStyle(document.documentElement);
+  const tokenVars=['--bg','--panel','--panel2','--line','--txt','--dim','--faint','--green','--red','--accent','--take','--mono','--sans'];
+  const rootBlock=':root{'+tokenVars.map(n=>`${n}:${cs.getPropertyValue(n).trim()}`).join(';')+';}';
   const reportCss=`
-  :root{--bg:#0d1014;--panel:#151a21;--panel2:#1b212a;--line:#262d38;--txt:#d6dde6;
-    --dim:#8a94a3;--faint:#5b6470;--green:#3fb950;--red:#f04a4a;--accent:#6aa0ff;--take:#c98bff;
-    --mono:"SF Mono",SFMono-Regular,ui-monospace,Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  ${rootBlock}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:13px;line-height:1.5;
     -webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -116,7 +118,7 @@ function exportReport(){
     padding:10px 14px;display:flex;gap:10px;justify-content:flex-end}
   .bar button{font-family:inherit;font-size:12.5px;cursor:pointer;border:1px solid var(--line);
     background:var(--panel2);color:var(--txt);padding:7px 14px;border-radius:7px}
-  .bar button.pri{background:var(--accent);color:#0d1014;border-color:var(--accent);font-weight:600}
+  .bar button.pri{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:600}
   @media print{.bar{display:none}.sheet{padding:0 6mm}@page{margin:12mm}}`;
 
   const sheetHtml=`<div class="sheet">
@@ -247,10 +249,6 @@ function wireExportModal(){
   if(ov) ov.addEventListener('click',e=>{ if(e.target.id==='exportModal') closeExportReportModal(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape' && ov && ov.classList.contains('open')) closeExportReportModal(); });
 }
-function expDlBlob(blob,name){
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1500);
-}
 async function exportDownload(){
   if(!EXPORT_CUR) return;
   const fmt=(document.getElementById('exp_format')||{}).value;
@@ -260,12 +258,12 @@ async function exportDownload(){
   const note=(t,k)=>{ if(msg){ msg.textContent=t||''; msg.className='parsestatus'+(k?' '+k:''); } };
   try{
     if(fmt==='pdf'){ ifr.contentWindow.focus(); ifr.contentWindow.print(); }
-    else if(fmt==='md'){ expDlBlob(new Blob([EXPORT_CUR.md],{type:'text/markdown;charset=utf-8'}), base+'.md'); note('Markdown downloaded.','ok'); }
+    else if(fmt==='md'){ downloadFile(base+'.md', new Blob([EXPORT_CUR.md],{type:'text/markdown;charset=utf-8'})); note('Markdown downloaded.','ok'); }
     else if(fmt==='png'||fmt==='jpeg'){
       note('Rendering image…');
       const type=fmt==='png'?'image/png':'image/jpeg';
       const blob=await rasterizeReport(ifr, type);
-      expDlBlob(blob, base+'.'+fmt); note('');
+      downloadFile(base+'.'+fmt, blob); note('');
     }
   }catch(err){ console.error('export download failed', err); note('Could not export '+String(fmt).toUpperCase()+' — try PDF or Markdown.','err'); }
 }
@@ -291,7 +289,9 @@ function rasterizeReport(iframe, type){
           const sc=2, cv=document.createElement('canvas');
           cv.width=w*sc; cv.height=h*sc;
           const ctx=cv.getContext('2d'); ctx.scale(sc,sc);
-          ctx.fillStyle='#0d1014'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0);
+          // raster background = the live --bg token (A8), not a hardcoded hex
+          ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0d1014';
+          ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0);
           cv.toBlob(b=> b?resolve(b):reject(new Error('toBlob returned null')), type, type==='image/jpeg'?0.92:undefined);
         }catch(e){ reject(e); }
       };

@@ -118,6 +118,13 @@ r = A.parse(flip);
 // fully on the closed contract, not be diluted to $250 by the new lot (500 * 1/2).
 ok('flip fill attributes full $500 realized', r.ok && Math.abs(r.trades[0].pnl - 500) < 1e-6, JSON.stringify(r.trades));
 
+console.log('\nB14 detection distinctiveness:');
+// A real TradeStation export (combined Date/Time) still auto-detects.
+ok('tradestation still detects (has Date/Time)', (A.detect(C.tradestation)||{}).id==='tradestation', JSON.stringify(A.detect(C.tradestation)));
+// A generic fills export with split Time/Date columns must NOT auto-claim as TradeStation.
+const generic = 'Symbol,Side,Quantity,Price,Time\nXYZ,Buy,1,100.00,09:31:00';
+ok('generic split-time export does not misdetect as tradestation', (A.detect(generic)||{}).id!=='tradestation', JSON.stringify(A.detect(generic)));
+
 console.log('\nB5 date format:');
 ok('M/D/Y stays US (06/02 → Jun 2)', A.normTime('06/02/2026 09:31:00').slice(0, 10) === '2026-06-02', A.normTime('06/02/2026 09:31:00'));
 ok('D/M/Y detected when day>12 (25/06 → Jun 25)', A.normTime('25/06/2026 09:31:00').slice(0, 10) === '2026-06-25', A.normTime('25/06/2026 09:31:00'));

@@ -75,6 +75,26 @@ export async function isAdminAuthorized(request, env, provided){
   return secret ? verifyToken(secret, val) : false;
 }
 
+/* ---- S13: Stripe webhook signature verification (for the future payments wiring) ----
+   Stripe sends `Stripe-Signature: t=<unix>,v1=<hexhmac>[,v1=...]`. The signed payload is
+   `${t}.${rawBody}` (the RAW request bytes — never the re-serialized JSON), and each v1 is
+   HMAC-SHA256(secret, signedPayload) in hex. Verify any v1 in constant time and reject a
+   timestamp outside `toleranceSec` (default 5 min) to block replay. Returns true only on a
+   valid, fresh signature. The webhook handler MUST call this before acting on any event. */
+export async function verifyStripeSignature(rawBody, sigHeader, secret, toleranceSec = 300){
+  if (!rawBody || !sigHeader || !secret) return false;
+  const items = String(sigHeader).split(',').map(s => s.trim());
+  const t = Number((items.find(s => s.startsWith('t=')) || '').slice(2));
+  if (!Number.isFinite(t)) return false;
+  if (Math.abs(Math.floor(Date.now() / 1000) - t) > toleranceSec) return false;   // replay window
+  const v1s = items.filter(s => s.startsWith('v1=')).map(s => s.slice(3));
+  if (!v1s.length) return false;
+  const mac = await crypto.subtle.sign('HMAC', await hmacKey(secret), enc.encode(t + '.' + rawBody));
+  const expected = [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, '0')).join('');
+  for (const v of v1s) { if (await timingSafeEqual(v, expected)) return true; }
+  return false;
+}
+
 /* ---- S4: Cloudflare Access JWT verification ---- */
 let JWKS_CACHE = { url: null, at: 0, keys: null };
 const JWKS_TTL = 3600 * 1000;

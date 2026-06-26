@@ -63,7 +63,7 @@
           <div class="fld feed"><label for="c_feed">Data feed (monthly)</label>
             <select id="c_feed"></select></div>
           <div class="fld"><label for="c_tv">Platform fee /mo</label>
-            <input id="c_tv" type="number" step="1" min="0" value="35"></div>
+            <input id="c_tv" type="number" step="1" min="0" value="35" placeholder="0"></div>
           <div class="fld state"><label for="c_state_sel">State (tax)</label>
             <select id="c_state_sel"></select></div>
         </div>
@@ -299,7 +299,8 @@
   <!-- /include:app-modal -->
 
 <!-- include:app-scripts mode=app -->
-  <script src="store.js"></script>
+  <script src="/assets/util.js"></script>
+<script src="store.js"></script>
 <script src="entitlements.js"></script>
 <script src="adapters.js"></script>
 <script src="core.js"></script>

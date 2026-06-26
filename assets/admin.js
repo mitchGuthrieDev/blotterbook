@@ -104,7 +104,6 @@
   });
 
   // ---- backlog (read-only view of data/backlog.json) ----
-  function bkesc(s){ return (s||'').replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];}); }
   var bkData=null;
   var bkFStatus=document.getElementById('bk_fstatus'), bkFEffort=document.getElementById('bk_feffort');
 
@@ -119,11 +118,11 @@
       var its=items.filter(function(i){return i.category===c
         && (!fs || i.status===fs) && (!fe || i.effort===fe);});
       if(!its.length) return '';
-      return '<div class="bkgroup">'+bkesc(c)+'</div>'+its.map(function(i){
+      return '<div class="bkgroup">'+esc(c)+'</div>'+its.map(function(i){
         var badge=i.status==='done'?'done':(i.status==='guardrail'?'guard':'open');
-        return '<div class="bkrow is-'+i.status+'"><span class="bk-id">'+bkesc(i.id)+'</span>'
-          +'<span class="bk-title">'+bkesc(i.title)+'</span>'
-          +'<span class="bk-eff">'+bkesc(i.effort)+'</span>'
+        return '<div class="bkrow is-'+i.status+'"><span class="bk-id">'+esc(i.id)+'</span>'
+          +'<span class="bk-title">'+esc(i.title)+'</span>'
+          +'<span class="bk-eff">'+esc(i.effort)+'</span>'
           +'<span class="bk-badge '+i.status+'">'+badge+'</span></div>';
       }).join('');
     }).join('');
@@ -134,7 +133,7 @@
     items.forEach(function(i){ if(i.status) statuses[i.status]=1; if(i.effort) efforts[i.effort]=1; });
     function fill(sel,vals){ var keep=sel.value;
       sel.innerHTML='<option value="">All</option>'+Object.keys(vals).sort().map(function(k){
-        return '<option value="'+bkesc(k)+'">'+bkesc(k)+'</option>'; }).join('');
+        return '<option value="'+esc(k)+'">'+esc(k)+'</option>'; }).join('');
       sel.value=keep; }
     fill(bkFStatus,statuses); fill(bkFEffort,efforts);
   }
@@ -153,7 +152,7 @@
         var guard=its.filter(function(i){return i.status==='guardrail';}).length;
         var tot=done+open; tDone+=done; tOpen+=open; tGuard+=guard;
         var pct= tot? Math.round(100*done/tot):0;
-        return '<div class="bkcount"><div class="bk-cat">'+bkesc(c)+'</div>'
+        return '<div class="bkcount"><div class="bk-cat">'+esc(c)+'</div>'
           +'<div class="bk-nums"><span class="bk-done">'+done+'</span><span class="bk-of">/ '+tot+' done</span>'
           +'<span class="bk-rem">'+open+' left'+(guard?(' · '+guard+' guard'):'')+'</span></div>'
           +'<div class="bkbar"><i style="width:'+pct+'%"></i></div></div>';

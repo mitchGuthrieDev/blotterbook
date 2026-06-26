@@ -60,11 +60,16 @@ Admin-auth environment variables (set in the Pages dashboard):
 - `ADMIN_TOKEN_TTL_SEC` — optional token lifetime in seconds (default `7200`).
 - `ACCESS_TEAM_DOMAIN` — e.g. `https://<team>.cloudflareaccess.com` (enables S4).
 - `ACCESS_AUD` — the Access application's Audience (AUD) tag (enables S4).
+- `ALLOW_PRESENCE_AUTH` — set to `1` ONLY for local/preview. With `ACCESS_TEAM_DOMAIN`+
+  `ACCESS_AUD` unset, admin-key issuance and the staging gate **fail closed** (S12); this
+  flag re-enables the old presence-only behavior where the route is gated some other way.
+- `ADMIN_DEBUG` — set to `1` to enable the `?check` diagnostic below (off by default, so it
+  can't fingerprint the infra for anonymous callers — S12). Unset it again after diagnosing.
 
-**Is S4 actually on? `GET /api/admin-key?check`** — run it through Access (the admin host)
-and read the JSON. It issues NO token and returns NO secret; it reports whether S4 is
-enforced and, separately, the signature / issuer / audience / expiry checks so a
-misconfigured env var is obvious:
+**Is S4 actually on? `GET /api/admin-key?check`** (requires `ADMIN_DEBUG=1`) — run it through
+Access (the admin host) and read the JSON. It issues NO token and returns NO secret; it
+reports whether S4 is enforced and, separately, the signature / issuer / audience / expiry
+checks so a misconfigured env var is obvious:
 
 - `s4Active` — true only when both `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are set (when
   false, the endpoint is falling back to the presence-only check — S4 is effectively off).
@@ -80,7 +85,9 @@ audMatches:true, expired:false`.
 ## Environment variables (set in the Pages dashboard when implementing)
 
 - `STRIPE_SECRET_KEY`
-- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_WEBHOOK_SECRET` — once set, `/api/webhook` verifies the `Stripe-Signature` over the
+  raw body (HMAC-SHA256, 5-min replay window) and rejects forgeries with 400 (S13). Until the
+  secret is set the endpoint fails closed (501) and never acts on an event.
 - `STRIPE_PRICE_ONE_TIME`, `STRIPE_PRICE_SUBSCRIPTION`
 
 ## Bindings to add when implementing

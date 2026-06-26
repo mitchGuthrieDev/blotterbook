@@ -21,8 +21,12 @@ export async function onRequest(context) {
 
   // Debug aid: GET /api/admin-key?check reports whether S4 (Access-JWT verification) is
   // active and exactly why a JWT would pass/fail — WITHOUT issuing a token or returning
-  // any secret. Run it through Access (admin host) and read `s4Active` + the `jwt` block.
+  // any secret. It discloses (non-secret) Access config + the caller's own email, so it
+  // is gated behind ADMIN_DEBUG and OFF by default — set ADMIN_DEBUG=1 only while
+  // diagnosing setup, so anonymous callers can't fingerprint the infra (S12). Kept ahead
+  // of the auth checks on purpose so it can still diagnose an absent/invalid assertion.
   if (new URL(request.url).searchParams.has('check')) {
+    if (env.ADMIN_DEBUG !== '1') return json({ error: 'not_found' }, 404);
     return json({
       check: true,
       s4Active: !!(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD),   // verification is enforced only when both are set
@@ -42,6 +46,12 @@ export async function onRequest(context) {
     const payload = await verifyAccessJwt(assertion, env.ACCESS_TEAM_DOMAIN, env.ACCESS_AUD);
     if (!payload) return json({ error: 'invalid Access token' }, 401);
     email = payload.email || email;
+  } else if (env.ALLOW_PRESENCE_AUTH !== '1') {
+    // Fail closed (S12): without ACCESS_TEAM_DOMAIN + ACCESS_AUD we cannot verify the
+    // assertion's signature, so a spoofed Cf-Access-Jwt-Assertion header would otherwise
+    // mint a real admin token off-Access. Refuse to issue one. Set ALLOW_PRESENCE_AUTH=1
+    // only for local/preview where the route is gated some other way.
+    return json({ error: 'Access verification not configured' }, 503);
   }
 
   const secret = env.TOKEN_SECRET || env.ADMIN_KEY;

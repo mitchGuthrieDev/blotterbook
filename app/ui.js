@@ -52,8 +52,11 @@ function initPanels(){
 /* ============================================================
    Helpers — file download, current setup labels
    ============================================================ */
-function downloadFile(name, text, type='application/json'){
-  const blob=new Blob([text],{type}); const url=URL.createObjectURL(blob);
+// Accepts a string (wrapped in a Blob of `type`) OR a ready-made Blob (CH11: replaces the
+// old export-only expDlBlob helper).
+function downloadFile(name, data, type='application/json'){
+  const blob = data instanceof Blob ? data : new Blob([data], {type});
+  const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download=name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1500);
