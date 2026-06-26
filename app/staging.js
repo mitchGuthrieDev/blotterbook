@@ -80,8 +80,12 @@ function initStaging(){
   let _rsz=null; window.addEventListener('resize',()=>{ clearTimeout(_rsz);
     _rsz=setTimeout(()=>{ if(METRICS_ALL) renderCurve(curveMetrics()); }, 160); });
   // Read the version from the page badge rather than hardcoding it (single source — CH8).
-  const ver=(document.querySelector('.ver')||{}).textContent||'';
-  logAction('Staging session ready'+(ver?' · '+ver.trim():''));
+  // Wait for the runtime version fetch to populate the badge first (CH12) so the log line
+  // shows the live version, not the baked offline fallback.
+  Promise.resolve(window.__versionsReady).then(()=>{
+    const ver=(document.querySelector('.ver')||{}).textContent||'';
+    logAction('Staging session ready'+(ver?' · '+ver.trim():''));
+  });
 }
 
 /* Subscribe to shared app-action events → terminal log lines (staging-only). */

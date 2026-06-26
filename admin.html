@@ -155,18 +155,11 @@
   <p class="amsg" id="stagemsg"></p>
 
   <h2>Platform versions</h2>
-  <p>The live version recorded for each surface. The running apps display their own baked-in version;
-    this is the source-of-truth record in KV used to coordinate releases. Promoting staging to the main
-    app / demo is a code release (see the README) — set these to match after a promotion.</p>
+  <p>Read-only. Versions are <b>automated</b> (CH12): a merge to main derives the bump from the
+    PR's conventional-commit type and changed paths, and writes <code>data/versions.json</code> —
+    the single source of truth every surface reads at load. The platform phase (Beta → stable) is
+    derived from the prod major. There's nothing to set here.</p>
   <p class="curstate" id="verstate">Versions: loading…</p>
-  <div class="adminkeyrow">
-    <div class="fld"><label for="v_main">Main app</label><input type="text" id="v_main" maxlength="16" placeholder="v0.11"></div>
-    <div class="fld"><label for="v_demo">Demo</label><input type="text" id="v_demo" maxlength="16" placeholder="v0.11"></div>
-    <div class="fld"><label for="v_staging">Staging</label><input type="text" id="v_staging" maxlength="16" placeholder="v0.13"></div>
-    <div class="fld"><label for="v_platform">Platform label</label><input type="text" id="v_platform" maxlength="24" placeholder="Beta 1.0"></div>
-  </div>
-  <div class="modes"><button class="modebtn" id="saveversions"><span class="d" style="background:var(--accent)"></span>Save versions</button></div>
-  <p class="amsg" id="vermsg"></p>
 
   <h2>Feature flags</h2>
   <p>Server-side configuration stored in KV. (Scaffold — not yet consumed by the main app.)</p>

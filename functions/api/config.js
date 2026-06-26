@@ -15,11 +15,7 @@ import { json, rateLimited } from '../_lib/http.js';
 const KEY = 'config';
 const DEFAULTS = {
   flags: { showBetaAdapters: true, maintenanceBanner: false },
-  refDataVersion: null,
-  // Live version per surface + the overall platform label. Admin-editable; the
-  // apps display their own baked-in version, this is the source-of-truth record
-  // used to coordinate staging -> prod promotions.
-  versions: { main: 'v0.11', demo: 'v0.11', staging: 'v0.13', platform: 'Beta 1.0' }
+  refDataVersion: null
 };
 
 async function read(kv) {
@@ -28,11 +24,32 @@ async function read(kv) {
   catch (_) { return { ...DEFAULTS }; }
 }
 
+// CH12: versions are NOT admin-editable anymore — they're derived from the automated
+// source of truth (data/versions.json). Surface them read-only on GET. Phase label is
+// derived from the prod major (0.x -> Beta).
+function platformLabel(prod) {
+  const major = parseInt(String(prod || '0').split('.')[0], 10) || 0;
+  return (major < 1 ? 'Beta ' : '') + (prod || '');
+}
+async function readVersions(request) {
+  try {
+    const r = await fetch(new URL('/data/versions.json', request.url), { cf: { cacheTtl: 60 } });
+    if (!r.ok) return null;
+    const v = await r.json();
+    return { prod: v.prod, staging: v.staging, platform: platformLabel(v.prod) };
+  } catch (_) { return null; }
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   const kv = env.STATUS_KV;
 
-  if (request.method === 'GET') return json(await read(kv));
+  if (request.method === 'GET') {
+    const cfg = await read(kv);
+    const versions = await readVersions(request);
+    if (versions) cfg.versions = versions;   // read-only, sourced from data/versions.json
+    return json(cfg);
+  }
 
   if (request.method === 'POST') {
     if (await rateLimited(env, 'config', request)) return json({ error: 'rate limited' }, 429);
@@ -41,7 +58,7 @@ export async function onRequest(context) {
     let body; try { body = await request.json(); } catch (_) { return json({ error: 'invalid JSON body' }, 400); }
     const cur = await read(kv);
     if (body && body.flags && typeof body.flags === 'object') cur.flags = { ...cur.flags, ...body.flags };
-    if (body && body.versions && typeof body.versions === 'object') cur.versions = { ...cur.versions, ...body.versions };
+    // versions are no longer writable (automated); any versions field in the body is ignored.
     if (body && body.bumpRefData) cur.refDataVersion = new Date().toISOString();
     cur.updatedAt = new Date().toISOString();
     await kv.put(KEY, JSON.stringify(cur));

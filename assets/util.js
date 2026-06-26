@@ -9,3 +9,24 @@ function esc(s){
     '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;'
   }[c]));
 }
+
+/* CH12 — populate the version badge(s) at runtime from data/versions.json, so all surfaces
+   read one source of truth without a rebuild. The baked `.ver` literal stays as the offline
+   fallback. Two tracks: staging page → `staging`, app + demo → `prod`. Exposes
+   window.__versionsReady (a promise) so app/staging.js can read the badge after it's set. */
+(function(){
+  if (typeof document === 'undefined') return;
+  const badges = document.querySelectorAll('.ver');
+  if (!badges.length) return;                              // info/admin pages have no badge
+  const mode = (document.body && document.body.dataset.mode) || 'app';   // app | demo | staging
+  window.__versionsReady = fetch('/data/versions.json', { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : null)
+    .then(v => {
+      if (v) {
+        const ver = mode === 'staging' ? v.staging : v.prod;   // demo + app share the prod track
+        if (ver) badges.forEach(b => { b.textContent = 'v' + ver; });
+      }
+      return v;
+    })
+    .catch(() => null);
+})();

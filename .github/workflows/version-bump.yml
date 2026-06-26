@@ -1,0 +1,48 @@
+name: Version bump
+
+# CH12 — after a merge to main, derive the two-track version bump from the merge
+# commit's conventional-commit type + changed paths, and commit data/versions.json
+# back. Runtime-fetch badges then pick it up; no HTML is regenerated here.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    # Don't bump our own release commit (belt-and-suspenders with the [skip ci] marker).
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2          # need HEAD~1 to diff the merged changeset
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Compute + apply version bump
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          CHANGED_FILES="$(git diff --name-only HEAD~1 HEAD)"
+          export CHANGED_FILES
+          node scripts/bump-version.mjs
+
+      - name: Commit the bump back to main
+        run: |
+          if git diff --quiet data/versions.json; then
+            echo "No version change to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/versions.json
+          git commit -m "chore(release): bump versions [skip ci]"
+          # Don't fail the run if main is protected and the bot push is rejected —
+          # surface a warning instead so merges never go red over versioning.
+          git push || echo "::warning::Could not push the version bump (branch protection?). Allow the github-actions bot to push to main, or run scripts/bump-version.mjs in a release PR."

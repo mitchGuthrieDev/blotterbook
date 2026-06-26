@@ -23,6 +23,9 @@ jobs:
       - name: Auth tests (tokens + Stripe signature)
         run: node scripts/test-auth.mjs
 
+      - name: Version-bump logic tests
+        run: node scripts/test-version.mjs
+
       - name: Regenerate partials + data manifest
         run: |
           node scripts/build-includes.mjs

@@ -185,29 +185,42 @@ equivalent — the Cookie request header) before opening the page.
 The admin page degrades gracefully off Cloudflare (locally the APIs 404 and it shows "deploy on
 Cloudflare to use").
 
-### Versioning &amp; releases
+### Versioning &amp; releases (automated — CH12)
 
-Each surface displays a **baked-in version** in its header — main app **v0.11**, demo **v0.11**,
-staging **v0.13** — and the platform label is **Beta 1.0**. Day-to-day development happens in
-**staging**; the main app and demo stay stable and lag staging by several versions until changes are
-promoted. The admin panel's **Platform versions** panel records the live version per surface in KV
-(`/api/config` → `versions`) as the source-of-truth.
+Versioning is **automated from commits + PR merges**; there's nothing to bump by hand. Two tracks live
+in one source of truth, `data/versions.json`:
 
-**Promoting staging → main app / demo** is a *code release*, not a config flip: static hosting serves
-whatever code is deployed, so you copy the validated staging markup/behavior into `app.html` /
-`demo.html`, remove the `STAGING_PAGE` gating, bump the version badges, and deploy. The planned upgrade
-(see the roadmap) is to serve **versioned app builds** and let the admin pick the live version per
-surface — enabling on-the-fly promote/rollback without a redeploy.
+- **`prod`** — shared by the main app and demo (their header badges both show it).
+- **`staging`** — the staging sandbox's own, faster-moving version.
 
-**Version-bump checklist** (until A6 folds the top bars into a partial that carries the version). The
-`.ver` badge in each page header is the *display* source — bump it there, then reconcile the records:
+The platform **phase** is *derived*, not stored: while the prod major is `0` the label reads
+**Beta `<prod>`** (e.g. `Beta 0.12.0`); at `1.0.0`+ the "Beta" drops.
 
-1. The `.ver` badge in the page being released — `app/app.html`, `app/demo.html`, or `app/staging.html`.
-2. The `versions` defaults in `functions/api/config.js` (the KV source-of-truth record) and the matching
-   placeholder in `admin.html`'s Platform-versions panel.
+**How a bump happens.** On every push to `main`, the `Version bump` workflow
+(`.github/workflows/version-bump.yml` → `scripts/bump-version.mjs`) reads the merge commit:
 
-Other surfaces derive from #1 automatically: `app/staging.js`'s activity-terminal "session ready" line
-reads the badge text (CH8), so it never needs editing.
+1. **Level** from the conventional-commit type in the squash-merge title — `feat:` → minor, `fix:`/
+   `chore:`/`refactor:`/etc → patch, `feat!:` or a `BREAKING CHANGE:` footer → major, untyped → patch.
+   (See the `commitConvention` field in `data/backlog.json`.)
+2. **Which track** from the changed paths — any **prod-shipping** file (shared `app/*.js` except
+   `staging.js`, `app/app.html`/`demo.html`/`app.css`, `partials/*`, `assets/*`, `tokens.css`, `data/*`
+   except versions/backlog json) bumps **both** prod and staging; **only** `app/staging.{js,html}` bumps
+   staging alone; non-app changes (info pages, README, `.github`) bump nothing.
+
+It writes `data/versions.json` and commits it back to `main` as `chore(release): … [skip ci]` (so it
+doesn't re-trigger itself). **Requires** the GitHub Actions bot to be allowed to push to `main`; if the
+branch is protected the job logs a warning instead of failing — grant the bot push access (or run
+`scripts/bump-version.mjs` in a release PR) to enable it.
+
+**Display is runtime-fetched.** Each page's `.ver` badge is populated at load from
+`/data/versions.json` (`assets/util.js`), with the baked literal in `partials/app-topbar.html` as the
+offline fallback. `/api/config` and the admin panel surface the same values **read-only** (the old
+manual entry + KV `versions` record are retired); `app/staging.js`'s "session ready" line reads the
+badge after it's populated.
+
+Separate, unrelated version numbers are intentionally **not** touched by this: `store.js` `DB_VERSION`
+(IndexedDB schema), the backup-file `version`, `manifest.json` content hashes, and the admin
+`refDataVersion` cache stamp.
 
 ### Staging sandbox
 

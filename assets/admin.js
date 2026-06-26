@@ -53,19 +53,15 @@
   var flagmsg=document.getElementById('flagmsg'), refmsg=document.getElementById('refmsg'), refstate=document.getElementById('refstate');
   function setFlagMsg(t,k){ flagmsg.textContent=t||''; flagmsg.className='amsg'+(k?' '+k:''); }
   function setRefMsg(t,k){ refmsg.textContent=t||''; refmsg.className='amsg'+(k?' '+k:''); }
-  var verstate=document.getElementById('verstate'), vermsg=document.getElementById('vermsg');
-  function setVerMsg(t,k){ vermsg.textContent=t||''; vermsg.className='amsg'+(k?' '+k:''); }
+  var verstate=document.getElementById('verstate');
   function loadConfig(){
     fetch('/api/config',{cache:'no-store'}).then(function(r){return r.json();}).then(function(c){
       var f=c.flags||{};
       document.querySelectorAll('[data-flag]').forEach(function(el){ el.checked=!!f[el.dataset.flag]; });
       refstate.innerHTML='Cache version: <b>'+(c.refDataVersion?new Date(c.refDataVersion).toLocaleString():'never')+'</b>';
+      // CH12: versions are read-only (automated, sourced from data/versions.json). prod = main+demo.
       var v=c.versions||{};
-      document.getElementById('v_main').value=v.main||'';
-      document.getElementById('v_demo').value=v.demo||'';
-      document.getElementById('v_staging').value=v.staging||'';
-      document.getElementById('v_platform').value=v.platform||'';
-      verstate.innerHTML='Main <b>'+(v.main||'—')+'</b> · Demo <b>'+(v.demo||'—')+'</b> · Staging <b>'+(v.staging||'—')+'</b> · Platform <b>'+(v.platform||'—')+'</b>';
+      verstate.innerHTML='Prod (main + demo) <b>'+esc(v.prod||'—')+'</b> · Staging <b>'+esc(v.staging||'—')+'</b> · Platform <b>'+esc(v.platform||'—')+'</b>';
     }).catch(function(){ refstate.textContent='Config unavailable (deploy on Cloudflare to use)'; verstate.textContent='Versions: unavailable (deploy on Cloudflare to use)'; });
   }
   function postConfig(body,onMsg){
@@ -82,14 +78,6 @@
     postConfig({flags:flags}, setFlagMsg);
   });
   document.getElementById('bumpref').addEventListener('click',function(){ postConfig({bumpRefData:true}, setRefMsg); });
-  document.getElementById('saveversions').addEventListener('click',function(){
-    postConfig({versions:{
-      main:(document.getElementById('v_main').value||'').trim(),
-      demo:(document.getElementById('v_demo').value||'').trim(),
-      staging:(document.getElementById('v_staging').value||'').trim(),
-      platform:(document.getElementById('v_platform').value||'').trim()
-    }}, setVerMsg);
-  });
 
   // Launch staging: carry the admin key as a short-lived cookie so the middleware gate passes,
   // then open the gated page. (Browsers can't set request headers on a navigation; the Cookie
