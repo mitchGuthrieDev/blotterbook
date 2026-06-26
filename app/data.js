@@ -177,7 +177,7 @@ function updateFilterCount(){
 function syncFilterOptions(){
   const sel=document.getElementById('f_symbol'); const cur=sel.value;
   const roots=[...new Set(TRADES.map(t=>t.root))].sort();
-  sel.innerHTML='<option value="">All</option>'+roots.map(r=>`<option value="${r}">${r}</option>`).join('');
+  sel.innerHTML='<option value="">All</option>'+roots.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join('');
   sel.value = roots.includes(cur)?cur:''; FILTERS.symbol=sel.value;
   syncTagFilter();
   updateFilterCount();
@@ -191,7 +191,7 @@ function syncTagFilter(){
   const sel=document.getElementById('f_tag'); if(!sel) return;
   const tags=allTags(); const cur=sel.value;
   const fld=sel.closest('.fld'); if(fld) fld.style.display = tags.length? '' : 'none';
-  sel.innerHTML='<option value="">All</option>'+tags.map(t=>`<option value="${t}">${t}</option>`).join('');
+  sel.innerHTML='<option value="">All</option>'+tags.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
   if(tags.includes(cur)) sel.value=cur; else { sel.value=''; FILTERS.tag=''; }
 }
 function resetFilters(){

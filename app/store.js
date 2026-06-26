@@ -199,7 +199,15 @@
     /* Merge a backup back in: trades de-dupe, notes & meta upsert. */
     async importAll(data) {
       let added = 0, dup = 0;
+      // Sanitize at the trust boundary: a backup file is untrusted input (unlike CSV
+      // import, which routes symbols through rootSym()). Force `root` to the safe
+      // charset and strip markup-significant chars from tags, so restored data can't
+      // become a stored-XSS payload in any (current or future) render sink.
+      const cleanSym = s => (window.Adapters && Adapters.rootSym) ? Adapters.rootSym(String(s || ''))
+        : String(s || '').toUpperCase().replace(/[^A-Z0-9._-]/g, '');
+      const cleanTag = s => String(s == null ? '' : s).replace(/[<>&"']/g, '');
       if (Array.isArray(data.trades) && data.trades.length) {
+        for (const t of data.trades) { if (t && t.root != null) t.root = cleanSym(t.root); }
         const r = await this.addTrades(data.trades);
         added = r.added; dup = r.duplicate;
       }
@@ -218,7 +226,7 @@
       if (Array.isArray(data.trademeta) && data.trademeta.length) {
         const store = await tx(TRADEMETA, 'readwrite');
         for (const tm of data.trademeta) {
-          if (tm && tm.id) store.put({ id: tm.id, tags: tm.tags || [], note: tm.note || '', shots: tm.shots || [], updated: tm.updated || Date.now() });
+          if (tm && tm.id) store.put({ id: tm.id, tags: (tm.tags || []).map(cleanTag).filter(Boolean), note: tm.note || '', shots: tm.shots || [], updated: tm.updated || Date.now() });
         }
         await done(store);
       }
