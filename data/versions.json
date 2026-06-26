@@ -1,5 +1,5 @@
 {
   "schemaVersion": 1,
-  "prod": "0.14.1",
-  "staging": "0.24.1"
+  "prod": "0.14.2",
+  "staging": "0.24.2"
 }
