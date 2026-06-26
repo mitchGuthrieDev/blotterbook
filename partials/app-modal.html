@@ -1,0 +1,62 @@
+<!-- ============ data manager modal ============ -->
+<div class="modal" id="dataModal" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Manage local data">
+    <div class="dmhead">
+      <div><h2>Manage local data</h2><div class="dmsub">Everything here lives only in this browser.</div></div>
+      <button class="dmx" id="dm_close" title="Close">&times;</button>
+    </div>
+    <div class="dmbody">
+      <div class="dmsec"><h3>Overview</h3><div class="dmgrid" id="dm_summary"></div></div>
+
+      <div class="dmsec"><h3>Load data</h3>
+        <div class="dmactions">
+          <button class="dmbtn" id="dm_load">Load CSV…</button>
+          <input type="file" id="file" accept=".csv,text/csv" hidden>
+          <div class="fld plat"><label for="dm_platform">Platform</label>
+            <select id="dm_platform"></select></div>
+          <button class="dmbtn" id="dm_import" disabled>Import</button>
+        </div>
+        <div class="parsestatus" id="dm_parsestatus"></div>
+        <p class="dmhint">Pick a CSV exported from your trading platform — Blotterbook detects the format, then hit <b>Import</b> to merge it in. Re-uploads merge by a stable trade id, so importing an overlapping export is always safe. The platform choice applies to this upload only.</p>
+      </div>
+
+      <div class="dmsec"><h3>Backup &amp; restore</h3>
+        <div class="dmactions">
+          <button class="dmbtn" id="dm_export">Download backup (.json)</button>
+          <button class="dmbtn" id="dm_importBtn">Restore from backup…</button>
+          <input type="file" id="dm_importFile" accept="application/json,.json" hidden>
+        </div>
+        <p class="dmhint">A backup is a single JSON file holding your trades, day-notes, and setup. Restoring merges it back in — existing trades are de-duplicated, so re-importing is always safe. Keep a backup before clearing data or switching browsers.</p>
+      </div>
+
+      <div class="dmsec"><h3>Day notes</h3>
+        <div class="dmnotescroll" id="dm_notes"></div>
+      </div>
+
+      <div class="dmsec"><h3>Trades</h3>
+        <div id="dm_editor" style="display:none"></div>
+        <div class="dmsearchrow">
+          <input type="text" id="dm_search" placeholder="Filter by symbol, date, or side…">
+          <span class="dmcount" id="dm_tcount"></span>
+        </div>
+        <div class="dmscroll">
+          <table class="dmtab">
+            <thead><tr><th>Date</th><th>Symbol</th><th>Side · tags</th><th class="num">PnL</th><th></th></tr></thead>
+            <tbody id="dm_trades"></tbody>
+          </table>
+        </div>
+        <p class="dmhint"><b>Edit</b> a trade to add tags, a note, and screenshots — tags also power the Tag filter. Deleting a trade can't be undone (re-load the CSV or a backup to restore it).</p>
+      </div>
+<!--IF mode=staging-->
+      <div class="dmsec"><h3>Saved filters</h3>
+        <div class="dmnotescroll" id="dm_filters"></div>
+        <p class="dmhint">Apply, rename, or delete the filter views you saved from the filter bar (<b>Save filter</b>).</p>
+      </div>
+<!--ENDIF-->
+      <div class="dmsec"><h3>Danger zone</h3>
+        <div class="dmactions"><button class="dmbtn danger" id="dm_clear">Erase all local data</button></div>
+        <p class="dmhint">Wipes every trade, day-note, and saved setup from this browser. Export a backup first if you might want it back.</p>
+      </div>
+    </div>
+  </div>
+</div>

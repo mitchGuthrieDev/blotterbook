@@ -30,6 +30,7 @@
     </div>
   </div>
 
+  <!-- include:app-landing mode=app -->
   <!-- ============ landing intro + setup (setup is reused, collapsible, once loaded) ============ -->
   <div id="landing">
     <div class="lhead">
@@ -68,7 +69,9 @@
       </div>
     </div>
   </div>
+  <!-- /include:app-landing -->
 
+  <!-- include:app-scope mode=app -->
   <!-- ============ scope toggle ============ -->
   <div class="scoperow" id="scoperow" style="display:none">
     <span class="slab">Showing</span>
@@ -78,7 +81,9 @@
     </div>
     <span class="snote" id="scopenote"></span>
   </div>
+  <!-- /include:app-scope -->
 
+  <!-- include:app-filters mode=app -->
   <!-- ============ filters ============ -->
   <div class="filterbar" id="filterbar">
     <div class="fld"><label for="f_from">From</label><input type="date" id="f_from"></div>
@@ -91,17 +96,21 @@
     <div class="fld" style="display:none"><label for="f_tag">Tag</label><select id="f_tag"><option value="">All</option></select></div>
     <div class="fld"><label>Day of week</label>
       <div class="dows" id="f_dows"></div></div>
+
+
     <span class="fcount" id="f_count"></span>
     <button class="btn fbtn" id="f_reset" title="Clear all filters">Reset filters</button>
+
   </div>
+  <!-- /include:app-filters -->
 
   <!-- ============ headline stat cards ============ -->
   <div class="cards" id="cards"></div>
 
   <!-- ============ collapsible / draggable sections ============ -->
   <div id="dash">
-
-    <!-- Performance -->
+    <!-- include:app-dash mode=app -->
+  <!-- Performance -->
     <section class="panel" data-key="perf">
       <div class="phead"><span class="grip" title="Drag to reorder">&#9776;</span>
         <h2>Performance</h2><button class="chev" aria-label="Collapse">&#9662;</button></div>
@@ -205,7 +214,7 @@
         </div>
       </div>
     </section>
-
+  <!-- /include:app-dash -->
   </div>
 
   <!-- ============ footer ============ -->
@@ -217,7 +226,8 @@
   </div>
 </div>
 
-<!-- ============ data manager modal ============ -->
+<!-- include:app-modal mode=app -->
+  <!-- ============ data manager modal ============ -->
 <div class="modal" id="dataModal" aria-hidden="true">
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Manage local data">
     <div class="dmhead">
@@ -274,6 +284,7 @@
     </div>
   </div>
 </div>
+  <!-- /include:app-modal -->
 
 <script src="store.js"></script>
 <script src="entitlements.js"></script>

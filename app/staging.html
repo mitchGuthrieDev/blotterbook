@@ -47,6 +47,7 @@
     </div>
   </div>
 
+  <!-- include:app-landing mode=staging -->
   <!-- ============ landing intro + setup (setup is reused, collapsible, once loaded) ============ -->
   <div id="landing">
     <div class="lhead">
@@ -85,7 +86,9 @@
       </div>
     </div>
   </div>
+  <!-- /include:app-landing -->
 
+  <!-- include:app-scope mode=staging -->
   <!-- ============ scope toggle ============ -->
   <div class="scoperow" id="scoperow" style="display:none">
     <span class="slab">Showing</span>
@@ -95,7 +98,9 @@
     </div>
     <span class="snote" id="scopenote"></span>
   </div>
+  <!-- /include:app-scope -->
 
+  <!-- include:app-filters mode=staging -->
   <!-- ============ filters ============ -->
   <div class="filterbar" id="filterbar">
     <div class="fld"><label for="f_from">From</label><input type="date" id="f_from"></div>
@@ -108,20 +113,24 @@
     <div class="fld" style="display:none"><label for="f_tag">Tag</label><select id="f_tag"><option value="">All</option></select></div>
     <div class="fld"><label>Day of week</label>
       <div class="dows" id="f_dows"></div></div>
+
     <div class="fld"><label for="f_saved">Saved filter</label>
       <select id="f_saved"><option value="">— Saved filters —</option></select></div>
     <button class="btn" id="f_save" title="Save the current filters as a named view">Save filter</button>
     <button class="btn" id="f_reset" title="Clear all filters">Reset filters</button>
     <span class="fcount fpush" id="f_count"></span>
+
+
   </div>
+  <!-- /include:app-filters -->
 
   <!-- ============ headline stat cards ============ -->
   <div class="cards" id="cards"></div>
 
   <!-- ============ collapsible / draggable sections ============ -->
   <div id="dash">
-
-    <!-- Performance -->
+    <!-- include:app-dash mode=staging -->
+  <!-- Performance -->
     <section class="panel" data-key="perf">
       <div class="phead"><span class="grip" title="Drag to reorder">&#9776;</span>
         <h2>Performance</h2><button class="chev" aria-label="Collapse">&#9662;</button></div>
@@ -225,8 +234,9 @@
         </div>
       </div>
     </section>
+  <!-- /include:app-dash -->
 
-    <!-- Activity terminal (staging flair — read-only live feed of platform actions) -->
+    <!-- Activity terminal (staging-ONLY flair — not shared; read-only live feed of platform actions) -->
     <section class="panel term" data-key="term">
       <div class="phead"><span class="grip" title="Drag to reorder">&#9776;</span>
         <h2>Activity terminal</h2><button class="chev" aria-label="Collapse">&#9662;</button></div>
@@ -248,7 +258,8 @@
   </div>
 </div>
 
-<!-- ============ data manager modal ============ -->
+<!-- include:app-modal mode=staging -->
+  <!-- ============ data manager modal ============ -->
 <div class="modal" id="dataModal" aria-hidden="true">
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Manage local data">
     <div class="dmhead">
@@ -310,6 +321,7 @@
     </div>
   </div>
 </div>
+  <!-- /include:app-modal -->
 
 <script src="store.js"></script>
 <script src="entitlements.js"></script>
