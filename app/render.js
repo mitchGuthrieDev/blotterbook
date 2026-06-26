@@ -324,10 +324,13 @@ function renderCalc(m){
     `<tr><td>${esc(s.root)}${s.known?'':' <span class="flag">*</span>'}</td>
       <td>${s.count}</td><td>${money(s.rate)}</td><td>${money(s.rate*2)}</td><td>${money(s.total)}</td></tr>`).join('');
   const anyUnknown=c.bySym.some(s=>!s.known);
-  tbl.innerHTML=
+  const commHtml=
     `<table class="commtab"><thead><tr><th>Symbol</th><th>Trades</th><th>$/side</th><th>$/RT</th><th>Commission</th></tr></thead>
      <tbody>${body}<tr class="tot"><td>Total</td><td>${c.n}</td><td></td><td></td><td>${money(c.totalComm)}</td></tr></tbody></table>`
     + (anyUnknown?`<div class="cnote"><span class="flag">*</span> No published exchange fee on file — priced with a fallback estimate. Add the symbol to <code>data/exchange-fees.json</code> for an exact figure.</div>`:'');
+  // F6 (staging): the per-symbol table moves into a collapsible subsection nested under the
+  // "Commissions (all-in)" line below; main app + demo keep it as the standalone table here.
+  tbl.innerHTML = STAGING_PAGE ? '' : commHtml;
 
   head.innerHTML=
     `<div class="k">Net P&L after costs &middot; ${scopeLabel()}</div>
@@ -339,6 +342,7 @@ function renderCalc(m){
   rowsEl.innerHTML=
      row('Gross P&L', `<span class="${cls(c.gross)}">${money(c.gross)}</span>`)
     +row('Commissions (all-in)', `<span class="neg">${money(-c.totalComm)}</span>`)
+    +(STAGING_PAGE ? `<details class="csubtable"><summary>Per-symbol breakdown</summary><div class="csubbody">${commHtml}</div></details>` : '')
     +row('Subscriptions ('+money(c.fixedMo)+'/mo &times; '+c.months+')', `<span class="neg">${money(-c.fixedPeriod)}</span>`)
     +row('Net P&L (pre-tax)', `<span class="${cls(c.netPreTax)}">${money(c.netPreTax)}</span>`,'tot')
     +`<div class="csub">Tax — Section 1256</div>`

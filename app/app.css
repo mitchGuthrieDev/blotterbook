@@ -501,3 +501,43 @@
      above 1100px). Kept moderate to avoid over-stretching the curve / tables. */
   @media(min-width:1480px){ body:not([data-mode="staging"]) .wrap{max-width:1360px} }
   @media(min-width:1920px){ body:not([data-mode="staging"]) .wrap{max-width:1520px} }
+
+  /* ============================================================
+     Staging-only experiments (gated by body[data-mode="staging"])
+     ============================================================ */
+
+  /* F4 — pin the expanded Broker & Costs panel while scrolling the dashboard.
+     display:contents lifts #setup out of the short #landing box so position:sticky
+     has the full .wrap height to work within; collapsing it releases the pin;
+     non-sticky on narrow screens so it never overlaps content. */
+  body[data-mode="staging"].loaded #landing{display:contents}
+  body[data-mode="staging"].loaded #setup:not(.collapsed){
+    position:sticky;top:8px;z-index:6;box-shadow:0 14px 34px rgba(0,0,0,.45)}
+  @media(max-width:760px){
+    body[data-mode="staging"].loaded #setup:not(.collapsed){position:static;box-shadow:none}
+  }
+
+  /* F6 — per-symbol commission table as a collapsible subsection nested under the
+     "Commissions (all-in)" line, styled to match the "Tax — Section 1256" subsection
+     (.csub) + the existing .cdefs disclosure marker. Staging-only (built in render.js). */
+  .calc details.csubtable{margin:2px 0 8px}
+  .calc details.csubtable summary{cursor:pointer;list-style:none;padding:5px 0 5px 14px;
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .calc details.csubtable summary::-webkit-details-marker{display:none}
+  .calc details.csubtable summary::before{content:"\25B8 ";color:var(--faint)}
+  .calc details.csubtable[open] summary::before{content:"\25BE "}
+  .calc details.csubtable .csubbody{padding:2px 0 6px 14px}
+  .calc details.csubtable .commtab{margin-bottom:2px}
+
+  /* F3 — export-report modal: scrollable iframe preview + a tools bar. Reuses the
+     shared .modal overlay + .sheet box; the report renders in its own iframe palette. */
+  .modal .sheet.expsheet{max-width:940px;display:flex;flex-direction:column;max-height:90vh;padding:0;overflow:hidden}
+  .expsheet .dmhead{padding:16px 20px}
+  .expbody{flex:1 1 auto;min-height:0;background:var(--bg)}
+  .expbody iframe{display:block;width:100%;height:62vh;border:0;background:var(--bg)}
+  .exptools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:13px 20px;border-top:1px solid var(--line)}
+  .exptools select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    font-family:inherit;font-size:13px;padding:8px 10px;border-radius:7px;outline:none}
+  .exptools select:focus{border-color:var(--accent)}
+  .exptools .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .exptools #exp_msg{margin-left:auto}

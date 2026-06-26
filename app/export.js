@@ -79,9 +79,7 @@ function exportReport(){
   const mailto='mailto:?subject='+encodeURIComponent(`Blotterbook Performance Report — ${range}`)
     +'&body='+encodeURIComponent(reportText);
 
-  const html=`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<title>Blotterbook — Performance Report</title>
-<style>
+  const reportCss=`
   :root{--bg:#0d1014;--panel:#151a21;--panel2:#1b212a;--line:#262d38;--txt:#d6dde6;
     --dim:#8a94a3;--faint:#5b6470;--green:#3fb950;--red:#f04a4a;--accent:#6aa0ff;--take:#c98bff;
     --mono:"SF Mono",SFMono-Regular,ui-monospace,Menlo,Consolas,monospace;
@@ -119,14 +117,9 @@ function exportReport(){
   .bar button{font-family:inherit;font-size:12.5px;cursor:pointer;border:1px solid var(--line);
     background:var(--panel2);color:var(--txt);padding:7px 14px;border-radius:7px}
   .bar button.pri{background:var(--accent);color:#0d1014;border-color:var(--accent);font-weight:600}
-  @media print{.bar{display:none}.sheet{padding:0 6mm}@page{margin:12mm}}
-</style></head><body>
-  <div class="bar">
-    <button onclick="dlReport()" class="pri">Download</button>
-    <button onclick="emailReport()">Email a copy</button>
-    <button onclick="window.close()">Close</button>
-  </div>
-  <div class="sheet">
+  @media print{.bar{display:none}.sheet{padding:0 6mm}@page{margin:12mm}}`;
+
+  const sheetHtml=`<div class="sheet">
     <div class="rtop">
       <div>
         <div class="brandline"><span class="dot"></span>Blotterbook</div>
@@ -165,7 +158,46 @@ function exportReport(){
       Section&nbsp;1256 tax (blended 60/40 federal rate plus state top rate, applied to positive net profit only) are
       modeled, not statements of record. Max drawdown is realized, closed-trade only. Not financial or tax advice.
     </div>
+  </div>`;
+
+  const mdRow=(l,v)=>`| ${l} | ${v} |\n`;
+  const reportMd=
+     `# Blotterbook — Performance Report\n\n`
+    +`**Period:** ${range} (${scopeLabel()})  \n`
+    +`**Generated:** ${fmtDate(gen)} ${pad2(gen.getHours())}:${pad2(gen.getMinutes())}  \n`
+    +`**Broker:** ${BROKERS[c.broker]?BROKERS[c.broker].name:c.broker} · **Feed:** ${feedName()} · **State:** ${stateLabel()}\n\n`
+    +`## Summary\n\n| Metric | Value |\n|---|---|\n`
+    +mdRow('Net P&L (pre-tax)', money(c.netPreTax))+mdRow('Take-home (post-tax)', money(c.afterTax))
+    +mdRow('Gross P&L', money(c.gross))+mdRow('Win rate', (m.n?100*m.wins/m.n:0).toFixed(1)+'%')
+    +mdRow('Profit factor', c.pf===Infinity?'∞':c.pf.toFixed(2))+mdRow('Max drawdown', money(-m.maxDD))
+    +mdRow('Trades', String(m.n))+mdRow('Active days', String(m.active))
+    +`\n## Cost & tax breakdown\n\n| Line | Amount |\n|---|---|\n`
+    +mdRow('Gross P&L', money(c.gross))+mdRow('Commissions (all-in)', money(-c.totalComm))
+    +mdRow(`Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, money(-c.fixedPeriod))
+    +mdRow('Net P&L (pre-tax)', money(c.netPreTax))+mdRow('Blended 1256 rate', (c.tEff*100).toFixed(1)+'%')
+    +mdRow('Est. 1256 tax (net profit only)', money(-c.tax))+mdRow('After-tax take-home', money(c.afterTax))
+    +mdRow('Break-even / trade', money(bePer))
+    +`\n_Estimates only — not financial or tax advice._\n`;
+
+  // F3 (staging): preview + multi-format download + email in an in-page modal,
+  // instead of auto-opening a new tab. Main app + demo keep the new-tab report.
+  if(STAGING_PAGE){
+    const docNoBar=`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<title>Blotterbook — Performance Report</title>
+<style>${reportCss}</style></head><body>${sheetHtml}</body></html>`;
+    openExportReportModal(docNoBar, { mailto, fname, md:reportMd });
+    return;
+  }
+
+  const html=`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<title>Blotterbook — Performance Report</title>
+<style>${reportCss}</style></head><body>
+  <div class="bar">
+    <button onclick="dlReport()" class="pri">Download</button>
+    <button onclick="emailReport()">Email a copy</button>
+    <button onclick="window.close()">Close</button>
   </div>
+  ${sheetHtml}
   <script id="rscript">
     var RFNAME=${JSON.stringify(fname)}, RMAILTO=${JSON.stringify(mailto)};
     function dlReport(){
@@ -185,4 +217,92 @@ function exportReport(){
   const w=window.open('', '_blank');
   if(!w){ alert('Allow pop-ups for this site to generate the report.'); return; }
   w.document.open(); w.document.write(html); w.document.close();
+}
+
+/* ============================================================
+   F3 (staging) — Export-report modal: preview + multi-format download + email
+   Reuses the .modal overlay pattern. The report renders in an isolated <iframe>
+   (its own palette/CSS); Download is disabled until a real format is chosen.
+   ============================================================ */
+let EXPORT_CUR=null, EXPORT_WIRED=false;
+
+function openExportReportModal(docNoBar, parts){
+  const ov=document.getElementById('exportModal'); if(!ov) return;
+  EXPORT_CUR=Object.assign({ docNoBar }, parts);
+  const ifr=document.getElementById('exp_preview');
+  ifr.srcdoc=docNoBar;
+  const sel=document.getElementById('exp_format'); if(sel) sel.value='';
+  const dl=document.getElementById('exp_download'); if(dl) dl.disabled=true;
+  const msg=document.getElementById('exp_msg'); if(msg){ msg.textContent=''; msg.className='parsestatus'; }
+  ov.classList.add('open'); document.body.style.overflow='hidden';
+  if(!EXPORT_WIRED){ wireExportModal(); EXPORT_WIRED=true; }
+}
+function closeExportReportModal(){
+  const ov=document.getElementById('exportModal'); if(ov) ov.classList.remove('open');
+  document.body.style.overflow='';
+}
+function wireExportModal(){
+  const sel=document.getElementById('exp_format'),
+        dl=document.getElementById('exp_download');
+  if(sel) sel.addEventListener('change',()=>{ if(dl) dl.disabled=!sel.value; });
+  if(dl) dl.addEventListener('click',exportDownload);
+  const em=document.getElementById('exp_email');
+  if(em) em.addEventListener('click',()=>{ if(EXPORT_CUR) window.location.href=EXPORT_CUR.mailto; });
+  document.querySelectorAll('#exportModal [data-expclose]').forEach(b=>b.addEventListener('click',closeExportReportModal));
+  const ov=document.getElementById('exportModal');
+  if(ov) ov.addEventListener('click',e=>{ if(e.target.id==='exportModal') closeExportReportModal(); });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape' && ov && ov.classList.contains('open')) closeExportReportModal(); });
+}
+function expDlBlob(blob,name){
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+}
+async function exportDownload(){
+  if(!EXPORT_CUR) return;
+  const fmt=(document.getElementById('exp_format')||{}).value;
+  const ifr=document.getElementById('exp_preview');
+  const base=(EXPORT_CUR.fname||'blotterbook-report.html').replace(/\.html$/,'');
+  const msg=document.getElementById('exp_msg');
+  const note=(t,k)=>{ if(msg){ msg.textContent=t||''; msg.className='parsestatus'+(k?' '+k:''); } };
+  try{
+    if(fmt==='pdf'){ ifr.contentWindow.focus(); ifr.contentWindow.print(); }
+    else if(fmt==='md'){ expDlBlob(new Blob([EXPORT_CUR.md],{type:'text/markdown;charset=utf-8'}), base+'.md'); note('Markdown downloaded.','ok'); }
+    else if(fmt==='png'||fmt==='jpeg'){
+      note('Rendering image…');
+      const type=fmt==='png'?'image/png':'image/jpeg';
+      const blob=await rasterizeReport(ifr, type);
+      expDlBlob(blob, base+'.'+fmt); note('');
+    }
+  }catch(err){ console.error('export download failed', err); note('Could not export '+String(fmt).toUpperCase()+' — try PDF or Markdown.','err'); }
+}
+/* Rasterize the report node by embedding its serialized HTML + CSS in an SVG
+   <foreignObject>, drawing that into a 2× canvas, then exporting a blob. The
+   report uses only inline styles + system fonts + a CSS-gradient dot (no external
+   images), so the canvas is not tainted. */
+function rasterizeReport(iframe, type){
+  return new Promise((resolve,reject)=>{
+    try{
+      const doc=iframe.contentDocument, sheet=doc.querySelector('.sheet');
+      if(!sheet) return reject(new Error('no report to render'));
+      const w=Math.ceil(sheet.scrollWidth), h=Math.ceil(sheet.scrollHeight);
+      const css=(doc.querySelector('style')||{}).textContent||'';
+      const xml=new XMLSerializer().serializeToString(sheet);
+      const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'">'
+        +'<foreignObject x="0" y="0" width="'+w+'" height="'+h+'">'
+        +'<div xmlns="http://www.w3.org/1999/xhtml"><style>'+css+'</style>'+xml+'</div>'
+        +'</foreignObject></svg>';
+      const img=new Image();
+      img.onload=()=>{
+        try{
+          const sc=2, cv=document.createElement('canvas');
+          cv.width=w*sc; cv.height=h*sc;
+          const ctx=cv.getContext('2d'); ctx.scale(sc,sc);
+          ctx.fillStyle='#0d1014'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0);
+          cv.toBlob(b=> b?resolve(b):reject(new Error('toBlob returned null')), type, type==='image/jpeg'?0.92:undefined);
+        }catch(e){ reject(e); }
+      };
+      img.onerror=()=>reject(new Error('image render failed'));
+      img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+    }catch(e){ reject(e); }
+  });
 }

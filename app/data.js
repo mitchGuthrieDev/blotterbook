@@ -330,11 +330,34 @@ async function restoreSession(){
   const all=await Store.getAllTrades();
   if(all.length){
     TRADES=all;
-    renderLoaded('saved data', `<b>${all.length}</b> trades &nbsp;·&nbsp; ${all[0].date} → ${all[all.length-1].date} &nbsp;·&nbsp; <span style="color:var(--dim)">restored from this browser</span>`);
+    const meta=`<b>${all.length}</b> trades &nbsp;·&nbsp; ${all[0].date} → ${all[all.length-1].date} &nbsp;·&nbsp; <span style="color:var(--dim)">restored from this browser</span>`;
+    if(STAGING_PAGE) armStagingLanding(meta);   // F5: staging always opens on the initial state
+    else renderLoaded('saved data', meta);
   } else {
     resetApp();
   }
   autoSelectState();   // fire-and-forget; no-ops if a state is already chosen
+}
+
+/* F5 (staging-only): always open on the initial/landing state, even when the
+   isolated DB already has data. When data exists we stay on the landing but flip
+   it into a "data ready" mode — swap the headline/blurb, show a loaded note, and
+   enable Start (which opens the existing dashboard). With no data the normal
+   load-CSV flow is untouched (Start stays gated). Main app + demo are unaffected. */
+let STAGING_DATA_READY=false, STAGING_META='';
+function armStagingLanding(metaHtml){
+  STAGING_DATA_READY=true; STAGING_META=metaHtml||'';
+  setDashVisible(false);                       // stay on the landing (body not .loaded)
+  $('srcname').textContent='saved data';
+  const t=document.querySelector('.ltitle'); if(t) t.textContent='Start Blotterbook to access your dashboard';
+  const lead=document.querySelector('.llead');
+  if(lead) lead.innerHTML='Your saved trade data is already loaded in this browser. <b>Start Blotterbook</b> to open your dashboard, or load a new CSV below to merge more trades.';
+  const st=$('landingStatus'); if(st){ st.className='parsestatus ok'; st.innerHTML='&#10003; Dashboard data already loaded — '+(metaHtml||''); }
+  const btn=$('startBtn'); if(btn){ btn.disabled=false; btn.textContent='Start Blotterbook →'; }
+}
+function enterStagingDashboard(){
+  STAGING_DATA_READY=false;
+  renderLoaded('saved data', STAGING_META);
 }
 
 /* Pre-select the US state for the tax model from the visitor's coarse region

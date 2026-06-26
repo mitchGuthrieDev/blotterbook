@@ -17,7 +17,11 @@ on('caltoday','click',jumpToLatest);
 on('file','change',e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return; stageFile(f, FILE_CTX); });
 on('c_platform','change',()=>onPlatformChange('landing'));
 on('dm_platform','change',()=>onPlatformChange('manage'));
-on('startBtn','click',()=>commitPending('landing'));
+on('startBtn','click',()=>{
+  // F5 (staging): with data preloaded and nothing newly staged, Start just opens the dashboard.
+  if(STAGING_PAGE && STAGING_DATA_READY && !PENDING){ enterStagingDashboard(); return; }
+  commitPending('landing');
+});
 document.querySelectorAll('#scope button').forEach(b=>b.onclick=()=>setScope(b.dataset.s));
 
 /* The demo lives on its own page (demo.html), reached from the homepage.

@@ -258,6 +258,30 @@
   </div>
 </div>
 
+<!-- ============ export-report modal (staging-only — F3) ============ -->
+<div class="modal" id="exportModal" aria-hidden="true">
+  <div class="sheet expsheet" role="dialog" aria-modal="true" aria-label="Export report">
+    <div class="dmhead">
+      <div><h2>Export report</h2><div class="dmsub">Preview, then download in your chosen format or email a copy.</div></div>
+      <button class="dmx" data-expclose title="Close">&times;</button>
+    </div>
+    <div class="expbody"><iframe id="exp_preview" title="Performance report preview"></iframe></div>
+    <div class="exptools">
+      <select id="exp_format" aria-label="Download format">
+        <option value="">Choose format…</option>
+        <option value="pdf">PDF (print)</option>
+        <option value="png">PNG image</option>
+        <option value="jpeg">JPEG image</option>
+        <option value="md">Markdown (.md)</option>
+      </select>
+      <button class="btn" id="exp_download" disabled title="Pick a format first">Download</button>
+      <button class="btn" id="exp_email">Email a copy</button>
+      <button class="btn" data-expclose>Close</button>
+      <span class="parsestatus" id="exp_msg"></span>
+    </div>
+  </div>
+</div>
+
 <!-- include:app-modal mode=staging -->
   <!-- ============ data manager modal ============ -->
 <div class="modal" id="dataModal" aria-hidden="true">
