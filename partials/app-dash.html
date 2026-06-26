@@ -57,7 +57,7 @@
             <details class="cdefs">
               <summary>Assumptions &amp; caveats</summary>
               <div class="cdbody">
-                <b>One round turn per trade.</b> Each CSV row is a position close (entry + exit, 1 contract), so the round-turn commission &mdash; 2&nbsp;&times; the symbol's per-side rate &mdash; is charged once per trade.<br>
+                <b>Round-turn commission, per contract.</b> Each trade is a closed position (entry + exit); the round-turn commission &mdash; 2&nbsp;&times; the symbol's per-side rate &mdash; is charged once per contract (&times; the trade's quantity).<br>
                 <b>Per-symbol commissions.</b> The symbol root is parsed from each row's Action text and priced as the selected broker's commission plus the contract's CME exchange/clearing/NFA fee. Symbols without a known exchange fee use a fallback and are flagged with <span class="flag">*</span>. All rates are editable estimates &mdash; verify against your account.<br>
                 <b>Subscriptions are not prorated.</b> A full month of platform + data fee is charged for every distinct calendar month present in the active scope.<br>
                 <b>Data feed</b> options and costs change with the selected broker. Defaults reflect each broker's published non-pro schedule.<br>
@@ -98,6 +98,7 @@
             <dt>Max Drawdown is REALIZED only</dt><dd>Computed on the closed-trade equity curve, peak-to-trough. It does NOT capture open-position heat between entry and exit.</dd>
             <dt>Commissions modeled, not exported</dt><dd>The export carries no fees, so raw PnL is gross. Commissions are overlaid from the broker rate model and may drift as brokers update their schedules.</dd>
             <dt>Calendar-day grouping</dt><dd>Days are grouped by the literal date in the Time column, not the CME session day. Sharpe uses daily PnL, population std, not annualized — near-meaningless on a handful of days.</dd>
+            <dt>US dates &amp; Eastern time assumed</dt><dd>Timestamps are read as written, in the export's own clock &mdash; no timezone conversion. Dates parse as US <b>M/D/Y</b>; an unambiguous day&nbsp;&gt;&nbsp;12 (e.g. 25/06) is auto-detected as D/M/Y, but ambiguous non-US dates can land on the wrong day. Session (RTH/ETH) classification assumes US&nbsp;Eastern time. Export in a US/ET format, or verify the parsed dates before trusting day/week/month grouping.</dd>
           </dl>
         </div>
       </div>

@@ -1,3 +1,56 @@
+<!--IF mode=demo-->
+<!-- ============ data manager modal (demo: preview only — actions disabled) ============ -->
+<div class="modal" id="dataModal" data-demo="1" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Manage local data (demo preview)">
+    <div class="dmhead">
+      <div><h2>Manage local data</h2><div class="dmsub">A preview of the real app's data manager.</div></div>
+      <button class="dmx" id="dm_close" title="Close">&times;</button>
+    </div>
+    <div class="dmbody">
+      <div class="dmnote-demo">Preview only — in the demo, data actions are disabled so the sample dataset stays intact. In the real app these load, edit, back up, and erase your local data.</div>
+
+      <div class="dmsec"><h3>Overview</h3><div class="dmgrid" id="dm_summary"></div></div>
+
+      <div class="dmsec"><h3>Load data</h3>
+        <div class="dmactions">
+          <button class="dmbtn" disabled>Load CSV…</button>
+          <div class="fld plat"><label for="dm_platform">Platform</label>
+            <select id="dm_platform" disabled></select></div>
+          <button class="dmbtn" disabled>Import</button>
+        </div>
+        <p class="dmhint">In the real app, pick a CSV exported from your trading platform — Blotterbook detects the format and merges it in.</p>
+      </div>
+
+      <div class="dmsec"><h3>Backup &amp; restore</h3>
+        <div class="dmactions">
+          <button class="dmbtn" disabled>Download backup (.json)</button>
+          <button class="dmbtn" disabled>Restore from backup…</button>
+        </div>
+        <p class="dmhint">A backup is a single JSON file holding your trades, day-notes, and setup. Restoring merges it back in safely.</p>
+      </div>
+
+      <div class="dmsec"><h3>Trades</h3>
+        <div class="dmsearchrow">
+          <input type="text" id="dm_search" placeholder="Filter by symbol, date, or side…">
+          <span class="dmcount" id="dm_tcount"></span>
+        </div>
+        <div class="dmscroll">
+          <table class="dmtab">
+            <thead><tr><th>Date</th><th>Symbol</th><th>Side</th><th class="num">PnL</th></tr></thead>
+            <tbody id="dm_trades"></tbody>
+          </table>
+        </div>
+        <p class="dmhint">In the real app, <b>Edit</b> a trade to add tags, a note, and screenshots, or delete it.</p>
+      </div>
+
+      <div class="dmsec"><h3>Danger zone</h3>
+        <div class="dmactions"><button class="dmbtn danger" disabled>Erase all local data</button></div>
+        <p class="dmhint">Wipes every trade, day-note, and saved setup from this browser. Disabled in the demo.</p>
+      </div>
+    </div>
+  </div>
+</div>
+<!--ENDIF--><!--IF mode!=demo-->
 <!-- ============ data manager modal ============ -->
 <div class="modal" id="dataModal" aria-hidden="true">
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Manage local data">
@@ -47,12 +100,12 @@
         </div>
         <p class="dmhint"><b>Edit</b> a trade to add tags, a note, and screenshots — tags also power the Tag filter. Deleting a trade can't be undone (re-load the CSV or a backup to restore it).</p>
       </div>
-<!--IF mode=staging-->
+<!--ENDIF--><!--IF mode=staging-->
       <div class="dmsec"><h3>Saved filters</h3>
         <div class="dmnotescroll" id="dm_filters"></div>
         <p class="dmhint">Apply, rename, or delete the filter views you saved from the filter bar (<b>Save filter</b>).</p>
       </div>
-<!--ENDIF-->
+<!--ENDIF--><!--IF mode!=demo-->
       <div class="dmsec"><h3>Danger zone</h3>
         <div class="dmactions"><button class="dmbtn danger" id="dm_clear">Erase all local data</button></div>
         <p class="dmhint">Wipes every trade, day-note, and saved setup from this browser. Export a backup first if you might want it back.</p>
@@ -60,3 +113,4 @@
     </div>
   </div>
 </div>
+<!--ENDIF-->

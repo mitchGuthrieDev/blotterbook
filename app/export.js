@@ -227,10 +227,13 @@ function openExportReportModal(docNoBar, parts){
   const msg=document.getElementById('exp_msg'); if(msg){ msg.textContent=''; msg.className='parsestatus'; }
   ov.classList.add('open'); document.body.style.overflow='hidden';
   if(!EXPORT_WIRED){ wireExportModal(); EXPORT_WIRED=true; }
+  modalOpened(ov);   // aria-hidden + focus trap/restore (B9)
 }
 function closeExportReportModal(){
-  const ov=document.getElementById('exportModal'); if(ov) ov.classList.remove('open');
+  const ov=document.getElementById('exportModal'); if(!ov||!ov.classList.contains('open')) return;
+  ov.classList.remove('open');
   document.body.style.overflow='';
+  modalClosed(ov);
 }
 function wireExportModal(){
   const sel=document.getElementById('exp_format'),

@@ -45,11 +45,13 @@ const footer = read('partials/footer.html').trim();
 
 // App-shell partials (single source for app.html / demo.html / staging.html).
 const appParts = {
+  'app-topbar':  read('partials/app-topbar.html'),
   'app-landing': read('partials/app-landing.html'),
   'app-scope':   read('partials/app-scope.html'),
   'app-filters': read('partials/app-filters.html'),
   'app-dash':    read('partials/app-dash.html'),
   'app-modal':   read('partials/app-modal.html'),
+  'app-scripts': read('partials/app-scripts.html'),
 };
 
 // Tiny mode conditional: <!--IF mode=staging-->..<!--ENDIF--> and

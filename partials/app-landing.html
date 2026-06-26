@@ -1,5 +1,6 @@
 <!-- ============ landing intro + setup (setup is reused, collapsible, once loaded) ============ -->
   <div id="landing">
+<!--IF mode!=demo-->
     <div class="lhead">
       <p class="leyebrow">Blotterbook</p>
       <h1 class="ltitle">Load a trade-history CSV to begin</h1>
@@ -9,6 +10,7 @@
       <p class="lmeta">Supports TradingView, Tradovate, Rithmic, Sierra Chart, TradeStation, MotiveWave, Webull, IBKR &amp; Schwab/thinkorswim</p>
     </div>
 
+<!--ENDIF-->
     <div class="setup" id="setup">
       <div class="setuphead" id="setuphead">
         <h2>Broker &amp; Costs</h2>
@@ -25,6 +27,7 @@
           <div class="fld state"><label for="c_state_sel">State (tax)</label>
             <select id="c_state_sel"></select></div>
         </div>
+<!--IF mode!=demo-->
         <div class="hintline"><b>Load CSV</b> and Blotterbook detects the trading platform. Choose a broker, data feed, and state, then hit <b>Start Blotterbook</b>.</div>
         <div class="loadrow">
           <button class="btn loadbtn" id="setupLoad" title="Load a CSV exported from your trading platform">Load CSV</button>
@@ -33,6 +36,9 @@
         </div>
         <div class="parsestatus" id="landingStatus"></div>
         <button class="btn startbtn" id="startBtn" disabled>Start Blotterbook &rarr;</button>
+<!--ENDIF--><!--IF mode=demo-->
+        <div class="hintline">This is sample data — change the broker, data feed, or state to see how costs move your net and take-home.</div>
+<!--ENDIF-->
       </div>
     </div>
   </div>

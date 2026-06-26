@@ -105,7 +105,7 @@ function compute(tr){
     best:n?Math.max(...pnls):0, worst:n?Math.min(...pnls):0,
     days,active,winDays,avgDaily:active?net/active:0,avgTrades:active?n/active:0,
     winDayPct:active?100*winDays/active:0, mcw,mcl,
-    recovery: maxDD>0? net/maxDD : NaN, sharpe,
+    recovery: maxDD>0 ? net/maxDD : (net>0?Infinity:NaN), sharpe,
     expectancy,tStd,long,short,bestDow,worstDow,
     bestDay: days.length? days.reduce((a,b)=>b.pnl>a.pnl?b:a) : null,
     worstDay: days.length? days.reduce((a,b)=>b.pnl<a.pnl?b:a) : null,
@@ -179,6 +179,14 @@ async function loadRefData(){
 
   STATES = tax.states || [];
   TAXMODEL = Object.assign(TAXMODEL, tax.model||{});
+  // The Section-1256 federal blend assumes ltcgWeight + ordinaryWeight === 1 (the 60/40
+  // split). Normalize if loaded data drifts, so a malformed state-tax.json can't silently
+  // skew take-home (B8).
+  const wsum = (+TAXMODEL.ltcgWeight||0) + (+TAXMODEL.ordinaryWeight||0);
+  if(wsum>0 && Math.abs(wsum-1)>1e-9){
+    console.warn('1256 tax weights summed to '+wsum+', not 1 — normalizing.');
+    TAXMODEL.ltcgWeight/=wsum; TAXMODEL.ordinaryWeight/=wsum;
+  }
 }
 
 function curBroker(){ const e=document.getElementById('c_broker'); return (e&&e.value)?e.value:'AMP'; }
@@ -199,10 +207,13 @@ function costModel(m){
   const trades=(m&&m.trades)?m.trades:[];
   const bySym=new Map(); let totalComm=0, gp=0, gl=0;
   for(const t of trades){
-    const {rate,known}=rateFor(broker,t.root); const rt=rate*2;
+    // Round-turn commission is charged per CONTRACT: 2 sides × the per-side rate × qty.
+    // Fills-based adapters (and MotiveWave) emit trades with qty>1; close-event exports
+    // (e.g. TradingView) have no qty, so (t.qty||1) keeps single-contract data unchanged.
+    const q=t.qty||1; const {rate,known}=rateFor(broker,t.root); const rt=rate*2*q;
     totalComm+=rt;
-    if(!bySym.has(t.root)) bySym.set(t.root,{root:t.root,count:0,rate,known,total:0});
-    const e=bySym.get(t.root); e.count++; e.total+=rt;
+    if(!bySym.has(t.root)) bySym.set(t.root,{root:t.root,count:0,qty:0,rate,known,total:0});
+    const e=bySym.get(t.root); e.count++; e.qty+=q; e.total+=rt;
     const x=t.pnl-rt; if(x>0)gp+=x; else if(x<0)gl+=x;
   }
   const months=m?m.months:0;
@@ -213,7 +224,8 @@ function costModel(m){
   const tax= netPreTax>0 ? netPreTax*tEff : 0;
   const afterTax=netPreTax-tax;
   const pf= gl!==0 ? gp/Math.abs(gl) : (gp>0?Infinity:0);
+  const contracts=trades.reduce((a,t)=>a+(t.qty||1),0);
   return {broker,platform,data,fixedMo,totalComm,months,fixedPeriod,gross,netPreTax,tEff,tax,afterTax,
-    pfGP:gp,pfGL:gl,pf,n:trades.length,
+    pfGP:gp,pfGL:gl,pf,n:trades.length,contracts,
     bySym:[...bySym.values()].sort((a,b)=>b.total-a.total)};
 }

@@ -42,16 +42,21 @@ function dailySeries(m){
   const broker=curBroker(), map=new Map();
   for(const t of m.trades){
     if(!map.has(t.date)) map.set(t.date,{gross:0,comm:0});
-    const e=map.get(t.date); e.gross+=t.pnl; e.comm+=rateFor(broker,t.root).rate*2;
+    const e=map.get(t.date); e.gross+=t.pnl; e.comm+=rateFor(broker,t.root).rate*2*(t.qty||1);  // per-contract (B4)
   }
-  const c=costModel(m), subs=c.fixedPeriod, tEff=c.tEff;
-  let cg=0,cn=0; const pts=[];
+  const c=costModel(m), tEff=c.tEff, fixedMo=c.fixedMo;
+  // Accrue the monthly subscription as each new calendar month is entered (B8), instead of
+  // dropping the whole period's subscriptions at day 0. The endpoint still equals
+  // costModel.fixedPeriod (fixedMo × distinct months), so totals are unchanged.
+  let cg=0,cn=0,subAcc=0; const pts=[], seenMonths=new Set();
   for(const d of [...map.keys()].sort()){
+    const mo=d.slice(0,7);
+    if(!seenMonths.has(mo)){ seenMonths.add(mo); subAcc+=fixedMo; }
     const e=map.get(d); cg+=e.gross; cn+=e.gross-e.comm;
-    const net=cn-subs, take=net-(net>0?net*tEff:0);
+    const net=cn-subAcc, take=net-(net>0?net*tEff:0);
     pts.push({date:d,gross:cg,net,take});
   }
-  return {pts,subs,tEff};
+  return {pts,subs:c.fixedPeriod,tEff};
 }
 /* "nice" axis ticks spanning [min,max] with ~count steps, always including 0. */
 function niceTicks(min,max,count){
@@ -79,8 +84,9 @@ function renderCurve(m){
 
   const [rd0,rd1]=dateRange(m);
   const d0ms=rd0.getTime(), d1ms=Math.max(rd1.getTime(), d0ms+864e5);
-  const {pts,subs}=dailySeries(m);
-  const disp=[{date:fmtDate(rd0),gross:0,net:-subs,take:-subs}, ...pts];
+  const {pts}=dailySeries(m);
+  // Curve starts at the origin; subscriptions accrue month-by-month across pts (B8).
+  const disp=[{date:fmtDate(rd0),gross:0,net:0,take:0}, ...pts];
 
   const series=[];
   if(curveSel.gross) series.push({key:'gross',color:'var(--green)',label:'Gross'});
@@ -178,30 +184,48 @@ function renderCurve(m){
     c.setAttribute('r','3.5'); c.setAttribute('fill',s.color); g.appendChild(c); return c; });
   svg.appendChild(g);
 
-  svg.onmousemove=ev=>{
-    const r=svg.getBoundingClientRect(); const mx=(ev.clientX-r.left)/r.width*W;
-    if(mx<padL-2 || mx>W-padR+2){ g.style.display='none'; tip.style.display='none'; return; }
-    let best=disp[0], bd=1e9;
-    for(const p of disp){ const d=Math.abs(xOf(p)-mx); if(d<bd){bd=d;best=p;} }
-    const x=xOf(best);
+  // shared guide+tooltip painter, driven by either the mouse or the keyboard cursor (B10)
+  function showGuideAt(best){
+    const x=xOf(best), r=svg.getBoundingClientRect();
     g.style.display=''; gline.setAttribute('x1',x); gline.setAttribute('x2',x);
     gline.setAttribute('y1',padT); gline.setAttribute('y2',H-padB);
     series.forEach((s,i)=>{ dots[i].setAttribute('cx',x); dots[i].setAttribute('cy',yPx(best[s.key])); });
     tip.style.display='block'; tip.style.left=(x/W*r.width)+'px'; tip.style.top='4px';
     tip.innerHTML=`<div class="td">${best.date}</div>`+series.map(s=>
       `<div class="tr"><span class="sw" style="background:${s.color}"></span>${s.label} <b>${usd(best[s.key])}</b></div>`).join('');
+  }
+  const hideGuide=()=>{ g.style.display='none'; tip.style.display='none'; };
+  const nearestTo=mx=>{ let best=disp[0], bd=1e9; for(const p of disp){ const d=Math.abs(xOf(p)-mx); if(d<bd){bd=d;best=p;} } return best; };
+
+  svg.onmousemove=ev=>{
+    const r=svg.getBoundingClientRect(); const mx=(ev.clientX-r.left)/r.width*W;
+    if(mx<padL-2 || mx>W-padR+2){ hideGuide(); return; }
+    showGuideAt(nearestTo(mx));
   };
-  svg.onmouseleave=()=>{ g.style.display='none'; tip.style.display='none'; };
+  svg.onmouseleave=hideGuide;
 
   // click the graph → select that date and jump the calendar to its month
   svg.style.cursor='crosshair';
   svg.onclick=ev=>{
     const r=svg.getBoundingClientRect(); const mx=(ev.clientX-r.left)/r.width*W;
     if(mx<padL-2 || mx>W-padR+2) return;
-    let best=disp[0], bd=1e9;
-    for(const p of disp){ const d=Math.abs(xOf(p)-mx); if(d<bd){bd=d;best=p;} }
-    selectFromGraph(best.date);
+    selectFromGraph(nearestTo(mx).date);
   };
+
+  // keyboard parity (B10): focus the curve, arrow across dates, Enter/Space to mark one.
+  svg.setAttribute('tabindex','0');
+  svg.setAttribute('role','button');
+  svg.setAttribute('aria-label','Equity curve. Use Left and Right arrows to move across dates and read each day’s value; press Enter to mark the focused date on the calendar.');
+  let kcur=disp.length-1;
+  svg.onkeydown=ev=>{
+    if(ev.key==='ArrowRight'||ev.key==='ArrowLeft'){
+      ev.preventDefault(); kcur=Math.max(0,Math.min(disp.length-1,kcur+(ev.key==='ArrowRight'?1:-1))); showGuideAt(disp[kcur]);
+    } else if(ev.key==='Home'){ ev.preventDefault(); kcur=0; showGuideAt(disp[kcur]); }
+    else if(ev.key==='End'){ ev.preventDefault(); kcur=disp.length-1; showGuideAt(disp[kcur]); }
+    else if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); selectFromGraph(disp[kcur].date); }
+  };
+  svg.onfocus=()=>{ kcur=Math.max(0,Math.min(disp.length-1,kcur)); showGuideAt(disp[kcur]); };
+  svg.onblur=hideGuide;
 }
 
 /* ============================================================
@@ -232,11 +256,12 @@ function renderCalendar(){
         weekPnl+=rec.pnl; weekDays++;
         const k=rec.pnl>0?'win':rec.pnl<0?'loss':'';
         const wr=rec.trades?(100*rec.wins/rec.trades).toFixed(0):'0';
-        weekCells.push(`<div class="cell ${k}${selc}${note}" data-date="${key}"><span class="dnum">${da}</span>
+        const lbl=`${MON[mo]} ${da}: ${rec.trades} trade${rec.trades===1?'':'s'}, ${usd(rec.pnl)}`;
+        weekCells.push(`<div class="cell ${k}${selc}${note}" data-date="${key}" tabindex="0" role="button" aria-label="${lbl}"><span class="dnum">${da}</span>
           <div class="pnl ${cls(rec.pnl)}">${usd(rec.pnl)}</div>
           <div class="meta">${rec.trades} tr · ${wr}%</div></div>`);
       } else {
-        weekCells.push(`<div class="cell${selc}${note}" data-date="${key}"><span class="dnum">${da}</span></div>`);
+        weekCells.push(`<div class="cell${selc}${note}" data-date="${key}" tabindex="0" role="button" aria-label="${MON[mo]} ${da}: no trades"><span class="dnum">${da}</span></div>`);
       }
       cur.setDate(cur.getDate()+1);
     }
@@ -289,7 +314,7 @@ function renderAdv(m){
     ['Worst Weekday', m.worstDow?`<span class="av ${cls(m.worstDow.pnl)}">${usd(m.worstDow.pnl)}</span> <span class="av na">· ${DOW_LABEL[m.worstDow.i]}</span>`:`<span class="av na">—</span>`],
     ['head','Trading Patterns'],
     ['Avg Trades/Day', `<span class="av">${m.avgTrades.toFixed(1)}</span>`],
-    ['Recovery Factor', `<span class="av ${cls(m.recovery)}">${isNaN(m.recovery)?'—':m.recovery.toFixed(2)}</span>`],
+    ['Recovery Factor', `<span class="av ${cls(m.recovery)}">${m.recovery===Infinity?'∞':(isNaN(m.recovery)?'—':m.recovery.toFixed(2))}</span>`],
     ['Max Consecutive Wins', `<span class="av pos">${m.mcw}</span>`],
     ['Max Consecutive Losses', `<span class="av neg">${m.mcl}</span>`],
     ['head','Account Information'],
@@ -322,11 +347,11 @@ function renderCalc(m){
 
   const body=c.bySym.map(s=>
     `<tr><td>${esc(s.root)}${s.known?'':' <span class="flag">*</span>'}</td>
-      <td>${s.count}</td><td>${money(s.rate)}</td><td>${money(s.rate*2)}</td><td>${money(s.total)}</td></tr>`).join('');
+      <td>${s.count}</td><td>${s.qty}</td><td>${money(s.rate)}</td><td>${money(s.rate*2)}</td><td>${money(s.total)}</td></tr>`).join('');
   const anyUnknown=c.bySym.some(s=>!s.known);
   const commHtml=
-    `<table class="commtab"><thead><tr><th>Symbol</th><th>Trades</th><th>$/side</th><th>$/RT</th><th>Commission</th></tr></thead>
-     <tbody>${body}<tr class="tot"><td>Total</td><td>${c.n}</td><td></td><td></td><td>${money(c.totalComm)}</td></tr></tbody></table>`
+    `<table class="commtab"><thead><tr><th>Symbol</th><th>Trades</th><th>Cts</th><th>$/side</th><th>$/RT</th><th>Commission</th></tr></thead>
+     <tbody>${body}<tr class="tot"><td>Total</td><td>${c.n}</td><td>${c.contracts}</td><td></td><td></td><td>${money(c.totalComm)}</td></tr></tbody></table>`
     + (anyUnknown?`<div class="cnote"><span class="flag">*</span> No published exchange fee on file — priced with a fallback estimate. Add the symbol to <code>data/exchange-fees.json</code> for an exact figure.</div>`:'');
   // F6 (staging): the per-symbol table moves into a collapsible subsection nested under the
   // "Commissions (all-in)" line below; main app + demo keep it as the standalone table here.

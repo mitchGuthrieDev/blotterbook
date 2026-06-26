@@ -51,6 +51,11 @@ on('cal','click',e=>{
   const cell=e.target.closest('.cell[data-date]'); if(!cell)return;
   selectDay(cell.dataset.date);
 });
+on('cal','keydown',e=>{   // keyboard parity for day cells (B10)
+  if(e.key!=='Enter' && e.key!==' ') return;
+  const cell=e.target.closest('.cell[data-date]'); if(!cell)return;
+  e.preventDefault(); selectDay(cell.dataset.date);
+});
 
 /* ---- data manager modal controls ---- */
 if($('dataModal')){

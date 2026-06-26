@@ -10,29 +10,37 @@
 <body>
 <div class="wrap">
 
+  <!-- include:app-topbar mode=app -->
   <!-- ============ top bar ============ -->
   <div class="top">
     <div class="brand">
       <a class="bwordmark" href="../index.html" title="Back to the Blotterbook homepage">Blotterbook</a>
+
       <span class="ver" title="Main app version">v0.11</span>
+
       <small id="srcname" title="Manage your local data">no data loaded</small>
+
     </div>
     <div class="topright">
       <div class="src" id="srcmeta"></div>
       <div class="topbtns">
+
         <a class="btn" id="changelogBtn" href="../changelog.html" title="What's changed — the Blotterlog">Changelog</a>
         <button class="btn" id="exportBtn" title="Generate a condensed performance report in a new tab">Export report</button>
         <button class="btn" id="manageBtn" title="Load, edit, back up, and manage the data saved in this browser">Manage data</button>
         <a class="btn" id="contactBtn"
            href="mailto:contact@blotterbook.com?subject=Blotterbook%20%E2%80%94%20support%20%2F%20feedback&body=Tell%20us%20what%20you%20need%20help%20with%20or%20what%20you%27d%20like%20to%20see%3A%0A%0A"
            title="Questions, support requests, or feedback — opens a draft in your email app">Contact</a>
+
       </div>
     </div>
   </div>
+  <!-- /include:app-topbar -->
 
   <!-- include:app-landing mode=app -->
   <!-- ============ landing intro + setup (setup is reused, collapsible, once loaded) ============ -->
   <div id="landing">
+
     <div class="lhead">
       <p class="leyebrow">Blotterbook</p>
       <h1 class="ltitle">Load a trade-history CSV to begin</h1>
@@ -41,6 +49,7 @@
         Re&#8209;uploads merge, only new trades are added, and nothing ever leaves your browser.</p>
       <p class="lmeta">Supports TradingView, Tradovate, Rithmic, Sierra Chart, TradeStation, MotiveWave, Webull, IBKR &amp; Schwab/thinkorswim</p>
     </div>
+
 
     <div class="setup" id="setup">
       <div class="setuphead" id="setuphead">
@@ -58,6 +67,7 @@
           <div class="fld state"><label for="c_state_sel">State (tax)</label>
             <select id="c_state_sel"></select></div>
         </div>
+
         <div class="hintline"><b>Load CSV</b> and Blotterbook detects the trading platform. Choose a broker, data feed, and state, then hit <b>Start Blotterbook</b>.</div>
         <div class="loadrow">
           <button class="btn loadbtn" id="setupLoad" title="Load a CSV exported from your trading platform">Load CSV</button>
@@ -66,6 +76,7 @@
         </div>
         <div class="parsestatus" id="landingStatus"></div>
         <button class="btn startbtn" id="startBtn" disabled>Start Blotterbook &rarr;</button>
+
       </div>
     </div>
   </div>
@@ -169,7 +180,7 @@
             <details class="cdefs">
               <summary>Assumptions &amp; caveats</summary>
               <div class="cdbody">
-                <b>One round turn per trade.</b> Each CSV row is a position close (entry + exit, 1 contract), so the round-turn commission &mdash; 2&nbsp;&times; the symbol's per-side rate &mdash; is charged once per trade.<br>
+                <b>Round-turn commission, per contract.</b> Each trade is a closed position (entry + exit); the round-turn commission &mdash; 2&nbsp;&times; the symbol's per-side rate &mdash; is charged once per contract (&times; the trade's quantity).<br>
                 <b>Per-symbol commissions.</b> The symbol root is parsed from each row's Action text and priced as the selected broker's commission plus the contract's CME exchange/clearing/NFA fee. Symbols without a known exchange fee use a fallback and are flagged with <span class="flag">*</span>. All rates are editable estimates &mdash; verify against your account.<br>
                 <b>Subscriptions are not prorated.</b> A full month of platform + data fee is charged for every distinct calendar month present in the active scope.<br>
                 <b>Data feed</b> options and costs change with the selected broker. Defaults reflect each broker's published non-pro schedule.<br>
@@ -210,6 +221,7 @@
             <dt>Max Drawdown is REALIZED only</dt><dd>Computed on the closed-trade equity curve, peak-to-trough. It does NOT capture open-position heat between entry and exit.</dd>
             <dt>Commissions modeled, not exported</dt><dd>The export carries no fees, so raw PnL is gross. Commissions are overlaid from the broker rate model and may drift as brokers update their schedules.</dd>
             <dt>Calendar-day grouping</dt><dd>Days are grouped by the literal date in the Time column, not the CME session day. Sharpe uses daily PnL, population std, not annualized — near-meaningless on a handful of days.</dd>
+            <dt>US dates &amp; Eastern time assumed</dt><dd>Timestamps are read as written, in the export's own clock &mdash; no timezone conversion. Dates parse as US <b>M/D/Y</b>; an unambiguous day&nbsp;&gt;&nbsp;12 (e.g. 25/06) is auto-detected as D/M/Y, but ambiguous non-US dates can land on the wrong day. Session (RTH/ETH) classification assumes US&nbsp;Eastern time. Export in a US/ET format, or verify the parsed dates before trusting day/week/month grouping.</dd>
           </dl>
         </div>
       </div>
@@ -286,7 +298,8 @@
 </div>
   <!-- /include:app-modal -->
 
-<script src="store.js"></script>
+<!-- include:app-scripts mode=app -->
+  <script src="store.js"></script>
 <script src="entitlements.js"></script>
 <script src="adapters.js"></script>
 <script src="core.js"></script>
@@ -296,5 +309,6 @@
 <script src="export.js"></script>
 <script src="datamanager.js"></script>
 <script src="main.js"></script>
+  <!-- /include:app-scripts -->
 </body>
 </html>

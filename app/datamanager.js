@@ -12,10 +12,11 @@ function openDataManager(){
   if(!demo && !Store.available()){ alert('Local storage is not available in this browser.'); return; }
   const ov=$('dataModal'); if(!ov) return;
   ov.classList.add('open'); document.body.style.overflow='hidden';
+  modalOpened(ov);   // aria-hidden + focus trap/restore (B9)
   if(!demo) resetStage('manage');   // platform select returns to "Auto-detect" each time it's opened
   renderDataManager();
 }
-function closeDataManager(){ const ov=$('dataModal'); if(ov) ov.classList.remove('open'); document.body.style.overflow=''; }
+function closeDataManager(){ const ov=$('dataModal'); if(!ov||!ov.classList.contains('open')) return; ov.classList.remove('open'); document.body.style.overflow=''; modalClosed(ov); }
 
 const esc=s=>(s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 async function renderDataManager(){

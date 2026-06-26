@@ -28,14 +28,32 @@
       "A cumulative performance graph with Gross / Net / Take-home overlays and hover detail, plus a Sunday-first monthly calendar of daily PnL with weekly summaries and day-notes.",
       "Filter by date, symbol, side, session (RTH/ETH), and weekday. Keep day-notes per session. Read expectancy, profit factor, drawdown, streaks, and an illustrative Sharpe — all after costs."
     ];
-    var items=list.querySelectorAll('.feat-item');
-    function show(i){
+    var items=Array.prototype.slice.call(list.querySelectorAll('.feat-item'));
+    // Tab/tabpanel pattern (B10): roving tabindex + selection-follows-focus.
+    function show(i, focus){
       var li=items[i]; if(!li) return;
-      items.forEach(function(el){ el.classList.toggle('is-active', +el.dataset.i===i); });
-      detail.innerHTML='<div class="ficon">'+li.querySelector('.ficon').innerHTML+'</div>'
+      items.forEach(function(el){
+        var on=(+el.dataset.i===i);
+        el.classList.toggle('is-active',on);
+        el.setAttribute('aria-selected',on?'true':'false');
+        el.tabIndex=on?0:-1;
+      });
+      detail.setAttribute('aria-labelledby', li.id);
+      detail.innerHTML='<div class="ficon" aria-hidden="true">'+li.querySelector('.ficon').innerHTML+'</div>'
         +'<h3>'+li.querySelector('.fl-t').innerHTML+'</h3><p>'+FEAT_BODY[i]+'</p>';
+      if(focus) li.focus();
     }
     items.forEach(function(el){ el.addEventListener('click',function(){ show(+el.dataset.i); }); });
+    list.addEventListener('keydown',function(e){
+      var cur=0;
+      items.forEach(function(el,ix){ if(el.getAttribute('aria-selected')==='true') cur=ix; });
+      var n=items.length, next=null;
+      if(e.key==='ArrowDown'||e.key==='ArrowRight') next=(cur+1)%n;
+      else if(e.key==='ArrowUp'||e.key==='ArrowLeft') next=(cur-1+n)%n;
+      else if(e.key==='Home') next=0;
+      else if(e.key==='End') next=n-1;
+      if(next!==null){ e.preventDefault(); show(next,true); }
+    });
   })();
 
   // Live status — an admin override (set on the admin page) wins; otherwise auto-detect by pinging the app

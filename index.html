@@ -56,7 +56,7 @@
   .ghost{color:var(--dim);font-size:13.5px;padding:7px 11px;border-radius:7px;transition:color .15s,background .15s}
   .ghost:hover{color:var(--txt);background:var(--panel)}
   .btn-primary{display:inline-flex;align-items:center;gap:7px;
-    background:var(--accent);color:#0d1014;font-weight:600;font-size:13.5px;
+    background:var(--accent);color:var(--bg);font-weight:600;font-size:13.5px;
     padding:9px 16px;border-radius:9px;transition:filter .15s,transform .15s}
   .btn-primary:hover{filter:brightness(1.08);transform:translateY(-1px)}
   /* mobile menu (hamburger replaces the Launch button) */
@@ -78,9 +78,9 @@
     .navlinks a{font-size:15px;padding:12px 10px;border-bottom:1px solid var(--line)}
     .navlinks a:last-child{border-bottom:none}
     /* match the desktop nav button exactly — .navlinks a would otherwise tint the text dim */
-    .navlinks a.navlaunch{display:block;color:#0d1014;background:var(--accent);font-weight:600;
+    .navlinks a.navlaunch{display:block;color:var(--bg);background:var(--accent);font-weight:600;
       border-radius:9px;margin-top:10px;text-align:center}
-    .navlinks a.navlaunch:hover{background:var(--accent);color:#0d1014}
+    .navlinks a.navlaunch:hover{background:var(--accent);color:var(--bg)}
   }
 
   /* ============ generic section frame ============ */
@@ -113,7 +113,7 @@
   .tag{color:var(--dim);font-size:clamp(15px,1.7vw,17px);max-width:620px;margin:24px auto 0;line-height:1.6}
   .hero-ctas{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:30px}
   .cta-lg{display:inline-flex;align-items:center;gap:9px;
-    background:var(--accent);color:#0d1014;font-weight:600;font-size:15px;
+    background:var(--accent);color:var(--bg);font-weight:600;font-size:15px;
     padding:14px 28px;border-radius:11px;transition:filter .15s,transform .15s}
   .cta-lg:hover{filter:brightness(1.08);transform:translateY(-1px)}
   .cta-ghost{display:inline-flex;align-items:center;gap:8px;
@@ -150,9 +150,11 @@
   .feat-explorer{display:grid;grid-template-columns:minmax(0,360px) 1fr;gap:18px;margin-top:18px;align-items:stretch}
   .feat-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
   .feat-item{display:flex;align-items:center;gap:13px;cursor:pointer;background:var(--panel);
-    border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+    border:1px solid var(--line);border-radius:12px;padding:14px 16px;width:100%;text-align:left;
+    font:inherit;color:inherit;appearance:none;-webkit-appearance:none;
     transition:border-color .18s,background .18s,transform .18s}
-  .feat-item:hover{border-color:#33405a;transform:translateX(2px)}
+  .feat-item:hover{border-color:var(--hover-line);transform:translateX(2px)}
+  .feat-item:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .feat-item .fl-t{font-size:14.5px;font-weight:600;letter-spacing:-.01em}
   .feat-item.is-active{border-color:var(--accent);background:var(--panel2)}
   .feat-item.is-active .ficon{background:rgba(106,160,255,.22)}
@@ -177,7 +179,7 @@
   .plat{display:flex;align-items:center;gap:11px;width:100%;color:var(--txt);text-decoration:none;
     background:var(--panel);border:1px solid var(--line);
     border-radius:12px;padding:15px 16px;transition:border-color .2s,transform .2s}
-  .plat:hover{border-color:#33405a;transform:translateY(-2px);text-decoration:none}
+  .plat:hover{border-color:var(--hover-line);transform:translateY(-2px);text-decoration:none}
   .plat b{font-size:15px;flex:1;font-weight:600}
   .plat .pdot{width:9px;height:9px;border-radius:50%;background:var(--warn);flex:none}
   .plat.verified .pdot{background:var(--green);box-shadow:0 0 0 3px rgba(63,185,80,.15)}
@@ -303,16 +305,16 @@
 
     <!-- clickable feature list (left) + detail (right) -->
     <div class="feat-explorer">
-      <ul class="feat-list" id="featList">
-        <li class="feat-item is-active" data-i="0"><span class="ficon"><svg viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 4-3 7-7 9-4-2-7-5-7-9V7z"/></svg></span><span class="fl-t">Private by design</span></li>
-        <li class="feat-item" data-i="1"><span class="ficon"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 3 7-8"/><path d="M16 6h4v4"/></svg></span><span class="fl-t">True after-cost performance</span></li>
-        <li class="feat-item" data-i="2"><span class="ficon"><svg viewBox="0 0 24 24"><path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6"/></svg></span><span class="fl-t">Location-based tax model</span></li>
-        <li class="feat-item" data-i="3"><span class="ficon"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span><span class="fl-t">Broker &amp; data-feed comparison</span></li>
-        <li class="feat-item" data-i="4"><span class="ficon"><svg viewBox="0 0 24 24"><path d="M3 12l4-4 4 4 4-6 4 8"/><path d="M3 20h18"/></svg></span><span class="fl-t">Equity curve &amp; calendar</span></li>
-        <li class="feat-item" data-i="5"><span class="ficon"><svg viewBox="0 0 24 24"><path d="M3 5h18l-7 8v5l-4 2v-7z"/></svg></span><span class="fl-t">Filters, journal &amp; statistics</span></li>
-      </ul>
-      <div class="feat-detail" id="featDetail">
-        <div class="ficon"><svg viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 4-3 7-7 9-4-2-7-5-7-9V7z"/></svg></div>
+      <div class="feat-list" id="featList" role="tablist" aria-label="Feature explorer" aria-orientation="vertical">
+        <button type="button" class="feat-item is-active" data-i="0" role="tab" id="feattab-0" aria-controls="featDetail" aria-selected="true" tabindex="0"><span class="ficon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 4v5c0 4-3 7-7 9-4-2-7-5-7-9V7z"/></svg></span><span class="fl-t">Private by design</span></button>
+        <button type="button" class="feat-item" data-i="1" role="tab" id="feattab-1" aria-controls="featDetail" aria-selected="false" tabindex="-1"><span class="ficon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 3 7-8"/><path d="M16 6h4v4"/></svg></span><span class="fl-t">True after-cost performance</span></button>
+        <button type="button" class="feat-item" data-i="2" role="tab" id="feattab-2" aria-controls="featDetail" aria-selected="false" tabindex="-1"><span class="ficon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6"/></svg></span><span class="fl-t">Location-based tax model</span></button>
+        <button type="button" class="feat-item" data-i="3" role="tab" id="feattab-3" aria-controls="featDetail" aria-selected="false" tabindex="-1"><span class="ficon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span><span class="fl-t">Broker &amp; data-feed comparison</span></button>
+        <button type="button" class="feat-item" data-i="4" role="tab" id="feattab-4" aria-controls="featDetail" aria-selected="false" tabindex="-1"><span class="ficon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12l4-4 4 4 4-6 4 8"/><path d="M3 20h18"/></svg></span><span class="fl-t">Equity curve &amp; calendar</span></button>
+        <button type="button" class="feat-item" data-i="5" role="tab" id="feattab-5" aria-controls="featDetail" aria-selected="false" tabindex="-1"><span class="ficon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18l-7 8v5l-4 2v-7z"/></svg></span><span class="fl-t">Filters, journal &amp; statistics</span></button>
+      </div>
+      <div class="feat-detail" id="featDetail" role="tabpanel" tabindex="0" aria-live="polite" aria-labelledby="feattab-0">
+        <div class="ficon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 4-3 7-7 9-4-2-7-5-7-9V7z"/></svg></div>
         <h3>Private by design</h3>
         <p>Your CSV is parsed and stored entirely in your browser via IndexedDB. Trade data never leaves the page — the only network calls are the app's own reference data.</p>
       </div>

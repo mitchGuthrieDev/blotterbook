@@ -59,3 +59,36 @@ function downloadFile(name, text, type='application/json'){
   setTimeout(()=>URL.revokeObjectURL(url), 1500);
 }
 function stateLabel(){ const o=$('c_state_sel'); return (o&&o.selectedOptions[0])?o.selectedOptions[0].textContent:'—'; }
+
+/* ============================================================
+   Modal a11y (B9) — shared by the data-manager and export modals.
+   modalOpened(): flip aria-hidden, remember the trigger, move focus inside,
+   and trap Tab within the dialog. modalClosed(): reverse it and restore focus.
+   State is stashed on the element so the two modals never clobber each other.
+   ============================================================ */
+function modalFocusables(root){
+  return [...root.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+    .filter(el=>el.offsetParent!==null);   // visible only
+}
+function modalOpened(ov){
+  if(!ov) return;
+  ov.setAttribute('aria-hidden','false');
+  ov._prevFocus=document.activeElement;
+  const f=modalFocusables(ov);
+  if(f[0]) f[0].focus();
+  ov._trap=e=>{
+    if(e.key!=='Tab') return;
+    const items=modalFocusables(ov); if(!items.length) return;
+    const first=items[0], last=items[items.length-1];
+    if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+  };
+  ov.addEventListener('keydown',ov._trap);
+}
+function modalClosed(ov){
+  if(!ov) return;
+  ov.setAttribute('aria-hidden','true');
+  if(ov._trap){ ov.removeEventListener('keydown',ov._trap); ov._trap=null; }
+  if(ov._prevFocus && ov._prevFocus.focus) ov._prevFocus.focus();
+  ov._prevFocus=null;
+}

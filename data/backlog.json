@@ -478,11 +478,11 @@
       "category": "FIXES",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "In staging, the Activity Terminal module doesn't collapse like the other dashboard modules (its collapse toggle / panel-header click doesn't hide the body the way the rest do). Debug the cause — a likely suspect is the fill-the-panel layout from B2 (`.panel.term .pbody` set to a growing flex column with a `min-height`) fighting the shared module-collapse mechanism, so the collapsed-state class/height never takes on the terminal panel. Fix it so the Activity Terminal collapses and expands exactly like every other module while keeping its filled-panel behavior + scroll/autoscroll when expanded. Touch `app.css` (`.panel.term` / collapse rules) and the collapse wiring if needed (`render.js`/`staging.js`). Staging-only; main app + demo unchanged. Done when: collapsing the Activity Terminal hides its body like the other modules and expanding restores the filled terminal with working scroll/autoscroll; the collapsed/expanded state persists with the saved workspace.",
-      "doneNote": null
+      "doneNote": "**Shipped:** the staging Activity Terminal `.pbody` carried `display:flex` (0,3,0 specificity, same as the generic `.panel.collapsed .pbody{display:none}` but later in source, so flex won). Scoped it to `.panel.term:not(.collapsed) .pbody` (`app/app.css`). Verified: the terminal panel now collapses/expands like every other module."
     },
     {
       "id": "S7",
@@ -550,11 +550,11 @@
       "category": "FIXES",
       "priority": "P2",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "Fix a commission undercount that overstates Net PnL, take-home, and profit factor for size traders. `costModel()` (`app/core.js` ~204) charges round-turn commission as `rate*2` once per trade regardless of contract count, but the fills-based adapters (`adapters.js` `pairFills`) and MotiveWave now emit trades with real `qty` greater than 1. Use `rate*2*(t.qty||1)` in both `costModel()` and the curve's `dailySeries()` (`render.js` ~45), and update the 'one contract' wording in the Definitions/Assumptions caveats to match. Done when: a multi-contract trade is billed for all its contracts, the cost caveat is accurate, and single-contract data is unchanged.",
-      "doneNote": null
+      "doneNote": "**Shipped:** round-turn commission is now charged per CONTRACT — `2 × per-side rate × (qty||1)` — in `costModel()` and the curve's `dailySeries()`. Close-event exports (no qty) are unchanged; fills/MotiveWave trades with qty>1 are priced correctly. The per-symbol table gained a Contracts column so `$/RT × Cts` reconciles to Commission, and the caveat copy was updated."
     },
     {
       "id": "B5",
@@ -562,11 +562,11 @@
       "category": "FIXES",
       "priority": "P2",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "Trades are silently misplaced for non-US/non-ET exports. `normTime()` (`app/adapters.js` ~73) always parses `d/d/d` as M/D/Y, and all timestamps are treated as local/ET — so a D/M/Y export shifts trades to the wrong day, week, and month-scope, and the RTH/ETH session classification (`data.js` ~373) is wrong off Eastern time. Either detect the format (e.g. a first field greater than 12 implies D/M/Y) and the export timezone, or at minimum prominently document the US/ET-only assumption in the UI + caveats and guard against obviously-wrong parses. Done when: non-US date formats either parse correctly or are clearly flagged, and the date/session assumptions are documented.",
-      "doneNote": null
+      "doneNote": "**Shipped:** `normTime()` now detects D/M/Y when the first field is >12 (e.g. 25/06 → Jun 25), defaulting to US M/D/Y otherwise; a new \"US dates & Eastern time assumed\" caveat documents the no-timezone-conversion / ET-session assumptions. Verified by adapter tests (M/D/Y stays US, D/M/Y day>12 swaps)."
     },
     {
       "id": "B6",
@@ -574,11 +574,11 @@
       "category": "FIXES",
       "priority": "P2",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "`Store.addTrades()` (`app/store.js` ~95) issues many interleaved async `get`/`put` requests on a single IndexedDB transaction via `Promise.all`; IndexedDB auto-commits when the microtask queue drains with no pending request, so a large import can throw `TransactionInactiveError` and silently drop trades. Rewrite to be transaction-safe — collect existing ids first (or use a cursor), then `put` the new trades in a tight synchronous loop within a fresh transaction. Done when: importing a large CSV (e.g. the ~1539-row staging set, repeated) reliably adds every new trade with no transaction errors.",
-      "doneNote": null
+      "doneNote": "**Shipped:** `Store.addTrades()` (`app/store.js`) was awaiting a `get()` per trade inside one readwrite transaction, which could auto-commit mid-flight on large imports (TransactionInactiveError). It now reads all ids once into a Set, then issues every `put` in a tight synchronous loop — also dedupes rows repeated within the same batch."
     },
     {
       "id": "B7",
@@ -586,11 +586,11 @@
       "category": "FIXES",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "Three adapter robustness fixes in `app/adapters.js`: (1) the Schwab adapter (~388) does `break` when a row is missing the Side cell, truncating ALL later trades on one blank-optional row — change to skip/`continue` and only stop on a real section boundary; (2) the `parseCSV` blank-row test (~34) keeps a row of all-empty fields as data — test whether ALL fields are empty before keeping; (3) review `pairFills` realized-PnL apportionment (~127) for the position-flip case where a closing fill also opens a new lot — apportion realized by matched-close qty over total-closed qty, not over the full fill qty, so PnL is not under-attributed. Done when: a Schwab file with a blank optional cell keeps later trades, all-empty lines are skipped, a flip fill attributes its full realized PnL, and `test-adapters.cjs` still passes.",
-      "doneNote": null
+      "doneNote": "**Shipped:** three adapter-robustness fixes in `app/adapters.js`: `parseCSV` drops all-empty lines; the Schwab adapter skips a row with a blank optional Side cell (`continue`) instead of `break`, only stopping at a real column-count boundary; `pairFills` apportions a flip fill's realized PnL over the closed qty (not the full fill qty) so the full realized value lands on the closed contracts. +5 regression tests (60/60 pass)."
     },
     {
       "id": "B8",
@@ -598,11 +598,11 @@
       "category": "FIXES",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "Small metric fixes in `app/core.js`/`render.js`: (1) Recovery Factor shows a dash when max drawdown is 0 even on a flawless run — show ∞ when `maxDD===0 && net>0`, mirroring how Profit Factor handles the analogous case; (2) the net/take equity curve subtracts the WHOLE period's subscriptions as a single day-0 drop (`dailySeries`) which is visually misleading on multi-month ranges — accrue subscriptions per calendar month along the curve (or document that net/take are end-anchored); (3) normalize or assert that the Section-1256 `ltcgWeight + ordinaryWeight` equals 1 when loading `state-tax.json` so malformed weights cannot silently skew take-home. Done when: a no-drawdown run shows ∞ recovery, the curve accrues subscriptions monthly, and bad tax weights are caught.",
-      "doneNote": null
+      "doneNote": "**Shipped:** Recovery Factor shows ∞ for an all-positive curve with no drawdown (was —); subscriptions now accrue month-by-month along the equity curve instead of dropping at day 0 (endpoint total unchanged); the 1256 tax weights are normalized if loaded `state-tax.json` drifts off the 60/40 split. In `app/core.js` + `app/render.js`."
     },
     {
       "id": "B9",
@@ -610,11 +610,11 @@
       "category": "FIXES",
       "priority": "P1",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "The data-manager modal is inaccessible to assistive tech: `partials/app-modal.html` hardcodes `aria-hidden='true'`, and open/close (`app/datamanager.js` ~14) only toggles the `.open` class — so the dialog stays hidden from screen readers even while visually open, and focus is never moved or trapped. On open: set `aria-hidden='false'` (or remove it), move focus into the sheet (the close button or first control), and trap Tab within `.sheet`; on close: restore focus to the opener. Apply the same to the staging export modal (`#exportModal`). Escape + backdrop close already work — keep them. Done when: screen readers expose the open dialog, focus is trapped and restored, and the modals still close on Escape/backdrop.",
-      "doneNote": null
+      "doneNote": "**Shipped:** the data-manager and staging export modals are now accessible — a shared `modalOpened`/`modalClosed` helper (`app/ui.js`) flips `aria-hidden`, moves focus into the sheet, traps Tab, and restores focus to the opener on close. Escape + backdrop close still work. Verified in Chromium (aria-hidden toggles, focus enters/restores, Escape closes)."
     },
     {
       "id": "B10",
@@ -622,11 +622,11 @@
       "category": "FIXES",
       "priority": "P2",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "Make the interactive controls keyboard-operable. The F7 homepage feature list (`index.html`) is built from bare list items with a click handler only (no tabindex/role/keydown) so it is mouse-only and not announced — model it as a tablist (role tablist/tab/tabpanel, arrow-key navigation, aria-selected, and an aria-live detail panel) or use real buttons. The calendar day cells and the equity-curve SVG (`app/render.js`) are mouse-only — add tabindex, role=button, and keydown handlers. Mark the purely-decorative `.ficon` SVGs aria-hidden. Done when: the feature list, calendar days, and curve are operable by keyboard and announced to screen readers.",
-      "doneNote": null
+      "doneNote": "**Shipped:** the homepage feature explorer is now a real tablist (role tab/tabpanel, roving tabindex, Arrow/Home/End with selection-follows-focus, aria-live detail); calendar day cells and the equity-curve SVG are keyboard-operable (tabindex/role=button, Enter/Space; the curve adds arrow-key date navigation), and decorative `.ficon` SVGs are `aria-hidden`. Verified in Chromium (15 keyboard/ARIA assertions)."
     },
     {
       "id": "CH5",
@@ -706,11 +706,11 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P3",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "Finish the deferred remainder of A5 by extending the existing `build-includes.mjs` partial + mode-conditional pattern to the markup still hand-kept across the three app pages: (1) an `app-topbar` partial covering the three top bars (mode conditionals for the demo Demo/End-demo + disabled Manage, and the staging session pill + workspace bar + Exit-staging); (2) an `app-scripts` partial for the identical script-loading block at the bottom of all three pages (the most ordering-sensitive markup — staging adds `staging.js` via a flag); (3) fold demo's bespoke landing + preview-only data manager into `app-landing`/`app-modal` with a `mode=demo` branch that emits the disabled/preview state. Output stays 100% static. Done when: the top bars, the script block, and demo's landing/modal each live in one source and the three app pages render identically to today.",
-      "doneNote": null
+      "doneNote": "**Shipped:** finished A5's tail — `app-topbar` and `app-scripts` partials now single-source the three top bars and the ordering-sensitive script block, and demo's trimmed landing + preview-only modal fold into `app-landing`/`app-modal` via a `mode=demo` branch. The three built pages are render-equivalent to before (comment-stripped/whitespace-normalized diff + 27 Chromium assertions); build stays idempotent and 100% static."
     },
     {
       "id": "L5",
@@ -718,11 +718,11 @@
       "category": "LAYOUT (web vs mobile)",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
       "prompt": "Tidy the theming: route the stray literal hex values through `tokens.css` (e.g. the `#33405a` hover borders and the `#0d1014` on-accent text duplicated across `index.html`/`app.css` — add a `--hover-line` token and reuse `--bg` for on-accent text), and spot-check WCAG AA contrast (4.5:1) for the low-emphasis text colors (`--faint` and `--dim`) against `--bg`, especially the footer disclaimer and the `.foot`/`.scrollhint` copy — bump the token value if any fail. Done when: no ad-hoc hexes remain for those cases and the flagged low-emphasis text meets AA contrast.",
-      "doneNote": null
+      "doneNote": "**Shipped:** stray hex literals routed through `tokens.css` — added `--hover-line` (#33405a hover borders) and replaced on-accent text `#0d1014` with `var(--bg)`. `--faint` was failing WCAG AA on `--bg` (3.18:1) and was bumped #5b6470 → #767f8c (4.71:1); `--dim` (6.22:1) already passed."
     }
   ],
   "howToDrive": [
