@@ -6,6 +6,7 @@
   "updated": "2026-06-26",
   "note": "Committed source of truth for the engineering backlog (replaces the retired .claude/backlog.md). The admin panel shows category/effort/status only; prompt + doneNote stay here.",
   "commitConvention": "Conventional-commit titles (enables CH12 automated versioning): when committing, and ESPECIALLY when titling a PR / squash-merge, lead the title with a conventional-commit type so the version bump can be derived automatically — `feat:` (new capability → minor), `fix:` (bug fix → patch), `chore:`/`refactor:`/`docs:`/`style:`/`test:`/`perf:` (→ patch), and append `!` (e.g. `feat!:`) or a `BREAKING CHANGE:` footer for a breaking change (→ major). Scope it when useful, e.g. `feat(staging): …`. Untyped/legacy titles default to a patch bump. Keep the existing Co-Authored-By and Claude-Session trailers on the commit body.",
+  "donePolicy": "When an item's status is set to `done`, delete its `prompt` field and keep only the `doneNote` — the doneNote is the shipped record of what was actually done, so the original prompt is redundant and only bloats this file (the admin backlog panel never renders done-item prompts anyway). Keep `prompt` on `open` and `guardrail` items, since those are still the actionable spec. Applies retroactively: a done item should never carry a prompt.",
   "categories": [
     "SECURITY",
     "ARCHITECTURE / DUPLICATION",
@@ -26,7 +27,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "Sanitize the futures symbol so a crafted CSV symbol can't inject HTML. In `app/adapters.js`, `rootSym()` (~line 48) currently lets arbitrary characters through; restrict its output to a safe charset (e.g. `[A-Z0-9._-]`). Verify the raw symbol is never rendered unescaped either — check the interpolation points in `app/app.js` (~493 live cost table, ~1164 exported report written via `w.document.write`, ~1385/1388 data-manager rows, ~1421 trade editor) and apply the existing `esc()` where a raw symbol still reaches `innerHTML`/`document.write`. Don't touch trade math. Done when: importing a CSV whose symbol contains `<img src=x onerror=alert(1)>` renders inert text everywhere (dashboard, data manager, exported report) and adapter tests still pass.",
       "doneNote": "**Shipped:** `rootSym()` (`app/adapters.js:52`) now strips to `[A-Z0-9._-]` at the source, and `esc()` was applied at every sink (`app/app.js` cost table ~493, exported report ~1165, data-manager rows ~1385/1388, trade editor ~1421 — incl. `side`). Verified in-browser: `rootSym('MES<img …>')` → `MESIMGSRCXONERRORALERT1`; a stored payload renders as escaped text (no injected element, XSS never fired); legit symbols (MES/MNQ/MCL) still render; 55/55 adapter tests pass."
     },
     {
@@ -38,7 +38,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "Add a Cloudflare Pages `_headers` file applying security headers site-wide: a Content-Security-Policy (the app has no runtime deps, so aim for `default-src 'self'`; allow only what the pages actually need — inline styles/SVG, the mailto/Stripe later), plus `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and `X-Frame-Options: DENY`. Don't break the existing inline `<style>`/`<script>` blocks or the data-URL screenshots. Done when: response headers carry the CSP + the three hardening headers, and the app, demo, staging, admin, and marketing pages all still render and function (verify in the preview).",
       "doneNote": "**Shipped:** root `_headers` file applies to `/*`: CSP (`default-src 'self'`; `img-src 'self' data:` for screenshots; `connect-src 'self'`; `object-src 'none'`; `base-uri 'self'`; `form-action 'self'`; `frame-ancestors 'none'`; no `'unsafe-eval'`), plus `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (camera/mic/geo/ topics off). `script-src`/`style-src` keep `'unsafe-inline'` (3 first-party inline scripts on home/ admin/changelog + inline `style=\"\"` attrs; no build step for nonces yet — tighten via A1/A2). NOTE: `_headers` only takes effect on Cloudflare Pages, not the local static preview — confirm the response headers on the next deploy. App/demo/staging/home/admin all still render."
     },
     {
@@ -50,7 +49,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Right now `/api/admin-key` returns the raw `ADMIN_KEY` and the admin page caches it in localStorage, and the staging gate carries the raw key in a cookie. Replace this with a short-lived signed token: the Access-authenticated admin endpoint issues a time-limited HMAC token (signed with a server secret), the admin page stores the token (not the key), and `/api/status`, `/api/config`, and the staging gate verify the token instead of comparing the raw key. Keep raw-key acceptance as a fallback if you want. Done when: the raw `ADMIN_KEY` never reaches the browser, admin writes + staging launch still work behind Access, and tokens expire.",
       "doneNote": "**Shipped:** new `functions/_lib/auth.js` issues/verifies HMAC-SHA256 tokens. `/api/admin-key` now returns a short-lived signed token (TTL `ADMIN_TOKEN_TTL_SEC`, default 2h; signed with `TOKEN_SECRET`→ falls back to `ADMIN_KEY`) instead of the raw key — the raw `ADMIN_KEY` never reaches the browser. The admin page stores/sends the token (x-admin-key header for writes; `bb_staging` cookie for staging launch). `/api/status`, `/api/config`, and the `_middleware` staging gate verify it via `isAdminAuthorized()`; the raw key stays accepted server-side as a fallback (never handed to a browser). Tokens expire. Verified with a Node WebCrypto test (valid/tamper/expiry/fallback). Full E2E needs the deployed Access+KV env."
     },
     {
@@ -62,7 +60,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "`functions/api/admin-key.js` currently trusts the *presence* of the `Cf-Access-Jwt-Assertion` header. Validate the JWT's signature against Cloudflare Access's JWKS (team domain + AUD) before returning anything, so the endpoint is safe even if it's ever reached off the Access-protected host. Cache the JWKS. Keep the existing 401 behavior off-Access. Done when: a request with a forged/absent assertion is rejected, a genuine Access request succeeds, and the admin page still auto-fills.",
       "doneNote": "**Shipped:** `/api/admin-key` verifies the `Cf-Access-Jwt-Assertion` RS256 signature against the team JWKS (`<ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs`, cached 1h) plus audience (`ACCESS_AUD`), issuer, and expiry before issuing a token (`verifyAccessJwt` in `functions/_lib/auth.js`). When `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` are unset it falls back to the prior header-presence check (route is still behind Access + the middleware gate). Verified with a Node WebCrypto test using a generated RSA keypair + mocked JWKS: a genuine token is accepted; forged-signature, absent, expired, wrong-aud, wrong-iss, and unknown-kid are all rejected. Full E2E needs the deployed Access env."
     },
     {
@@ -74,7 +71,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "Screenshots are stored as data-URLs in IndexedDB (`trademeta`). Add a per-image size cap (e.g. reject or downscale > ~1–2 MB) with a friendly message in the trade editor, so the local DB can't balloon. Done when: oversized images are downscaled or refused with a clear note; existing data is untouched.",
       "doneNote": "**Shipped:** `dmAddShot` (`app/datamanager.js`) now auto-downscales (longest side ≤ 1600px) and re-encodes to JPEG q0.82 whenever an image exceeds a ~600 KB soft cap, flattening transparency first; images already compact are stored as-is, and if re-encoding doesn't shrink it the original is kept. Replaced the old \"over 4 MB, store anyway?\" confirm with a friendly post-add note. Verified in-browser: a 4.7 MB / 3000×2000 PNG → 1600px / ~73 KB JPEG, \"Image optimized for local storage (4.7 MB → ~73 KB)\" shown, 0 console errors."
     },
     {
@@ -86,7 +82,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "Add the remaining Cloudflare/Node dev-cruft patterns to `.gitignore`: `.mf/` (Miniflare), `*.local`, `npm-debug.log*`, `.pnpm-debug.log*`, `.cache/`. Don't remove existing entries.",
       "doneNote": "**Shipped:** added `.mf/` (under Cloudflare), `npm-debug.log*` + `pnpm-debug.log*` (under logs), and a new \"Local-only overrides & caches\" section with `*.local` + `.cache/`. No existing entries removed."
     },
     {
@@ -98,7 +93,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "Kill the structural duplication without adding a runtime/bundler. The nav and footer are copy-pasted across 6 HTML pages, the `:root` design tokens are declared in 3 files (`index.html`, `site.css`, `app/app.css`), and `app/staging.html` is a near-verbatim copy of `app/index.html`. Introduce a small Node prebuild script (run by hand and/or as the Pages build command) that injects shared partials (`partials/nav.html`, `partials/footer.html`, the shared app shell) into the HTML, and move the tokens into one `tokens.css` imported everywhere. Output must stay 100% static files served over http(s). Done when: nav/footer/tokens/app-shell each exist in exactly one source, the built pages are byte-equivalent in behavior, and the deploy is still static.",
       "doneNote": "**Shipped:** `tokens.css` is the lone source of design tokens — `site.css` + `app/app.css` `@import` it, the homepage links it (3 `:root` blocks → 1; verified `--accent`/bg resolve on info, home, and app pages). `partials/nav.html` + `partials/footer.html` are injected by `scripts/build-includes.mjs` (idempotent; `active=KEY` highlights the current link) into the four info pages via `<!-- include:nav/footer -->` markers. Footers were unified (each had drifted — self-link omission + a howto-only line, which was relocated into howto's body). Homepage + admin keep bespoke nav/footer by design (different links/CTA/scroll-spy), sharing only tokens. Verified in-browser: nav active states, unified footer, correct theme, 0 console errors; build re-run reports 0 changes. **Not done (deferred):** the app *shell* (`app/index.html`↔`staging.html` near-duplicate markup) is still hand-kept — fold into a shared shell partial in a follow-up (pairs naturally with A3)."
     },
     {
@@ -110,7 +104,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "`app/app.js` is ~1,660 lines doing parsing, metrics, rendering, data-manager, filters, journal, and export. Split it into multiple plain `<script>` files loaded in order (e.g. `core.js` = state+metrics, `render.js` = dashboard, `datamanager.js`, `export.js`), no bundler. Preserve load order and globals. Done when: behavior is unchanged across main/demo/staging (verify in preview), each file has a clear single responsibility, and all JS passes `node --check`.",
       "doneNote": "**Shipped:** `app.js` → 7 ordered classic scripts: `core.js` (globals/helpers/metrics/format/cost/ refdata), `render.js` (cards/curve/calendar/advanced/break-even + scope/filter driver), `data.js` (import/demo/filters/journal/session/setup), `ui.js` (panels/staging flair/file-dl), `export.js` (report), `datamanager.js` (manage-data modal), `main.js` (event wiring + boot, loaded LAST). Cut at section boundaries in original order, so concatenation == original (no reordering). Verified: all 7 pass `node --check`; main app (initial state, 9 brokers), demo (loaded, curve), and staging (v0.13, 1539-row manage data, terminal, session pill) all boot with 0 console errors; cross-file fns resolve. Old app.js removed; 3 HTML pages load the 7 scripts in order. README updated. Note: staging code still lives in `ui.js` — fully isolating it is A3."
     },
     {
@@ -122,7 +115,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "Extract the staging-only logic (`initStaging`, activity terminal, session pill, workspace templates — ~120 lines, gated by `STAGING_PAGE`) into a `staging.js` that ONLY `staging.html` includes, so the main app can't be affected by staging experiments. Replace the `logAction()` calls sprinkled in shared code (`commitPending`, `dmExport`, etc.) with a lightweight event model: core emits events (`data:imported`, `note:saved`, `backup:created`, `trade:deleted`), staging.js subscribes. Main app and demo must not reference any staging symbol. Done when: removing `staging.js` leaves main+demo fully working, and the terminal still logs the same actions in staging.",
       "doneNote": "**Shipped:** all staging flair (activity terminal, session pill, workspace templates, the staging resize redraw) moved from `ui.js` into a new `app/staging.js` that ONLY `staging.html` loads (inserted before `main.js`). `core.js` gained a tiny event bus (`emit`/`onEvent` over `EventTarget`); the `logAction()` calls in shared code (`data.js`, `datamanager.js`, `main.js`) were replaced with `emit('data:imported' | 'note:saved' | 'trade:deleted' | 'backup:created' | 'data:erased')`, and `boot()` now `emit('app:ready')` instead of calling `initStaging()`. `staging.js` subscribes and logs. `seedStagingIfEmpty` stays in `main.js` (boot-time data bootstrap; keeps the boot path robust). Verified in-browser: main app + demo load NO staging.js and define zero staging fns (boot fine, 0 console errors); staging's terminal logs session-ready + backup + delete via the bus. All 8 scripts pass `node --check`. Note: the staging↔index app-shell markup duplication (deferred from A1) is still open — now tracked as A5."
     },
     {
@@ -146,7 +138,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": true,
-      "prompt": "Finish what A1 started: the three app pages share a near-identical shell (top bar, landing/setup, the dashboard panels, the data-manager modal) that's hand-kept in three files — `app/staging.html` is a near-verbatim copy of `app/index.html` and the biggest drift risk (A3 isolated the staging *JS*, not the markup). Extend the existing prebuild (`scripts/build-includes.mjs`) to inject a shared app-shell partial, with the per-page differences handled by markers/flags: `data-mode`, the version badge, the demo's trimmed top bar + disabled Manage-data, and the staging-only markup (session pill + popup, the filter Save/Saved controls, the activity-terminal panel). Output must stay 100% static. Done when: the shared top-bar / dashboard / modal markup lives in one source, the three app pages render identically to today (verify main/demo/staging in preview), and editing the shell updates all three.",
       "doneNote": "**Shipped (partial):** extended `scripts/build-includes.mjs` to inject shared app-shell partials into all three app pages via a tiny `<!--IF mode=…-->` conditional. Single-sourced into `partials/`: `app-landing.html` (app+staging), `app-scope.html` (all three), `app-filters.html` (+staging saved-filter controls via flag), `app-dash.html` (the five dashboard panels; demo journal-hint via flag), `app-modal.html` (data-manager modal; staging Saved-filters section via flag). Editing a partial + re-running the build updates all three pages. The staging-only Activity Terminal stays inline right after the shared dash include — it exists on staging ALONE, so it was never duplicated. Verified: each built page's id/data-key attribute set is identical to before; demo carries none of the staging-only nodes; the build is idempotent; all three boot in Chromium with 0 page errors (app=5 panels, demo=5, staging=6 incl. terminal + saved-filter controls). **Deferred:** the three top bars stay per-page (version badge, button sets, staging session-pill/workspace-bar diverge too much to fold safely), and demo keeps its bespoke trimmed landing + preview-only data manager."
     },
     {
@@ -158,7 +149,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "There are ~15 distinct media breakpoints across `app/app.css`, `index.html`, and `site.css` (760/880/1180/620/1080/780/680/520/460/900/840/720/660/560… plus staging 1100/1480/1700). Define a small named scale (e.g. sm 560 / md 760 / lg 1080 / xl 1480) and migrate the queries to it, keeping the responsive-in-place approach (do NOT split mobile into separate files). Adjust only where a query doesn't already land near a scale value; don't regress current layouts. Done when: queries use the named scale, and main/demo/staging/marketing look the same or better at mobile/tablet/desktop/4K widths (spot-check in preview at a few widths).",
       "doneNote": "**Shipped:** consolidated the ad-hoc media breakpoints into a documented named scale — xs 460 · sm 560 · cal 620 · md 760 · lg 900, plus the wide min-width tiers 1100/1480/1700/1920 (full table commented at the top of `app/app.css`; one-line pointers in `site.css` + `index.html`). CSS media queries can't read custom properties without a build step, so the scale is a documented convention + snapped literals. Snapped the near-duplicates: `.cards` & `.mcards` 520→560, nav-hamburger 720→760, `.grid3` & `.price-grid` 880→900. `@media` conditions now use only {460,560,620,760,900} + the wide tiers — 520/720/880 no longer appear as breakpoints. Responsive-in-place kept (no separate mobile files). Verified in Chromium at the boundary widths (home 1280/900/560, app 560, howto 760 hamburger) — no regressions."
     },
     {
@@ -170,7 +160,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": true,
-      "prompt": "",
       "doneNote": "**Shipped:** main app + demo `.wrap` now bumps to 1360px (≥1480) / 1520px (≥1920) — dashboard fills wide displays (verified composed at 1920px, side margins ~200px vs ~370px). **Deliberately did NOT widen the marketing homepage**: bumping its container pushed body paragraphs to ~1520px (~150 chars/line), hurting line-length. Possible follow-up: widen only the homepage's grid sections (features/pricing), leaving prose narrow. On very wide screens the marketing pages and main app cap narrow while staging goes edge-to-edge. Review the max-width caps and make the main app + key marketing sections use the extra width more intentionally on ≥1480px (without hurting readability/line length). Done when: at 4K the main app and homepage feel composed, not stranded in a narrow column."
     },
     {
@@ -182,7 +171,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "",
       "doneNote": "**Shipped:** pill now sits after the \"Blotterbook v0.13\" version badge; wrapped pill + popup in a relatively-positioned `.sesswrap` so the legend popup stays anchored under the pill. Verified in-browser. In `app/staging.html` the session-status pill (`#sesspill`) sits at the far LEFT of the header, before the wordmark. Reposition it to the RIGHT of the \"Blotterbook v0.13\" text (after the `.ver` badge) so it reads \"Blotterbook v0.13 · ●Online\". Keep the click-to-explain popup working and the header left-aligned. Touch the `.brand` markup + `app.css`. Done when: the online/offline/degraded pill sits just right of the version badge, popup still opens, no mobile layout shift."
     },
     {
@@ -194,7 +182,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "",
       "doneNote": "**Shipped:** Reset filters now sits immediately after Save filter (dropped `fbtn`/margin-left:auto); the trade-count floats to the right of the bar via a new `.fpush` util. Verified adjacent + count right. In the staging filter bar (`app/staging.html` + `app.css`), the Reset filters button (`#f_reset`) is separated from Save filter (`#f_save`). Relocate Reset so it sits adjacent to Save filter in the filter module. Both must keep working. Done when: Save filter and Reset filters are next to each other in the filter bar; filtering + saving still work."
     },
     {
@@ -206,7 +193,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "(Updated post-A2: `app.js` was split into core/render/data/ui/export/datamanager/main.) Add a header block at the top of `app/core.js` documenting the `PAGE_MODE` matrix ('' main / 'demo' / 'staging'), what `STAGING_PAGE`/`DEMO_MODE` gate, which globals are staging-only, and the load order of the seven scripts. Add a one-line intent comment above the densest metrics-math one-liners (the Metrics section in `app/core.js`) and the equity-curve math in `app/render.js`. Comments only — no behavior change.",
       "doneNote": "**Shipped:** added an orientation block at the top of `app/core.js` (7-script load order, `STAGING_PAGE`/ `DEMO_MODE` gating, shared-global-state map + \"persist only via Store\" note), and intent comments on the dense metrics math (realized max-drawdown walk, consecutive-streak loop, daily-PnL Sharpe) plus the equity-curve linear scales in `app/render.js`. Comments only — diff is 31 insertions/0 deletions; both files pass `node --check`."
     },
     {
@@ -218,7 +204,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "**Migrate the backlog's source of truth from `.claude/backlog.md` to a committed `data/backlog.json`.** This is NOT just adding a JSON alongside the markdown — `backlog.json` REPLACES `backlog.md` and becomes THE backlog we read and update from now on (the old gitignored `.md` is retired once migrated). Yes, it will be committed to the repo; that's intended and accepted, so the deployed admin page can read it.\n\n`backlog.json` must contain ALL information currently in `backlog.md` — including the full per-item **prompt text** and the **\"Shipped:\" done-notes** — losing nothing in the migration. Suggested shape per item: `{id, title, category, effort, priority, status, completedDate, prompt, doneNote}`.\n\nThen surface it in the admin panel (`admin.html`), behind the existing Cloudflare Access + admin-key protection: render the items grouped by category showing **category + effort + status only** — the `prompt`/`doneNote` text must NOT be shown in the admin UI element (it stays in the JSON data, just hidden from that view). Keep a persistent HISTORY of every completed item (don't drop them), and add a counts module: per category, completed vs remaining, plus an overall total. Done when: `data/backlog.json` is the single committed source (markdown retired) and carries every field incl. prompts; the admin page lists open + completed items by category with effort/status (no prompt text visible); completed history persists; and a per-category completed/remaining tally renders.",
       "doneNote": "**Shipped:** migrated `.claude/backlog.md` → committed `data/backlog.json` (26 items, all fields incl. prompts + doneNotes) via a one-time parser, then retired the `.md` to a redirect stub. Added a read-only **Backlog** section to `admin.html` that fetches the JSON and renders per-category completed/remaining count cards + an overall tally + the grouped item list (id / title / effort / status badge). Verified in-browser: 8 categories, 26 rows, \"15 done · 10 remaining · 1 guardrail · 60% complete\", and that the prompt/doneNote text is NOT present in the rendered admin DOM. 0 console errors."
     },
     {
@@ -230,7 +215,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "",
       "doneNote": "**Shipped:** placeholder renamed \"— Workspace —\" → \"— Default —\"; selecting it now clears the saved order/collapsed state and resets to `DEFAULT_DASH_ORDER`. Removed the standalone Default button. Verified: scrambled layout reverts on selecting \"— Default —\". Covers two related staging requests. (1) Rename the workspace-template `<select>` placeholder from \"— Workspace —\" to \"— Default —\", and make SELECTING it revert the layout to default (today the placeholder is a no-op; the separate Default button does the revert). (2) Remove the now-redundant `#ws_default` \"Default\" button. Touch `app/staging.html` + the staging UI handlers (`ui.js` `initStaging` / the `ws_*` wiring). Done when: choosing \"— Default —\" resets module order + collapsed state to default; the standalone Default button is gone; Save layout and loading saved templates still work."
     },
     {
@@ -242,7 +226,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Replace staging's \"Export report\" (which auto-opens a new tab) with a modal popup (reuse the app's modal pattern): a scrollable PREVIEW of the report plus Download / Email a copy / Close buttons. Beside Download, a format `<select>` — \"Choose format\" (default selected), PDF, PNG, JPEG, MD — with Download DISABLED until a real format is chosen. PDF = the existing print-to-PDF path; PNG/JPEG = rasterize the report node to canvas; MD = generate a Markdown summary. \"Email a copy\" keeps the current mailto behavior (prefilled draft). Build it staging-only (gated by `STAGING_PAGE`) so the main app + demo Export are untouched until promoted. Done when: Export report opens the popup with a live preview; Download is greyed until a format is picked, then exports the chosen format; Email opens a prefilled mailto; Close dismisses; main app + demo Export unchanged.",
       "doneNote": "**Shipped (staging-only):** Export report now opens an in-page modal (`#exportModal`) with a scrollable iframe preview + a format `<select>` (PDF print / PNG / JPEG / Markdown; Download disabled until a real format is picked) + Email-a-copy (mailto) + Close. PNG/JPEG rasterize the report via an SVG `<foreignObject>`→canvas (no new dependency); MD builds a markdown summary; PDF prints the iframe. `exportReport()` was refactored to share the report CSS/markup between the unchanged new-tab path (main/demo) and the modal. Verified in Chromium: preview renders, format gating works, MD + PNG downloads succeed, 0 errors; demo/main keep the new-tab export."
     },
     {
@@ -254,7 +237,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "",
       "doneNote": "**Shipped:** root cause was `display:flex` on a `<td>` (dropped it out of the table column model and overlapped PnL). Reverted to a normal table-cell; space the buttons with margin. Verified: action cell starts exactly at the PnL cell's right edge, no overlap. (Fix is in shared `app.css`, applies app-wide.) In the Manage-data trades table, a per-trade row's Edit/Delete action buttons visually overlay the PnL number (the actions render on top of the PnL column). Fix the table/cell layout in `app.css` (and the row markup in `app/datamanager.js` if needed) so the actions occupy their own column with no overlap. Check at staging fullscreen widths where it's most visible. Done when: PnL and the Edit/Delete actions are cleanly separated across widths; Edit/Delete still work."
     },
     {
@@ -266,7 +248,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "",
       "doneNote": "**Shipped:** `.panel.term .pbody` is now a growing flex column and the terminal flexes to fill it (160px min on narrow). Verified at 1800px (3-col): terminal grows to 664px to fill its 777px panel. The Activity Terminal console (`#termwin`) has a fixed height, leaving empty space below it inside the panel on the wide/fullscreen staging grid. Make the terminal window fill its module body (flex / height:100%) so there's no gap, keeping the scroll + 200-line cap. `app.css` (`.panel.term` / `.termwin`). Done when: in fullscreen staging the terminal fills its panel with no negative space; scroll + autoscroll still work."
     },
     {
@@ -314,7 +295,6 @@
       "status": "done",
       "completedDate": "2026-06-25",
       "partial": false,
-      "prompt": "",
       "doneNote": "**Shipped:** the only stale item was \"Trade = one row … exactly as TradingView exported it\" — rewrote it to \"Trade = one closed position\" covering auto-detection, one-row-per-close vs FIFO fills-pairing (+ hold time), and the beta caveat. Applied to all 3 app pages (identical panel). Rest verified accurate. Re-read the dashboard's \"Definitions & Caveats\" panel against the app's CURRENT behavior and correct anything stale — metric definitions, scope behavior, cost/tax model wording, and any staging-only features. Accuracy pass only (content). Done when: every definition/caveat matches current functionality; corrections applied."
     },
     {
@@ -326,7 +306,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Rename `app/index.html` to `app/app.html`. IMPORTANT URL impact: the app is currently served at `/app/` (directory index = index.html); after the rename `/app/` has no index. Either update every internal Launch link (`/app/` → `/app/app.html`) across the marketing pages + admin + README, OR add a Cloudflare Pages redirect/rewrite so `/app/` still resolves to `app.html` — pick one and apply it consistently. Relative `app.css`/script paths are unaffected; `demo.html` + `staging.html` are already named, so only the main entry changes. Done when: the app loads at its new path, every Launch link works (no dead `/app/` route), and the README reflects the new filename.",
       "doneNote": "**Shipped:** `git mv app/index.html → app/app.html`, then added a root `_redirects` rewriting `/app/` → `/app/app.html` (200 = rewrite; the URL stays `/app/`) so the clean URL and every existing Launch link keep working with zero link churn. README updated (file-tree entry, `app.css` shared-by line, promote-staging note, and quick-start — incl. a note that the `/app/` rewrite is Pages-only, so the local static server should open `/app/app.html` directly). No code referenced `app/index.html` directly (the `../index.html` link is the homepage). Verified app.html boots in Chromium."
     },
     {
@@ -338,7 +317,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "In staging, when the Broker & Costs panel is expanded it should stay pinned in view as the user scrolls (e.g. position:sticky at the top), so they can switch broker / feed / fees / state while reading modules lower down (like Advanced Statistics on a non-4K screen) without scrolling back up. Only stick while expanded; collapsing releases it. Degrade to non-sticky on narrow/mobile so it doesn't overlap content. Touch the staging setup markup + `app.css`. Done when: with Broker & Costs expanded it stays visible while scrolling; collapsing returns it to normal flow; mobile unaffected; main app/demo unchanged.",
       "doneNote": "**Shipped (staging-only):** the expanded Broker & Costs panel is now `position:sticky` while scrolling the dashboard — `display:contents` on `#landing` (when loaded) lifts `#setup` out of its short box so sticky has the full `.wrap` height. Collapsing the panel returns it to normal flow; below 760px it degrades to non-sticky so it never overlaps content. Gated by `body[data-mode=staging].loaded`. Verified in Chromium: position sticky when expanded, static when collapsed; demo/main unaffected (static)."
     },
     {
@@ -350,7 +328,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Rework the app-state flow so the initial (landing/setup) state is ALWAYS the entry point — whether or not data is already loaded — instead of jumping straight to the dashboard when data exists. The initial state must indicate whether dashboard data is already loaded: if loaded, show a 'data is already loaded' message, ENABLE Start Blotterbook (opens the existing dashboard), and change the lead blurb from 'Load a trade-history CSV to begin' to something like 'Start Blotterbook to access your dashboard'; if no data, behave exactly as today (load-CSV flow, Start gated). Staging-only (gated) until promoted. Touch the staging landing markup + the boot/restore path (`data.js`/`main.js`). Done when: staging always opens on the initial state; it clearly shows loaded vs no-data; Start is enabled + the blurb changes when data exists; the no-data flow is unchanged; main app/demo untouched.",
       "doneNote": "**Shipped (staging-only):** staging always boots on the initial/landing state. When the isolated DB has data, `restoreSession` calls `armStagingLanding()` instead of entering the dashboard: it swaps the headline to “Start Blotterbook to access your dashboard”, updates the blurb, shows a “✓ Dashboard data already loaded — N trades” note, and enables Start; Start then opens the existing dashboard via `enterStagingDashboard()`. With no data the normal load-CSV flow is unchanged (Start gated). Main app + demo untouched (verified: demo still boots straight to the dashboard)."
     },
     {
@@ -362,7 +339,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "In staging's Break-Even & Cost Budget module, move the per-symbol table (symbol / trades / commission) to become a COLLAPSIBLE subsection nested under the 'Commissions (all-in)' line, styled to match the 'Tax — Section 1256' subsection — so a user can collapse it to see just the Commissions (all-in) total, or expand for the per-symbol breakdown. Touch the staging cost-panel markup + break-even render (`render.js`) + `app.css`. Done when: the symbol/commission table sits under Commissions (all-in) as a collapsible block styled like the 1256 section; collapsing hides the table leaving the all-in total; main app/demo unchanged.",
       "doneNote": "**Shipped (staging-only):** the per-symbol commission table moved into a collapsible `<details class=\"csubtable\">` nested under the “Commissions (all-in)” line in the Break-even panel, styled to match the “Tax — Section 1256” subsection (`.csub` + the `.cdefs` ▸/▾ marker). Collapsed shows just the all-in total; expanded shows the breakdown. Built in `render.js` gated by `STAGING_PAGE` (the standalone `#c_comm_table` is left empty in staging). Verified in Chromium: collapsible present with the table inside, `#c_comm_table` empty; demo/main keep the standalone table."
     },
     {
@@ -374,7 +350,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Redesign the homepage Features section and fold in Use Cases (then delete the Use Cases section). Reference: https://gwtrade.app/#features. (1) Convert the six feature elements into a clickable LIST; selecting an item shows its detail in a panel to the RIGHT of the list (list-left / detail-right, desktop). (2) Take the four Use Cases elements and place them ABOVE that list, laid out HORIZONTALLY (not the current 2×2 grid), with simplified/shortened copy so they fit the horizontal row. Keep it responsive (this describes the desktop layout; stack sensibly on mobile). Remove the now-redundant Use Cases section. Done when: the homepage has a single Features section = a horizontal row of 4 condensed use-cases above a clickable feature list with a right-hand detail panel; Use Cases is gone; mobile still reads well.",
       "doneNote": "**Shipped:** the homepage Features section now leads with a horizontal row of four condensed use-cases, then a clickable feature LIST (left) + detail panel (right) that swaps on selection (first item pre-rendered for initial paint / no-JS). The standalone Use Cases section was removed and its pitch line folded in. Responsive: the use-case row collapses 4→2→1 and the explorer stacks to one column at md (760). Dropped the unused `.grid3/.fcard/.uc/.uc-grid` styles. Verified in Chromium: 4 use-cases, 6 feature items, click swaps detail + active state, single-column on mobile, 0 errors."
     },
     {
@@ -386,7 +361,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "In the admin panel's read-only Backlog list (`admin.html`, which reads `data/backlog.json`), render items whose status is done with a strikethrough on the title/row so completed items are visually distinct from open ones. Done when: done items show struck-through in the admin backlog list; open/guardrail items are unaffected.",
       "doneNote": "**Shipped:** completed (status=done) rows in the admin Backlog list now render the title with `text-decoration:line-through`, visually distinct from open/guardrail items (which are unaffected). Verified in Chromium (computed `line-through` on done titles)."
     },
     {
@@ -398,7 +372,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Add filter controls to the admin Backlog module (`admin.html`) to filter the item list by STATUS (open / done / guardrail) and by EFFORT (trivial / small / medium / large). Filters combine; decide whether the per-category counts stay full totals or reflect the active filter, and keep it clear. Done when: the admin can narrow the backlog list by status and effort, and clearing filters restores the full list.",
       "doneNote": "**Shipped:** added Status and Effort `<select>` filters (options derived from the data) to the admin Backlog module; they combine and narrow the item LIST only — the per-category counts stay full project totals (noted inline). A Clear-filters button resets both. Verified in Chromium: 40 rows → status=done 21 → +effort=small 12 → clear 40, every shown row matching the active filter."
     },
     {
@@ -458,7 +431,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Replace every `contact@scalineaudio.net` with `contact@blotterbook.com` across the repo — marketing pages, the app Contact buttons / mailto links, the legal page, footers, the shared partials, and the README. Update any mailto subject/body links accordingly. Done when: no `contact@scalineaudio.net` remains in the codebase and all Contact links open a draft to `contact@blotterbook.com`.",
       "doneNote": "**Shipped:** replaced `contact@scalineaudio.net` → `contact@blotterbook.com` across the marketing pages (index/changelog/howto/roadmap/legal), the app Contact mailto buttons (`app/app.html`, `app/demo.html`), the shared `partials/footer.html`, and `LICENSE` (licensing-inquiry line). mailto subject/body params preserved. The only remaining `contact@scalineaudio.net` is this item's own task description in `data/backlog.json`, left intact as the historical record. NOTE: LICENSE's licensing-inquiry contact was switched to blotterbook.com for consistency with the done-when — revert that one line if licensing should stay on the company domain."
     },
     {
@@ -470,7 +442,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Review `.claude/change-plan.md` — it predates the backlog and is now redundant (we track work in `data/backlog.json`). Confirm nothing in it is still needed, then remove it (or reduce it to a one-line pointer to the backlog) so there's a single planning source. Note: it's gitignored, so this is local cleanup. Done when: change-plan.md is gone or a stub, and the backlog is the sole planning source.",
       "doneNote": "**Verified — nothing to remove:** `.claude/change-plan.md` is gitignored and was never committed, so it is absent from the repo and this checkout (confirmed via `git log` — no history). `data/backlog.json` is already the sole committed planning source. No file change was needed; a stray local `change-plan.md` on a dev machine, if any, can be deleted by hand."
     },
     {
@@ -482,7 +453,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "In staging, the Activity Terminal module doesn't collapse like the other dashboard modules (its collapse toggle / panel-header click doesn't hide the body the way the rest do). Debug the cause — a likely suspect is the fill-the-panel layout from B2 (`.panel.term .pbody` set to a growing flex column with a `min-height`) fighting the shared module-collapse mechanism, so the collapsed-state class/height never takes on the terminal panel. Fix it so the Activity Terminal collapses and expands exactly like every other module while keeping its filled-panel behavior + scroll/autoscroll when expanded. Touch `app.css` (`.panel.term` / collapse rules) and the collapse wiring if needed (`render.js`/`staging.js`). Staging-only; main app + demo unchanged. Done when: collapsing the Activity Terminal hides its body like the other modules and expanding restores the filled terminal with working scroll/autoscroll; the collapsed/expanded state persists with the saved workspace.",
       "doneNote": "**Shipped:** the staging Activity Terminal `.pbody` carried `display:flex` (0,3,0 specificity, same as the generic `.panel.collapsed .pbody{display:none}` but later in source, so flex won). Scoped it to `.panel.term:not(.collapsed) .pbody` (`app/app.css`). Verified: the terminal panel now collapses/expands like every other module."
     },
     {
@@ -494,7 +464,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Close a stored-XSS chain via backup restore. CSV-imported symbols are charset-filtered by `rootSym()`, but `Store.importAll()` (`app/store.js`) writes `trades[].root` and `trademeta[].tags` from an untrusted backup JSON with NO sanitization, and those values are rendered into `<option>` elements WITHOUT escaping in `syncFilterOptions()` (`app/data.js` ~180) and `syncTagFilter()` (~194) — a crafted tag/root such as `'><img src=x onerror=alert(1)>` executes in the app origin (can read IndexedDB + the admin token). Wrap both interpolations in the existing `esc()`, AND sanitize at the trust boundary in `Store.importAll()` (run `root` through `Adapters.rootSym()`, strip angle-brackets/ampersand/quote chars from tags) so restored data matches CSV-imported data. Done when: importing a backup whose tag/symbol contains an HTML payload renders inert text in the filter dropdowns and chips, and a normal backup round-trips unchanged.",
       "doneNote": "**Shipped:** two layers. Sink: the f_symbol/f_tag filter <option> interpolations (app/data.js) are now wrapped in esc(). Boundary: Store.importAll() (app/store.js) forces trades[].root through Adapters.rootSym() and strips <>&\"' from trademeta tags, so a restored backup matches CSV-imported data. Verified in Chromium: importing a backup whose symbol is a crafted img/onerror payload does NOT execute (no alert, no live element), the root is stored as sanitized text (EVILIMGSRCXONERROR...), the dropdown renders inert text, and a normal restore still completes."
     },
     {
@@ -506,7 +475,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Small hardening pass in `functions/` + admin: (1) add `;Secure` to the `bb_staging` admin-token cookie (`admin.html` ~285) — it carries an admin credential; (2) make the raw-key fallback compare constant-time in `isAdminAuthorized()` (`functions/_lib/auth.js`, currently `val===env.ADMIN_KEY`) via an HMAC-equal or `crypto.subtle.verify`; (3) add `Cache-Control: no-store` to `/api/me` (`functions/api/me.js`) before it ever returns per-user data; (4) drop the unnecessary wildcard `Access-Control-Allow-Origin` from `/api/changelog` (all callers are same-origin under the CSP). Done when: the staging cookie is Secure, the raw-key compare is constant-time, `/api/me` is no-store, and `/api/changelog` sends no wildcard CORS header; admin + staging still work.",
       "doneNote": "**Shipped:** (1) the bb_staging admin-token cookie now carries ;Secure; (2) the raw-key fallback in isAdminAuthorized() uses a constant-time compare (HMAC both sides under a random key — leaks neither contents nor length); (3) /api/me is now no-store (via the shared json() helper); (4) dropped the wildcard Access-Control-Allow-Origin from /api/changelog. Verified with a Node WebCrypto test: constant-time accept/reject, me.js no-store, all function modules import."
     },
     {
@@ -518,7 +486,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Remove `'unsafe-inline'` from the CSP `script-src` — it is the biggest residual XSS amplifier (it is what lets an injected script/onerror run; e.g. it is the difference between S7 being exploitable or not). Move the first-party inline `<script>` blocks (homepage `index.html`, `admin.html`, `changelog.html`, and any app page) into external `.js` files, then set `script-src 'self'` in `_headers`. Keep `style-src 'unsafe-inline'` only if inline `style=` attributes remain (or externalize those too). There is no build step, so this is plain file moves. Done when: every page loads its script from an external file, `_headers` `script-src` is `'self'` with no `unsafe-inline`, and app/demo/staging/admin/home still function in preview.",
       "doneNote": "**Shipped:** removed the last inline executable scripts so the CSP forbids inline JS. Moved each page's inline <script> to its own file (index->/assets/home.js, admin->/assets/admin.js, changelog->/assets/changelog.js); rewrote the main/demo new-tab Export report to load external /assets/report.js with per-report data in a non-executable <script type=application/json> block and addEventListener-wired buttons (it inherits the app CSP). _headers script-src is now 'self' (no 'unsafe-inline'); style-src keeps it (inline styles remain). Verified in Chromium UNDER THE EXACT DEPLOYED CSP HEADER: homepage feature explorer, admin backlog, the demo new-tab report (downloads a clean HTML file), and the staging export modal all work with ZERO CSP violations; no inline on*= handlers remain in served HTML."
     },
     {
@@ -530,7 +497,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Harden the admin write path further (already behind Access + token): (1) add lightweight rate limiting to `/api/status`, `/api/config`, `/api/admin-key` (e.g. a KV-backed counter keyed by IP or Access email with a short window) to blunt brute force/abuse; (2) stop persisting the admin token in `localStorage` (`admin.html`) — keep it in a page-session JS variable, or have the function set an HttpOnly+Secure+SameSite cookie — so an XSS cannot lift a live credential. Done when: rapid repeated admin POSTs are throttled, and the admin token is no longer readable from localStorage.",
       "doneNote": "**Shipped (defense-in-depth):** added a best-effort KV-backed fixed-window rate limiter (functions/_lib/http.js rateLimited()) keyed by Access email / client IP — /api/status + /api/config at 30/min, /api/admin-key at 20/min, 429 over limit; fails OPEN if STATUS_KV is unbound so it can't lock the admin out. assets/admin.js no longer writes the admin token (or any key) to localStorage — it lives only in the page-session field and autoKey() re-issues a fresh token each load, so an XSS can't lift a persisted credential. Verified with a Node test (35 reqs at limit 30 -> 5 blocked; fail-open without KV)."
     },
     {
@@ -554,7 +520,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Fix a commission undercount that overstates Net PnL, take-home, and profit factor for size traders. `costModel()` (`app/core.js` ~204) charges round-turn commission as `rate*2` once per trade regardless of contract count, but the fills-based adapters (`adapters.js` `pairFills`) and MotiveWave now emit trades with real `qty` greater than 1. Use `rate*2*(t.qty||1)` in both `costModel()` and the curve's `dailySeries()` (`render.js` ~45), and update the 'one contract' wording in the Definitions/Assumptions caveats to match. Done when: a multi-contract trade is billed for all its contracts, the cost caveat is accurate, and single-contract data is unchanged.",
       "doneNote": "**Shipped:** round-turn commission is now charged per CONTRACT — `2 × per-side rate × (qty||1)` — in `costModel()` and the curve's `dailySeries()`. Close-event exports (no qty) are unchanged; fills/MotiveWave trades with qty>1 are priced correctly. The per-symbol table gained a Contracts column so `$/RT × Cts` reconciles to Commission, and the caveat copy was updated."
     },
     {
@@ -566,7 +531,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Trades are silently misplaced for non-US/non-ET exports. `normTime()` (`app/adapters.js` ~73) always parses `d/d/d` as M/D/Y, and all timestamps are treated as local/ET — so a D/M/Y export shifts trades to the wrong day, week, and month-scope, and the RTH/ETH session classification (`data.js` ~373) is wrong off Eastern time. Either detect the format (e.g. a first field greater than 12 implies D/M/Y) and the export timezone, or at minimum prominently document the US/ET-only assumption in the UI + caveats and guard against obviously-wrong parses. Done when: non-US date formats either parse correctly or are clearly flagged, and the date/session assumptions are documented.",
       "doneNote": "**Shipped:** `normTime()` now detects D/M/Y when the first field is >12 (e.g. 25/06 → Jun 25), defaulting to US M/D/Y otherwise; a new \"US dates & Eastern time assumed\" caveat documents the no-timezone-conversion / ET-session assumptions. Verified by adapter tests (M/D/Y stays US, D/M/Y day>12 swaps)."
     },
     {
@@ -578,7 +542,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "`Store.addTrades()` (`app/store.js` ~95) issues many interleaved async `get`/`put` requests on a single IndexedDB transaction via `Promise.all`; IndexedDB auto-commits when the microtask queue drains with no pending request, so a large import can throw `TransactionInactiveError` and silently drop trades. Rewrite to be transaction-safe — collect existing ids first (or use a cursor), then `put` the new trades in a tight synchronous loop within a fresh transaction. Done when: importing a large CSV (e.g. the ~1539-row staging set, repeated) reliably adds every new trade with no transaction errors.",
       "doneNote": "**Shipped:** `Store.addTrades()` (`app/store.js`) was awaiting a `get()` per trade inside one readwrite transaction, which could auto-commit mid-flight on large imports (TransactionInactiveError). It now reads all ids once into a Set, then issues every `put` in a tight synchronous loop — also dedupes rows repeated within the same batch."
     },
     {
@@ -590,7 +553,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Three adapter robustness fixes in `app/adapters.js`: (1) the Schwab adapter (~388) does `break` when a row is missing the Side cell, truncating ALL later trades on one blank-optional row — change to skip/`continue` and only stop on a real section boundary; (2) the `parseCSV` blank-row test (~34) keeps a row of all-empty fields as data — test whether ALL fields are empty before keeping; (3) review `pairFills` realized-PnL apportionment (~127) for the position-flip case where a closing fill also opens a new lot — apportion realized by matched-close qty over total-closed qty, not over the full fill qty, so PnL is not under-attributed. Done when: a Schwab file with a blank optional cell keeps later trades, all-empty lines are skipped, a flip fill attributes its full realized PnL, and `test-adapters.cjs` still passes.",
       "doneNote": "**Shipped:** three adapter-robustness fixes in `app/adapters.js`: `parseCSV` drops all-empty lines; the Schwab adapter skips a row with a blank optional Side cell (`continue`) instead of `break`, only stopping at a real column-count boundary; `pairFills` apportions a flip fill's realized PnL over the closed qty (not the full fill qty) so the full realized value lands on the closed contracts. +5 regression tests (60/60 pass)."
     },
     {
@@ -602,7 +564,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Small metric fixes in `app/core.js`/`render.js`: (1) Recovery Factor shows a dash when max drawdown is 0 even on a flawless run — show ∞ when `maxDD===0 && net>0`, mirroring how Profit Factor handles the analogous case; (2) the net/take equity curve subtracts the WHOLE period's subscriptions as a single day-0 drop (`dailySeries`) which is visually misleading on multi-month ranges — accrue subscriptions per calendar month along the curve (or document that net/take are end-anchored); (3) normalize or assert that the Section-1256 `ltcgWeight + ordinaryWeight` equals 1 when loading `state-tax.json` so malformed weights cannot silently skew take-home. Done when: a no-drawdown run shows ∞ recovery, the curve accrues subscriptions monthly, and bad tax weights are caught.",
       "doneNote": "**Shipped:** Recovery Factor shows ∞ for an all-positive curve with no drawdown (was —); subscriptions now accrue month-by-month along the equity curve instead of dropping at day 0 (endpoint total unchanged); the 1256 tax weights are normalized if loaded `state-tax.json` drifts off the 60/40 split. In `app/core.js` + `app/render.js`."
     },
     {
@@ -614,7 +575,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "The data-manager modal is inaccessible to assistive tech: `partials/app-modal.html` hardcodes `aria-hidden='true'`, and open/close (`app/datamanager.js` ~14) only toggles the `.open` class — so the dialog stays hidden from screen readers even while visually open, and focus is never moved or trapped. On open: set `aria-hidden='false'` (or remove it), move focus into the sheet (the close button or first control), and trap Tab within `.sheet`; on close: restore focus to the opener. Apply the same to the staging export modal (`#exportModal`). Escape + backdrop close already work — keep them. Done when: screen readers expose the open dialog, focus is trapped and restored, and the modals still close on Escape/backdrop.",
       "doneNote": "**Shipped:** the data-manager and staging export modals are now accessible — a shared `modalOpened`/`modalClosed` helper (`app/ui.js`) flips `aria-hidden`, moves focus into the sheet, traps Tab, and restores focus to the opener on close. Escape + backdrop close still work. Verified in Chromium (aria-hidden toggles, focus enters/restores, Escape closes)."
     },
     {
@@ -626,7 +586,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Make the interactive controls keyboard-operable. The F7 homepage feature list (`index.html`) is built from bare list items with a click handler only (no tabindex/role/keydown) so it is mouse-only and not announced — model it as a tablist (role tablist/tab/tabpanel, arrow-key navigation, aria-selected, and an aria-live detail panel) or use real buttons. The calendar day cells and the equity-curve SVG (`app/render.js`) are mouse-only — add tabindex, role=button, and keydown handlers. Mark the purely-decorative `.ficon` SVGs aria-hidden. Done when: the feature list, calendar days, and curve are operable by keyboard and announced to screen readers.",
       "doneNote": "**Shipped:** the homepage feature explorer is now a real tablist (role tab/tabpanel, roving tabindex, Arrow/Home/End with selection-follows-focus, aria-live detail); calendar day cells and the equity-curve SVG are keyboard-operable (tabindex/role=button, Enter/Space; the curve adds arrow-key date navigation), and decorative `.ficon` SVGs are `aria-hidden`. Verified in Chromium (15 keyboard/ARIA assertions)."
     },
     {
@@ -638,7 +597,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "No page has Open Graph, Twitter-card, or canonical tags, so shared links render bare previews. Add `og:title/description/image/url/type` plus `twitter:card` and `rel=canonical` to `index.html` (and ideally the info pages), and provide a raster (PNG/JPG) OG image — the existing `assets/banner.svg` will not render as an OG image. Titles + meta descriptions are already present and good. Done when: sharing the homepage produces a rich preview card and each public page declares a canonical URL.",
       "doneNote": "**Shipped:** generated a 1200x630 raster OG card (assets/og-image.png, branded dark card). index.html gets full Open Graph + Twitter summary_large_image tags + rel=canonical; howto/roadmap/changelog/legal each get rel=canonical + per-page OG/Twitter (own title/description, shared OG image). Shared links now render a rich preview and every public page declares a canonical URL."
     },
     {
@@ -650,7 +608,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Add a root `robots.txt` and `sitemap.xml`. `admin.html` already carries noindex/nofollow, but there is no sitemap advertising the public pages (home/howto/roadmap/changelog/legal) and no robots.txt. Add a minimal `robots.txt` that references the sitemap and disallows `/app/` and `/admin.html` at the crawler level, plus a `sitemap.xml` listing the public pages. Done when: both files serve at the root and validate.",
       "doneNote": "**Audit + shipped.** A Cloudflare-managed robots.txt was already served at the edge (AI Crawl Control: `User-agent:* / Allow:/` + `Content-Signal: search=yes,ai-train=no`, and `Disallow:/` for Amazonbot, Applebot-Extended, Bytespider, CCBot, ClaudeBot, CloudflareBrowserRenderingCrawler, Google-Extended, GPTBot, meta-externalagent; no sitemap). Per decision, that managed file was DISABLED in the Cloudflare dashboard so there's one source of truth. Added a committed root `robots.txt` that subsumes the prior AI-crawler blocks + the `Content-Signal` reservation, and adds `Disallow: /app/` + `/admin.html` and a `Sitemap:` line; plus `sitemap.xml` listing the 5 public pages (matching their CH5 canonical URLs). Verified: sitemap is valid XML and its locs equal the page canonicals; robots carries the disallows + content-signal + sitemap line. NOTE: confirm on the live site post-deploy that only our file serves (the Cloudflare override is off)."
     },
     {
@@ -662,7 +619,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Nothing enforces the manual tooling: there is no CI, no package.json, and nothing guarantees that `build-includes.mjs` (partials) and `build-manifest.mjs` (cache-bust hashes) were re-run after edits, or that `test-adapters.cjs` passes before deploy. Add a GitHub Actions workflow (and/or set the Cloudflare Pages build command) that runs both build scripts and FAILS if they produce a diff, and runs the adapter tests. Consider a SessionStart hook so web sessions run the tests. Done when: a change that edits a partial or data file without re-running the builds fails CI, and the adapter tests run automatically.",
       "doneNote": "**Shipped:** .github/workflows/ci.yml (push to main + PRs) runs test-adapters.cjs, regenerates partials (build-includes) + the data manifest (build-manifest), and FAILS on any uncommitted diff — so stale partials or a stale manifest can't merge. Made build-manifest deterministic for the gate: dropped the generatedAt timestamp (nothing reads it; the app cache-busts the manifest fetch itself) and excluded backlog.json (admin-only, fetched no-store) so the manifest stops churning on backlog edits. Verified: manifest re-run = no diff, 55/55 adapter tests pass, build-includes idempotent. Note: a SessionStart hook isn't committable (.claude/ is gitignored) — the Actions workflow is the enforcement."
     },
     {
@@ -674,7 +630,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "The same version numbers live in `functions/api/config.js` DEFAULTS, each app page's `.ver` badge, a hardcoded literal in `app/staging.js` (~82, 'Staging session ready · v0.13'), and the `admin.html` placeholders — a bump means four-plus hand-edits and silent drift, and the staging.js literal is easy to miss. At minimum, make `staging.js` read the version from the `.ver` element instead of the literal, and document a one-place bump checklist; better, drive each page badge from a single shared constant. Done when: bumping the staging version no longer requires editing `staging.js`, and the remaining drift points are documented and reduced.",
       "doneNote": "**Shipped:** app/staging.js reads the version from the .ver page badge instead of a hardcoded 'v0.13' in the activity-terminal 'session ready' line, so a bump no longer touches staging.js. README documents a version-bump checklist (badge = display source; reconcile config.js KV defaults + admin placeholder). Verified: the staging terminal shows 'Staging session ready · v0.13' read from the badge."
     },
     {
@@ -686,7 +641,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Two small cleanups surfaced by the audit: (1) the L1 breakpoint-scale comment block at the top of `app/app.css` still cites F7-deleted classes (`.grid3`, `.uc-grid`) as live examples — update to surviving selectors (`.uc-row`, `.feat-explorer`, `.plat-grid`, `.price-grid`); (2) the homepage live-status pill pings `fetch('app/')` (relative) while every other call is absolute — change to `fetch('/app/')` for path-independence and convention. Done when: the CSS comment references real classes and the pill uses the absolute `/app/` path.",
       "doneNote": "**Shipped:** the app/app.css L1 breakpoint-scale comment now references surviving selectors (.uc-row, .feat-explorer) instead of the F7-deleted .grid3/.uc-grid; assets/home.js live-status pill pings /app/ (absolute) instead of the relative app/, matching every other fetch + the _redirects convention."
     },
     {
@@ -698,7 +652,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "The `json(obj,status)` Response helper is byte-identical in `functions/api/config.js`, `status.js`, and `admin-key.js`, while `me.js`/`checkout.js`/`webhook.js`/`geo.js` hand-roll inconsistent variants (e.g. lowercase content-type, no Cache-Control). Add a single `json()` to a shared `functions/_lib/http.js` (or `_lib/auth.js`) and import it everywhere so all API responses share one shape (charset + no-store by default). Done when: every API function returns JSON via the shared helper and the response headers are consistent.",
       "doneNote": "**Shipped:** new functions/_lib/http.js exports a single json(obj,status,headers) helper (no-store + charset by default). config/status/admin-key dropped their byte-identical local copies; me/checkout/webhook/geo now return via the shared helper for a consistent response shape (also gives /api/me no-store). changelog keeps its bespoke long-cache headers by design. Verified: all function modules import; json() defaults + override correct."
     },
     {
@@ -710,7 +663,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Finish the deferred remainder of A5 by extending the existing `build-includes.mjs` partial + mode-conditional pattern to the markup still hand-kept across the three app pages: (1) an `app-topbar` partial covering the three top bars (mode conditionals for the demo Demo/End-demo + disabled Manage, and the staging session pill + workspace bar + Exit-staging); (2) an `app-scripts` partial for the identical script-loading block at the bottom of all three pages (the most ordering-sensitive markup — staging adds `staging.js` via a flag); (3) fold demo's bespoke landing + preview-only data manager into `app-landing`/`app-modal` with a `mode=demo` branch that emits the disabled/preview state. Output stays 100% static. Done when: the top bars, the script block, and demo's landing/modal each live in one source and the three app pages render identically to today.",
       "doneNote": "**Shipped:** finished A5's tail — `app-topbar` and `app-scripts` partials now single-source the three top bars and the ordering-sensitive script block, and demo's trimmed landing + preview-only modal fold into `app-landing`/`app-modal` via a `mode=demo` branch. The three built pages are render-equivalent to before (comment-stripped/whitespace-normalized diff + 27 Chromium assertions); build stays idempotent and 100% static."
     },
     {
@@ -722,7 +674,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Tidy the theming: route the stray literal hex values through `tokens.css` (e.g. the `#33405a` hover borders and the `#0d1014` on-accent text duplicated across `index.html`/`app.css` — add a `--hover-line` token and reuse `--bg` for on-accent text), and spot-check WCAG AA contrast (4.5:1) for the low-emphasis text colors (`--faint` and `--dim`) against `--bg`, especially the footer disclaimer and the `.foot`/`.scrollhint` copy — bump the token value if any fail. Done when: no ad-hoc hexes remain for those cases and the flagged low-emphasis text meets AA contrast.",
       "doneNote": "**Shipped:** stray hex literals routed through `tokens.css` — added `--hover-line` (#33405a hover borders) and replaced on-accent text `#0d1014` with `var(--bg)`. `--faint` was failing WCAG AA on `--bg` (3.18:1) and was bumped #5b6470 → #767f8c (4.71:1); `--dim` (6.22:1) already passed."
     },
     {
@@ -734,7 +685,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "`compute()` (`app/core.js:105`) does `best:n?Math.max(...pnls):0, worst:n?Math.min(...pnls):0` — spreading the per-trade PnL array as function arguments. Argument count is engine-capped (~65k–125k), so a large multi-year fills export (Sierra/IBKR can emit tens of thousands of round-trips) throws `RangeError: Maximum call stack size exceeded` inside `compute()` and blanks the entire dashboard. Every other reduction in `compute()` already uses a loop/`reduce`; this is the lone unbounded spread. Done when: best/worst are computed via the existing per-trade loop (running max/min) and a synthetic ~100k-trade dataset renders without error.",
       "doneNote": "**Shipped:** `compute()` (`app/core.js`) now tracks best/worst as running min/max inside the existing equity-curve loop instead of `Math.max(...pnls)`/`Math.min(...pnls)` — the spread overflowed the call stack on large fills exports and blanked the dashboard. Verified a 200k-row dataset no longer throws; metrics unchanged."
     },
     {
@@ -746,7 +696,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "`app/main.js:11-14` assign `$('prev').onclick`/`$('next').onclick` directly at script-evaluation time, bypassing the null-safe `on(id,ev,fn)` helper used for every other handler. If either id is ever absent (a trimmed partial variant or a future page reusing these scripts), `main.js` throws at load and `boot()` never runs — the whole app silently fails to initialize. Done when: both calendar-nav handlers route through `on('prev','click',…)`/`on('next','click',…)` like the rest of main.js.",
       "doneNote": "**Shipped:** the calendar prev/next handlers route through the null-safe `on()` helper (`app/main.js`) instead of `$('prev').onclick`, so an absent id can't throw at module load and kill `boot()`. Verified prev/next still navigate months."
     },
     {
@@ -758,7 +707,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "`numIn`/`feedCost`/`stateRate` (`app/core.js:199-202`) coerce a cleared or malformed input to `0` with no signal, so an empty platform-fee field or a bad saved `setup.platform` quietly models $0 cost and overstates net/take-home. Done when: cost inputs clamp negatives to 0 and a genuinely-empty field is visually distinguishable from an explicit 0 (placeholder/`—`), so the cost model can't silently under-count.",
       "doneNote": "**Shipped:** `numIn()` (`app/core.js`) clamps negatives to 0 (a typed `-5` can't manufacture negative cost) and the platform-fee input gained `placeholder=\"0\"` so an empty field reads as 0 rather than a typed value."
     },
     {
@@ -770,7 +718,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "`tradestation.sniff` (`app/adapters.js:303`) scores `2` on a generic column set (symbol + type/side/action + shares/contracts/qty + price + time/date), which is exactly `detect()`'s `score>=2` floor (`adapters.js:419`). Other brokers' fills exports can be misclassified as TradeStation when no higher-scoring adapter matches. The beta flag + manual override mitigate it, but auto-detect is the default. Done when: TradeStation requires a distinctive TS-specific token (or the floor is raised to 3 with TS kept at 2 as an explicit weak-guess tier), and the existing 60 adapter tests still pass.",
       "doneNote": "**Shipped:** the TradeStation adapter (`app/adapters.js`) now requires the distinctive combined `date/time` column and scores 3 (was 2, the detect floor), so a generic split-time fills export no longer auto-claims as TradeStation. IBKR also has date/time but uses `buy/sell`, so no collision. Regression test added (62/62 pass)."
     },
     {
@@ -782,7 +729,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "`renderCalendar()`/`renderCurve()` (`app/render.js`) rebuild `innerHTML` wholesale, so a keyboard user who arrows into a day cell or the curve and then triggers a re-render (filter change, `selectFromGraph`) loses focus to `<body>`. Not a regression (cells weren't focusable before B10) but an a11y rough edge. Done when: focus is restored to the matching `[data-date]` cell (or the curve) after a re-render that was initiated from keyboard interaction.",
       "doneNote": "**Shipped:** `renderCalendar()` (`app/render.js`) remembers the focused day's date and restores focus to the same cell after its wholesale innerHTML rebuild, so keyboard users no longer drop to `<body>` on re-render. (The `#curve` SVG element persists across renders, so it never lost focus.) Verified in Chromium."
     },
     {
@@ -794,7 +740,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "When `ACCESS_TEAM_DOMAIN`+`ACCESS_AUD` are unset, `admin-key.js:41-48` skips `verifyAccessJwt` and issues a signed admin token on mere *presence* of the `Cf-Access-Jwt-Assertion` header (`_middleware.js` staging gate is similarly fail-open). This is safe only while the route is actually behind Cloudflare Access at the network layer; a preview deploy or unenrolled custom domain would let a caller spoof the header. Separately, the `?check` diagnostic (`admin-key.js:25-36`) runs BEFORE the 401 and discloses Access config + the authenticated email to anyone who reaches the endpoint. Done when: unset Access env is treated as fail-closed in production (refuse to mint tokens) and `?check` requires a valid assertion (or a prod-disabled debug flag). Read-only S4 health stays available behind Access.",
       "doneNote": "**Shipped:** admin-key issuance and the staging gate now **fail closed** when `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` are unset (admin-key → 503, staging → 403) unless `ALLOW_PRESENCE_AUTH=1` is set for local/preview — closing the spoof-the-header-off-Access path. The `?check` diagnostic is gated behind `ADMIN_DEBUG=1` (off by default) so it can't disclose Access config/email to anonymous callers. Prod (Access configured) is unaffected. README updated."
     },
     {
@@ -806,7 +751,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Before the payment/account scaffolds go live, harden them: `functions/api/webhook.js` must verify the `stripe-signature` over the RAW request body against `STRIPE_WEBHOOK_SECRET` (constant-time, with timestamp tolerance) before any KV/D1 write — otherwise a forged `checkout.session.completed` grants the `cloud` tier; `functions/api/checkout.js` must authenticate the caller and select price IDs server-side from `env.STRIPE_PRICE_*` (never trust client-supplied prices); `functions/api/me.js` must resolve and authorize a real session before returning entitlements. All three are inert 501/local-tier stubs today (no live exposure). Done when: each endpoint enforces the above at implementation time and is covered by a test.",
       "doneNote": "**Shipped:** added `verifyStripeSignature()` (`functions/_lib/auth.js`) — HMAC-SHA256 over the RAW body, constant-time compare, 5-minute replay window, multi-`v1` rotation support — and wired `/api/webhook` to verify before acting (no secret → 501, bad sig → 400, valid → 501 pending provisioning). Reinforced checkout/me with SECURITY notes (server-side price IDs only; authorize the session before a non-local tier). New `scripts/test-auth.mjs` (13 assertions) added to CI. Account provisioning itself stays a scaffold."
     },
     {
@@ -818,7 +762,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Three byte-identical escapers exist — `esc` (`app/datamanager.js:21`, relied on across data/render/staging via shared global scope), `esc` (`assets/changelog.js:15`), `bkesc` (`assets/admin.js:107`) — and none escape `\"`/`'`. Tag values and workspace-template names flow into double-quoted attributes (`datamanager.js:100`, `staging.js:48`) where a `\"` enables attribute injection; the strict CSP blocks execution today, so it's latent, not live. Move `esc()` next to the shared formatters in `app/core.js` (and a tiny shared util for the info pages/admin), and extend it to encode `\"` and `'`. Done when: one escaper is used everywhere, it encodes `<>&\"'`, and a tag containing `\"` renders inert.",
       "doneNote": "**Shipped:** the three duplicated escapers (`esc` in datamanager.js used app-wide, `esc` in changelog.js, `bkesc` in admin.js) collapse into one shared `assets/util.js` loaded first on every page. The shared `esc()` now also encodes `\"` and `'`, closing the latent attribute-injection that only the strict CSP was guarding. Verified across app/changelog/admin."
     },
     {
@@ -830,7 +773,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "`reportCss` in `app/export.js` (~83-86, plus `#0d1014` at ~119/158/294) re-declares the entire `:root` palette as literal hexes — a second source of truth for the same 11 colors. It already ships `--faint:#5b6470`, the exact value L5 bumped to `#767f8c` for WCAG AA, so the report renders the old failing-contrast color. The report is a standalone document (can't `@import`), so derive its `:root` block from a single shared token constant (or snapshot `getComputedStyle(document.documentElement)` at export time). Done when: the report's colors come from one source, `--faint` matches tokens.css, and no raw palette hexes remain in export.js.",
       "doneNote": "**Shipped:** the exported report's `:root` is generated from the live token values (`getComputedStyle` at export time) instead of a hardcoded palette, and the remaining `#0d1014` literals read from `var(--bg)`/the `--bg` token. The report no longer ships the pre-L5 `--faint:#5b6470` — verified it now carries `#767f8c`, matching tokens.css."
     },
     {
@@ -842,7 +784,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "A6 single-sourced nav/footer for changelog/roadmap/legal/howto, but `index.html` and `admin.html` still carry bespoke copies with no include markers, and the nav/footer CSS is duplicated between `site.css` and `index.html`'s inline `<style>` (with value drift: `.nav` max-width 1080 vs 1180, differing footer disclaimer text). Done when: index/admin either consume `<!-- include:nav -->`/`<!-- include:footer -->` (with variant params) or their divergence is explicitly documented, and the shared nav/footer CSS lives in one stylesheet with only page-specific overrides inline.",
       "doneNote": "**Shipped (documented divergence):** index.html (marketing landing) and admin.html (internal tool) keep genuinely-distinct bespoke nav/footer — homepage uses section anchors + CTA/hamburger and a fuller disclaimer; admin uses a trimmed nav + 'internal' disclaimer. Folding them into the shared partials (or coupling the standalone homepage to site.css) would add risk for no gain, so each file now carries an inline note explaining why it stays bespoke, and the build-includes.mjs header is corrected (it also fixes the now-stale claim that demo keeps a bespoke shell — A6 folded it in)."
     },
     {
@@ -854,7 +795,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "A bundle of low-risk cleanups from the second audit: (1) compute `costModel(m)` once in `renderDash()` and thread it into renderCards/renderAdv/renderCalc/dailySeries instead of recomputing it 4–5× per render; (2) merge the two blob-download helpers (`downloadFile` in `ui.js:55` and `expDlBlob` in `export.js:250`) into one that accepts a string or a Blob; (3) data-drive the ~5 parallel metric emitters (export HTML tiles/table, plaintext, markdown, and the dashboard) from one `[{label,value,cls}]` list so a metric change is made once; (4) capture `selectedDate`+textarea value when scheduling the journal autosave (`data.js:301-302`) so a fast day-switch can't write notes to the wrong date; (5) drop the stale inline CSS fallback hexes `var(--panel,#11151b)`/`var(--red,#e0564d)` (`app.css:469,471`) that don't match the real token values; (6) add `git status --porcelain` (fail if non-empty) to the CI drift gate to also catch new untracked build outputs. Done when: each is applied, adapter tests pass, and the build stays idempotent.",
       "doneNote": "**Shipped:** `costModel(m)` computed once per `renderDash()` and threaded into renderCards/renderAdv/renderCalc (was ~4 walks/render); `downloadFile()` now takes a string OR a Blob (replacing `expDlBlob`); the report's headline figures are defined once and rendered as both HTML tiles and the plaintext summary; journal autosave captures date+text at schedule time (no wrong-date writes on a fast day-switch); stale `var(--red,#e0564d)`/`var(--panel,#11151b)` CSS fallbacks removed; and the CI drift gate now also catches untracked outputs via `git status --porcelain`."
     },
     {
@@ -866,7 +806,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "In the staging Break-even & Cost Budget module, refactor the Section-1256 tax presentation in the cost waterfall (`renderCalc` → `c_rows`/`c_head` in `app/render.js`) to mirror the existing <b>Commissions (all-in)</b> pattern: a single headline line item <b>Est. 1256 Tax (net profit only)</b> showing the total, with the <em>State top rate</em> and <em>Blended 1256 rate</em> lines moved into a collapsible <em>Tax breakdown</em> subsection beneath it — the same `<details>`/collapsible treatment used for the per-symbol commission table (F6). Keep the computed values identical (`stateRate()`, `c.tEff`, `c.tax`); this is presentation only. Staging-scoped (gate behind `STAGING_PAGE` like the F6 commission subsection). Done when: the live Break-even module shows one Est. 1256 Tax line with a collapsible breakdown holding State top rate + Blended 1256 rate, matching the Commissions item's styling, and the numbers are unchanged.",
       "doneNote": "**Shipped:** in staging, the Break-even module now shows one **Est. 1256 tax (net profit only)** headline line with the total, and the State top rate + Blended 1256 rate moved into a collapsible **Tax breakdown** details element (mirrors the F6 commission subsection). Main app + demo keep the inline rows. Values unchanged (gated on STAGING_PAGE in renderCalc)."
     },
     {
@@ -878,7 +817,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "The Day-notes editor (`#journal`: `j_date`/`j_stat`/`j_text` in `partials/app-dash.html`) is always shown even when no calendar day is selected. Make it appear only while a day is actively selected (`selectedDate` set) and hide it otherwise, and make a click anywhere OUTSIDE the Trading Calendar module deselect the active day — clear `selectedDate`, remove `.selday`, drop the graph marker, and hide the notes box. Touches `selectedDate`/`selectDay()` (`app/render.js`/`app/data.js`) and a document-level click handler in `app/main.js` (ignore clicks inside `#cal`/the calendar panel and inside the notes editor itself). Lives in shared dashboard code, so verify on app/demo/staging (demo keeps its 'notes disabled' hint). Done when: the notes box is hidden until a day is clicked, clicking outside the calendar module deselects the day and hides the box, and selecting a day still loads/saves its note.",
       "doneNote": "**Shipped:** the Day-notes editor (#journal) is hidden until a day is actively selected and reappears on selection; a click outside the Trading Calendar module (and outside the equity curve, the other date-selection surface) deselects the day — clears the highlight, drops the graph marker, hides the box. Capture-phase document handler so a curve re-render cannot detach the target. Verified on app/demo/staging."
     },
     {
@@ -890,7 +828,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "The staging Activity Terminal (`app/staging.js`, the `#termwin` feed) appends new lines at the bottom (oldest-first). Reverse it so the most recent entry is at the TOP of the terminal — prepend each new line (or reverse render order) and adjust any autoscroll (newest is now always visible at the top, so scroll-to-bottom logic should become scroll-to-top or be removed). Keep the timestamp/line formatting and the line cap unchanged. Done when: the latest activity line appears at the top of the terminal and older lines flow downward.",
       "doneNote": "**Shipped:** the staging Activity Terminal now prepends new lines so the most recent entry is at the TOP; the line cap trims the oldest (now last) and the view scrolls to top. Formatting/cap unchanged."
     },
     {
@@ -902,7 +839,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Replace manual versioning with automation. DESIGN IS DECIDED (analysis done, decisions confirmed) — implement exactly this:\n\n• SOURCE OF TRUTH: one committed `data/versions.json` = {prod, staging} as semver (seed prod \"0.12.0\", staging \"0.22.0\"). The platform 'phase' is DERIVED, not stored: prod major 0 → \"Beta\", ≥1 → stable; platform label = e.g. \"Beta 0.12\".\n• TWO TRACKS: prod (main + demo share it) and staging. (Retires the old per-surface main/demo/staging/platform record.)\n• BUMP LEVEL via conventional commits — the squash-merge title's type: feat→minor, fix/chore/refactor/docs/etc→patch, feat!/BREAKING→major; untyped/legacy→patch.\n• SURFACE SELECTION via changed paths: any PROD-shipping file changed (shared `app/*.js` except staging.js, `app/app.html`, `app/demo.html`, `app/app.css`, `partials/*`, `assets/*`, `tokens.css`, `data/*` except versions.json+backlog.json) bumps BOTH prod and staging (shared code ships to both); ONLY staging-specific files (`app/staging.js`, `app/staging.html`) bump staging alone; only non-app files (info pages, README, backlog, .github) bump nothing.\n• MECHANISM: a CI job on push to main computes the bump from the merge commit + its changed paths, writes data/versions.json, and commits it back to main with [skip ci] (needs `permissions: contents: write`; guard against bumping its own [skip ci] commit).\n• DISPLAY = RUNTIME FETCH: a tiny script (e.g. extend assets/util.js or a versions.js loaded on the app pages) fetches `/data/versions.json` on load and sets each `.ver` badge from the page's `data-mode` (staging→staging, app/demo→prod), shown as vMAJOR.MINOR.PATCH; keep the baked partial literal as an offline fallback. `app/staging.js` must read the badge AFTER it's populated (await/event).\n• ADMIN/API: `/api/config` and the admin panel read versions.json; REMOVE the manual v_main/v_demo/v_staging/v_platform inputs (or make read-only) and retire the KV `versions` record.\n• EXCLUDE versions.json from build-manifest.mjs (like backlog.json) so it doesn't thrash cache-bust hashes.\n• DO NOT TOUCH separate concerns: store.js DB_VERSION, backup `version`, manifest.json hashes, refDataVersion.\n\nDone when: a merge to main auto-bumps the correct track(s) per the rules, every surface shows the source-of-truth version at runtime (with offline fallback), the manual admin version entry is gone, adapter/auth tests + the build drift gate stay green, and no separate concern regressed.",
       "doneNote": "**Shipped:** one source of truth data/versions.json ({prod, staging}) replaces the two disconnected sources. A CI job (.github/workflows/version-bump.yml -> scripts/bump-version.mjs) bumps on merge to main — level from the conventional-commit type, track from changed paths (shared code -> both, app/staging.* -> staging, non-app -> none) — and commits versions.json back as chore(release): ... [skip ci]. Badges are runtime-fetched (assets/util.js) with the baked partial literal as offline fallback; /api/config + admin show the values read-only (manual inputs + KV versions record retired); phase derived from prod major (0.x -> Beta). versions.json excluded from the manifest; separate concerns (DB_VERSION, backup version, manifest hashes, refDataVersion) untouched. 24 bump-logic unit tests + 7 Chromium assertions pass; added to CI. README versioning section rewritten. Seed prod 0.12.0 / staging 0.22.0."
     },
     {
@@ -911,11 +847,10 @@
       "category": "CHORE / REFACTOR",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Shrink data/backlog.json: for every item with status `done`, remove its `prompt` field — the `doneNote` is the shipped record, so the now-redundant prompt only bloats the file (the admin viewer never renders done-item prompts anyway). Keep `prompt` on open/guardrail items. Add a standing instruction as a top-level field next to `commitConvention` (e.g. `donePolicy`) stating: when an item's status is set to `done`, delete its `prompt` and keep only the `doneNote`. Done when: no done item has a `prompt`, the policy note is present, backlog.json is still valid JSON, and the admin backlog panel still renders.",
-      "doneNote": null
+      "doneNote": "**Shipped:** stripped the `prompt` field from all 74 done items (kept only `doneNote`, the shipped record), and added a top-level `donePolicy` next to `commitConvention` stating that setting an item to `done` removes its prompt and keeps the doneNote (prompts stay on open/guardrail items). Net diff: 1 insertion (the policy) + 74 prompt deletions, no other changes. Verified backlog.json is valid JSON and the admin backlog panel still renders all 87 items (74 done · 11 open · 2 guardrail) with no errors — it never rendered done-item prompts anyway."
     },
     {
       "id": "F13",
@@ -926,7 +861,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "DISCUSSION → then build. Today the changelog (`changelog.html` / `assets/changelog.js` / `functions/api/changelog.js`) just lists raw commit/merge titles pulled from the GitHub API, with no version linkage. Revamp it into a user-approachable, VERSIONED changelog: each entry keyed by the platform/app version (the CH12 two-track versions; `chore(release)` commits mark version boundaries in history), with a friendly sub-detail under it — the merge title or a snippet of the PR description/notes. Truncate everything before versioning was introduced into a single generic \"Beta released\" entry, then continue from the first versioned release. Propose the approach FIRST (how to map commits→versions via the chore(release) boundaries; where the human-readable blurb comes from — PR body vs a curated release-notes file; prod vs staging track on the public page) and surface it before implementing. Done when: the changelog reads as versioned release notes (\"Beta released\" → each subsequent version with a readable summary), distinct from the raw git log.",
       "doneNote": "Discussed and agreed three decisions (curated source / prod track only / manual maintenance), then built. New source of truth: curated, version-keyed data/changelog.json (prod track, newest first) — each release has version, date, friendly title/summary, optional highlights; pre-versioning rolled into one beta:true 'Beta released' entry. assets/changelog.js now fetches the static file and renders versioned timeline cards (version badge, formatted date, Latest pill, summary, highlight bullets) with a small inline fallback; retired the raw-commit functions/api/changelog.js entirely. Seeded from the real chore(release) history: 0.13.0→0.14.2 plus the Beta floor. Added .entry .ver/.summary/.highlights styles to site.css; excluded changelog.json from build-manifest (fetched directly, like backlog/versions). Updated README, legal.html, and changelog.html copy off 'commit history'. Verified in-browser: 5 entries render from the live fetch, no console errors; tests 62/27/13 green, builds idempotent. Future releases: add a top entry to data/changelog.json each prod bump."
     },
     {
@@ -974,7 +908,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "The F11 capture-phase deselect handler (`app/main.js` ~66) only retains the calendar selection for `.panel[data-key=\"cal\"]` and `#curve`. The data-manager (`#dataModal`) and export (`#exportModal`) modals are top-level `.modal` siblings OUTSIDE both, so with a day selected, opening Manage-data and clicking anything in it (search, Edit, Delete-note, a format select) fires `deselectDay()` — clearing the day, hiding the journal, and re-rendering the curve under the open modal. Especially confusing since the modal is where you delete the selected day's note. Fix: add `|| e.target.closest('.modal')` to the early-return guard. Also (P3) `deselectDay()` should flush a pending journal save before nulling selectedDate (`clearTimeout(jSaveTimer); if(selectedDate) Store.saveJournal(selectedDate, j_text.value)`), to close a narrow keyboard/synthetic-click data-loss window where the debounced note is dropped. Done when: interacting with either modal keeps the selected day, and no unsaved note is lost on deselect.",
       "doneNote": "app/main.js capture-phase deselect guard now also early-returns on `e.target.closest('.modal')`, so interacting with the data-manager or export modal keeps the selected day. deselectDay() (app/data.js) flushes the debounced journal note (clearTimeout(jSaveTimer) + Store.saveJournal) before nulling selectedDate, closing the data-loss window."
     },
     {
@@ -986,7 +919,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "The PR #11 staging-launch hardening appends the live short-lived admin token to the URL: `/app/staging.html?k=<token>` (`assets/admin.js` ~109). The page never scrubs it, and the global `Referrer-Policy: strict-origin-when-cross-origin` (`_headers`) sends the FULL URL (token included) as the `Referer` on every same-origin subresource fetch staging makes (util.js, store.js, /data/versions.json), so the token lands in Cloudflare access logs, browser history, and the address bar — replayable for its 2h TTL against /api/status, /api/config, and the staging gate. The `bb_staging` cookie set by the same launch is the safe channel. Fix: drop `?k=` and rely on the cookie (now SameSite=Lax, which already survives the window.open navigation); OR if `?k=` is kept as a fallback, have staging.html `history.replaceState` to strip it immediately on load AND add `<meta name=\"referrer\" content=\"no-referrer\">` to staging.html. Done when: the admin token no longer appears in the staging URL after load or in any Referer header.",
       "doneNote": "Kept ?k= as the navigation-safe fallback but neutered its exposure: a top-of-file IIFE in assets/util.js (loads first on every page) history.replaceState-strips ?k= immediately on load, and app/staging.html now carries <meta name=\"referrer\" content=\"no-referrer\"> so no subresource fetch leaks the token via Referer. Token no longer lingers in the address bar/history or any Referer header."
     },
     {
@@ -998,7 +930,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "Robustness fixes for the CH12 automation (`.github/workflows/version-bump.yml` + `scripts/bump-version.mjs`): (1) CONCURRENCY — two merges landing close together each compute a bump from the same versions.json and race `git push`; the loser is rejected and the `|| echo warning` swallows it, silently LOSING that bump. Add `concurrency: {group: version-bump-main, cancel-in-progress: false}` and make the push `git pull --rebase && git push` with retry. (2) MERGE COMMITS — `git diff HEAD~1 HEAD` assumes a linear squash history; a true (non-squash) merge commit makes HEAD~1 the old main tip and misclassifies, and fetch-depth:2 may lack the parent. Detect merge commits (diff `HEAD^1 HEAD^2`) or use the PR file list. (3) FIRST-COMMIT/SHALLOW — the local CLI `execSync('git diff HEAD~1 HEAD')` (`bump-version.mjs` ~85) throws when HEAD~1 doesn't exist; guard with a tree-hash fallback or try/catch. (4) PUSH RANGE — the `[skip ci]` guard + COMMIT_MSG read only `github.event.head_commit`; a multi-commit direct push can skip/misclassify. Optionally compute over `github.event.before..github.sha`. (5) Minor: set `window.__versionsReady = Promise.resolve(null)` before util.js's early return so the contract holds for future consumers. Done when: concurrent merges don't lose bumps, the script is safe on the first commit, and merge-commit pushes classify correctly.",
       "doneNote": "Hardened both halves of the CH12 automation. version-bump.yml: added `concurrency: {group: version-bump-main, cancel-in-progress: false}`, fetch-depth:0, diffs the pushed range (before..after with a HEAD~1 fallback), and wraps bump→build-includes→commit→push in a 5-attempt retry loop (reset --hard HEAD~1 + pull --rebase on rejection) so close merges can't lose a bump. bump-version.mjs: the local `git diff HEAD~1 HEAD` is now guarded (try/catch → treat as no changes) so it's safe on the first/shallow commit. util.js sets window.__versionsReady = Promise.resolve(null) before its early return so the promise contract always holds."
     },
     {
@@ -1010,7 +941,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "`isProdShipping` (`scripts/bump-version.mjs` ~34) does NOT classify `index.html` (the live marketing landing), `site.css`, or the root info pages (howto/roadmap/legal/changelog) as prod-shipping, so real user-facing production changes produce NO version bump (`classifySurfaces(['index.html'])` → neither track). The 'prod' track currently tracks only the app shell, not the deployed site. Decide intent: if prod means 'what users see at blotterbook.com', add `index.html`/`site.css`/the info `*.html` to `isProdShipping` (update the unit tests); if it deliberately means 'the app only', rename/clarify the track so the semantics aren't misleading. Done when: the prod-track definition is intentional and documented, and the bump tests cover homepage/info-page changes.",
       "doneNote": "Chose the 'what users see at blotterbook.com' intent. Added a PROD_ONLY set (index.html, site.css, howto/roadmap/legal/changelog.html) to classifySurfaces in scripts/bump-version.mjs so those user-facing changes now bump the prod track. Added prod-only surface cases to test-version.mjs (now 27 tests): index.html → prod only, site.css+howto.html → prod only, admin.html/README/backlog → neither, index.html+staging.js → both."
     },
     {
@@ -1022,7 +952,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "The offline fallback `.ver` literals (`partials/app-topbar.html` ~6-10 → baked into app/app.html, demo.html, staging.html) are frozen at v0.12.0/v0.22.0 while `data/versions.json` is several releases ahead, and nothing (no script, no CI step) regenerates them — so an offline/error user (when the runtime `/data/versions.json` fetch fails, `assets/util.js`) sees a stale version. Fix: have `bump-version.mjs` also rewrite the baked literals in `partials/app-topbar.html` and run `build-includes` as part of the bump commit, so the fallback tracks the live version; or at minimum document that the literal is a best-effort floor. Done when: the offline fallback version stays current with data/versions.json (or the limitation is explicitly documented).",
       "doneNote": "bump-version.mjs now calls syncBakedBadges() after writing versions.json: it regex-rewrites the baked `.ver` literals in partials/app-topbar.html (Main app/Demo → prod, Staging → staging), and the workflow runs build-includes and commits partials/app-topbar.html + app/app.html/demo.html/staging.html alongside data/versions.json. The offline fallback now tracks the live version. Synced the current literals to v0.14.1 (Main/Demo) / v0.24.1 (Staging)."
     },
     {
@@ -1034,7 +963,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "`importAll` (`app/store.js` ~237) passes a backup's `trademeta.shots` through untouched (it sanitizes `root` and `tags` but not `shots`), and the editor interpolates each into `<img src=\"${s}\">` without `esc()` (`app/datamanager.js` ~104). A crafted backup (`shots:['x\" onerror=\"…']`) breaks out of the attribute. NOT currently exploitable (the strict `script-src 'self'` CSP blocks the inline handler), but it contradicts the store.js sanitizer comment that claims protection for 'any current or future render sink' and would matter if CSP ever loosens. Fix: in importAll, keep only `shots` entries matching `^data:image/(png|jpe?g|webp|gif);base64,`, and `esc()` the value at the render site. Done when: a backup with a malformed shot URL is dropped/inert and the render site escapes it.",
       "doneNote": "Added a cleanShots() sanitizer to importAll (app/store.js) that keeps only strings matching `^data:image/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$`, dropping any crafted shot payload at the trust boundary. Defense-in-depth: the editor now escapes the value at the render site — `<img src=\"${esc(s)}\">` (app/datamanager.js). A malformed shot URL is now both dropped on import and inert if rendered."
     },
     {
@@ -1046,7 +974,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "The admin panel can toggle `flags.showBetaAdapters`, `flags.maintenanceBanner`, and bump `refDataVersion` (`functions/api/config.js`, `assets/admin.js`, `admin.html`), and the Function persists them — but NO app surface or info page ever reads them (config.js even self-describes flags as a scaffold; the app cache-busts via manifest.json hashes, not refDataVersion). So an admin flipping 'maintenance banner' or 'show beta adapters' sees zero effect — misleading, and dangerous if an admin believes maintenance mode is engaged. Fix: either wire one real consumer (e.g. `assets/home.js` shows a banner when `maintenanceBanner` is set; the app gates beta adapters on `showBetaAdapters`) or relabel the controls 'not yet wired' / hide them until consumed. Done when: each admin control either has a real effect or is clearly marked inert.",
       "doneNote": "Chose the honest-labeling path (no consumer wired yet). The Feature flags section already carried the '(Scaffold — not yet consumed by the main app.)' note; reworded the Reference data section in admin.html to state plainly that the control only records a server-side timestamp in KV and has no client effect — clients cache-bust reference data via per-file hashes in data/manifest.json, not refDataVersion. No admin control now implies an effect it doesn't have."
     },
     {
@@ -1058,7 +985,6 @@
       "status": "done",
       "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "The '0.x → Beta' phase derivation exists twice: the canonical, tested `platformLabel()` in `scripts/bump-version.mjs` (covered by test-version.mjs) and an untested inline re-implementation in `assets/admin.js` (`var major=parseInt(...); (major<1?'Beta ':'')+...`). If the phase rule changes (e.g. add 'RC', or <1→<2), admin.js drifts silently. admin.js is a classic browser script and can't import the .mjs, so factor the one-liner into a shared classic helper — e.g. add `platformLabel()` to `assets/util.js` (loads first everywhere) and call it from admin.js — keeping the .mjs export for the Node/CI side with a 'keep in sync' note, or covering both with the same rule. (Optional adjacent: move the load-order-duplicated `pad2` into util.js too.) Done when: the phase rule lives in one browser-shared place consumed by the admin panel.",
       "doneNote": "Factored the phase rule into a shared classic helper `platformLabel(prod)` in assets/util.js (loads first on every page); assets/admin.js now calls it instead of its inline re-implementation. Added a 'MIRROR of platformLabel() in scripts/bump-version.mjs — keep in sync' note on the util.js copy so the Node/CI side and browser side stay aligned."
     }
   ],
