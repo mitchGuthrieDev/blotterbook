@@ -79,7 +79,9 @@ function initStaging(){
   // redraw the performance graph on resize so it re-measures its (grid) width
   let _rsz=null; window.addEventListener('resize',()=>{ clearTimeout(_rsz);
     _rsz=setTimeout(()=>{ if(METRICS_ALL) renderCurve(curveMetrics()); }, 160); });
-  logAction('Staging session ready · v0.13');
+  // Read the version from the page badge rather than hardcoding it (single source — CH8).
+  const ver=(document.querySelector('.ver')||{}).textContent||'';
+  logAction('Staging session ready'+(ver?' · '+ver.trim():''));
 }
 
 /* Subscribe to shared app-action events → terminal log lines (staging-only). */

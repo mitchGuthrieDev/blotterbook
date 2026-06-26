@@ -199,6 +199,16 @@ whatever code is deployed, so you copy the validated staging markup/behavior int
 (see the roadmap) is to serve **versioned app builds** and let the admin pick the live version per
 surface — enabling on-the-fly promote/rollback without a redeploy.
 
+**Version-bump checklist** (until A6 folds the top bars into a partial that carries the version). The
+`.ver` badge in each page header is the *display* source — bump it there, then reconcile the records:
+
+1. The `.ver` badge in the page being released — `app/app.html`, `app/demo.html`, or `app/staging.html`.
+2. The `versions` defaults in `functions/api/config.js` (the KV source-of-truth record) and the matching
+   placeholder in `admin.html`'s Platform-versions panel.
+
+Other surfaces derive from #1 automatically: `app/staging.js`'s activity-terminal "session ready" line
+reads the badge text (CH8), so it never needs editing.
+
 ### Staging sandbox
 
 `app/staging.html` (`body[data-mode="staging"]`) is now a **clone of the main app**, not the demo —
