@@ -1,8 +1,9 @@
 name: Version bump
 
-# CH12 — after a merge to main, derive the two-track version bump from the merge
-# commit's conventional-commit type + changed paths, and commit data/versions.json
-# back. Runtime-fetch badges then pick it up; no HTML is regenerated here.
+# CH12 — after a merge to main, derive the two-track version bump from the merge commit's
+# conventional-commit type + changed paths, write data/versions.json, sync the offline-fallback
+# badge literals (B17), regenerate the app pages, and commit it all back. Runtime-fetch badges
+# pick up versions.json live.
 
 on:
   push:
@@ -10,6 +11,12 @@ on:
 
 permissions:
   contents: write
+
+# Serialize bump runs so two close merges don't both compute from the same versions.json and
+# race the push (which would silently drop a bump). Queue, don't cancel (CH14).
+concurrency:
+  group: version-bump-main
+  cancel-in-progress: false
 
 jobs:
   bump:
@@ -19,30 +26,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2          # need HEAD~1 to diff the merged changeset
+          fetch-depth: 0          # full history so `before..after` diffs resolve for any merge style
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Compute + apply version bump
+      # Apply the bump (re-derived from the latest main on each retry) and push it back. If the
+      # push is rejected because another bump landed first, reset, pull, and recompute against the
+      # now-current versions.json so no bump is lost (CH14).
+      - name: Bump + commit + push
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
         run: |
-          CHANGED_FILES="$(git diff --name-only HEAD~1 HEAD)"
-          export CHANGED_FILES
-          node scripts/bump-version.mjs
-
-      - name: Commit the bump back to main
-        run: |
-          if git diff --quiet data/versions.json; then
-            echo "No version change to commit."
-            exit 0
-          fi
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/versions.json
-          git commit -m "chore(release): bump versions [skip ci]"
-          # Don't fail the run if main is protected and the bot push is rejected —
-          # surface a warning instead so merges never go red over versioning.
-          git push || echo "::warning::Could not push the version bump (branch protection?). Allow the github-actions bot to push to main, or run scripts/bump-version.mjs in a release PR."
+
+          # Diff the exact pushed range (handles squash AND true merge commits), falling back to
+          # HEAD~1 if `before` is unavailable. Computed once — the changeset doesn't change on retry.
+          if git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            CHANGED_FILES="$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA")"
+          else
+            CHANGED_FILES="$(git diff --name-only HEAD~1 HEAD || true)"
+          fi
+          export CHANGED_FILES COMMIT_MSG
+
+          for attempt in 1 2 3 4 5; do
+            git checkout -- . || true
+            node scripts/bump-version.mjs
+            if git diff --quiet; then
+              echo "No version change to commit."; exit 0
+            fi
+            node scripts/build-includes.mjs        # propagate the synced badge literals into the app pages
+            git add data/versions.json partials/app-topbar.html app/app.html app/demo.html app/staging.html
+            git commit -m "chore(release): bump versions [skip ci]"
+            if git push; then
+              echo "Pushed version bump on attempt $attempt."; exit 0
+            fi
+            echo "Push rejected (attempt $attempt) — rebasing onto latest main and recomputing."
+            git reset --hard HEAD~1
+            git pull --rebase origin main || true
+          done
+          echo "::warning::Could not push the version bump after retries. Ensure the github-actions bot can push to main (branch protection), or run scripts/bump-version.mjs in a release PR."

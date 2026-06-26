@@ -29,8 +29,13 @@ export function bumpLevel(message) {
 
 const STAGING_ONLY = new Set(['app/staging.js', 'app/staging.html']);
 
-/* A file that ships to production (main + demo). Shared app JS/CSS, the app+demo shells,
-   partials, assets, tokens, and reference data — but NOT versions.json/backlog.json. */
+// Production-only surfaces: the public marketing homepage + info pages + their CSS ship to
+// prod (main+demo deployment) but are NOT part of the staging sandbox, so they bump PROD only
+// (B16 — previously these were classified as nothing, so homepage changes never bumped).
+const PROD_ONLY = new Set(['index.html', 'site.css', 'howto.html', 'roadmap.html', 'legal.html', 'changelog.html']);
+
+/* A file shared across the app surfaces (main + demo + staging). Shared app JS/CSS, the app+demo
+   shells, partials, assets, tokens, and reference data — but NOT versions.json/backlog.json. */
 export function isProdShipping(f) {
   if (f === 'app/app.html' || f === 'app/demo.html' || f === 'app/app.css' || f === 'tokens.css') return true;
   if (/^app\/[^/]+\.js$/.test(f) && f !== 'app/staging.js') return true;   // shared app modules
@@ -43,9 +48,10 @@ export function isProdShipping(f) {
 export function classifySurfaces(files) {
   let prod = false, staging = false;
   for (const f of files) {
-    if (isProdShipping(f)) { prod = true; staging = true; }      // shared → both
+    if (isProdShipping(f)) { prod = true; staging = true; }      // shared app code → both
     else if (STAGING_ONLY.has(f)) { staging = true; }            // staging-only → staging
-    // anything else (info pages, README, .github, scripts, functions, versions/backlog json) → no bump
+    else if (PROD_ONLY.has(f)) { prod = true; }                  // homepage/info pages → prod only
+    // anything else (admin.html, README, .github, scripts, functions, versions/backlog json) → no bump
   }
   return { prod, staging };
 }
@@ -75,15 +81,33 @@ export function platformLabel(prod) {
   return (major < 1 ? 'Beta ' : '') + prod;
 }
 
+/* Keep the offline-fallback `.ver` literals in the top-bar partial in sync with the live
+   versions (B17), so a user who hits the fallback (the runtime /data/versions.json fetch
+   failed) doesn't see a stale version. The workflow then runs build-includes to propagate
+   the partial into the generated app pages. */
+function syncBakedBadges(root, next) {
+  const file = root + 'partials/app-topbar.html';
+  let s = readFileSync(file, 'utf8');
+  s = s.replace(/(title="Main app version">)v[\d.]+/, `$1v${next.prod}`)
+       .replace(/(title="Demo version">)v[\d.]+/, `$1v${next.prod}`)
+       .replace(/(title="Staging version">)v[\d.]+/, `$1v${next.staging}`);
+  writeFileSync(file, s);
+}
+
 function main() {
   const root = fileURLToPath(new URL('..', import.meta.url));
   const file = root + 'data/versions.json';
   const cur = JSON.parse(readFileSync(file, 'utf8'));
 
   const message = process.env.COMMIT_MSG || execSync('git log -1 --format=%B').toString();
-  const files = (process.env.CHANGED_FILES
-    || execSync('git diff --name-only HEAD~1 HEAD').toString())
-    .split('\n').map(s => s.trim()).filter(Boolean);
+  let rawFiles = process.env.CHANGED_FILES;
+  if (rawFiles == null) {
+    // Local convenience: diff against the parent. Guard the first-commit / shallow-clone case
+    // where HEAD~1 doesn't exist (CH14) so the script doesn't throw — treat as no changes.
+    try { rawFiles = execSync('git diff --name-only HEAD~1 HEAD').toString(); }
+    catch (_) { console.warn('No HEAD~1 (first commit / shallow clone) — treating as no changes.'); rawFiles = ''; }
+  }
+  const files = rawFiles.split('\n').map(s => s.trim()).filter(Boolean);
 
   const { next, level, bumpedProd, bumpedStaging } = computeBump({
     message, files, versions: { prod: cur.prod, staging: cur.staging }
@@ -95,6 +119,7 @@ function main() {
   }
   const updated = { ...cur, prod: next.prod, staging: next.staging };
   writeFileSync(file, JSON.stringify(updated, null, 2) + '\n');
+  syncBakedBadges(root, updated);
   console.log(`Bumped (${level}): prod ${cur.prod}->${next.prod}${bumpedProd ? '' : ' (unchanged)'}, `
     + `staging ${cur.staging}->${next.staging}${bumpedStaging ? '' : ' (unchanged)'}`);
 }

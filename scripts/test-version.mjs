@@ -25,8 +25,11 @@ ok('info pages / readme / ci are NOT prod', !isProdShipping('index.html') && !is
 console.log('\nSurface selection:');
 ok('shared code → both tracks', (()=>{const s=classifySurfaces(['app/render.js']);return s.prod&&s.staging;})());
 ok('staging-only → staging alone', (()=>{const s=classifySurfaces(['app/staging.js']);return !s.prod&&s.staging;})());
-ok('non-app only → neither', (()=>{const s=classifySurfaces(['index.html','README.md','data/backlog.json']);return !s.prod&&!s.staging;})());
+ok('homepage/info pages → prod only (B16)', (()=>{const s=classifySurfaces(['index.html']);return s.prod&&!s.staging;})());
+ok('site.css + an info page → prod only', (()=>{const s=classifySurfaces(['site.css','howto.html']);return s.prod&&!s.staging;})());
+ok('admin.html / README / backlog → neither', (()=>{const s=classifySurfaces(['admin.html','README.md','data/backlog.json']);return !s.prod&&!s.staging;})());
 ok('mixed (shared + staging) → both', (()=>{const s=classifySurfaces(['app/staging.js','app/core.js']);return s.prod&&s.staging;})());
+ok('mixed (homepage + staging-only) → both', (()=>{const s=classifySurfaces(['index.html','app/staging.js']);return s.prod&&s.staging;})());
 
 console.log('\ncomputeBump application:');
 {

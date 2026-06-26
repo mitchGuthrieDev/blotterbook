@@ -23,6 +23,7 @@ function esc(s){
    fallback. Two tracks: staging page → `staging`, app + demo → `prod`. Exposes
    window.__versionsReady (a promise) so app/staging.js can read the badge after it's set. */
 (function(){
+  if (typeof window !== 'undefined') window.__versionsReady = Promise.resolve(null);  // always a promise (CH14)
   if (typeof document === 'undefined') return;
   const badges = document.querySelectorAll('.ver');
   if (!badges.length) return;                              // info/admin pages have no badge
