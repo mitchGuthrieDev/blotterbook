@@ -32,6 +32,23 @@
   .flagrow{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--txt);cursor:pointer}
   .flagrow input{width:16px;height:16px;accent-color:var(--accent)}
   .authnote{font-family:var(--mono);font-size:11.5px;color:var(--green);margin:0 0 10px;min-height:14px}
+  /* advanced (tucked-away) manual admin-key fallback */
+  .advkey{margin:6px 0 4px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);padding:0 12px}
+  .advkey > summary{cursor:pointer;list-style:none;padding:10px 0;font-size:12px;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--faint);user-select:none}
+  .advkey > summary::-webkit-details-marker{display:none}
+  .advkey > summary::before{content:"\25B8 ";color:var(--faint)}
+  .advkey[open] > summary::before{content:"\25BE "}
+  /* explicitly hide content when closed — our .fld{display:flex} below would otherwise
+     out-specify the UA rule that collapses <details>, leaking the field out of the box */
+  .advkey:not([open]) > :not(summary){display:none}
+  .advkey .advkey-note{font-size:12px;color:var(--dim);line-height:1.5;margin:0 0 10px}
+  .advkey .advkey-note code{font-family:var(--mono);color:var(--txt)}
+  .advkey .fld{display:flex;flex-direction:column;gap:5px;margin:0 0 12px;max-width:320px}
+  .advkey .fld label{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  .advkey .fld input{background:var(--panel);border:1px solid var(--line);color:var(--txt);
+    font-family:var(--mono);font-size:13px;padding:8px 10px;border-radius:7px;outline:none}
+  .advkey .fld input:focus{border-color:var(--accent)}
   /* backlog module */
   .bkcounts{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin:12px 0}
   .bkcount{border:1px solid var(--line);background:var(--panel2);border-radius:9px;padding:10px 12px}
@@ -103,11 +120,20 @@
 
   <p class="authnote" id="authnote"></p>
   <div class="adminkeyrow">
-    <div class="fld"><label for="adminkey">Admin key</label>
-      <input type="password" id="adminkey" placeholder="ADMIN_KEY" autocomplete="off"></div>
     <div class="fld"><label for="label">Custom label (optional)</label>
       <input type="text" id="label" maxlength="40" placeholder="e.g. Back at 5pm ET"></div>
   </div>
+
+  <!-- The admin credential is auto-issued as a short-lived token via Cloudflare Access
+       (S3/S4). This manual field is a tucked-away fallback: only needed off-Access or if
+       the token didn't issue. -->
+  <details class="advkey">
+    <summary>Advanced — manual admin key</summary>
+    <p class="advkey-note">Auto-filled from Cloudflare Access. Enter the raw <code>ADMIN_KEY</code> here
+      only if you're working off-Access or the token didn't issue.</p>
+    <div class="fld"><label for="adminkey">Admin key</label>
+      <input type="password" id="adminkey" placeholder="ADMIN_KEY" autocomplete="off"></div>
+  </details>
 
   <div class="modes" id="modes">
     <button class="modebtn" data-mode="auto"><span class="d"></span>Auto-detect</button>
