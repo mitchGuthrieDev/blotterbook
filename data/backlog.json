@@ -3,7 +3,6 @@
   "title": "Blotterbook — improvement backlog (paste-ready prompts)",
   "intro": "From the 2026-06-25 audit. Each item is a self-contained prompt: scope, goal, constraints, \"done when\".",
   "tags": "Tags: P1 do-soon · P2 durable win · P3 polish. Send them one at a time (one surface/concern per turn).",
-  "modelGuidance": "MODEL ROUTING BY EFFORT — when working a backlog item, Claude should run on the model that matches the item's `effort` tag: `small` effort → Haiku 4.5 (claude-haiku-4-5); `medium` effort → Sonnet 4.6 (claude-sonnet-4-6); high/`large` effort → Opus 4.8 (claude-opus-4-8). For `trivial` effort use Haiku 4.5; for `ongoing`/`guardrail` items use judgement (default Sonnet 4.6). Note: this is guidance for whoever dispatches the work — switching the active model mid-session must be done by the operator (e.g. Claude Code `/model`, or by launching the session/subagent on the chosen model). Reading this line does not by itself change the model the current turn is running on.",
   "updated": "2026-06-26",
   "note": "Committed source of truth for the engineering backlog (replaces the retired .claude/backlog.md). The admin panel shows category/effort/status only; prompt + doneNote stay here.",
   "categories": [
@@ -487,15 +486,15 @@
     },
     {
       "id": "CH4",
-      "title": "Add per-effort model-routing instructions to the top of data/backlog.json",
+      "title": "Add an effort-based model dispatcher for backlog items",
       "category": "CHORE / REFACTOR",
       "priority": "P3",
-      "effort": "trivial",
-      "status": "done",
-      "completedDate": "2026-06-26",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
       "partial": false,
-      "prompt": "Add a top-level instruction field near the top of `data/backlog.json` (e.g. a `modelGuidance` string alongside `intro`/`note`/`tags`) that tells Claude which model to use per effort tier when working a backlog item: Haiku 4.5 (`claude-haiku-4-5`) for `small`-effort items, Sonnet 4.6 (`claude-sonnet-4-6`) for `medium`-effort items, and Opus 4.8 (`claude-opus-4-8`) for high/`large`-effort items. Keep the file valid JSON and the wording unambiguous. Done when: the backlog file carries a clearly-worded model-by-effort instruction at the top mapping small→Haiku 4.5, medium→Sonnet 4.6, large/high→Opus 4.8.",
-      "doneNote": "**Shipped:** added a top-level `modelGuidance` string (alongside `intro`/`note`/`tags`) mapping `small`→Haiku 4.5, `medium`→Sonnet 4.6, high/`large`→Opus 4.8 (plus `trivial`→Haiku, `ongoing`/`guardrail`→judgement). The line explicitly notes it is dispatch *guidance*: the model only actually changes if the operator switches it (Claude Code `/model` or launching the session/subagent on the chosen model) — reading the field does not self-switch the running model."
+      "prompt": "Build a small operator-side dispatcher so a backlog item runs on the model matching its `effort` tag, instead of relying on a human to switch models by hand (a static instruction line in `data/backlog.json` can't change the running model — it must be set before the work runs). Read an item's `effort` from `data/backlog.json` by id and launch the work on the mapped model: `small`/`trivial` → Haiku 4.5 (`claude-haiku-4-5`); `medium` → Sonnet 4.6 (`claude-sonnet-4-6`); `large`/high → Opus 4.8 (`claude-opus-4-8`); `ongoing`/`guardrail` default to Sonnet 4.6. Implement as thin dev tooling — e.g. a Node script that, given an item id, resolves the effort→model mapping and either prints the model + item prompt for the operator or spawns a Claude Code session/subagent with that model override. Keep it OUT of the deployed static site (dev-only; not app code). Done when: invoking the dispatcher with an item id selects the effort-mapped model and surfaces/runs that item's prompt, the mapping is documented, and no per-effort model instructions live inside backlog.json itself.",
+      "doneNote": null
     }
   ],
   "howToDrive": [
