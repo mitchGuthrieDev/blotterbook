@@ -869,11 +869,10 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P2",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-26",
       "partial": false,
-      "prompt": "DISCUSSION → then document. Staging runs many features ahead of the main app + demo (gated on `STAGING_PAGE`), and promoting a feature to prod has several moving parts that need a repeatable process: (a) shared dashboard code already ships to all surfaces, so promotion means removing/flipping the `STAGING_PAGE` gates for that feature; (b) DEMO must KEEP its restrictions (day-notes disabled, preview-only data manager, sample-only data) even as new features land — promotion can't blindly enable everything on demo; (c) the prod (main+demo) version must reconcile to the staging version of the feature set being ported (CH12 two-track); (d) the partial/build + mode-conditional system (A6) is the mechanism. Analyze the current gating + version model and PROPOSE a documented, repeatable promotion checklist before changing anything. Done when: an agreed promotion workflow is documented (README + checklist) covering gate removal, demo-restriction preservation, and version reconciliation.",
-      "doneNote": null
+      "doneNote": "**Discussed, then documented.** Agreed three decisions: (1) version model stays independent counters — a promotion bumps prod by the commit-type level and staging keeps its lead, no numeric sync; (2) lives in README as a section + copy-pasteable checklist; (3) demo mirrors prod 1:1, with trade-mutating UI greyed out/disabled and persistence blocked (DEMO_MODE), so a promoted feature MUST appear on demo with its restrictions applied, not be excluded. Added a 'Promoting a feature from staging → prod' subsection to README.md: the surface-by-gate model, the four gate layers (staging.js / STAGING_PAGE runtime guard / inline staging HTML / mode=staging partial conditional) and how to un-gate each, that staging is a proving ground where EVERY feature promotes (the activity terminal, session pill, and workspace templates are features, not dev tools), and an 8-step checklist covering gate removal, demo-restriction preservation, build-includes regeneration, three-surface verification, conventional-commit titling for the CH12 bump, and a changelog (F13) entry."
     },
     {
       "id": "F14",
@@ -986,6 +985,19 @@
       "completedDate": "2026-06-26",
       "partial": false,
       "doneNote": "Factored the phase rule into a shared classic helper `platformLabel(prod)` in assets/util.js (loads first on every page); assets/admin.js now calls it instead of its inline re-implementation. Added a 'MIRROR of platformLabel() in scripts/bump-version.mjs — keep in sync' note on the util.js copy so the Node/CI side and browser side stay aligned."
+    },
+    {
+      "id": "CH16",
+      "title": "Promote Staging to Prod",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "recurring": true,
+      "prompt": "REPEATABLE — leave this item OPEN; never mark it done. Run to promote staging-only feature(s) onto prod + demo. Canonical procedure: the README section 'Promoting a feature from staging → prod' (the gate-layer model + 8-step checklist) — read it first; this prompt is the operational driver, the README is the source of truth.\n\nSCOPE: promote the feature(s) named in the request. If none are named, inventory the full staging delta and promote all of it (staging is a proving ground — every feature is destined for prod + demo). Build the inventory by grepping: `STAGING_PAGE` and `if(!STAGING_PAGE)` / `if(STAGING_PAGE)` guards in `app/*.js`; the whole of `app/staging.js`; `<!--IF mode=staging-->` blocks in `partials/*.html`; inline markup in `app/staging.html` that isn't yet in a partial; and the `STAGING_ONLY` set in `scripts/bump-version.mjs`. List each feature and its gate layers before editing.\n\nPER FEATURE: (1) un-gate JS — move shared logic out of `staging.js` into its module, or delete the `STAGING_PAGE` runtime guard so it runs on every surface. (2) un-gate HTML — move inline staging markup into the right `partials/app-*.html`, or widen its `<!--IF mode=staging-->` to the modes it should reach (normally all three). (3) DEMO 1:1 — the feature MUST appear on demo, single-sourced from the SAME partial (never fork a separate demo copy — that is exactly what drifted before), with every TRADE-mutating control `disabled` in the `<!--IF mode=demo-->` path AND guarded by `DEMO_MODE`; read-only features (activity terminal, session pill) and UI-preference state (saved layouts) just mirror over. (4) if a path is no longer staging-exclusive, update the `STAGING_ONLY` set in `scripts/bump-version.mjs`.\n\nTHEN: run `node scripts/build-includes.mjs`; verify all three surfaces in a browser (prod: feature works and persists; demo: feature visible with trade-mutations disabled and nothing saved; staging: unchanged); run the gate — `node scripts/test-adapters.cjs`, `test-version.mjs`, `test-auth.mjs`, plus build-includes/build-manifest idempotency. Title the commit/PR `feat:` (or `fix:`) so CH12 bumps prod by the right level automatically — do NOT hand-edit `data/versions.json`; staging keeps its lead. Add a `data/changelog.json` (F13) entry for the new prod version describing what shipped. Commit + push (open a PR only if asked).\n\nEach run done when: the in-scope staging features are live on prod + demo at 1:1 (demo trade-mutations disabled), all three surfaces verified, the gate is green, a changelog entry is added, and the change is committed/pushed. Leave this item OPEN (repeatable).",
+      "doneNote": null
     }
   ],
   "howToDrive": [

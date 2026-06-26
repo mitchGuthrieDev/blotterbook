@@ -383,6 +383,7 @@
   .dmdel{flex:none;background:none;border:1px solid var(--line);color:var(--dim);padding:4px 10px;
     border-radius:6px;cursor:pointer;font-size:11px;font-family:inherit}
   .dmdel:hover{border-color:var(--red);color:var(--red)}
+  .dmdel:disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
   .dmempty{color:var(--faint);font-size:12.5px;padding:14px 0;text-align:center}
   .dmsearchrow{display:flex;align-items:center;gap:12px;margin-bottom:9px}
   .dmsearchrow input{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
