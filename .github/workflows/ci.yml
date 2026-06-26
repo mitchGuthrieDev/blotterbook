@@ -1,0 +1,34 @@
+name: CI
+
+# Guards the hand-run tooling: the committed HTML must match the partials, the
+# data manifest must match the data files, and the adapter tests must pass.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Adapter tests
+        run: node scripts/test-adapters.cjs
+
+      - name: Regenerate partials + data manifest
+        run: |
+          node scripts/build-includes.mjs
+          node scripts/build-manifest.mjs
+
+      - name: Fail if generated outputs are not committed
+        run: |
+          if ! git diff --quiet; then
+            echo "::error::Generated files are stale. Run 'node scripts/build-includes.mjs && node scripts/build-manifest.mjs' and commit the result."
+            git --no-pager diff --stat
+            exit 1
+          fi

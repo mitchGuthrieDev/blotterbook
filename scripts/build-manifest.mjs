@@ -22,9 +22,13 @@ import { dirname, join } from 'node:path';
 
 const dataDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'data');
 const MANIFEST = 'manifest.json';
+// Only the reference-data files the app fetches with `?v=<hash>` need a manifest entry.
+// backlog.json is admin-only and fetched no-store (not cache-busted), so it's excluded —
+// keeping the manifest from churning on every backlog edit.
+const EXCLUDE = new Set([MANIFEST, 'backlog.json']);
 
 const names = (await readdir(dataDir))
-  .filter(n => n.endsWith('.json') && n !== MANIFEST)
+  .filter(n => n.endsWith('.json') && !EXCLUDE.has(n))
   .sort();
 
 const files = {};
@@ -33,9 +37,11 @@ for (const name of names) {
   files[name] = createHash('sha256').update(bytes).digest('hex').slice(0, 12);
 }
 
+// No timestamp/non-deterministic fields: the manifest is a pure function of the data
+// files' bytes, so re-running it produces no diff (lets CI assert generated outputs are
+// committed). The app only reads `files`; it cache-busts the manifest fetch itself.
 const manifest = {
   schemaVersion: 1,
-  generatedAt: new Date().toISOString(),
   files
 };
 
