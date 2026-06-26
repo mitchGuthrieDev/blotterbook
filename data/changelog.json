@@ -4,6 +4,16 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.15.0",
+      "date": "2026-06-26",
+      "title": "Versioned release notes",
+      "summary": "This changelog is new. Instead of a raw list of code changes, it's now curated release notes — what actually shipped in each version, written to be read. You're looking at the first one.",
+      "highlights": [
+        "Every release gets a plain-language summary and highlights, newest first.",
+        "Tracks the live production app and demo."
+      ]
+    },
+    {
       "version": "0.14.2",
       "date": "2026-06-26",
       "title": "Stability & security pass",
