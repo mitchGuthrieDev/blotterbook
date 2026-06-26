@@ -243,8 +243,6 @@ ship on the main app and demo too (the demo mirrors them with data-mutating acti
 - **Web-grid dashboard** — fills the window (edge-to-edge, `max-width:none`) at ≥1100px with a grid
   placed by DOM order so **drag-to-reorder** keeps working; the performance graph spans full width,
   the rest flow into 2–3 columns, and the stats panel stacks for readability.
-- **Filters affect the graph only** — the calendar, cards, cost, and stats always use the full dataset;
-  filters (incl. a date range) re-draw the **performance graph** alone.
 - **Sharper graph** — the curve renders at its real pixel width so labels aren't horizontally stretched.
 - **Note dots on the graph** — a small blue dot marks each date that has a day-note (like the calendar).
 - **Saved filters** — name and recall filter views from the filter bar (**Save filter** + a Saved

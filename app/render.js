@@ -417,10 +417,9 @@ function applyFilters(arr){
     return true;
   });
 }
-/* Filters apply to the performance graph ONLY — the calendar, cards, cost, and stats always
-   use the full (unfiltered) dataset (promoted from staging, CH16). */
-function graphBase(){ return applyFilters(TRADES); }
-function baseTrades(){ return TRADES.slice(); }
+/* Filters apply to the WHOLE dashboard — the calendar, cards, cost, stats, and the performance
+   graph all reflect the active filter bar + scope. */
+function baseTrades(){ return applyFilters(TRADES); }
 
 function scopeLabel(){ return SCOPE==='all' ? 'all time' : `${MON[calMonth]} ${calYear}`; }
 function activeMetrics(){
@@ -428,20 +427,13 @@ function activeMetrics(){
   const mk=`${calYear}-${pad2(calMonth+1)}`;
   return compute(baseTrades().filter(t=>t.date.startsWith(mk)));
 }
-/* Filtered metrics for the staging performance graph (scope + filters). */
-function activeGraphMetrics(){
-  const arr=graphBase();
-  if(SCOPE==='all') return compute(arr);
-  const mk=`${calYear}-${pad2(calMonth+1)}`;
-  return compute(arr.filter(t=>t.date.startsWith(mk)));
-}
-/* Metrics the performance graph should draw — filtered (scope + filter bar), CH16. */
-function curveMetrics(){ return activeGraphMetrics(); }
+/* Metrics the performance graph should draw — the same filtered + scoped set as the dashboard. */
+function curveMetrics(){ return activeMetrics(); }
 function renderDash(){
   if(!METRICS_ALL) return;
   const m=activeMetrics(), c=costModel(m);   // compute the cost model once, share it (CH11)
   renderCards(m,c); renderAdv(m,c); renderCalc(m,c);
-  renderCurve(activeGraphMetrics());
+  renderCurve(m);
   document.getElementById('scopenote').textContent =
     SCOPE==='all' ? `all ${METRICS_ALL.n} trades` : `${MON[calMonth]} ${calYear}`;
 }

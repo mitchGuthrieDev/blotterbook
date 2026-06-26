@@ -158,13 +158,15 @@ function runDemo(){
    ============================================================ */
 function onFiltersChanged(){
   if(!TRADES.length){ updateFilterCount(); return; }
-  // Filters only re-render the performance graph; the dashboard/calendar stay full (CH16).
+  // Filters apply to the whole dashboard: recompute the active dataset and re-render everything.
+  METRICS_ALL=compute(baseTrades());
   updateFilterCount();
-  if(METRICS_ALL) renderCurve(activeGraphMetrics());
+  renderCalendar();
+  renderDash();
 }
 function updateFilterCount(){
   const el=document.getElementById('f_count'); if(!el) return;
-  const base = graphBase();
+  const base = baseTrades();
   el.textContent = filtersActive() ? `${base.length} / ${TRADES.length} trades` : `${TRADES.length} trades`;
 }
 function syncFilterOptions(){

@@ -10,8 +10,8 @@ const $ = id => document.getElementById(id);
 /* Page modes (document.body[data-mode]):
      ''        — the main app
      'demo'    — in-memory sample data, never persists (its own trimmed top bar)
-     'staging' — a clone of the main app on an ISOLATED IndexedDB, plus experimental
-                 features (web-grid dashboard, graph-only filters, note dots, saved filters) */
+     'staging' — a clone of the main app on an ISOLATED IndexedDB, used to trial changes
+                 before they reach the main app (features now ship to all surfaces — CH16) */
 const PAGE_MODE = (document.body && document.body.dataset.mode) || '';
 const STAGING_PAGE = PAGE_MODE === 'staging';
 
@@ -30,9 +30,9 @@ const STAGING_PAGE = PAGE_MODE === 'staging';
 
    Mode flags (derived from document.body[data-mode] above):
      STAGING_PAGE  marks the staging sandbox. Its former feature set (web-grid dashboard,
-                   graph-only filters, note dots, saved filters, activity terminal, session
-                   pill, workspace templates) was promoted to all surfaces (CH16); this flag
-                   now gates only the staging ENVIRONMENT — the isolated DB, the one-time
+                   note dots, saved filters, activity terminal, session pill, workspace
+                   templates) was promoted to all surfaces (CH16); this flag now gates only
+                   the staging ENVIRONMENT — the isolated DB, the one-time
                    sample seeding, and the F5 "open on the initial state" landing flow.
      DEMO_MODE     (declared in render.js) true while the demo's in-memory dataset is
                    loaded; suppresses ALL persistence (nothing is written to IndexedDB).

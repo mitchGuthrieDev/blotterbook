@@ -4,6 +4,13 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.17.1",
+      "date": "2026-06-26",
+      "title": "Filters refine the whole dashboard",
+      "summary": "Filtering once again narrows your entire dashboard — the calendar, stat cards, cost budget, statistics, and the performance graph all respond together, the way they always have.",
+      "highlights": []
+    },
+    {
       "version": "0.17.0",
       "date": "2026-06-26",
       "title": "The full dashboard, everywhere",
@@ -11,8 +18,7 @@
       "highlights": [
         "New edge-to-edge web-grid dashboard on wide screens, with drag-to-reorder modules and a full-width performance graph.",
         "Activity terminal, a session-status pill, and saveable workspace layouts.",
-        "Saved filter views, an in-app export-report modal (PDF / PNG / JPEG / Markdown + email), collapsible per-symbol cost & tax breakdowns, and day-note dots on the equity curve.",
-        "Filters now refine the performance graph, while the calendar, cards, cost, and stats always reflect your full history."
+        "Saved filter views, an in-app export-report modal (PDF / PNG / JPEG / Markdown + email), collapsible per-symbol cost & tax breakdowns, and day-note dots on the equity curve."
       ]
     },
     {
