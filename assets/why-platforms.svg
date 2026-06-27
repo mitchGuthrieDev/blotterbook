@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 132" width="220" height="132" role="img" aria-label="Several platform CSV exports auto-detected and normalized into one unified trade table">
+  <style>.mono{font-family:"SF Mono",SFMono-Regular,ui-monospace,Menlo,Consolas,monospace}</style>
+  <rect x=".75" y=".75" width="218.5" height="130.5" rx="12" fill="#0d1014" stroke="#262d38" stroke-width="1.5"/>
+  <!-- source platform chips -->
+  <g class="mono" font-size="8.5" fill="#d6dde6">
+    <rect x="16" y="26" width="74" height="20" rx="6" fill="#151a21" stroke="#262d38"/>
+    <circle cx="28" cy="36" r="3.5" fill="#3fb950"/><text x="37" y="39">TradingView</text>
+    <rect x="16" y="56" width="74" height="20" rx="6" fill="#151a21" stroke="#262d38"/>
+    <circle cx="28" cy="66" r="3.5" fill="#e3b341"/><text x="37" y="69">Tradovate</text>
+    <rect x="16" y="86" width="74" height="20" rx="6" fill="#151a21" stroke="#262d38"/>
+    <circle cx="28" cy="96" r="3.5" fill="#8a94a3"/><text x="37" y="99">+7 more</text>
+  </g>
+  <!-- arrows converging -->
+  <g stroke="#6aa0ff" stroke-width="1.6" fill="none" opacity=".9">
+    <path d="M92,36 C108,36 110,60 124,62"/>
+    <path d="M92,66 L124,66"/>
+    <path d="M92,96 C108,96 110,72 124,70"/>
+  </g>
+  <path d="M122,66 l-7,-4 v8 z" fill="#6aa0ff"/>
+  <!-- unified normalized table -->
+  <rect x="132" y="34" width="72" height="64" rx="7" fill="#151a21" stroke="#262d38"/>
+  <line x1="132" y1="48" x2="204" y2="48" stroke="#262d38"/>
+  <text x="140" y="45" class="mono" font-size="8" fill="#767f8c">trades</text>
+  <g class="mono" font-size="7.5" fill="#8a94a3">
+    <text x="140" y="62">MES</text><text x="196" y="62" text-anchor="end" fill="#3fb950">+75</text>
+    <text x="140" y="76">MNQ</text><text x="196" y="76" text-anchor="end" fill="#f04a4a">-40</text>
+    <text x="140" y="90">MCL</text><text x="196" y="90" text-anchor="end" fill="#3fb950">+120</text>
+  </g>
+  <text x="110" y="120" text-anchor="middle" class="mono" font-size="8.5" fill="#767f8c">auto-detect · normalize</text>
+</svg>
