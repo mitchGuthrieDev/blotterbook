@@ -71,11 +71,11 @@ call is loading the app's own reference-data JSON.
   ui.js                 collapsible/drag panels + file-download / setup-label helpers
   export.js             condensed performance report (print → PDF)
   datamanager.js        Manage-data modal + per-trade editor + backup/restore
-  widgets.js            activity terminal, session pill, workspace templates — loaded on every app page (CH16)
-  main.js               DOM event wiring + boot() — loaded LAST (core→render→data→ui→export→datamanager→[staging]→main)
+  widgets.js            activity terminal, session pill, workspace templates, stat-card detail modals — loaded on every app page (CH16)
+  main.js               DOM event wiring + boot() — loaded LAST (core→render→data→ui→export→datamanager→widgets→main)
   adapters.js           platform CSV adapters + format auto-detection + fills matcher
   store.js              IndexedDB persistence (trades, journal, meta, per-trade trademeta)
-  entitlements.js       storage-tier resolver (scaffold; always "local" today)
+  entitlements.js       storage-tier resolver (scaffold; not currently loaded — kept for the future cloud tier)
 /data/                  reference data, fetched at runtime
   brokers.json          broker commission tiers
   exchange-fees.json    CME exchange/clearing/NFA fees + micro set
@@ -85,17 +85,22 @@ call is loading the app's own reference-data JSON.
   backlog.json          engineering backlog — committed source of truth (rendered read-only in admin.html)
   changelog.json        curated, version-keyed release notes for changelog.html (prod track)
 /functions/             Cloudflare Pages Functions
-  _middleware.js        key-gates /app/staging.html (x-admin-key header / bb_staging cookie / ?k=)
+  _middleware.js        key-gates /app/staging.html (x-admin-key header / bb_staging cookie)
   api/geo.js            visitor region (Cloudflare edge geo) → pre-fill the tax state
   api/status.js         homepage Live-indicator status (GET public; POST admin-only, KV-backed)
-  api/config.js         feature flags + reference-data cache version + platform versions (KV; POST admin-only)
+  api/config.js         feature flags (KV; GET public, POST admin-only)
   api/admin-key.js      returns ADMIN_KEY to Access-authenticated admins (key auto-fill)
   api/{me,checkout,webhook}.js   Stripe/accounts scaffold
   README.md             accounts/payments/storage-tier plan
 /scripts/
-  build-includes.mjs    injects partials/nav.html + footer.html into the info pages (node scripts/build-includes.mjs)
-  build-manifest.mjs    regenerates data/manifest.json (Node built-ins only)
-  test-adapters.cjs     synthetic tests for the platform adapters (node scripts/test-adapters.cjs)
+  build-includes.mjs    assembles the info pages (nav/footer partials) AND the three app surfaces
+                        (partials/app-*.html via `<!--IF mode=…-->` conditionals → app/{app,demo,staging}.html)
+  build-manifest.mjs    regenerates data/manifest.json content hashes (Node built-ins only)
+  bump-version.mjs      two-track version bump from a merge commit (CH12; run by CI)
+  test-adapters.cjs     synthetic platform-adapter tests
+  test-auth.mjs         admin-token + Stripe-webhook-signature tests
+  test-version.mjs      version-bump logic tests
+  test-flags.mjs        guards feature-flag default drift (app/data.js vs functions/api/config.js)
 /assets/banner.svg
 /assets/favicon.svg     site favicon (the gradient square from the wordmark)
 LICENSE                 proprietary — all rights reserved
@@ -113,7 +118,7 @@ anchor links plus links to the standalone info pages:
 | **Features** | A three-column grid of the app's capabilities (privacy, cost model, tax, broker comparison, curve/calendar, stats). |
 | **Use Cases** | The pitch — Blotterbook as both a profit/budgeting calculator and a private journal. |
 | **Platforms** | A grid of supported import platforms, each badged **Verified · real data** (TradingView) or **Beta · synthetic** (the rest), linking to the How-To guides. |
-| **Pricing** | Two cards: **Blotterbook — Free** and a greyed-out, planned **Online app (~$49/mo)**. The current CSV-driven app stays free. |
+| **Pricing** | *"Free for everyone. Support if it helps."* — a **Free** card (the full app) and an optional **Back the project** donation card ($25 one-time / $50/year); cross-device **synced workspaces** are noted as a coming low-cost add-on. See [Pricing & tiers](#pricing--tiers-scaffold). |
 | **FAQ** | Expandable questions covering supported data, cost/tax modeling, and limitations. |
 
 **Standalone info pages** (share `site.css`):
@@ -152,7 +157,7 @@ state and silently does nothing off-Cloudflare or outside the US.
 ### Admin page &amp; the Live indicator
 
 `admin.html` is an internal control page. It can set the homepage's **Live** pill, manage **feature
-flags** + a **reference-data cache version**, record the **platform versions** per surface, show a
+flags** (consumed by the app at boot via `/api/config`), show the **platform versions** read-only, show a
 read-only **Backlog** view (per-category completed/remaining counts + the item list from
 [`data/backlog.json`](data/backlog.json) — titles/effort/status only, prompts stay in the file), auto-fill
 its own admin key, and **launch the staging sandbox** (carrying the key for you). The homepage pill
@@ -169,23 +174,17 @@ Access's `Cf-Access-Jwt-Assertion` header (i.e. an authenticated admin); the adm
 load and pre-fills the key, so you never type it. Off-Access it 401s and you enter the key manually.
 
 **Protecting the admin panel.** The admin panel is protected by **Cloudflare Access** plus the
-**`ADMIN_KEY`** on writes — `functions/_middleware.js` no longer 404s `/admin` (an earlier version did,
-which blocked admin access; that was reverted). To lock it to its own subdomain:
+**`ADMIN_KEY`** on writes (`_middleware.js` doesn't block `/admin` itself). To lock it to its own
+subdomain: add `admin.blotterbook.com` as a Pages custom domain, redirect its root to `/admin.html`,
+put a **Cloudflare Access** (Zero Trust → Self-hosted) *Allow*-policy on it, and keep `ADMIN_KEY` as
+the second layer so writes need both Access **and** the key. Full click-paths:
+[`functions/README.md`](functions/README.md).
 
-1. **Add the subdomain to the Pages project.** Pages → *Custom domains* → add `admin.blotterbook.com`.
-2. **Point the subdomain root at `admin.html`.** A custom domain serves the whole site, so add a
-   **Redirect Rule** (Rules → *Redirect Rules*): *When* `hostname equals admin.blotterbook.com` *and*
-   `URI path equals /` → redirect to `https://admin.blotterbook.com/admin.html` (or a Transform rewrite).
-3. **Cloudflare Zero Trust (Access).** Zero Trust → *Access* → *Applications* → **Self-hosted** →
-   domain `admin.blotterbook.com`; policy *Allow* your email/IdP. Add the apex path too if you want to
-   block `blotterbook.com/admin`.
-4. **`ADMIN_KEY` stays as a second layer** — writes are defended by both Access *and* the key.
-
-**Staging is key-gated.** `functions/_middleware.js` now gates `/app/staging.html`: it requires the
-`ADMIN_KEY` via an `x-admin-key` header, a `bb_staging` cookie, or a `?k=` query param (if `ADMIN_KEY`
-isn't configured, staging stays open). Browsers can't set request headers on a navigation, so the admin
-panel's **Launch staging env** button sets the short-lived `bb_staging` cookie (the navigation-safe
-equivalent — the Cookie request header) before opening the page.
+**Staging is key-gated.** `functions/_middleware.js` gates `/app/staging.html`: it requires the
+`ADMIN_KEY` via an `x-admin-key` header or a `bb_staging` cookie (if `ADMIN_KEY` isn't configured,
+staging stays open). Browsers can't set request headers on a navigation, so the admin panel's **Launch
+staging env** button sets the short-lived path-scoped `bb_staging` cookie before opening the page — the
+token never travels in the URL (S19).
 
 The admin page degrades gracefully off Cloudflare (locally the APIs 404 and it shows "deploy on
 Cloudflare to use").
@@ -220,13 +219,12 @@ branch is protected the job logs a warning instead of failing — grant the bot 
 
 **Display is runtime-fetched.** Each page's `.ver` badge is populated at load from
 `/data/versions.json` (`assets/util.js`), with the baked literal in `partials/app-topbar.html` as the
-offline fallback. `/api/config` and the admin panel surface the same values **read-only** (the old
-manual entry + KV `versions` record are retired); `app/staging.js`'s "session ready" line reads the
-badge after it's populated.
+offline fallback. The admin panel surfaces the same values **read-only** (the old manual entry + KV
+`versions` record are retired); `app/widgets.js`'s "session ready" line reads the badge after it's
+populated.
 
 Separate, unrelated version numbers are intentionally **not** touched by this: `store.js` `DB_VERSION`
-(IndexedDB schema), the backup-file `version`, `manifest.json` content hashes, and the admin
-`refDataVersion` cache stamp.
+(IndexedDB schema), the backup-file `version`, and `manifest.json` content hashes.
 
 ### Staging sandbox
 
@@ -258,6 +256,8 @@ ship on the main app and demo too (the demo mirrors them with data-mutating acti
   which modules are placed where and which are collapsed; stored in `localStorage` (`tj_ws_templates`).
 - **Equal-size modules** — calendar, break-even, and advanced-stats panels share row height (the grid
   stretches them) so they no longer leave negative space.
+- **Stat-card detail modals (F14)** — clicking a headline stat card opens a read-only metric-detail
+  modal with a focused chart; promoted to all surfaces in a later CH16 run.
 
 After CH16, `STAGING_PAGE` no longer gates any of these features — it marks only the staging
 **environment**: the isolated `blotterbookStaging` DB, the one-time sample seed, the F5 "open on the
@@ -298,10 +298,10 @@ so it may persist on demo — only *trade*-mutating controls get the demo lock-d
 
 **Promotion checklist** (one feature at a time):
 
-1. **Find every gate.** Grep the feature for `STAGING_PAGE`, `mode=staging`, and references in
-   `app/staging.js` / inline markup in `app/staging.html`. List each gate layer from above.
-2. **Un-gate the JS** — move shared logic out of `staging.js` into its module, or delete the
-   `STAGING_PAGE` runtime guard, so the code runs on app + demo + staging.
+1. **Find every gate.** Grep the feature for `STAGING_PAGE` and `mode=staging` (and any inline markup
+   that only `app/staging.html` carries). List each gate layer from above.
+2. **Un-gate the JS** — delete the `STAGING_PAGE` runtime guard so the code runs on app + demo +
+   staging (or, for a future staging-only script, move its logic into a shared `app/*.js` module).
 3. **Un-gate the HTML** — move inline staging markup into a partial, or widen the partial's
    `<!--IF mode=staging-->` to the modes it should reach (normally all three).
 4. **Preserve demo restrictions (never skip).** Demo mirrors prod, so the feature **must** appear on
@@ -408,9 +408,9 @@ They're flagged *(beta — verify the numbers)* in the UI until validated agains
 | **Filters** | Date range, symbol, side, session (RTH/ETH), **tag** (when any per-trade tags exist), and day-of-week. Applies before everything. |
 | **Stat cards** | Net PnL (+ take-home), win rate, profit factor, avg win/loss, max drawdown. |
 | **Performance** | Cumulative PnL vs. date, with stepped y-axis gridlines and a gradient area fill. Click the **Gross / Net / Take-home** buttons to toggle overlays (at least one stays on); hover for values; **click anywhere on the graph to select that date and jump the calendar to its month**. |
-| **Trading Calendar** | Sunday-first month grid of daily PnL with weekly summaries and a **jump-to-latest** arrow (snaps to the most recent month of data); **day-notes** below. Clicking a day marks it on the graph. |
+| **Trading Calendar** | Sunday-first month grid of daily PnL with weekly summaries and a **jump-to-latest** arrow (snaps to the most recent month of data). Clicking a day marks it on the graph and opens the **day editor** below: a notes textarea that expands to tags + screenshots, plus a read-only list of that day's intraday trades. |
 | **Break-even & Cost Budget** | Per-symbol commission table and a full-width itemized waterfall — gross, commissions, subscriptions, net pre-tax, the folded-in **Section 1256** tax detail, take-home, and break-even/trade. |
-| **Advanced Statistics** | Daily averages, expectancy, long/short split, best/worst day & weekday, Sharpe, streaks, and **Avg Hold Time** (when the import was a fills export). |
+| **Advanced Statistics** | Avg daily PnL, expectancy, avg winner/loser + payoff ratio, profit concentration, long/short split, best/worst day & **per-trade-average** weekday, max drawdown ($/%/duration), Sharpe + Sortino, consecutive + dollar streaks, and **Avg Hold Time** (when the import was a fills export). |
 | **Definitions & Caveats** | How each number is computed and where the data falls short. |
 
 **Demo (its own page).** The demo lives at `app/demo.html` and is reached from the homepage
@@ -500,11 +500,12 @@ Pages build command).
 Trade data and day-notes are stored in **IndexedDB** via `app/store.js`, so your data is restored
 automatically on return visits. Nothing is uploaded.
 
-- **Stores:** `trades` (keyed by the dedupe id), `journal` (keyed by date), `meta` (setup
-  selections).
+- **Stores:** `trades` (keyed by the dedupe id), `journal` (per-day notes keyed by date — each a
+  `{text, tags, shots}` annotation), `meta` (setup + saved filters), and `trademeta` (per-trade
+  tags/note/screenshots, keyed by trade id; added in DB v2).
 - **Delta merge:** `Store.addTrades()` skips ids already present, so re-imports only add new trades.
 - **Demo data is never persisted** — it lives in memory only.
-- **Erase all local data** (Manage data → Danger zone) calls `Store.purge()` to wipe all three stores after a confirm.
+- **Erase all local data** (Manage data → Danger zone) calls `Store.purge()` to wipe all four stores after a confirm.
 
 The app never touches `indexedDB` directly — it goes through the `Store` interface. A future cloud
 backend implements the same interface, so adding cloud sync won't touch the rest of the app. See
@@ -514,7 +515,7 @@ backend implements the same interface, so adding cloud sync won't touch the rest
 
 **Manage data** (top bar, or click the loaded-source text) opens a modal — the single home for all
 local-data control. It reuses the existing `Store` interface and keeps loading, backup, and
-destructive actions behind one clearly-labeled surface. It has six parts:
+destructive actions behind one clearly-labeled surface. It has seven parts:
 
 - **Overview** — trade count, date range, day-note count, **tagged-trade count**, and the approximate on-disk size.
 - **Load data** — *Load CSV* lives here (moved out of the top bar). Picking a file parses and
@@ -527,11 +528,14 @@ destructive actions behind one clearly-labeled surface. It has six parts:
   and setup (`Store.exportAll()`); *Restore from backup* merges one back in (`Store.importAll()`).
   Restores de-duplicate by the same stable trade id, so re-importing is always safe. This is the
   answer to "local storage is per-browser" — a portable snapshot you control.
-- **Day notes** — every dated note, each with a delete button.
+- **Day notes** — every dated note, previewed with its tag/image markers, each with **Open** (jumps
+  the calendar to that day) and **Delete**.
 - **Trades** — a searchable (symbol / date / side), scrollable table with per-row **Edit** and
   **Delete**. **Edit** opens a per-trade editor for **tags** (comma-separated), a free-text **note**,
   and **screenshots** (image uploads stored as data URLs). Tags show as chips on the row and populate
   the dashboard's **Tag** filter; deletions apply immediately and recompute metrics live.
+- **Saved filters** — name, apply, rename, and delete filter views (the same set the filter bar's
+  **Save filter** + Saved dropdown manage); stored in `meta`.
 - **Danger zone** — *Erase all local data* (`Store.purge()`), behind a confirm. (This replaced the
   old top-bar Clear data button.)
 
@@ -554,10 +558,12 @@ future cloud backend gets the same management UI for free.
 - **Day of week** — toggle any subset of S M T W T F S.
 - A live `N / M trades` count and a **Reset filters** button.
 
-**Day-notes / journal:** click any calendar day to open a notes editor for that date. Notes
-auto-save to IndexedDB; days with a note get a small dot on the calendar. (Disabled for demo data.)
-**Per-trade tags, notes &amp; screenshots** are edited from Manage data → Trades → **Edit** (see
-[Managing local data](#managing-local-data)).
+**Day-notes / journal:** click any calendar day to open the **day editor** — a quick notes textarea
+that expands to **tags + screenshots** (F16, sharing the per-trade editor's pipeline), plus a
+read-only list of that day's intraday trades. Everything auto-saves to IndexedDB (a captured-snapshot
+debounce writes to the right day even if you switch days mid-edit); days with a note get a small dot on
+the calendar and the equity curve. (Note editing is disabled for demo data; the trades list still
+shows.) **Per-trade tags, notes &amp; screenshots** are edited from Manage data → Trades → **Edit**.
 
 ## Architecture
 
@@ -585,7 +591,7 @@ enables the experimental features above. Key globals: `TRADES`, `METRICS_ALL`, `
 `runDemo()`; staging seeds its DB first).
 
 The former monolithic `app.js` is split (A2) into ordered, concern-scoped classic scripts —
-**core → render → data → ui → export → datamanager → main** — loaded in that sequence (see the layout
+**core → render → data → ui → export → datamanager → widgets → main** — loaded in that sequence (see the layout
 above). They're plain `<script>`s sharing one global scope, not ES modules: `main.js` (loaded last) holds
 all the event wiring + the boot IIFE, so every function/state it calls is already defined. No bundler,
 no build step.
@@ -603,15 +609,17 @@ To keep the static, build-stepless deploy while killing copy-paste drift, two th
 
 - **Design tokens** live only in [`tokens.css`](tokens.css). `site.css` and `app/app.css` `@import` it;
   the bespoke homepage links it directly. Change a color or font in one place.
-- **The info-site nav + footer** live only in [`partials/nav.html`](partials/nav.html) and
-  [`partials/footer.html`](partials/footer.html). Each info page (changelog / roadmap / legal / howto)
-  carries `<!-- include:nav active=… -->` / `<!-- include:footer -->` markers, and
-  [`scripts/build-includes.mjs`](scripts/build-includes.mjs) injects the partials between them
-  (`active=KEY` highlights the matching `data-nav` link). It's **idempotent** — re-run it after editing a
-  partial: `node scripts/build-includes.mjs`. The committed HTML already contains the rendered output, so
-  the deploy works with or without running it; it can also be set as the Cloudflare Pages build command.
-  The **homepage and admin keep their own bespoke nav/footer** by design (different links/CTA/scroll-spy)
-  — they only share the tokens.
+- **Shared HTML lives in `partials/`** and [`scripts/build-includes.mjs`](scripts/build-includes.mjs)
+  assembles two things from it: (1) the **info-site nav + footer** ([`partials/nav.html`](partials/nav.html)
+  / [`partials/footer.html`](partials/footer.html)) injected into each info page via
+  `<!-- include:nav active=… -->` / `<!-- include:footer -->` markers (`active=KEY` highlights the
+  matching `data-nav` link); and (2) the **three app surfaces** — `app/{app,demo,staging}.html` are
+  generated from the `partials/app-*.html` fragments, with `<!--IF mode=app|demo|staging-->` /
+  `<!--IF mode!=demo-->` conditionals selecting the per-surface markup from one source (this is how a
+  control gets `disabled` on demo or a panel ships staging-only). It's **idempotent** — re-run it after
+  editing any partial: `node scripts/build-includes.mjs`. The committed HTML already contains the
+  rendered output, so the deploy works with or without running it (also a fine Cloudflare Pages build
+  command). The **homepage and admin keep their own bespoke nav/footer** by design — they only share the tokens.
 
 ## Pricing & tiers (scaffold)
 
@@ -641,13 +649,15 @@ The live, prettier version is [`roadmap.html`](roadmap.html). Highlights, roughl
   [the note below](#sourcing-accurate-rate-data).
 - **Validate & harden platform adapters** — confirm the eight `beta` adapters against real exports,
   widen the futures point-value map, add a manual column-mapping fallback for unrecognized formats.
-- **Main-app web UI redesign** — *in trial:* a responsive multi-column dashboard for wide screens,
-  currently behind the [staging sandbox](#staging-sandbox); promote to the main app once validated.
-- **Code review & refactor pass** — a lot landed fast; a deliberate cleanup before the codebase grows.
+- **Main-app web UI redesign** — *shipped:* the responsive multi-column web-grid dashboard (and the
+  other staging features) were validated and promoted to the main app + demo (CH16). New work continues
+  to incubate in the [staging sandbox](#staging-sandbox) before promotion.
+- **Code review & refactor pass** — *ongoing:* recurring full-repo audits (R1) feed prioritized
+  fix/refactor items into the backlog.
 - **Compliance review session** — disclaimers, data handling, and any wording/registration needs as
   monetization approaches.
-- **Journal feature parity** — *started:* per-trade **tags, notes, and screenshots** plus a tag filter
-  now ship. *Next:* setups, R-multiple & risk tracking, MAE/MFE, and saved filter views.
+- **Journal feature parity** — *shipped:* per-trade **and per-day** tags, notes & screenshots, a tag
+  filter, and saved filter views. *Next:* setups, R-multiple & risk tracking, and MAE/MFE.
 - **Accounts + cross-device sync (zero-knowledge)** — end-to-end-encrypted sync so data moves across
   devices without us ever seeing it (Obsidian-Sync-style); removes the re-upload-per-device pain while
   keeping the privacy promise. A `CloudStore` implementing the same `Store` interface.
