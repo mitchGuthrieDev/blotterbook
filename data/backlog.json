@@ -1278,11 +1278,10 @@
       "category": "FIXES",
       "priority": "P2",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "From the R1 audit. num() in app/adapters.js (~line 60) strips ALL commas unconditionally (s.replace(/[()$,\\s]/g,'')), so a locale-formatted value like '1.234,50' becomes 1.234 — silently corrupting price/PnL/commission for EU-format exports (IBKR/MotiveWave etc). The app documents a US-format assumption, but several adapters are beta and this fails silently. Detect the decimal separator (e.g. if the last ',' comes after the last '.', treat ',' as decimal) before stripping, or guard + warn on ambiguous input. Done when: a comma-decimal value parses correctly (or is rejected with a clear message), with a test.",
-      "doneNote": null
+      "doneNote": "num() now detects thousands-vs-decimal separators and parses EU locale numbers ('1.234,50' → 1234.5) while preserving US '1,234.50'/'1,234' thousands. Tests added (test-adapters.cjs)."
     },
     {
       "id": "B25",
@@ -1290,11 +1289,10 @@
       "category": "FIXES",
       "priority": "P2",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "From the R1 audit. pairFills()/parse() sort fills by the 'YYYY-MM-DD HH:MM:SS' string only (app/adapters.js, the arr.sort/trades.sort by a.time<b.time). Timestamps have no sub-second precision, so same-second fills keep input (CSV) order; for newest-first exports (Webull/Schwab/Tradovate) a same-second entry+exit can FIFO-pair in reversed order, flipping long/short and the PnL sign for that round-trip. Carry the original row index and use it as a stable chronological tiebreaker (respecting known-descending exports). Done when: same-second round-trips pair in true execution order, with a test.",
-      "doneNote": null
+      "doneNote": "pairFills detects a newest-first export and inverts the row-index tiebreak, so same-second fills pair in execution order instead of CSV order (which could flip a round-trip's long/short + PnL sign). Test added."
     },
     {
       "id": "B26",
@@ -1302,11 +1300,10 @@
       "category": "FIXES",
       "priority": "P2",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "From the R1 audit. normTime() in app/adapters.js (~line 77) decides M/D/Y vs D/M/Y per row — it only swaps when field-1>12 and field-2<=12. A real D/M/Y file like '05/03/2025' (5 Mar) is read as 3 May, and only rows whose day exceeds 12 get corrected, so one export can end up with a mix of correctly- and incorrectly-parsed dates, scrambling calendar/weekday/equity ordering with no error. Detect the format ONCE per column across all rows (if any value has field-1>12, treat the whole column as D/M/Y). Done when: a uniform D/M/Y file parses consistently, with a test.",
-      "doneNote": null
+      "doneNote": "Date order (M/D/Y vs D/M/Y) is decided once per file by detectDateOrder() in parse() instead of per-row, so a uniform D/M/Y export no longer mixes formats when only some days exceed 12; standalone normTime keeps the per-value heuristic. Test added."
     },
     {
       "id": "B27",
@@ -1314,11 +1311,10 @@
       "category": "FIXES",
       "priority": "P2",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "From the R1 audit. compute() in app/core.js deliberately AVOIDS Math.min/max spread on per-trade arrays (documented at core.js ~line 73: 'spreading a large array as args overflows the call stack on big fills exports, blanking the whole dashboard'). That pattern crept back into the staging-promoted code: render.js ~line 103 (Math.min(...vals)/max), widgets.js ~line 138 (Math.min(...curve)/max) and ~line 153 (Math.min(...values)/max). On a large fills export these can overflow the stack and blank the curve / card modals. Replace with running min/max loops, consistent with compute(). Done when: the curve and card-modal min/max use loops and a large synthetic dataset renders without overflow.",
-      "doneNote": null
+      "doneNote": "Replaced Math.min(...arr)/Math.max(...arr) on per-trade arrays (render curve domain, cmCurve, cmHist) with a shared running minMax() helper in core, removing the call-stack-overflow risk on large fills exports that compute() already avoids."
     },
     {
       "id": "S17",
@@ -1326,11 +1322,10 @@
       "category": "SECURITY",
       "priority": "P2",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "From the R1 audit. Store.importAll (app/store.js) re-sanitizes root/tags/screenshots at the restore trust boundary but feeds trade/journal records in WITHOUT the date validation the CSV path enforces (/^\\d{4}-\\d{2}-\\d{2}/), and never validates symbol. Those date values reach innerHTML UNESCAPED in app/datamanager.js (the day-notes list ~line 45/47 ${j.date} and the trades table ~line 62 ${t.date}), so a crafted backup with a markup payload in 'date' is stored HTML injection — currently neutralized only by the script-src CSP (defense-in-depth, not escaping). Fix both layers: validate/reject non-conforming date on import (trades + journal), and esc() the ${j.date}/${t.date} interpolations. Done when: a backup with a non-date 'date' is rejected on import and the date sinks are escaped.",
-      "doneNote": null
+      "doneNote": "Store.importAll now requires canonical YYYY-MM-DD dates (+ finite pnl) on restored trades and journal records, matching the CSV path; the data-manager date sinks are esc()'d. Verified in-browser: a backup with a markup 'date' is rejected on import and the lists render no raw <img>."
     },
     {
       "id": "S18",
@@ -1338,11 +1333,10 @@
       "category": "SECURITY",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "From the R1 audit (defense-in-depth; neither is exploitable today given the script-src CSP). (1) The live screenshot path dmAddShot (app/datamanager.js ~line 130-166) accepts image/svg+xml and, on decode failure, stores the ORIGINAL data URL without the SHOT_RE check that Store.importAll applies — apply SHOT_RE (or exclude svg) for parity. (2) _headers sets style-src 'self' 'unsafe-inline' (acknowledged in the header comment as pending); several sinks interpolate values into inline style attributes. Plan the move to hashed/external styles so 'unsafe-inline' can be dropped from style-src. Done when: the live screenshot path enforces SHOT_RE and a path to remove style-src 'unsafe-inline' is implemented or documented.",
-      "doneNote": null
+      "doneNote": "Lifted SHOT_RE to a shared Store.validShot() and enforce it on the live screenshot path (dmAddShot) so SVG/non-base64/decode-failure URLs are rejected for parity with restore (verified validShot accepts png, rejects svg + javascript:). Documented the path to drop style-src 'unsafe-inline' in _headers."
     },
     {
       "id": "S19",
@@ -1350,11 +1344,10 @@
       "category": "SECURITY",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "From the R1 audit of functions/ (all currently auth-gated and correct; these are pre-launch hardening). (1) assets/admin.js (~line 108) appends the live admin token to a navigable URL (?k=) and functions/_middleware.js accepts url.searchParams.get('k') — query-string credentials leak into history/referrer/logs. Prefer the cookie-only path and drop the ?k= fallback (or cut the staging-token TTL to minutes). (2) functions/api/config.js merges arbitrary client 'flags' into the world-readable config record with no allow-list or size cap — constrain to a known flag allow-list and cap value sizes before F17 (feature flags) / R15 (Stripe) start trusting them. Done when: no admin token travels in a URL and config flags are allow-listed + size-capped.",
-      "doneNote": null
+      "doneNote": "Dropped the ?k= staging-token query fallback (admin.js carries the token only in the path-scoped cookie; _middleware no longer reads searchParams). /api/config now allow-lists flag writes to DEFAULTS.flags and boolean-coerces them, so no arbitrary/oversized keys reach the world-readable config record. Auth suite 13/13."
     },
     {
       "id": "CH23",
@@ -1362,11 +1355,10 @@
       "category": "CHORE / REFACTOR",
       "priority": "P2",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "From the R1 audit — copy-pasted analytics that have begun to drift. (1) Day-of-week PnL bucketing is implemented in compute() (app/core.js ~line 134) AND cmDow() (app/widgets.js ~line 161), with the DOW label array duplicated too — expose one dowBuckets(trades) + DOW_LABEL from core. (2) The realized-drawdown peak/trough walk runs in compute() (core.js ~line 78) AND cmDDMarks() (widgets.js ~line 177); compute() already finds the indices but doesn't expose them — surface ddPeakIdx/ddTroughIdx and drop the re-walk. (3) The per-symbol commission table is built in render.js (~line 371) AND export.js (~line 22/157) and has already drifted (the report omits the 'Cts' column) — extract a shared symCommissionRows(c) data builder. Done when: each of the three is single-sourced and both call sites consume the shared helper.",
-      "doneNote": null
+      "doneNote": "Single-sourced drifted view math: dowBuckets() in core (compute + cmDow), curve-space ddPeakIdx/ddTroughIdx exposed from compute so the drawdown card marks peak→trough without re-walking (cmDDMarks removed), and a shared commSymRows(c,report) for the cost panel + export report (which regained the lost Cts column). Verified the dd card still renders both marks and the win-card DOW."
     },
     {
       "id": "CH24",
@@ -1374,11 +1366,10 @@
       "category": "CHORE / REFACTOR",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "From the R1 audit — small, safe cleanups. (a) app/entitlements.js is loaded on every app page but has zero callers — either wire it into boot()/Store selection or drop the script tag until the cloud tier lands. (b) renderAdv(m, c=costModel(m)) in app/render.js never reads c — drop the dead param + the recompute-on-default. (c) curveMetrics() is a pure alias for activeMetrics() — inline it. (d) the schwab adapter resolves cPos ('pos effect') and never uses it. (e) assets/changelog.js hardcodes a FALLBACK version list topping out at 0.14.2 while prod is 0.19.x — drive it from a generated source or accept the drift explicitly. (f) note the two independent pad2() and the two trade-id derivations (render.js tradeKey = t.id||Store.tradeId(t) vs datamanager.js Store.tradeId(t) directly) as drift risks — unify on one helper. Done when: the dead code is removed/wired and the trade-id accessor is single-sourced.",
-      "doneNote": null
+      "doneNote": "Removed dead/drift code from the R1 audit: unused entitlements.js <script> tag (file kept for the cloud tier), renderAdv's unused cost-model param, the curveMetrics() alias (inlined), and the unused schwab cPos lookup; unified the trade-id accessor on tradeKey() in datamanager; and explicitly documented the changelog fallback as intentionally-unsynced. Build idempotent; tests green."
     },
     {
       "id": "A13",
@@ -1386,11 +1377,10 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "From the R1 audit (companion to A4, which targets IndexedDB). Layout/workspace state is written to localStorage DIRECTLY in app/ui.js (tj_order/tj_collapsed, ~lines 18/23/34/37) and app/widgets.js (tj_ws_templates, ~lines 48/49/78), outside the Store seam. It's deliberate and per-origin-namespaced today, but it means user-composed layouts/templates won't migrate when the cloud/account tier ships. Route this state through a Store namespace (e.g. Store.getMeta/setMeta or an explicit Store.local) so there is genuinely one persistence seam. Done when: layout + workspace-template persistence goes through Store and no app/*.js touches localStorage directly.",
-      "doneNote": null
+      "doneNote": "Added Store.local — the single synchronous persistence seam for UI layout/workspace state — and routed ui.js (panel order/collapse) and widgets.js (workspace templates) through it, so no app/*.js touches localStorage directly. Kept synchronous so layout applies before paint. Verified layout order persists across reload via the seam."
     }
   ],
   "howToDrive": [
