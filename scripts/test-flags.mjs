@@ -5,10 +5,16 @@
    Run: node scripts/test-flags.mjs */
 import { readFileSync } from 'node:fs';
 
-let pass = 0, fail = 0;
+let pass = 0,
+  fail = 0;
 function ok(name, cond, extra) {
-  if (cond) { pass++; console.log('  ok  ' + name); }
-  else { fail++; console.log('  FAIL ' + name + (extra ? '  → ' + extra : '')); }
+  if (cond) {
+    pass++;
+    console.log('  ok  ' + name);
+  } else {
+    fail++;
+    console.log('  FAIL ' + name + (extra ? '  → ' + extra : ''));
+  }
 }
 
 // Extract a flat { key: true/false, ... } object literal from source via the given regex (group 1 = body).
@@ -17,8 +23,10 @@ function flagsFrom(src, re, label) {
   if (!m) throw new Error('could not find the flags literal in ' + label);
   const obj = {};
   for (const pair of m[1].split(',')) {
-    const t = pair.trim(); if (!t) continue;
-    const i = t.indexOf(':'); if (i < 0) continue;
+    const t = pair.trim();
+    if (!t) continue;
+    const i = t.indexOf(':');
+    if (i < 0) continue;
     const k = t.slice(0, i).trim().replace(/['"]/g, '');
     obj[k] = t.slice(i + 1).trim() === 'true';
   }
@@ -26,10 +34,15 @@ function flagsFrom(src, re, label) {
 }
 
 const app = flagsFrom(readFileSync('app/data.js', 'utf8'), /APP_FLAGS\s*=\s*\{([^}]*)\}/, 'app/data.js');
-const def = flagsFrom(readFileSync('functions/api/config.js', 'utf8'), /DEFAULTS\s*=\s*\{\s*flags:\s*\{([^}]*)\}/, 'functions/api/config.js');
+const def = flagsFrom(
+  readFileSync('functions/api/config.js', 'utf8'),
+  /DEFAULTS\s*=\s*\{\s*flags:\s*\{([^}]*)\}/,
+  'functions/api/config.js'
+);
 
 console.log('A14 — feature-flag defaults: app/data.js APP_FLAGS vs functions/api/config.js DEFAULTS.flags');
-const ak = Object.keys(app).sort(), dk = Object.keys(def).sort();
+const ak = Object.keys(app).sort(),
+  dk = Object.keys(def).sort();
 ok('non-empty flag set parsed', ak.length > 0 && dk.length > 0, `app=${ak.length} server=${dk.length}`);
 ok('same flag keys', JSON.stringify(ak) === JSON.stringify(dk), `app=[${ak}] server=[${dk}]`);
 for (const k of [...new Set([...ak, ...dk])].sort()) {

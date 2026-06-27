@@ -6,10 +6,16 @@
    This test fails if the two diverge. Run: node scripts/test-tax.mjs */
 import { readFileSync } from 'node:fs';
 
-let pass = 0, fail = 0;
+let pass = 0,
+  fail = 0;
 function ok(name, cond, extra) {
-  if (cond) { pass++; console.log('  ok  ' + name); }
-  else { fail++; console.log('  FAIL ' + name + (extra ? '  → ' + extra : '')); }
+  if (cond) {
+    pass++;
+    console.log('  ok  ' + name);
+  } else {
+    fail++;
+    console.log('  FAIL ' + name + (extra ? '  → ' + extra : ''));
+  }
 }
 
 // Parse a flat { key: <number>, ... } object literal from source (group 1 = body).
@@ -18,8 +24,10 @@ function numModelFrom(src, re, label) {
   if (!m) throw new Error('could not find the TAXMODEL literal in ' + label);
   const obj = {};
   for (const pair of m[1].split(',')) {
-    const t = pair.trim(); if (!t) continue;
-    const i = t.indexOf(':'); if (i < 0) continue;
+    const t = pair.trim();
+    if (!t) continue;
+    const i = t.indexOf(':');
+    if (i < 0) continue;
     const k = t.slice(0, i).trim().replace(/['"]/g, '');
     obj[k] = Number(t.slice(i + 1).trim());
   }
@@ -30,7 +38,8 @@ const lit = numModelFrom(readFileSync('app/core.js', 'utf8'), /TAXMODEL\s*=\s*\{
 const json = JSON.parse(readFileSync('data/state-tax.json', 'utf8')).model || {};
 
 console.log('A19 — state-tax model default: app/core.js TAXMODEL vs data/state-tax.json model');
-const lk = Object.keys(lit).sort(), jk = Object.keys(json).sort();
+const lk = Object.keys(lit).sort(),
+  jk = Object.keys(json).sort();
 ok('non-empty model parsed', lk.length > 0 && jk.length > 0, `core=${lk.length} json=${jk.length}`);
 ok('same model keys', JSON.stringify(lk) === JSON.stringify(jk), `core=[${lk}] json=[${jk}]`);
 for (const k of [...new Set([...lk, ...jk])].sort()) {

@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 import { Adapters } from './adapters.js';
 /* ============================================================
    Local persistence — IndexedDB
@@ -27,13 +27,13 @@ import { Adapters } from './adapters.js';
    See functions/README.md for the storage-tier plan.
    ============================================================ */
 // The staging sandbox uses an isolated database so it never touches real data.
-const DB_NAME = (typeof document !== 'undefined' && document.body && document.body.dataset.mode === 'staging')
-  ? 'blotterbookStaging' : 'blotterbook';
+const DB_NAME =
+  typeof document !== 'undefined' && document.body && document.body.dataset.mode === 'staging' ? 'blotterbookStaging' : 'blotterbook';
 const DB_VERSION = 2;
 const TRADES = 'trades';
 const JOURNAL = 'journal';
 const META = 'meta';
-const TRADEMETA = 'trademeta';   // per-trade tags / note / screenshots, keyed by trade id
+const TRADEMETA = 'trademeta'; // per-trade tags / note / screenshots, keyed by trade id
 
 // Screenshots are inlined data: URIs rendered straight into an <img src>. Only well-formed base64
 // image data URIs are allowed — this drops any `javascript:`/`data:text/html`/SVG payload before it
@@ -91,9 +91,14 @@ function tradeId(t) {
 }
 
 export const Store = {
-  available() { return typeof indexedDB !== 'undefined'; },
+  available() {
+    return typeof indexedDB !== 'undefined';
+  },
 
-  async init() { await open(); return true; },
+  async init() {
+    await open();
+    return true;
+  },
 
   tradeId,
 
@@ -106,7 +111,8 @@ export const Store = {
     // auto-committing mid-flight (B6: an await inside a tx lets it commit and the next put
     // throws TransactionInactiveError). The id Set also dedupes rows repeated within a batch.
     const store = await tx(TRADES, 'readwrite');
-    let added = 0, duplicate = 0;
+    let added = 0,
+      duplicate = 0;
     await new Promise((resolve, reject) => {
       const kr = store.getAllKeys();
       kr.onerror = () => reject(kr.error);
@@ -114,7 +120,10 @@ export const Store = {
         const existing = new Set(kr.result);
         for (const t of trades) {
           const id = tradeId(t);
-          if (existing.has(id)) { duplicate++; continue; }
+          if (existing.has(id)) {
+            duplicate++;
+            continue;
+          }
           existing.add(id);
           store.put({ id, ...t });
           added++;
@@ -143,7 +152,7 @@ export const Store = {
   // bare string (legacy callers) or the record object; deletes the row when fully empty.
   async saveJournal(date, rec) {
     const store = await tx(JOURNAL, 'readwrite');
-    const r = (typeof rec === 'string') ? { text: rec } : (rec || {});
+    const r = typeof rec === 'string' ? { text: rec } : rec || {};
     const text = (r.text || '').trim();
     const tags = Array.isArray(r.tags) ? r.tags.filter(Boolean) : [];
     const shots = Array.isArray(r.shots) ? r.shots.filter(s => this.validShot(s)) : [];
@@ -201,7 +210,7 @@ export const Store = {
     const note = (m.note || '').trim();
     const shots = m.shots || [];
     if (tags.length || note || shots.length) store.put({ id, tags, note, shots, updated: Date.now() });
-    else store.delete(id);   // empty → remove the record
+    else store.delete(id); // empty → remove the record
     return done(store);
   },
   async deleteTradeMeta(id) {
@@ -217,23 +226,35 @@ export const Store = {
   /* Full local snapshot — for the data manager's backup/export. */
   async exportAll() {
     const [trades, journal, meta, trademeta] = await Promise.all([
-      this.getAllTrades(), this.getAllJournal(), this.getAllMeta(), this.allTradeMeta()
+      this.getAllTrades(),
+      this.getAllJournal(),
+      this.getAllMeta(),
+      this.allTradeMeta(),
     ]);
     return { app: 'blotterbook', version: 2, exportedAt: new Date().toISOString(), trades, journal, meta, trademeta };
   },
 
   /* Merge a backup back in: trades de-dupe, notes & meta upsert. */
   async importAll(data) {
-    let added = 0, dup = 0;
+    let added = 0,
+      dup = 0;
     // Sanitize at the trust boundary: a backup file is untrusted input (unlike CSV
     // import, which routes symbols through rootSym()). Force `root` to the safe
     // charset and strip markup-significant chars from tags, so restored data can't
     // become a stored-XSS payload in any (current or future) render sink.
-    const cleanSym = s => (Adapters && Adapters.rootSym) ? Adapters.rootSym(String(s || ''))
-      : String(s || '').toUpperCase().replace(/[^A-Z0-9._-]/g, '');
+    const cleanSym = s =>
+      Adapters && Adapters.rootSym
+        ? Adapters.rootSym(String(s || ''))
+        : String(s || '')
+            .toUpperCase()
+            .replace(/[^A-Z0-9._-]/g, '');
     // B29: lowercase to match the live editors' canonical form (annCapture lowercases + dedupes),
     // so restored tags match the tag filter/chips. cleanTags also dedupes, like the live path.
-    const cleanTag = s => String(s == null ? '' : s).replace(/[<>&"']/g, '').trim().toLowerCase();
+    const cleanTag = s =>
+      String(s == null ? '' : s)
+        .replace(/[<>&"']/g, '')
+        .trim()
+        .toLowerCase();
     const cleanTags = a => [...new Set((Array.isArray(a) ? a : []).map(cleanTag).filter(Boolean))];
     // Restore is untrusted: keep ONLY well-formed base64 image data URIs (S15, SHOT_RE above).
     const cleanShots = a => (Array.isArray(a) ? a.filter(s => typeof s === 'string' && SHOT_RE.test(s)) : []);
@@ -249,14 +270,15 @@ export const Store = {
         clean.push(t.root != null ? { ...t, root: cleanSym(t.root) } : { ...t });
       }
       const r = await this.addTrades(clean);
-      added = r.added; dup = r.duplicate;
+      added = r.added;
+      dup = r.duplicate;
     }
     if (Array.isArray(data.journal) && data.journal.length) {
       const store = await tx(JOURNAL, 'readwrite');
       for (const j of data.journal) {
         if (!j || !validDate(j.date)) continue;
         const text = String(j.text || '').trim();
-        const tags = cleanTags(j.tags);   // F16: restore tags/shots too (B29: lowercased + deduped)
+        const tags = cleanTags(j.tags); // F16: restore tags/shots too (B29: lowercased + deduped)
         const shots = cleanShots(j.shots);
         if (text || tags.length || shots.length) store.put({ date: j.date, text, tags, shots, updated: j.updated || Date.now() });
       }
@@ -268,17 +290,28 @@ export const Store = {
     // at the boundary (coerce id to a safe charset, strip markup from name, whitelist filter
     // fields); unknown keys are dropped.
     const FILTER_FIELDS = ['from', 'to', 'symbol', 'side', 'session', 'tag'];
-    const cleanSavedFilters = a => (Array.isArray(a) ? a : []).map(s => {
-      if (!s || typeof s !== 'object') return null;
-      const id = String(s.id == null ? '' : s.id).replace(/[^A-Za-z0-9]/g, '').slice(0, 32);
-      if (!id) return null;
-      const name = String(s.name == null ? '' : s.name).replace(/[<>&"']/g, '').trim().slice(0, 80);
-      const src = (s.f && typeof s.f === 'object') ? s.f : {};
-      const f = {};
-      for (const k of FILTER_FIELDS) f[k] = String(src[k] == null ? '' : src[k]).replace(/[<>&"']/g, '').slice(0, 64);
-      f.dows = Array.isArray(src.dows) ? src.dows.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6) : [];
-      return { id, name, f };
-    }).filter(Boolean);
+    const cleanSavedFilters = a =>
+      (Array.isArray(a) ? a : [])
+        .map(s => {
+          if (!s || typeof s !== 'object') return null;
+          const id = String(s.id == null ? '' : s.id)
+            .replace(/[^A-Za-z0-9]/g, '')
+            .slice(0, 32);
+          if (!id) return null;
+          const name = String(s.name == null ? '' : s.name)
+            .replace(/[<>&"']/g, '')
+            .trim()
+            .slice(0, 80);
+          const src = s.f && typeof s.f === 'object' ? s.f : {};
+          const f = {};
+          for (const k of FILTER_FIELDS)
+            f[k] = String(src[k] == null ? '' : src[k])
+              .replace(/[<>&"']/g, '')
+              .slice(0, 64);
+          f.dows = Array.isArray(src.dows) ? src.dows.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6) : [];
+          return { id, name, f };
+        })
+        .filter(Boolean);
     if (Array.isArray(data.meta) && data.meta.length) {
       const store = await tx(META, 'readwrite');
       for (const mm of data.meta) {
@@ -292,7 +325,14 @@ export const Store = {
     if (Array.isArray(data.trademeta) && data.trademeta.length) {
       const store = await tx(TRADEMETA, 'readwrite');
       for (const tm of data.trademeta) {
-        if (tm && tm.id) store.put({ id: tm.id, tags: cleanTags(tm.tags), note: tm.note || '', shots: cleanShots(tm.shots), updated: tm.updated || Date.now() });
+        if (tm && tm.id)
+          store.put({
+            id: tm.id,
+            tags: cleanTags(tm.tags),
+            note: tm.note || '',
+            shots: cleanShots(tm.shots),
+            updated: tm.updated || Date.now(),
+          });
       }
       await done(store);
     }
@@ -313,25 +353,47 @@ export const Store = {
 
   async purge() {
     const db = await open();
-    await Promise.all([TRADES, JOURNAL, META, TRADEMETA].map(name => {
-      const store = db.transaction(name, 'readwrite').objectStore(name);
-      store.clear();
-      return done(store);
-    }));
+    await Promise.all(
+      [TRADES, JOURNAL, META, TRADEMETA].map(name => {
+        const store = db.transaction(name, 'readwrite').objectStore(name);
+        store.clear();
+        return done(store);
+      })
+    );
     return true;
   },
 
   // S18: shared screenshot validator so the live capture path enforces the same data-URI
   // allow-list as restore (rejects SVG / javascript: / data:text payloads).
-  validShot(s) { return typeof s === 'string' && SHOT_RE.test(s); },
+  validShot(s) {
+    return typeof s === 'string' && SHOT_RE.test(s);
+  },
 
   // A13: the ONE synchronous persistence seam for small UI state (panel layout, workspace
   // templates) that must apply before paint, so it can't use the async IndexedDB path. Keeping
   // it here means no app/*.js touches localStorage directly — when the cloud tier lands, this is
   // the single place that mirrors layout state up. JSON-encodes values; never throws.
   local: {
-    get(key, fallback) { try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch (_) { return fallback; } },
-    set(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (_) { return false; } },
-    remove(key) { try { localStorage.removeItem(key); } catch (_) { } }
-  }
+    get(key, fallback) {
+      try {
+        const v = localStorage.getItem(key);
+        return v == null ? fallback : JSON.parse(v);
+      } catch (_) {
+        return fallback;
+      }
+    },
+    set(key, val) {
+      try {
+        localStorage.setItem(key, JSON.stringify(val));
+        return true;
+      } catch (_) {
+        return false;
+      }
+    },
+    remove(key) {
+      try {
+        localStorage.removeItem(key);
+      } catch (_) {}
+    },
+  },
 };

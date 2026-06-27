@@ -15,13 +15,17 @@ import { json, rateLimited } from '../_lib/http.js';
 
 const KEY = 'config';
 const DEFAULTS = {
-  flags: { showBetaAdapters: true, maintenanceBanner: false, betaRibbon: false }
+  flags: { showBetaAdapters: true, maintenanceBanner: false, betaRibbon: false },
 };
 
 async function read(kv) {
   if (!kv) return { ...DEFAULTS };
-  try { const raw = await kv.get(KEY); return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : { ...DEFAULTS }; }
-  catch (_) { return { ...DEFAULTS }; }
+  try {
+    const raw = await kv.get(KEY);
+    return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : { ...DEFAULTS };
+  } catch (_) {
+    return { ...DEFAULTS };
+  }
 }
 
 // CH12: versions are NOT admin-editable anymore — they're derived from the automated
@@ -41,7 +45,12 @@ export async function onRequest(context) {
     if (await rateLimited(env, 'config', request)) return json({ error: 'rate limited' }, 429);
     if (!(await isAdminAuthorized(request, env))) return json({ error: 'unauthorized' }, 401);
     if (!kv) return json({ error: 'STATUS_KV namespace is not bound' }, 500);
-    let body; try { body = await request.json(); } catch (_) { return json({ error: 'invalid JSON body' }, 400); }
+    let body;
+    try {
+      body = await request.json();
+    } catch (_) {
+      return json({ error: 'invalid JSON body' }, 400);
+    }
     const cur = await read(kv);
     // S19: allow-list flag keys to the declared schema (DEFAULTS.flags) and coerce to boolean, so a
     // client can't write arbitrary keys or oversized values into the world-readable config record.

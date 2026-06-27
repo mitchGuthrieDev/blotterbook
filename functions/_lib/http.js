@@ -6,7 +6,7 @@
 export function json(obj, status = 200, headers = {}) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers }
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers },
   });
 }
 
@@ -25,12 +25,15 @@ export function json(obj, status = 200, headers = {}) {
 export async function rateLimited(env, bucket, request, limit = 30, windowSec = 60) {
   const kv = env.STATUS_KV;
   if (!kv) return false;
-  const who = request.headers.get('Cf-Access-Authenticated-User-Email')
-    || request.headers.get('CF-Connecting-IP') || 'anon';
+  const who = request.headers.get('Cf-Access-Authenticated-User-Email') || request.headers.get('CF-Connecting-IP') || 'anon';
   const key = `rl:${bucket}:${who}:${Math.floor(Date.now() / (windowSec * 1000))}`;
   let n = 0;
-  try { n = parseInt(await kv.get(key), 10) || 0; } catch (_) {}
+  try {
+    n = parseInt(await kv.get(key), 10) || 0;
+  } catch (_) {}
   if (n >= limit) return true;
-  try { await kv.put(key, String(n + 1), { expirationTtl: Math.max(60, windowSec * 2) }); } catch (_) {}
+  try {
+    await kv.put(key, String(n + 1), { expirationTtl: Math.max(60, windowSec * 2) });
+  } catch (_) {}
   return false;
 }

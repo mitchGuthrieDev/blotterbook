@@ -31,13 +31,13 @@ export async function onRequest(context) {
     if (env.ADMIN_DEBUG !== '1') return json({ error: 'not_found' }, 404);
     return json({
       check: true,
-      s4Active: !!(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD),   // verification is enforced only when both are set
-      accessTeamDomain: env.ACCESS_TEAM_DOMAIN || null,         // not a secret
-      accessAud: env.ACCESS_AUD || null,                        // app identifier, not a secret
+      s4Active: !!(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD), // verification is enforced only when both are set
+      accessTeamDomain: env.ACCESS_TEAM_DOMAIN || null, // not a secret
+      accessAud: env.ACCESS_AUD || null, // app identifier, not a secret
       adminKeySet: !!env.ADMIN_KEY,
       tokenSecretSet: !!env.TOKEN_SECRET,
       tokenTtlSec: Number(env.ADMIN_TOKEN_TTL_SEC) || 7200,
-      jwt: await inspectAccessJwt(assertion, env.ACCESS_TEAM_DOMAIN, env.ACCESS_AUD)
+      jwt: await inspectAccessJwt(assertion, env.ACCESS_TEAM_DOMAIN, env.ACCESS_AUD),
     });
   }
 

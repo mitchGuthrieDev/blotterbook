@@ -10,8 +10,8 @@ import { json } from '../_lib/http.js';
 export async function onRequest(context) {
   const cf = (context.request && context.request.cf) || {};
   return json({
-    country: cf.country || null,        // "US"
-    region: cf.region || null,          // "Texas"
-    regionCode: cf.regionCode || null   // "TX"
+    country: cf.country || null, // "US"
+    region: cf.region || null, // "Texas"
+    regionCode: cf.regionCode || null, // "TX"
   });
 }

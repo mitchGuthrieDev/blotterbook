@@ -5,11 +5,19 @@ import { issueToken, verifyToken, verifyStripeSignature } from '../functions/_li
 import { onRequest as adminKeyOnRequest } from '../functions/api/admin-key.js';
 import { createHmac } from 'node:crypto';
 
-let pass = 0, fail = 0;
-const ok = (name, cond) => { if (cond) { pass++; console.log('  ok   ' + name); } else { fail++; console.log('  FAIL ' + name); } };
+let pass = 0,
+  fail = 0;
+const ok = (name, cond) => {
+  if (cond) {
+    pass++;
+    console.log('  ok   ' + name);
+  } else {
+    fail++;
+    console.log('  FAIL ' + name);
+  }
+};
 
-const stripeHeader = (secret, body, t) =>
-  `t=${t},v1=${createHmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;
+const stripeHeader = (secret, body, t) => `t=${t},v1=${createHmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;
 
 const SECRET = 'whsec_test_123';
 const BODY = '{"id":"evt_1","type":"checkout.session.completed"}';
@@ -35,8 +43,14 @@ ok('missing v1 fails', !(await verifyStripeSignature(BODY, `t=${now}`, SECRET)))
 ok('empty header fails', !(await verifyStripeSignature(BODY, '', SECRET)));
 ok('missing secret fails', !(await verifyStripeSignature(BODY, stripeHeader(SECRET, BODY, now), '')));
 // multiple v1s (Stripe rotates secrets): the matching one anywhere in the list passes
-ok('matches one of several v1s', await verifyStripeSignature(BODY,
-  `t=${now},v1=deadbeef,v1=${createHmac('sha256', SECRET).update(`${now}.${BODY}`).digest('hex')}`, SECRET));
+ok(
+  'matches one of several v1s',
+  await verifyStripeSignature(
+    BODY,
+    `t=${now},v1=deadbeef,v1=${createHmac('sha256', SECRET).update(`${now}.${BODY}`).digest('hex')}`,
+    SECRET
+  )
+);
 
 console.log('\nadmin-key ?check debug gate (S21):');
 {

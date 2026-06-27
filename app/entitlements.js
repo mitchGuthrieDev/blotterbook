@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 /* ============================================================
    Entitlements — which storage tier the current user gets.
 
@@ -28,5 +28,5 @@ export const Entitlements = {
   // Both tiers use local Store today; "cloud" will gain a CloudStore later.
   storeFor(/* tier */) {
     return Store;
-  }
+  },
 };

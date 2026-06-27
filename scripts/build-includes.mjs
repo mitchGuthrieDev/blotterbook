@@ -47,29 +47,26 @@ const footer = read('partials/footer.html').trim();
 
 // App-shell partials (single source for app.html / demo.html / staging.html).
 const appParts = {
-  'app-topbar':  read('partials/app-topbar.html'),
+  'app-topbar': read('partials/app-topbar.html'),
   'app-landing': read('partials/app-landing.html'),
-  'app-scope':   read('partials/app-scope.html'),
+  'app-scope': read('partials/app-scope.html'),
   'app-filters': read('partials/app-filters.html'),
-  'app-dash':    read('partials/app-dash.html'),
-  'app-modal':   read('partials/app-modal.html'),
+  'app-dash': read('partials/app-dash.html'),
+  'app-modal': read('partials/app-modal.html'),
   'app-scripts': read('partials/app-scripts.html'),
 };
 
 // Tiny mode conditional: <!--IF mode=staging-->..<!--ENDIF--> and
 // <!--IF mode!=demo-->..<!--ENDIF-->. No nesting; that's all the shell needs.
 function applyMode(tpl, mode) {
-  return tpl.replace(
-    /<!--IF\s+mode(!?)=([a-z]+)-->([\s\S]*?)<!--ENDIF-->/g,
-    (_m, neg, val, body) => ((mode === val) !== Boolean(neg) ? body : '')
+  return tpl.replace(/<!--IF\s+mode(!?)=([a-z]+)-->([\s\S]*?)<!--ENDIF-->/g, (_m, neg, val, body) =>
+    (mode === val) !== Boolean(neg) ? body : ''
   );
 }
 
 // Replace everything between <!-- include:NAME ... --> and <!-- /include:NAME -->
 function fill(html, name, render) {
-  const re = new RegExp(
-    `(<!--\\s*include:${name}\\b([^>]*?)-->)[\\s\\S]*?(<!--\\s*/include:${name}\\s*-->)`, 'g'
-  );
+  const re = new RegExp(`(<!--\\s*include:${name}\\b([^>]*?)-->)[\\s\\S]*?(<!--\\s*/include:${name}\\s*-->)`, 'g');
   return html.replace(re, (_m, open, attrs, close) => `${open}\n  ${render((attrs || '').trim())}\n  ${close}`);
 }
 
@@ -91,7 +88,11 @@ for (const dir of ['.', 'app']) {
       out = fill(out, name, attrs => applyMode(tpl, modeOf(attrs)).trim());
     }
 
-    if (out !== src) { writeFileSync(join(root, rel), out); changed++; console.log('updated', rel); }
+    if (out !== src) {
+      writeFileSync(join(root, rel), out);
+      changed++;
+      console.log('updated', rel);
+    }
   }
 }
 console.log(`build-includes: ${changed} file(s) updated`);

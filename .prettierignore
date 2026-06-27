@@ -13,3 +13,8 @@ build
 
 # Reference + generated data (curated / hashed); never reflow JSON data files
 data/
+
+# Hand-authored prose + workflow YAML — leave their formatting alone (CH32 is about
+# code consistency, not reflowing docs/tables or CI YAML)
+**/*.md
+.github/

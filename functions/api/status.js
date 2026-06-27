@@ -23,7 +23,12 @@ export async function onRequest(context) {
 
   if (request.method === 'GET') {
     let v = { mode: 'auto' };
-    if (kv) { try { const raw = await kv.get(KEY); if (raw) v = JSON.parse(raw); } catch (_) {} }
+    if (kv) {
+      try {
+        const raw = await kv.get(KEY);
+        if (raw) v = JSON.parse(raw);
+      } catch (_) {}
+    }
     return json(v);
   }
 
@@ -33,12 +38,17 @@ export async function onRequest(context) {
       return json({ error: 'unauthorized' }, 401);
     }
     if (!kv) return json({ error: 'STATUS_KV namespace is not bound to this Pages project' }, 500);
-    let body; try { body = await request.json(); } catch (_) { return json({ error: 'invalid JSON body' }, 400); }
+    let body;
+    try {
+      body = await request.json();
+    } catch (_) {
+      return json({ error: 'invalid JSON body' }, 400);
+    }
     const mode = MODES.includes(body && body.mode) ? body.mode : 'auto';
     const rec = {
       mode,
-      label: (body && typeof body.label === 'string') ? body.label.slice(0, 40) : '',
-      updatedAt: new Date().toISOString()
+      label: body && typeof body.label === 'string' ? body.label.slice(0, 40) : '',
+      updatedAt: new Date().toISOString(),
     };
     await kv.put(KEY, JSON.stringify(rec));
     return json(rec);

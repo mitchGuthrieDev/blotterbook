@@ -22,9 +22,11 @@ export async function onRequest(context) {
 
   if (path === '/app/staging.html' || path === '/app/staging') {
     const secret = env.TOKEN_SECRET || env.ADMIN_KEY;
-    const block = () => new Response('Staging is restricted — open it from the admin panel.', {
-      status: 403, headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-    });
+    const block = () =>
+      new Response('Staging is restricted — open it from the admin panel.', {
+        status: 403,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
     if (secret) {
       const hdr = request.headers.get('x-admin-key');
       const m = (request.headers.get('Cookie') || '').match(/(?:^|;\s*)bb_staging=([^;]+)/);

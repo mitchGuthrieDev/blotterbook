@@ -29,9 +29,7 @@ const MANIFEST = 'manifest.json';
 // on every content edit.
 const EXCLUDE = new Set([MANIFEST, 'backlog.json', 'backlog_archive.json', 'versions.json', 'changelog.json']);
 
-const names = (await readdir(dataDir))
-  .filter(n => n.endsWith('.json') && !EXCLUDE.has(n))
-  .sort();
+const names = (await readdir(dataDir)).filter(n => n.endsWith('.json') && !EXCLUDE.has(n)).sort();
 
 const files = {};
 for (const name of names) {
@@ -44,7 +42,7 @@ for (const name of names) {
 // committed). The app only reads `files`; it cache-busts the manifest fetch itself.
 const manifest = {
   schemaVersion: 1,
-  files
+  files,
 };
 
 await writeFile(join(dataDir, MANIFEST), JSON.stringify(manifest, null, 2) + '\n');

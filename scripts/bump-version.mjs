@@ -24,7 +24,7 @@ export function bumpLevel(message) {
   const subject = msg.split('\n')[0];
   if (/^[a-z]+(\([^)]*\))?!:/i.test(subject) || /(^|\n)BREAKING[ -]CHANGE/i.test(msg)) return 'major';
   const m = subject.match(/^([a-z]+)(\([^)]*\))?:/i);
-  return (m && m[1].toLowerCase() === 'feat') ? 'minor' : 'patch';
+  return m && m[1].toLowerCase() === 'feat' ? 'minor' : 'patch';
 }
 
 // After CH16 the staging FEATURES were promoted to all surfaces (the old app/staging.js became
@@ -44,7 +44,7 @@ const PROD_ONLY = new Set(['index.html', 'site.css', 'howto.html', 'roadmap.html
 const NON_SHIPPING_DATA = new Set(['data/versions.json', 'data/backlog.json', 'data/backlog_archive.json', 'data/changelog.json']);
 export function isProdShipping(f) {
   if (f === 'app/app.html' || f === 'app/demo.html' || f === 'app/app.css' || f === 'tokens.css') return true;
-  if (/^app\/[^/]+\.js$/.test(f)) return true;   // shared app modules (all app JS ships to every surface)
+  if (/^app\/[^/]+\.js$/.test(f)) return true; // shared app modules (all app JS ships to every surface)
   if (/^partials\//.test(f) || /^assets\//.test(f)) return true;
   if (/^data\//.test(f) && !NON_SHIPPING_DATA.has(f)) return true;
   return false;
@@ -52,21 +52,38 @@ export function isProdShipping(f) {
 
 /* Which tracks a changeset bumps. */
 export function classifySurfaces(files) {
-  let prod = false, staging = false;
+  let prod = false,
+    staging = false;
   for (const f of files) {
-    if (isProdShipping(f)) { prod = true; staging = true; }      // shared app code → both
-    else if (STAGING_ONLY.has(f)) { staging = true; }            // staging-only → staging
-    else if (PROD_ONLY.has(f)) { prod = true; }                  // homepage/info pages → prod only
+    if (isProdShipping(f)) {
+      prod = true;
+      staging = true;
+    } // shared app code → both
+    else if (STAGING_ONLY.has(f)) {
+      staging = true;
+    } // staging-only → staging
+    else if (PROD_ONLY.has(f)) {
+      prod = true;
+    } // homepage/info pages → prod only
     // anything else (admin.html, README, .github, scripts, functions, versions/backlog/backlog_archive/changelog json) → no bump
   }
   return { prod, staging };
 }
 
 function applyBump(ver, level) {
-  let [maj, min, pat] = String(ver).split('.').map(n => parseInt(n, 10) || 0);
-  if (level === 'major') { maj++; min = 0; pat = 0; }
-  else if (level === 'minor') { min++; pat = 0; }
-  else { pat++; }
+  let [maj, min, pat] = String(ver)
+    .split('.')
+    .map(n => parseInt(n, 10) || 0);
+  if (level === 'major') {
+    maj++;
+    min = 0;
+    pat = 0;
+  } else if (level === 'minor') {
+    min++;
+    pat = 0;
+  } else {
+    pat++;
+  }
   return `${maj}.${min}.${pat}`;
 }
 
@@ -94,9 +111,10 @@ export function platformLabel(prod) {
 function syncBakedBadges(root, next) {
   const file = root + 'partials/app-topbar.html';
   let s = readFileSync(file, 'utf8');
-  s = s.replace(/(title="Main app version">)v[\d.]+/, `$1v${next.prod}`)
-       .replace(/(title="Demo version">)v[\d.]+/, `$1v${next.prod}`)
-       .replace(/(title="Staging version">)v[\d.]+/, `$1v${next.staging}`);
+  s = s
+    .replace(/(title="Main app version">)v[\d.]+/, `$1v${next.prod}`)
+    .replace(/(title="Demo version">)v[\d.]+/, `$1v${next.prod}`)
+    .replace(/(title="Staging version">)v[\d.]+/, `$1v${next.staging}`);
   writeFileSync(file, s);
 }
 
@@ -110,13 +128,22 @@ function main() {
   if (rawFiles == null) {
     // Local convenience: diff against the parent. Guard the first-commit / shallow-clone case
     // where HEAD~1 doesn't exist (CH14) so the script doesn't throw — treat as no changes.
-    try { rawFiles = execSync('git diff --name-only HEAD~1 HEAD').toString(); }
-    catch (_) { console.warn('No HEAD~1 (first commit / shallow clone) — treating as no changes.'); rawFiles = ''; }
+    try {
+      rawFiles = execSync('git diff --name-only HEAD~1 HEAD').toString();
+    } catch (_) {
+      console.warn('No HEAD~1 (first commit / shallow clone) — treating as no changes.');
+      rawFiles = '';
+    }
   }
-  const files = rawFiles.split('\n').map(s => s.trim()).filter(Boolean);
+  const files = rawFiles
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
 
   const { next, level, bumpedProd, bumpedStaging } = computeBump({
-    message, files, versions: { prod: cur.prod, staging: cur.staging }
+    message,
+    files,
+    versions: { prod: cur.prod, staging: cur.staging },
   });
 
   if (!bumpedProd && !bumpedStaging) {
@@ -126,8 +153,10 @@ function main() {
   const updated = { ...cur, prod: next.prod, staging: next.staging };
   writeFileSync(file, JSON.stringify(updated, null, 2) + '\n');
   syncBakedBadges(root, updated);
-  console.log(`Bumped (${level}): prod ${cur.prod}->${next.prod}${bumpedProd ? '' : ' (unchanged)'}, `
-    + `staging ${cur.staging}->${next.staging}${bumpedStaging ? '' : ' (unchanged)'}`);
+  console.log(
+    `Bumped (${level}): prod ${cur.prod}->${next.prod}${bumpedProd ? '' : ' (unchanged)'}, ` +
+      `staging ${cur.staging}->${next.staging}${bumpedStaging ? '' : ' (unchanged)'}`
+  );
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
