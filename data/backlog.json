@@ -337,24 +337,72 @@
       "partial": false,
       "doneNote": null,
       "id": "A24",
-      "title": "Adopt Tier B: shipped-output build (deferred — gated on a concrete trigger)",
+      "title": "Adopt Tier B: shipped-output build — TRIGGER FIRED, superseded by ADR-001 (A26)",
       "category": "ARCHITECTURE / DUPLICATION",
-      "priority": "P3",
+      "priority": "P2",
       "effort": "large",
       "status": "open",
-      "prompt": "DEFERRED per the R19 decision (docs/build-step-decision.md). Tier A (dev-only tooling — ESLint/Prettier/Playwright in CI, committed files stay the deploy artifact) shipped; this is the heavier Tier B that emits the SHIPPED output (bundler + minify + content-hashed filenames + nonce/hash CSP). Do NOT start until a concrete trigger fires: (1) dropping `style-src 'unsafe-inline'` (S18) becomes a priority — nonce/hash CSP is Tier B's only unique payoff, and note script-src is already 'self' with no inline allowance so the residual risk is CSS-injection only; OR (2) module count / CSS size becomes a MEASURED perf problem (native ESM + HTTP/2 + edge caching make this unlikely soon). When triggered: the ONLY Pages-compatible shape is the public/ output-dir split from A18, migrated all-at-once across the full coupled-path map (the /app//assets//data absolute refs, _redirects, _headers, robots/sitemap + canonicals, build-includes/build-manifest/bump-version path prefixes), with a Pages build command + SKIP of the old no-build assumptions. Re-confirm no-runtime-deps stays hard (build deps must not ship at runtime). Done when: either the trigger is met and the output-dir build + CSP-nonce migration lands with the coupled-path set updated in lockstep and all surfaces verified, or this is explicitly re-affirmed as deferred."
+      "prompt": "RESOLVED-AS-ACCEPTED, not deferred. The R19 trigger has fired: the commercial pivot + the complex-UI roadmap (R11 trade replay, R12 module menu, R13 resizable/snapping modules, F23 Trade Blotter) require a charting/layout library + a component model, which require a shipped-output build. The decision and phased plan now live in docs/adr-001-vite-svelte-spa.md, which supersedes the Tier B deferral in docs/build-step-decision.md. Tier B is being adopted as a Vite build + Svelte SPA on the /app/ surface (marketing pages stay static). This umbrella item is superseded by the spawned implementation/guardrail items: A26 (Vite infra + deploy-contract reversal), A27 (Svelte on staging), A28 (dependency policy), A29 (preserve the pure-logic core). Done when: A26 + A27 have landed and prod/demo migration (ADR Phase 4) is tracked; this item then closes referencing the ADR."
     },
     {
       "completedDate": null,
       "partial": false,
       "doneNote": null,
       "id": "A25",
-      "title": "(guardrail) Dev tooling stays dev-only — never alters shipped bytes",
+      "title": "(guardrail) Dev tooling stays dev-only — SUPERSEDED IN PART by ADR-001/A28",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "ongoing",
+      "status": "guardrail",
+      "prompt": "PARTIALLY SUPERSEDED by docs/adr-001-vite-svelte-spa.md. This guardrail was written for the R19 Tier A world where the shipped app was zero-dep and the committed files were the deploy artifact (so devDeps could never touch shipped bytes, and SKIP_DEPENDENCY_INSTALL=1 was set on Pages). ADR-001 reverses that: Tier B (Vite build) is being adopted, so build deps now DO produce shipped bytes and Pages WILL install + build. The replaced clauses: 'shipped output stays dependency-free', the drift gate as proof-of-no-shipped-deps, and SKIP_DEPENDENCY_INSTALL — those no longer hold after A26 lands. WHAT STILL APPLIES until/after migration: keep node_modules + build output (playwright-report, test-results, the Vite dist/output dir) gitignored; pin every dep with a committed lockfile. The NEW dependency discipline lives in A28 (minimal/pinned/audited; supply chain as a security control; local-compute pillar gates every dep). Reference A28, not this item, going forward."
+    },
+    {
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "id": "A26",
+      "title": "Vite build infrastructure + deploy-contract reversal (ADR-001 Phase 1)",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "large",
+      "status": "open",
+      "prompt": "ADR-001 Phase 1 (docs/adr-001-vite-svelte-spa.md). Stand up a Vite shipped-output build and execute the deploy-contract reversal — ALL AT ONCE (no users yet, so isolate the infra change from any logic rewrite; the app code stays VANILLA in this phase). Scope: (1) Add `vite` as a devDependency, pinned + lockfile. (2) Multi-page config that lists every HTML entry — the marketing pages (index/howto/roadmap/changelog/legal/admin) stay STATIC-rendered, plus app/{app,demo,staging}.html; do NOT pull marketing behind an SPA shell (SEO/instant-load). (3) Execute the public/ output-dir split from A18: browser-served files build → the Pages output dir; functions/, scripts/, partials/, and tooling stay at the repo ROOT. (4) Update the FULL A18 coupled-path map in lockstep — the absolute /app/ /assets/ /data/ refs, _redirects, _headers, robots.txt, sitemap.xml + page canonicals (CH5/CH6), and the path prefixes in build-includes.mjs / build-manifest.mjs / bump-version.mjs. (5) Cloudflare Pages: set build command (`vite build`) + output directory, and REMOVE SKIP_DEPENDENCY_INSTALL=1 (the build now needs devDeps at deploy — reverses the A25 posture). (6) CSP: move to hash/nonce and DROP `style-src 'unsafe-inline'` (closes S18). (7) Keep data/*.json static + runtime-fetched + cache-busted: RETAIN build-manifest.mjs (a rate change stays 'edit JSON, rebuild manifest, no app rebuild'); Vite hashes the APP assets. Re-confirm the HARD local-compute pillar (no telemetry/egress) survives. Done when: all three app surfaces + every marketing page build via Vite and boot clean (Playwright e2e green on each), the coupled-path set is updated in lockstep, the Pages build deploys, style-src no longer allows 'unsafe-inline', and build-script idempotency holds."
+    },
+    {
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "id": "A27",
+      "title": "Adopt Svelte on the staging app surface (ADR-001 Phase 2)",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "large",
+      "status": "open",
+      "prompt": "ADR-001 Phase 2 (docs/adr-001-vite-svelte-spa.md) — depends on A26. Introduce Svelte and rewrite the STAGING app surface's VIEW LAYER as Svelte components; prod (app/app.html) + demo (app/demo.html) stay vanilla until staging proves out (mirrors the CH16 staging→prod proving-ground model). Scope: (1) Add `svelte` + `@sveltejs/vite-plugin-svelte`, pinned + lockfile. (2) Mount a Svelte app into app/staging.html; rebuild the staging panels/widgets/modals as components. (3) Import the pure-logic core VERBATIM per A29 — app/adapters.js, compute(), costModel(), the Section-1256 tax model, app/store.js (Store), assets/util.js — do NOT rewrite them; the framework touches the view layer only. (4) Preserve staging's isolated-IndexedDB + key-gate behavior and the STAGING_PAGE-gated features. Done when: the Svelte staging app reaches feature parity with the vanilla app, e2e is green, the staging key-gate + isolated DB behave unchanged, and prod/demo are untouched. Follow-up (Phase 4, separate item when reached): migrate prod + demo to Svelte and retire the vanilla view layer, re-verifying the demo-never-persists invariant."
+    },
+    {
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "id": "A28",
+      "title": "(guardrail) Dependency policy — minimal/pinned/audited; supply chain is a security control",
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P2",
       "effort": "ongoing",
       "status": "guardrail",
-      "prompt": "Guardrail from the R19 Tier A adoption (docs/build-step-decision.md). The project now has devDependencies (ESLint/Prettier/Playwright) + a lockfile, but the SHIPPED app must stay dependency-free and build-stepless: tooling runs only locally/CI and must NEVER alter the committed/served files. Keep node_modules + playwright-report + test-results gitignored; keep the CI drift gate (git clean after install/test) so a tool that writes into the tree fails the build; never add a runtime/import dependency to app/*.js, assets/*.js, or functions/* on an npm package. Set SKIP_DEPENDENCY_INSTALL=1 on the Cloudflare Pages project so devDeps never execute at deploy. Reject any change that makes the shipped output depend on the build tooling (that is Tier B / A24, which is deferred)."
+      "prompt": "Guardrail from ADR-001 (docs/adr-001-vite-svelte-spa.md), replacing the zero-runtime-dep stance (A25). Runtime/build dependencies are now ALLOWED, under discipline — because for a privacy product handling financial data, the supply chain IS a security control. (1) EARN-ITS-WEIGHT: add a dep only when hand-rolling it is materially worse; keep writing small utilities by hand (assets/util.js). Heavyweight enablers qualify (the framework, charting like lightweight-charts, layout/virtualization libs); date/utility micro-libs do not. (2) SUPPLY CHAIN: pin every version + commit the lockfile; run `npm audit` in CI; apply Subresource Integrity / strict CSP to shipped bundles; keep the dependency surface minimal; consider vendoring the few critical libs so a registry compromise can't silently reach users. (3) LOCAL-COMPUTE PILLAR GATES EVERY DEP (hard): reject any dep or dep feature that phones home, ships telemetry/analytics, or could exfiltrate trade data — no exceptions, regardless of convenience. Reject any dependency addition that fails the earn-its-weight bar or the local-compute gate."
+    },
+    {
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "id": "A29",
+      "title": "(guardrail) Preserve the pure-logic core verbatim through the framework migration",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "ongoing",
+      "status": "guardrail",
+      "prompt": "Guardrail from ADR-001 (docs/adr-001-vite-svelte-spa.md). The Svelte migration (A27 + later Phase 4) must touch the VIEW LAYER ONLY. The pure-logic modules are the hard-won, test-covered value and must be imported into components VERBATIM, not rewritten: app/adapters.js (platform CSV adapters + detection + pairFills), compute() (metrics), costModel() (commissions/subscriptions/tax/take-home), the Section-1256 tax model, app/store.js (the Store seam — A4), and assets/util.js. They stay framework-agnostic so the node test suites (test-adapters/test-version/test-auth/test-flags/test-tax) keep covering them unchanged. Reject a framework PR that reimplements adapter parsing, the metrics/cost/tax math, or persistence inside a component instead of importing the existing module. The Store interface (A4) remains the only persistence seam."
     }
   ],
   "howToDrive": [

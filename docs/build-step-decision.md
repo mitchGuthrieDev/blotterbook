@@ -1,6 +1,13 @@
 # Build-step decision (R19)
 
-**Status:** decided 2026-06-27 — **adopt Tier A (dev-only tooling) now; defer Tier B (shipped-output build).**
+> **⚠️ Tier B deferral SUPERSEDED 2026-06-27 by [ADR-001](adr-001-vite-svelte-spa.md).** The
+> trigger fired: the commercial pivot + the complex-UI roadmap (R11/R12/R13/F23) require a build.
+> Tier B is now **accepted** — a Vite build + Svelte SPA on the `/app/` surface (A24 → A26/A27).
+> The Tier A history and the two-tier framing below remain accurate and useful background; only the
+> "defer Tier B" conclusion is overtaken.
+
+**Status:** decided 2026-06-27 — adopt Tier A (dev-only tooling); Tier B was deferred here, then
+**accepted 2026-06-27 in [ADR-001](adr-001-vite-svelte-spa.md)** (see banner above).
 
 This records the outcome of backlog item **R19** ("adopt a build step?"). It sits under the
 [design pillars](architecture.md#design-pillars): the no-build pillar is *soft*, but **no *runtime*

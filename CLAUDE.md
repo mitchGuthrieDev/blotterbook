@@ -17,18 +17,28 @@ leaves the browser.** It deploys to Cloudflare Pages as static files plus
 
 ## Hard constraints (do not break these)
 
-- **No runtime dependencies** *(hard)*. The shipped app loads no framework and no
-  third-party/runtime libraries — keep the *shipped output* dependency-free. Build-*time*/dev
-  tooling is now decided (**R19**): ESLint + Prettier + Playwright live in `devDependencies`
-  that run locally/CI and **must never alter the shipped/committed files** (guardrail **A25**;
-  CI's drift gate enforces it). A shipped-output build (bundler/minify/nonce-CSP) stays
-  **deferred** (**A24**). See
-  [`docs/build-step-decision.md`](docs/build-step-decision.md) and the design pillars in
+- **Compute happens locally — no trade data ever leaves the browser** *(hard — the
+  product moat)*. All parsing, metrics, and storage are client-side; no telemetry, no
+  analytics, no trade-data egress, ever — this gates every dependency. The paid sync tier
+  stays zero-knowledge / E2E-encrypted. **This is the one pillar that does not bend.**
+- **Dependencies: minimal, pinned, audited** *(policy — was "no runtime dependencies",
+  relaxed by [ADR-001](docs/adr-001-vite-svelte-spa.md))*. Blotterbook is adopting a **Vite
+  build + Svelte SPA** on the `/app/` surface to enable the complex-UI roadmap
+  (R11/R12/R13/F23); marketing pages stay static. Dependencies are allowed where they earn
+  their weight (framework, charting, layout libs); small utilities stay hand-written. Pin every
+  version + commit the lockfile; treat the supply chain as a security control (guardrail
+  **A28**). The pure-logic core (adapters/compute/costModel/tax/Store/util) is migrated
+  **verbatim** (guardrail **A29**). Migration is phased: **A26** (Vite infra + deploy-contract
+  reversal) → **A27** (Svelte on staging) → prod/demo. Dev-only tooling (ESLint/Prettier/
+  Playwright) came earlier in R19 Tier A. See
+  [`docs/adr-001-vite-svelte-spa.md`](docs/adr-001-vite-svelte-spa.md),
+  [`docs/build-step-decision.md`](docs/build-step-decision.md), and the design pillars in
   [`docs/architecture.md`](docs/architecture.md#design-pillars).
 - **Must be served over http(s).** The app `fetch()`es `/data/*.json`, so opening
   files from disk breaks it. Use a static server.
-- **App scripts are native ES modules** (A20) — *(hard: no build, no runtime deps;
-  this is browser-native ESM)*. [`partials/app-scripts.html`](partials/app-scripts.html)
+- **App scripts are native ES modules** (A20) — *(describes today's vanilla app; the
+  Vite + Svelte migration of ADR-001 changes this for the `/app/` surface — see A26/A27)*.
+  [`partials/app-scripts.html`](partials/app-scripts.html)
   is a single module entry, `<script type="module" src="main.js">`; `main.js`
   imports the rest. Each module `export`s what others use and `import`s what it
   needs — no shared global scope, no fixed load order, no module-isolation

@@ -30,23 +30,30 @@ CH16, F13, F14, S19, R1, …) are backlog item ids from
 
 ## Design pillars
 
-Three intentional constraints shape every decision:
+> **Re-ranked 2026-06-27 (ADR-001).** As Blotterbook moves from a personal tool to a
+> commercial futures-analytics product, the one *product* pillar (local compute) is affirmed
+> as HARD, while the two *implementation* pillars (no runtime deps, no build step) relax to
+> enable the complex-UI roadmap. A **Vite build + Svelte SPA** on the `/app/` surface is now
+> adopted — see [adr-001-vite-svelte-spa.md](adr-001-vite-svelte-spa.md), which supersedes the
+> Tier B deferral in [build-step-decision.md](build-step-decision.md).
 
-1. **Compute happens locally** — all parsing, metrics, and storage are
-   client-side; no trade data leaves the browser.
-2. **No runtime dependencies** *(hard rule)* — the shipped app loads no framework
-   and no third-party/runtime libraries; it's plain JavaScript. Build-*time*/dev
-   tooling is separate: **R19 is decided** — dev-only tooling (ESLint, Prettier,
-   Playwright render tests) is adopted and lives in `devDependencies` that run
-   locally/CI and **never alter the shipped bytes**; only the *shipped* output must
-   stay dependency-free. See [build-step-decision.md](build-step-decision.md).
-3. **Deployable as static files with zero runtime deps** — ships to Cloudflare
-   Pages as static assets, with `/functions/*` as the thin edge layer for the few
-   things that can't be client-side. No build is *required* to deploy: the
-   committed files are the artifacts (the dev tooling from #2 does not emit shipped
-   output). A shipped-output build — bundler/minify/hashed names/nonce-CSP, which
-   *would* reverse this — is **deferred** (guardrail **A18**; tracked as **A24**,
-   gated on a concrete trigger). See [build-step-decision.md](build-step-decision.md).
+1. **Compute happens locally** *(HARD — the product moat)* — all parsing, metrics, and storage
+   are client-side; **no trade data ever leaves the browser.** No telemetry, no analytics, no
+   trade-data egress, regardless of what dependencies are added. This survives
+   commercialization intact (the paid sync tier stays zero-knowledge / E2E-encrypted) and it
+   gates every dependency (A28).
+2. **Minimal, pinned, audited dependencies** *(policy — relaxed from "no runtime
+   dependencies")* — dependencies are allowed where they earn their weight (the framework,
+   charting, layout/virtualization libs); small utilities stay hand-written. The supply chain
+   is treated as a security control: pinned versions + committed lockfile, `npm audit` in CI,
+   SRI / strict CSP on shipped bundles. See guardrail **A28**. (Dev-only tooling — ESLint,
+   Prettier, Playwright — was already adopted in R19 Tier A.)
+3. **Deployable to Cloudflare Pages** *(build step now adopted)* — ships to Pages, with
+   `/functions/*` as the thin edge layer for the few things that can't be client-side. A
+   shipped-output build (Vite: bundler/minify/hashed names/nonce-CSP) is being adopted via the
+   `public/` output-dir split (**A26**), reversing the old "committed files are the artifacts"
+   contract (**A18**) — done all-at-once while there are no users. The pure-logic core is
+   migrated **verbatim** (guardrail **A29**).
 
 Because the app is split across files (it used to be one `index.html`), it must
 be **served over http(s)** — opening from disk blocks the `fetch()` of the
