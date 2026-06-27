@@ -5,8 +5,14 @@
 #   (S9: homepage -> /assets/home.js, admin -> /assets/admin.js, changelog ->
 #   /assets/changelog.js; the app pages already load external scripts). So an injected
 #   inline <script> or onX= handler will not execute, even if markup escaping ever slips.
-# - style-src keeps 'unsafe-inline' because inline <style> blocks and style="" attributes
-#   are still used throughout and there is no build step for per-response style hashes yet.
+# - style-src keeps 'unsafe-inline' because inline <style> blocks and dynamic style="" attributes
+#   (e.g. data-driven widths/colors in the charts and bars) are still used throughout. Per-response
+#   nonces/hashes don't fit a static host, and the values are computed at runtime, so hashing won't
+#   cover them. Path to drop it (tracked in S18): move static inline <style> into linked CSS, and
+#   convert the dynamic style="" usages to CSS custom properties set via element.style.setProperty()
+#   (which 'unsafe-inline' is NOT required for) or utility classes; once no inline style remains,
+#   tighten this to style-src 'self'. Note script-src already omits 'unsafe-inline', so an injected
+#   style cannot execute script — this is defense-in-depth (CSS-exfiltration hardening), not a hole.
 # - No external origins are needed: every fetch is same-origin (/api/*, /data/*, /app/),
 #   and per-trade screenshots are data: URLs (hence img-src 'self' data:). No 'unsafe-eval'.
 # - When Stripe checkout lands it redirects (full navigation), so no CSP change is needed;

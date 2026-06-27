@@ -35,6 +35,11 @@
   const META = 'meta';
   const TRADEMETA = 'trademeta';   // per-trade tags / note / screenshots, keyed by trade id
 
+  // Screenshots are inlined data: URIs rendered straight into an <img src>. Only well-formed base64
+  // image data URIs are allowed — this drops any `javascript:`/`data:text/html`/SVG payload before it
+  // can reach a render sink (S15/S18). Shared by importAll (restore) and the live capture path.
+  const SHOT_RE = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+
   let dbp = null; // cached open-promise
 
   function open() {
@@ -214,20 +219,26 @@
       const cleanSym = s => (window.Adapters && Adapters.rootSym) ? Adapters.rootSym(String(s || ''))
         : String(s || '').toUpperCase().replace(/[^A-Z0-9._-]/g, '');
       const cleanTag = s => String(s == null ? '' : s).replace(/[<>&"']/g, '');
-      // Screenshots are inlined data: URIs rendered straight into an <img src>. A backup is
-      // untrusted, so keep ONLY well-formed base64 image data URIs (S15) — this drops any
-      // `javascript:`/`data:text/html` payload before it can reach a render sink.
-      const SHOT_RE = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+      // Restore is untrusted: keep ONLY well-formed base64 image data URIs (S15, SHOT_RE above).
       const cleanShots = a => (Array.isArray(a) ? a.filter(s => typeof s === 'string' && SHOT_RE.test(s)) : []);
+      // S17: a restored `date` flows into innerHTML sinks (the data-manager trades/day-notes lists),
+      // and the CSV path validates dates but addTrades/journal-restore did not. Require canonical
+      // YYYY-MM-DD (and a finite pnl for trades) here so a crafted backup can't smuggle markup in.
+      const validDate = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s);
       if (Array.isArray(data.trades) && data.trades.length) {
-        for (const t of data.trades) { if (t && t.root != null) t.root = cleanSym(t.root); }
-        const r = await this.addTrades(data.trades);
+        const clean = [];
+        for (const t of data.trades) {
+          if (!t || !validDate(t.date) || !Number.isFinite(+t.pnl)) continue;
+          if (t.root != null) t.root = cleanSym(t.root);
+          clean.push(t);
+        }
+        const r = await this.addTrades(clean);
         added = r.added; dup = r.duplicate;
       }
       if (Array.isArray(data.journal) && data.journal.length) {
         const store = await tx(JOURNAL, 'readwrite');
         for (const j of data.journal) {
-          if (j && j.date && j.text) store.put({ date: j.date, text: j.text, updated: j.updated || Date.now() });
+          if (j && validDate(j.date) && j.text) store.put({ date: j.date, text: String(j.text), updated: j.updated || Date.now() });
         }
         await done(store);
       }
@@ -266,7 +277,11 @@
         return done(store);
       }));
       return true;
-    }
+    },
+
+    // S18: shared screenshot validator so the live capture path enforces the same data-URI
+    // allow-list as restore (rejects SVG / javascript: / data:text payloads).
+    validShot(s) { return typeof s === 'string' && SHOT_RE.test(s); }
   };
 
   window.Store = Store;

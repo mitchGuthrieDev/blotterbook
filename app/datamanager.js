@@ -42,9 +42,9 @@ async function renderDataManager(){
 
   // Notes
   if($('dm_notes')) $('dm_notes').innerHTML = notes.length
-    ? notes.map(j=>`<div class="dmrow"><span class="mono dmdate">${j.date}</span>
+    ? notes.map(j=>`<div class="dmrow"><span class="mono dmdate">${esc(j.date)}</span>
         <span class="dmnote">${esc(j.text).slice(0,120)}</span>
-        <button class="dmdel" data-note="${j.date}" title="Delete this note">Delete</button></div>`).join('')
+        <button class="dmdel" data-note="${esc(j.date)}" title="Delete this note">Delete</button></div>`).join('')
     : '<div class="dmempty">No day notes saved.</div>';
 
   // Per-trade editor (tags / note / screenshots)
@@ -59,7 +59,7 @@ async function renderDataManager(){
   const dis = demo ? ' disabled' : '';
   if($('dm_trades')) $('dm_trades').innerHTML = shown.length
     ? shown.slice().reverse().map(t=>{ const id=Store.tradeId(t);
-        return `<tr><td class="mono">${t.date}</td><td>${esc(t.root)}</td>
+        return `<tr><td class="mono">${esc(t.date)}</td><td>${esc(t.root)}</td>
         <td>${esc(t.side||'—')}${metaChips(TRADE_META.get(id))}</td><td class="num mono ${cls(t.pnl)}">${usd(t.pnl)}</td>
         <td class="dmrowact"><button class="dmdel alt" data-edit="${id}"${dis} title="Tags, note & screenshots">Edit</button>
         <button class="dmdel" data-trade="${id}"${dis} title="Delete this trade">Delete</button></td></tr>`; }).join('')
@@ -132,6 +132,9 @@ function dmAddShot(file){
   if(!/^image\//.test(file.type||'')){ alert('Please choose an image file.'); return; }
   const sizeLabel = n => n>=1048576 ? (n/1048576).toFixed(1)+' MB' : Math.round(n/1024)+' KB';
   const pushShot = (url, optimizedFromBytes) => {
+    // S18: enforce the same data-URI allow-list as restore — rejects SVG / non-base64 images
+    // (e.g. a decode-failure fallthrough) so a stored shot can't carry a non-image payload.
+    if(!Store.validShot(url)){ alert('That image type isn’t supported — please use PNG, JPEG, WebP, or GIF.'); return; }
     dmCaptureEdit();
     DM_EDIT.shots.push(url);
     DM_EDIT._msg = optimizedFromBytes
