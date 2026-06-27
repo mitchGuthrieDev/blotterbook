@@ -1499,6 +1499,17 @@
       "completedDate": "2026-06-27",
       "partial": false,
       "doneNote": "**Shipped:** added scripts/test-auth.mjs assertions that GET /api/admin-key?check returns 404 when ADMIN_DEBUG is unset (200 when ADMIN_DEBUG=1, and a normal no-assertion request is 401), plus a GUARDRAIL comment at the endpoint that ADMIN_DEBUG must stay unset in production. The ?check branch was already gated behind ADMIN_DEBUG; this locks the behaviour into the CI test suite."
+    },
+    {
+      "id": "CH31",
+      "title": "Stop the changelog from triggering its own release (changelog.json → NON_SHIPPING_DATA)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "trivial",
+      "status": "done",
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "**Shipped:** added `data/changelog.json` to the NON_SHIPPING_DATA set in scripts/bump-version.mjs, so isProdShipping() now returns false for it and a curated release-notes commit no longer bumps prod/staging — release notes DOCUMENT a version instead of triggering one (previously the changelog perpetually trailed prod by a release and each notes edit fired another). Updated the surrounding comments and added test-version.mjs coverage: changelog.json is not prod-shipping; a changelog-only changeset bumps neither track; a changelog + a real prod-shipping change (app/core.js) still bumps both; and computeBump on a changelog-only docs commit yields no bump with bumped* flags false. Full version-bump suite green (32). (changelog.json was already excluded from build-manifest.mjs, so cache-busting is unaffected.)"
     }
   ]
 }

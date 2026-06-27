@@ -21,6 +21,7 @@ ok('app/staging.html is NOT prod', !isProdShipping('app/staging.html'));
 ok('app+demo shells + css + tokens are prod', ['app/app.html','app/demo.html','app/app.css','tokens.css'].every(isProdShipping));
 ok('partials + assets + data are prod', isProdShipping('partials/app-dash.html') && isProdShipping('assets/util.js') && isProdShipping('data/brokers.json'));
 ok('versions/backlog/backlog_archive json are NOT prod', !isProdShipping('data/versions.json') && !isProdShipping('data/backlog.json') && !isProdShipping('data/backlog_archive.json'));
+ok('changelog.json is NOT prod (CH31 — notes must not self-bump)', !isProdShipping('data/changelog.json'));
 ok('info pages / readme / ci are NOT prod', !isProdShipping('index.html') && !isProdShipping('README.md') && !isProdShipping('.github/workflows/ci.yml'));
 
 console.log('\nSurface selection:');
@@ -31,6 +32,8 @@ ok('site.css + an info page → prod only', (()=>{const s=classifySurfaces(['sit
 ok('admin.html / README / backlog(+archive) → neither', (()=>{const s=classifySurfaces(['admin.html','README.md','data/backlog.json','data/backlog_archive.json']);return !s.prod&&!s.staging;})());
 ok('mixed (shared + staging) → both', (()=>{const s=classifySurfaces(['app/staging.html','app/core.js']);return s.prod&&s.staging;})());
 ok('mixed (homepage + staging-only) → both', (()=>{const s=classifySurfaces(['index.html','app/staging.html']);return s.prod&&s.staging;})());
+ok('changelog-only → neither track (CH31)', (()=>{const s=classifySurfaces(['data/changelog.json']);return !s.prod&&!s.staging;})());
+ok('changelog + a real prod-shipping change → still both (CH31)', (()=>{const s=classifySurfaces(['data/changelog.json','app/core.js']);return s.prod&&s.staging;})());
 
 console.log('\ncomputeBump application:');
 {
@@ -43,6 +46,8 @@ console.log('\ncomputeBump application:');
   ok('major shared → prod 1.0.0 + staging 1.0.0', c.next.prod === '1.0.0' && c.next.staging === '1.0.0');
   const d = computeBump({ message: 'docs: x', files: ['README.md'], versions: v });
   ok('non-app → no change, flags false', d.next.prod === '0.12.0' && d.next.staging === '0.22.0' && !d.bumpedProd && !d.bumpedStaging);
+  const e = computeBump({ message: 'docs(changelog): notes', files: ['data/changelog.json'], versions: v });
+  ok('changelog-only → no bump (CH31)', e.next.prod === '0.12.0' && e.next.staging === '0.22.0' && !e.bumpedProd && !e.bumpedStaging);
 }
 
 console.log('\nPlatform label (derived phase):');

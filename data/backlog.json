@@ -343,18 +343,6 @@
       "partial": false,
       "prompt": "From the R1 audit. rateLimited() (functions/_lib/http.js ~19-30) returns false (ALLOW) whenever STATUS_KV is unbound and is best-effort/non-atomic; it is the only throttle on /api/status, /api/config, and /api/admin-key (token issuance, 20/60s). This is the correct trade-off (don't lock the admin out; endpoints sit behind Access + constant-time token/key compare), so it is defense-in-depth only. Guardrail: never let an endpoint's security DEPEND on rateLimited() — auth (Access JWT + constant-time compare) is the real control; reject any future endpoint that relies on the limiter as primary protection, and keep STATUS_KV bound in prod so the throttle is actually active. Adjacent: A17 (KV low-write), S11 (webhook signature).",
       "doneNote": null
-    },
-    {
-      "id": "CH31",
-      "title": "Stop the changelog from triggering its own release (changelog.json → NON_SHIPPING_DATA)",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "trivial",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the A20/R1 changelog work. data/changelog.json is classified as PROD-SHIPPING by scripts/bump-version.mjs (isProdShipping: any data/* not in NON_SHIPPING_DATA — line ~47), so committing a curated release-notes entry for prod version N itself bumps prod to N+1. The result: the changelog perpetually lags the live prod version by one release, and every notes edit fires another (undocumented) release. Add 'data/changelog.json' to the NON_SHIPPING_DATA set in scripts/bump-version.mjs (alongside data/versions.json, data/backlog.json, data/backlog_archive.json) and update that set's comment to mention the changelog. Add a test-version.mjs case asserting a commit that touches ONLY data/changelog.json bumps NEITHER track, while a normal prod-shipping change (e.g. an app/*.js edit) still bumps both. NOTE: changelog.json is fetched directly by changelog.html and is already EXCLUDED from build-manifest.mjs, so it does not need cache-busting — only the version-bump classification is wrong. Done when: editing data/changelog.json alone produces no version bump, a real prod-shipping change still bumps both tracks, and test-version.mjs covers it.",
-      "doneNote": null
     }
   ],
   "howToDrive": [
