@@ -1345,6 +1345,17 @@
       "completedDate": "2026-06-27",
       "partial": false,
       "doneNote": "Hardened the remaining unguarded boot-time DOM handlers (B12 class). Routed the direct document.getElementById('f_reset'/'c_feed'/'c_tv').addEventListener calls in app/data.js initFilters/initSetup through the null-safe on() helper (consistent with the adjacent on('f_save') and bind() usage), so a missing id can no longer throw and abort the rest of boot(). Wrapped assets/home.js in an IIFE (no global leakage, matching admin.js/changelog.js) and guarded the #hdr scroll handler with if(hdr). node --check green; demo/app boot clean, homepage unaffected."
+    },
+    {
+      "id": "L7",
+      "title": "(staging) Enable F14 stat-card detail modals on mobile",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "Verified ALREADY RESOLVED — no code needed. L7 was filed while F14 (stat-card detail modals) was staging-only and predated/coincided with the CH16 promotion. Current state: the modal interaction ships on ALL surfaces — renderCards (app/render.js) marks the 5 headline cards .card.clickable[data-card], and widgets.js initWidgets binds a DELEGATED click handler on #cards (plus an Enter/Space keydown), with NO hover/pointer/matchMedia gating. A mobile tap produces a click event, so the delegated handler fires on touch. CSS is mobile-ready: .card.clickable has cursor:pointer + :active feedback and the cards stack to one column at <=560px; the .modal overlay scrolls (overflow:auto), the .sheet is width-responsive (max-width + 16px side padding), and the chart SVGs are svg.cmcurve/cmhist{width:100%;height:auto} so they scale without overflow. #cardModal ships via partials/app-modal.html on every surface. VERIFIED end-to-end via the Chromium DevTools Protocol at a 390x844 phone viewport with touch emulation (demo.html): tapping the Net PnL card opened its modal (opened=true); the sheet measured 358px wide in the 390px viewport with overflowsX=false, the overlay overflowY=auto, and the chart scaled to 312px; the screenshot showed the full modal (stat tiles + cumulative-PnL curve + gross->net->take-home waterfall) rendering cleanly with no clipping. The 'Done when' (tapping a headline stat card on mobile opens its detail modal, sized/scrollable for small screens) is already met. Closed with no code change; the stale '(staging)' title label is moot on archival."
     }
   ]
 }

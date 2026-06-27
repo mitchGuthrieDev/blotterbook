@@ -69,18 +69,6 @@
       "doneNote": null
     },
     {
-      "id": "L7",
-      "title": "(staging) Enable F14 stat-card detail modals on mobile",
-      "category": "LAYOUT (web vs mobile)",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "F14 makes the headline stat cards open metric-detail modals (CARD_VIEWS + the delegated `.card.clickable` handler in app/widgets.js / renderCards). That click-for-detail interaction isn't available on mobile. Wire it up for touch/mobile: ensure the cards are tappable, the delegated handler fires on touch, and the detail modal is sized/scrollable for small screens. Done when: tapping a headline stat card on mobile opens its detail modal, matching desktop behaviour.",
-      "doneNote": null
-    },
-    {
       "id": "R11",
       "title": "Discussion & planning: Trade Replay (simulated market snapshots)",
       "category": "REVIEW / AUDIT",
