@@ -333,18 +333,6 @@
       "doneNote": null
     },
     {
-      "id": "A22",
-      "title": "Targeted DOM updates on interactive surfaces (retire wholesale innerHTML re-render)",
-      "category": "ARCHITECTURE / DUPLICATION",
-      "priority": "P3",
-      "effort": "large",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the design-pillars review. The dashboard renderers rebuild whole subtrees via innerHTML on every change, which destroys nodes and loses focus / listeners / scroll / selection — the recurring state-loss bug class (e.g. B15 calendar focus-restore, the day-editor capture-snapshot autosave, note-dot repaint). Refactor the INTERACTIVE surfaces to targeted DOM/CSSOM updates that mutate in place instead of replacing innerHTML: the trading calendar (day selection/highlight), the day-notes editor, and the equity-curve markers/overlays. NO build, NO deps (plain DOM APIs). Keep the bulk render-once panels on innerHTML where wholesale rebuild is fine — only convert the surfaces where node destruction costs live UI state. Pairs naturally with the ESM migration and the styling refactor. VERIFY keyboard focus, in-progress note edits, scroll position, and curve selection survive re-renders across app/demo/staging. Done when: selecting calendar days, editing day notes, and interacting with the curve no longer lose focus/edit/scroll state on re-render, and the existing focus-restore workarounds (B15-style) can be simplified or removed.",
-      "doneNote": null
-    },
-    {
       "id": "R19",
       "title": "Discussion & planning: adopt a build step (dev-only tooling)",
       "category": "REVIEW / AUDIT",
