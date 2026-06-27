@@ -34,10 +34,16 @@ Three intentional constraints shape every decision:
 
 1. **Compute happens locally** — all parsing, metrics, and storage are
    client-side; no trade data leaves the browser.
-2. **No runtime dependencies** — no framework, no bundler, no build step for the
-   app itself. Plain `<script>` tags in one global scope.
-3. **Deploys as static files to Cloudflare Pages** — with `/functions/*` as the
-   thin edge layer for the few things that can't be client-side.
+2. **No runtime dependencies** *(hard rule)* — the shipped app loads no framework
+   and no third-party/runtime libraries; it's plain JavaScript. Build-*time*
+   tooling is a separate, open question (see the "adopt a build" discussion,
+   **R19**) — "no build" is no longer an absolute, only the *shipped* output must
+   stay dependency-free.
+3. **Deployable as static files with zero runtime deps** — ships to Cloudflare
+   Pages as static assets, with `/functions/*` as the thin edge layer for the few
+   things that can't be client-side. No build is *required* to deploy today (the
+   committed files are the artifacts) — a soft convention now under review
+   (**R19**), not a hard pillar like #2.
 
 Because the app is split across files (it used to be one `index.html`), it must
 be **served over http(s)** — opening from disk blocks the `fetch()` of the

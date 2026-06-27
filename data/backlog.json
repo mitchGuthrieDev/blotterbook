@@ -319,6 +319,54 @@
       "partial": false,
       "prompt": "Guardrail from R16's structure review. Because the project has NO build step, the repo root IS the Cloudflare Pages deploy/web root — the folder layout is simultaneously the public URL structure AND the deploy contract. Do NOT adopt a '/src vs /public with a bundler' reorganization: it either changes every public URL (breaking canonicals/sitemap/_redirects/bookmarks) or requires a build/copy step that violates the 'no build step / deploys as static files' design pillar. Keep root = web root (functions/ MUST stay at root for Pages Functions; _headers/_redirects/robots.txt/sitemap.xml/favicon stay at root). IF a reorg is ever truly needed, the ONLY Pages-compatible move is a public/ output-dir split (browser-served files under public/, Pages 'build output directory' = public, functions/+scripts/+partials/+tooling stay at root) — and it must update the FULL coupled set in lockstep: the absolute /app/ /assets/ /data/ URL references, _redirects, _headers, robots.txt, sitemap.xml + page canonicals (CH5/CH6), build-includes.mjs (the ['.', 'app'] HTML scan), build-manifest.mjs (data/* paths), and bump-version.mjs (the prod-shipping path prefixes). Reject piecemeal moves that update only some of these.",
       "doneNote": null
+    },
+    {
+      "id": "A20",
+      "title": "Migrate to native ES modules (kill global-scope + fixed-load-order coupling)",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "large",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the design-pillars review (the no-build pillar is now soft; no-RUNTIME-deps stays hard — see R19 + docs/architecture.md#design-pillars). Convert the app's classic global-scope scripts (app/*.js + the shared assets/util.js and the info-page scripts) to native ES modules — <script type=module> + explicit import/export — eliminating the current HARD constraint of one shared global scope loaded in a FIXED ORDER (util->store->adapters->core->render->data->ui->export->datamanager->widgets->main). NO build and NO dependencies: this is browser-native ESM, so the deploy stays static + dependency-free, and it is also the prerequisite IF a bundler is ever adopted (R19), so it is not throwaway work. SCOPE: each module exports what others use and imports what it needs (today's implicit globals become explicit imports); collapse partials/app-scripts.html to a single module entry (e.g. <script type=module src=/app/main.js> importing the rest); keep assets/util.js as a module imported by both the app and the info pages. WATCH: module scripts are deferred and run in module scope (boot timing/order changes — verify boot() still runs after DOM ready); CSP script-src 'self' already permits module scripts; circular-import risk between core/render/data; convert the info-site page scripts (home/admin/changelog) that also use util. VERIFY all three app surfaces + the info pages boot with zero console errors and identical behavior; run the full test suite + the build-includes/build-manifest drift gate. Done when: the app runs on native ES modules with explicit imports, no symbol relies on global-scope leakage, app-scripts is a single module entry, all surfaces verified, and NO build/deps were added.",
+      "doneNote": null
+    },
+    {
+      "id": "A21",
+      "title": "Move dynamic styling out of inline style= into CSS classes + custom properties",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the design-pillars review. Move styling out of inline style= strings and into the stylesheet: define behavior in CSS (classes + custom properties) and have JS feed only the dynamic VALUE via the CSSOM, e.g. .cmbf{width:var(--w);background:var(--c)} + el.style.setProperty('--w', w+'%'). TARGETS: the runtime data-driven style= injections in app/render.js (curve gradient stops / end-labels / legend swatches), app/widgets.js (card-modal bars + splits), the admin backlog bars (assets/admin.js), and the ~23 static style= attributes in the HTML; plus the inline <style> blocks in index.html/admin.html where practical. NO build, NO deps (pure CSS + CSSOM). WATCH SPECIFICITY: an inline style beats selectors, so moving a value to a class/attr can let a stylesheet rule override it — verify each visual; and SVG presentation attributes (fill/x/width) are NOT inline styles — do not convert those. This also pre-clears the path to later drop style-src 'unsafe-inline' (separate, currently shelved). VERIFY charts/bars/legend render identically across app/demo/staging + month/all-time scope + the export report. Done when: dynamic styling is driven by classes + custom properties via the CSSOM (no runtime data-driven style= strings remain in the chart/bar renderers), with no visual regressions.",
+      "doneNote": null
+    },
+    {
+      "id": "A22",
+      "title": "Targeted DOM updates on interactive surfaces (retire wholesale innerHTML re-render)",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "large",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the design-pillars review. The dashboard renderers rebuild whole subtrees via innerHTML on every change, which destroys nodes and loses focus / listeners / scroll / selection — the recurring state-loss bug class (e.g. B15 calendar focus-restore, the day-editor capture-snapshot autosave, note-dot repaint). Refactor the INTERACTIVE surfaces to targeted DOM/CSSOM updates that mutate in place instead of replacing innerHTML: the trading calendar (day selection/highlight), the day-notes editor, and the equity-curve markers/overlays. NO build, NO deps (plain DOM APIs). Keep the bulk render-once panels on innerHTML where wholesale rebuild is fine — only convert the surfaces where node destruction costs live UI state. Pairs naturally with the ESM migration and the styling refactor. VERIFY keyboard focus, in-progress note edits, scroll position, and curve selection survive re-renders across app/demo/staging. Done when: selecting calendar days, editing day notes, and interacting with the curve no longer lose focus/edit/scroll state on re-render, and the existing focus-restore workarounds (B15-style) can be simplified or removed.",
+      "doneNote": null
+    },
+    {
+      "id": "R19",
+      "title": "Discussion & planning: adopt a build step (dev-only tooling)",
+      "category": "REVIEW / AUDIT",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Discussion/planning from the design-pillars review (the no-build pillar is now soft — docs/architecture.md#design-pillars). Decide whether to adopt a build step, on the EXPLICIT basis that no-runtime-dependencies stays a HARD rule (the shipped app ships zero third-party/runtime deps) while build-time/dev tooling is the open question. COVER: (1) what a build would buy — a lint/format/typecheck pipeline and especially Playwright RENDER/visual tests (the current coverage gap), CSS minify/dead-code, native hashed-filename cache-busting (retiring build-manifest), and auto-generated hashed/nonce CSP (retiring style-src 'unsafe-inline'); (2) the cost — it reverses the deploy contract (output dir, source != committed artifact, repo root no longer = web root; ripples through CH28/A18), a new failure surface + a Cloudflare Pages build command, and a SUPPLY-CHAIN surface (package.json + lockfile + transitive dev deps that run at build time can inject into shipped assets — relevant to the privacy/security ethos); (3) the spectrum — zero-dep hand-rolled Node build vs dev-dep tooling (esbuild/postcss/eslint/playwright) vs the ruled-out runtime-framework option; (4) sequencing — the ESM migration, the styling refactor, and the targeted-update refactor are all zero-build/zero-dep and should land FIRST regardless; a build is justified mainly by the test/lint pipeline. Done when: a written recommendation (adopt vs stay; if adopt, which tier + how it changes the deploy contract) + concrete next-step backlog items exist.",
+      "doneNote": null
     }
   ],
   "howToDrive": [

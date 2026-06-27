@@ -17,8 +17,11 @@ leaves the browser.** It deploys to Cloudflare Pages as static files plus
 
 ## Hard constraints (do not break these)
 
-- **No runtime dependencies.** No bundler, no npm install, no framework. The app
-  is plain `<script>` tags sharing one global scope. Keep it that way.
+- **No runtime dependencies** *(hard)*. The shipped app loads no framework and no
+  third-party/runtime libraries — keep the *shipped output* dependency-free. NOTE:
+  "no build" is no longer an absolute rule — whether to add build-*time* tooling
+  (bundler / linters / tests) is an open decision (backlog **R19**); see the
+  design pillars in [`docs/architecture.md`](docs/architecture.md#design-pillars).
 - **Must be served over http(s).** The app `fetch()`es `/data/*.json`, so opening
   files from disk breaks it. Use a static server.
 - **App scripts share one global scope** and load in a fixed order (defined in
@@ -28,6 +31,8 @@ leaves the browser.** It deploys to Cloudflare Pages as static files plus
   monolithic `app.js`; `util`/`store`/`adapters` are loaded first as foundations.
   `main.js` loads last and holds all event wiring + `boot()`, so everything it
   references is already defined. Don't reorder; don't assume module isolation.
+  *(A20 plans to migrate this to native ES modules — explicit `import`/`export`,
+  no global scope or fixed load order — with no build/deps added.)*
 - **The committed HTML and data manifest are generated artifacts** that must stay
   in sync with their sources — CI fails if they drift (see Commands).
 
