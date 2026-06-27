@@ -4,6 +4,28 @@
    scripts share one global scope, so cross-file functions/state resolve at runtime). */
 
 /* ============================================================
+   Feature flags (F17) — admin-managed, served by /api/config and consumed at boot. The defaults
+   here MUST mirror functions/api/config.js DEFAULTS.flags, so behaviour is unchanged when the
+   config can't be fetched (static host / offline / pre-deploy). flag('x') reads the live value.
+   ============================================================ */
+let APP_FLAGS = { showBetaAdapters: true, maintenanceBanner: false, betaRibbon: false };
+function flag(k){ return !!APP_FLAGS[k]; }
+async function loadFlags(){
+  try{ const r=await fetch('/api/config',{cache:'no-store'});
+    if(r.ok){ const c=await r.json(); if(c && c.flags && typeof c.flags==='object') APP_FLAGS={ ...APP_FLAGS, ...c.flags }; }
+  }catch(_){ /* no API (static/offline) → keep safe defaults */ }
+  applyFlags();
+}
+function applyFlags(){
+  const banner=document.getElementById('maintBanner');
+  if(banner){ const on=flag('maintenanceBanner');
+    banner.hidden=!on;
+    if(on && !banner.textContent) banner.textContent='Blotterbook is undergoing maintenance — your local data is safe; some features may be briefly unavailable.';
+  }
+  const ribbon=document.getElementById('betaRibbon'); if(ribbon) ribbon.hidden=!flag('betaRibbon');
+}
+
+/* ============================================================
    CSV staging → parse/detect → import
    ------------------------------------------------------------
    A picked file is parsed and held in PENDING (not committed). The user
@@ -104,8 +126,11 @@ async function commitPending(ctx){
 }
 
 function platformOptionsHtml(){
+  // F17: the showBetaAdapters flag gates whether beta adapters appear in the manual picker
+  // (auto-detect still works regardless). Default-true, so the picker is unchanged unless an
+  // admin turns it off.
   return '<option value="">Auto-detect</option>'
-    + Adapters.list().map(a=>`<option value="${a.id}">${a.label}${a.beta?' (beta)':''}</option>`).join('');
+    + Adapters.list().filter(a=>flag('showBetaAdapters')||!a.beta).map(a=>`<option value="${a.id}">${a.label}${a.beta?' (beta)':''}</option>`).join('');
 }
 function initPlatformSelects(){
   const html=platformOptionsHtml();

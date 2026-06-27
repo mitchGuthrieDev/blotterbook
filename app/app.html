@@ -12,12 +12,16 @@
 
   <!-- include:app-topbar mode=app -->
   <!-- ============ top bar ============ -->
+  <!-- F17: admin-toggled maintenance banner (hidden until the maintenanceBanner flag is on) -->
+  <div class="maintbanner" id="maintBanner" hidden></div>
   <div class="top">
     <div class="brand">
       <a class="bwordmark" href="../index.html" title="Back to the Blotterbook homepage">Blotterbook</a>
 
       <span class="ver" title="Main app version">v0.19.1</span>
 
+      <!-- F17: admin-toggled "Beta" badge (hidden until the betaRibbon flag is on) -->
+      <span class="betaribbon" id="betaRibbon" hidden>Beta</span>
       <!-- session-status pill — promoted to all surfaces (CH16) -->
       <span class="sesswrap">
         <button class="sesspill online" id="sesspill" title="Session status — click for details" aria-haspopup="true" aria-expanded="false">

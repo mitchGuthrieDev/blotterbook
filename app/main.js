@@ -131,6 +131,7 @@ if($('dataModal')){
   initPanels();
   initFilters();
   wireJournal();
+  loadFlags();         // F17: fetch admin feature flags (non-blocking; safe defaults if unavailable)
   emit('app:ready');   // widgets.js subscribes to build its terminal / session pill / workspace controls
   // Reflect the initial overlay selection on the toggle buttons.
   document.querySelectorAll('.curvebtn').forEach(b=>b.classList.toggle('on',!!curveSel[b.dataset.k]));

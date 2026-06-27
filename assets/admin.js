@@ -59,17 +59,15 @@
     if(b.dataset.mode) b.addEventListener('click',function(){ save(b.dataset.mode); });
   });
 
-  // ---- feature flags + reference data (/api/config) ----
-  var flagmsg=document.getElementById('flagmsg'), refmsg=document.getElementById('refmsg'), refstate=document.getElementById('refstate');
+  // ---- feature flags (/api/config) ----
+  var flagmsg=document.getElementById('flagmsg');
   function setFlagMsg(t,k){ flagmsg.textContent=t||''; flagmsg.className='amsg'+(k?' '+k:''); }
-  function setRefMsg(t,k){ refmsg.textContent=t||''; refmsg.className='amsg'+(k?' '+k:''); }
   var verstate=document.getElementById('verstate');
   function loadConfig(){
     fetchT('/api/config',{cache:'no-store'}).then(function(r){return r.json();}).then(function(c){
       var f=c.flags||{};
       document.querySelectorAll('[data-flag]').forEach(function(el){ el.checked=!!f[el.dataset.flag]; });
-      refstate.innerHTML='Cache version: <b>'+(c.refDataVersion?new Date(c.refDataVersion).toLocaleString():'never')+'</b>';
-    }).catch(function(){ refstate.textContent='Config unavailable (deploy on Cloudflare to use)'; });
+    }).catch(function(){ setFlagMsg('Config unavailable (deploy on Cloudflare to use)','err'); });
   }
   // CH12: read versions straight from the public source of truth (no server self-fetch, which
   // hung GET /api/config behind Access). Platform phase derived from the prod major (0.x → Beta).
@@ -92,7 +90,6 @@
     var flags={}; document.querySelectorAll('[data-flag]').forEach(function(el){ flags[el.dataset.flag]=el.checked; });
     postConfig({flags:flags}, setFlagMsg);
   });
-  document.getElementById('bumpref').addEventListener('click',function(){ postConfig({bumpRefData:true}, setRefMsg); });
 
   // Launch staging: carry the short-lived admin token to the gated page TWO ways — a cookie
   // (the navigation-safe header equivalent) AND a ?k= query-param fallback, since the cookie

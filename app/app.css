@@ -519,6 +519,12 @@
   /* version badge in the app header */
   .ver{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--dim);
     border:1px solid var(--line);border-radius:5px;padding:1px 6px;align-self:center}
+  /* F17 admin-flag UI */
+  .betaribbon{align-self:center;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--bg);background:var(--accent);border-radius:5px;padding:2px 6px;font-weight:600}
+  .maintbanner{background:rgba(232,168,56,.14);border-bottom:1px solid rgba(232,168,56,.4);
+    color:var(--take);font-size:12.5px;text-align:center;padding:7px 14px}
+  .maintbanner[hidden]{display:none}
 
   /* ---- staging: session-status pill + popup ---- */
   .sesswrap{position:relative;display:inline-flex;align-items:center}   /* anchors the popup under the pill */
