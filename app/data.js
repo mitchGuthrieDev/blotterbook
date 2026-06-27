@@ -250,7 +250,7 @@ async function selectDay(d){
   document.querySelectorAll('#cal .cell.selday').forEach(c=>c.classList.remove('selday'));
   if(selectedDate){ const cell=document.querySelector(`#cal .cell[data-date="${selectedDate}"]`); if(cell) cell.classList.add('selday'); }
   await updateJournalEditor();
-  if(METRICS_ALL) renderCurve(curveMetrics());
+  if(METRICS_ALL) renderCurve(activeMetrics());
 }
 /* Clear any active calendar selection (F11): drop the highlight, hide the notes box, and
    remove the graph marker. No-op when nothing is selected. */
@@ -264,7 +264,7 @@ function deselectDay(){
   selectedDate=null;
   document.querySelectorAll('#cal .cell.selday').forEach(c=>c.classList.remove('selday'));
   updateJournalEditor();
-  if(METRICS_ALL) renderCurve(curveMetrics());
+  if(METRICS_ALL) renderCurve(activeMetrics());
 }
 /* Jump the calendar to the most recent month that has data ("present"). */
 function jumpToLatest(){
@@ -313,7 +313,7 @@ function wireJournal(){
     const cell=document.querySelector(`#cal .cell[data-date="${d}"]`);
     if(cell) cell.classList.toggle('hasnote', JOURNAL_DATES.has(d));
     emit('note:saved', { date: d });
-    if(METRICS_ALL) renderCurve(curveMetrics());   // refresh note dots on the graph (CH16)
+    if(METRICS_ALL) renderCurve(activeMetrics());   // refresh note dots on the graph (CH16)
   };
   ta.addEventListener('input',()=>{ clearTimeout(jSaveTimer); const d=selectedDate, v=ta.value; jSaveTimer=setTimeout(()=>save(d,v),500); });
   ta.addEventListener('blur',()=>{ clearTimeout(jSaveTimer); save(selectedDate, ta.value); });

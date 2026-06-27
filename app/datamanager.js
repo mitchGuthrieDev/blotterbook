@@ -58,7 +58,7 @@ async function renderDataManager(){
   // mirrors prod 1:1, with data-mutating actions greyed out) — `dis` is the demo lock-down.
   const dis = demo ? ' disabled' : '';
   if($('dm_trades')) $('dm_trades').innerHTML = shown.length
-    ? shown.slice().reverse().map(t=>{ const id=Store.tradeId(t);
+    ? shown.slice().reverse().map(t=>{ const id=tradeKey(t);   // CH24: one trade-id accessor (matches render.js)
         return `<tr><td class="mono">${esc(t.date)}</td><td>${esc(t.root)}</td>
         <td>${esc(t.side||'—')}${metaChips(TRADE_META.get(id))}</td><td class="num mono ${cls(t.pnl)}">${usd(t.pnl)}</td>
         <td class="dmrowact"><button class="dmdel alt" data-edit="${id}"${dis} title="Tags, note & screenshots">Edit</button>
@@ -111,7 +111,7 @@ function renderTradeEditor(){
 }
 async function dmOpenTradeEditor(id){
   let trades=[]; try{ trades=await Store.getAllTrades(); }catch(_){}
-  const trade=trades.find(t=>Store.tradeId(t)===id) || {date:'?',root:'?',side:'',pnl:0};
+  const trade=trades.find(t=>tradeKey(t)===id) || {date:'?',root:'?',side:'',pnl:0};
   const m=await Store.getTradeMeta(id);
   DM_EDIT={ id, trade, tags:(m.tags||[]).slice(), note:m.note||'', shots:(m.shots||[]).slice(), _msg:'' };
   renderTradeEditor();

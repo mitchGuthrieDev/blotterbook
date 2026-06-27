@@ -1,9 +1,11 @@
 (function(){
   var log=document.getElementById('log'), status=document.getElementById('clstatus');
 
-  /* F13: the changelog now reads from a curated, version-keyed release-notes file
-     (data/changelog.json, prod track) instead of raw commit titles. The small inline
-     fallback below covers local dev / a failed fetch with the latest couple of releases. */
+  /* F13: the changelog reads from a curated, version-keyed release-notes file
+     (data/changelog.json, prod track) instead of raw commit titles — that file is the source
+     of truth. The inline fallback below is a deliberately-minimal degraded-state notice for
+     local dev / a failed fetch; it is INTENTIONALLY NOT kept in lockstep with releases (CH24),
+     so its versions will lag the live changelog and that's expected, not a bug to chase. */
   var FALLBACK=[
     {version:'0.14.2',date:'2026-06-26',title:'Stability & security pass',
       summary:'A sweep of fixes from an internal audit — tightening up the calendar, your data, and the behind-the-scenes release machinery.'},

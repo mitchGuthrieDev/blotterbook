@@ -43,10 +43,10 @@ function applyWorkspace(tpl){
   const col=tpl.collapsed||{};
   dash.querySelectorAll('.panel').forEach(p=>p.classList.toggle('collapsed', !!col[p.dataset.key]));
   saveOrder(); saveCollapsed();   // (shared, in ui.js)
-  if(METRICS_ALL) renderCurve(curveMetrics());
+  if(METRICS_ALL) renderCurve(activeMetrics());
 }
-function readWsTemplates(){ try{ return JSON.parse(localStorage.getItem(WS_KEY)||'{}')||{}; }catch(e){ return {}; } }
-function writeWsTemplates(o){ try{ localStorage.setItem(WS_KEY,JSON.stringify(o)); }catch(e){} }
+function readWsTemplates(){ return Store.local.get(WS_KEY, {}) || {}; }   // A13: via the Store.local seam
+function writeWsTemplates(o){ Store.local.set(WS_KEY, o); }
 function refreshWsSelect(sel){
   const el=document.getElementById('ws_tpl'); if(!el) return;
   const tpls=readWsTemplates();
@@ -75,7 +75,7 @@ function initWidgets(){
     logAction('Workspace template saved · '+name); });
   on('ws_tpl','change',e=>{ const n=e.target.value;
     if(!n){   // "— Default —" → drop saved layout and reset to the default arrangement
-      try{ localStorage.removeItem(LS_ORDER); localStorage.removeItem(LS_COLLAPSE); }catch(_){}
+      Store.local.remove(LS_ORDER); Store.local.remove(LS_COLLAPSE);
       applyWorkspace({ order:DEFAULT_DASH_ORDER, collapsed:{} });
       logAction('Layout reverted to default'); return;
     }
@@ -83,7 +83,7 @@ function initWidgets(){
     if(t){ applyWorkspace(t); logAction('Workspace template loaded · '+n); } });
   // redraw the performance graph on resize so it re-measures its (grid) width
   let _rsz=null; window.addEventListener('resize',()=>{ clearTimeout(_rsz);
-    _rsz=setTimeout(()=>{ if(METRICS_ALL) renderCurve(curveMetrics()); }, 160); });
+    _rsz=setTimeout(()=>{ if(METRICS_ALL) renderCurve(activeMetrics()); }, 160); });
   // F14: headline stat cards open metric-detail modals (delegated — cards re-render each pass).
   // Inert on app/demo (cards carry no data-card there, and #cardModal is staging-only).
   const cardsEl=document.getElementById('cards');

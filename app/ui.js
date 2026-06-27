@@ -7,20 +7,21 @@
 /* ============================================================
    Collapsible + drag-to-reorder panels (persisted)
    ============================================================ */
-// Layout state lives in localStorage, which is per-ORIGIN (shared across app/demo/staging pages).
-// Staging is a separate environment, so it gets its own namespaced keys — rearranging/collapsing
-// modules in staging must NOT leak into prod/demo (and vice versa). prod + demo share one set
-// (they're the same environment; the demo mirrors prod 1:1). STAGING_PAGE is set in core.js.
+// Layout state lives in localStorage (per-ORIGIN), reached through the single Store.local seam (A13)
+// rather than touching localStorage directly. Staging is a separate environment, so it gets its own
+// namespaced keys — rearranging/collapsing modules in staging must NOT leak into prod/demo (and vice
+// versa). prod + demo share one set (same environment; the demo mirrors prod 1:1). STAGING_PAGE is
+// set in core.js.
 const LS_SUFFIX = STAGING_PAGE ? '_staging' : '';
 const LS_ORDER='tj_order'+LS_SUFFIX, LS_COLLAPSE='tj_collapsed'+LS_SUFFIX;
 function saveOrder(){
   const ord=[...document.querySelectorAll('#dash .panel')].map(p=>p.dataset.key);
-  try{ localStorage.setItem(LS_ORDER,JSON.stringify(ord)); }catch(e){}
+  Store.local.set(LS_ORDER, ord);
 }
 function saveCollapsed(){
   const col={};
   document.querySelectorAll('#dash .panel').forEach(p=>{ if(p.classList.contains('collapsed'))col[p.dataset.key]=1; });
-  try{ localStorage.setItem(LS_COLLAPSE,JSON.stringify(col)); }catch(e){}
+  Store.local.set(LS_COLLAPSE, col);
 }
 function panelAfter(dash,y){
   const els=[...dash.querySelectorAll('.panel:not(.dragging)')];
@@ -31,10 +32,9 @@ function panelAfter(dash,y){
 }
 function initPanels(){
   const dash=document.getElementById('dash');
-  try{ const ord=JSON.parse(localStorage.getItem(LS_ORDER)||'null');
-    if(Array.isArray(ord)) ord.forEach(k=>{ const el=dash.querySelector(`.panel[data-key="${k}"]`); if(el)dash.appendChild(el); });
-  }catch(e){}
-  let col={}; try{ col=JSON.parse(localStorage.getItem(LS_COLLAPSE)||'{}')||{}; }catch(e){}
+  const ord=Store.local.get(LS_ORDER, null);
+  if(Array.isArray(ord)) ord.forEach(k=>{ const el=dash.querySelector(`.panel[data-key="${k}"]`); if(el)dash.appendChild(el); });
+  const col=Store.local.get(LS_COLLAPSE, {}) || {};
   dash.querySelectorAll('.panel').forEach(p=>{
     if(col[p.dataset.key]) p.classList.add('collapsed');
     const head=p.querySelector('.phead'), grip=p.querySelector('.grip');

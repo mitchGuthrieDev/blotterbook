@@ -302,7 +302,7 @@ function fmtDur(ms){
   if(h<24) return h+'h'+(rem?' '+rem+'m':'');
   const d=Math.floor(h/24); return d+'d'+(h%24?' '+(h%24)+'h':'');
 }
-function renderAdv(m, c=costModel(m)){
+function renderAdv(m){
   // hold time is only available for fills-based platform exports (round-trip matched)
   const held=(m.trades||[]).filter(t=>t.holdMs!=null && t.holdMs>0);
   const avgHold=held.length? held.reduce((a,t)=>a+t.holdMs,0)/held.length : null;
@@ -455,12 +455,10 @@ function activeMetrics(){
   const mk=`${calYear}-${pad2(calMonth+1)}`;
   return compute(baseTrades().filter(t=>t.date.startsWith(mk)));
 }
-/* Metrics the performance graph should draw — the same filtered + scoped set as the dashboard. */
-function curveMetrics(){ return activeMetrics(); }
 function renderDash(){
   if(!METRICS_ALL) return;
   const m=activeMetrics(), c=costModel(m);   // compute the cost model once, share it (CH11)
-  renderCards(m,c); renderAdv(m,c); renderCalc(m,c);
+  renderCards(m,c); renderAdv(m); renderCalc(m,c);
   renderCurve(m);
   document.getElementById('scopenote').textContent =
     SCOPE==='all' ? `all ${METRICS_ALL.n} trades` : `${MON[calMonth]} ${calYear}`;

@@ -46,7 +46,7 @@ document.querySelectorAll('.curvebtn').forEach(btn=>btn.addEventListener('click'
   if(curveSel[k] && selected.length===1) return;   // can't deselect the last overlay
   curveSel[k]=!curveSel[k];
   btn.classList.toggle('on',curveSel[k]);
-  if(METRICS_ALL) renderCurve(curveMetrics());
+  if(METRICS_ALL) renderCurve(activeMetrics());
 }));
 
 on('cal','click',e=>{

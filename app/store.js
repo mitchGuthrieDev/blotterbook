@@ -281,7 +281,17 @@
 
     // S18: shared screenshot validator so the live capture path enforces the same data-URI
     // allow-list as restore (rejects SVG / javascript: / data:text payloads).
-    validShot(s) { return typeof s === 'string' && SHOT_RE.test(s); }
+    validShot(s) { return typeof s === 'string' && SHOT_RE.test(s); },
+
+    // A13: the ONE synchronous persistence seam for small UI state (panel layout, workspace
+    // templates) that must apply before paint, so it can't use the async IndexedDB path. Keeping
+    // it here means no app/*.js touches localStorage directly — when the cloud tier lands, this is
+    // the single place that mirrors layout state up. JSON-encodes values; never throws.
+    local: {
+      get(key, fallback) { try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch (_) { return fallback; } },
+      set(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (_) { return false; } },
+      remove(key) { try { localStorage.removeItem(key); } catch (_) { } }
+    }
   };
 
   window.Store = Store;

@@ -437,7 +437,7 @@
       if (hr < 0) throw new Error('no "Exec Time / Symbol" trade-history section found');
       const head = lc(rows[hr]); const ix = finder(head);
       const cT = ix('exec time'), cSide = ix('side'), cSym = ix('symbol');
-      const cQty = ix('qty'), cPx = ix('price'), cPos = ix('pos effect');
+      const cQty = ix('qty'), cPx = ix('price');
       if (cT < 0 || cSide < 0 || cSym < 0 || cPx < 0) throw new Error('missing Exec Time / Side / Symbol / Price');
       const ncol = rows[hr].length;
       const fills = [];
