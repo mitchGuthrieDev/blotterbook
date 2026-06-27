@@ -28,7 +28,7 @@
 (function () {
   // The staging sandbox uses an isolated database so it never touches real data.
   const DB_NAME = (typeof document !== 'undefined' && document.body && document.body.dataset.mode === 'staging')
-    ? 'blotterbookStaging' : 'tradingJournal';
+    ? 'blotterbookStaging' : 'blotterbook';
   const DB_VERSION = 2;
   const TRADES = 'trades';
   const JOURNAL = 'journal';
