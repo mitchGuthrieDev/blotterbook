@@ -189,18 +189,6 @@
       "doneNote": null
     },
     {
-      "id": "R16",
-      "title": "Review & plan: repo/folder structure for maintainability",
-      "category": "REVIEW / AUDIT",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Review-only (no code edits beyond trivial). Analyze the current repo/folder structure — the flat root holding the marketing site + /app + /partials + /data + /functions + /scripts + /assets — and evaluate whether reorganizing would improve maintainability, measured against best practice for a STATIC, build-stepless website/webapp deployed to Cloudflare Pages. Consider: whether a /src vs /public (or /site vs /app) split helps or fights the no-build static deploy and the Pages /functions convention; separating the marketing site from the journal app; where partials/scripts/assets best live; how the move interacts with _redirects, _headers, the build-includes/build-manifest path assumptions, and every internal link; and the migration cost vs payoff. Give concrete, prioritized recommendations with trade-offs (reorganize vs keep, and exactly how), and append any actionable follow-ups as new backlog items. Done when: a written structure review with a clear recommendation and any spun-off items exists.",
-      "doneNote": null
-    },
-    {
       "id": "R17",
       "title": "(staging) Review: purpose of the 'Tagged trades' Overview stat + what tagging means",
       "category": "REVIEW / AUDIT",
@@ -330,6 +318,30 @@
       "completedDate": null,
       "partial": false,
       "prompt": "Guardrail for KV usage (`STATUS_KV`). The Workers FREE plan caps KV at 1,000 WRITES/day (plus 1,000 deletes + 1,000 lists; reads are 100k/day; 1 GB storage). Today KV holds only admin-set status + feature-flag config and the best-effort admin rate-limiter — all low-write and fail-open, which is fine. Keep it that way: never put per-VISITOR or per-REQUEST state in KV (counters, analytics, sessions, public-endpoint rate-limiting) — that would blow 1,000 writes/day almost immediately and start erroring. New per-user/per-request persistence belongs in D1/R2 (and on Workers Paid). Reject a change that writes to KV on a public or high-traffic path.",
+      "doneNote": null
+    },
+    {
+      "id": "A18",
+      "title": "(infra guardrail) Repo layout is the deploy contract — no /src+bundler reorg",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "ongoing",
+      "status": "guardrail",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Guardrail from R16's structure review. Because the project has NO build step, the repo root IS the Cloudflare Pages deploy/web root — the folder layout is simultaneously the public URL structure AND the deploy contract. Do NOT adopt a '/src vs /public with a bundler' reorganization: it either changes every public URL (breaking canonicals/sitemap/_redirects/bookmarks) or requires a build/copy step that violates the 'no build step / deploys as static files' design pillar. Keep root = web root (functions/ MUST stay at root for Pages Functions; _headers/_redirects/robots.txt/sitemap.xml/favicon stay at root). IF a reorg is ever truly needed, the ONLY Pages-compatible move is a public/ output-dir split (browser-served files under public/, Pages 'build output directory' = public, functions/+scripts/+partials/+tooling stay at root) — and it must update the FULL coupled set in lockstep: the absolute /app/ /assets/ /data/ URL references, _redirects, _headers, robots.txt, sitemap.xml + page canonicals (CH5/CH6), build-includes.mjs (the ['.', 'app'] HTML scan), build-manifest.mjs (data/* paths), and bump-version.mjs (the prod-shipping path prefixes). Reject piecemeal moves that update only some of these.",
+      "doneNote": null
+    },
+    {
+      "id": "CH28",
+      "title": "Document the build-stepless layout contract + path-coupling map (docs/architecture.md)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From R16. Document the build-stepless layout contract so the constraint is discoverable and the A18 guardrail is actionable. Add a short 'Repository layout & the deploy contract' note to docs/architecture.md (cross-linked from CLAUDE.md's layout map) stating: the repo has NO build step, so the root IS the Cloudflare Pages web root and a file's path IS its URL; therefore moving any browser-served file changes its URL and must be updated in lockstep across the coupled set — list it: the absolute /app/ /assets/ /data/ references in HTML/JS, _redirects, _headers, robots.txt, sitemap.xml + page canonicals (CH5/CH6), build-includes.mjs (the ['.', 'app'] HTML scan + partials/), build-manifest.mjs (data/* hashing + filename excludes), and bump-version.mjs (the prod-shipping path classifier). Note that functions/, _headers, and _redirects are pinned at the deploy root by Cloudflare Pages. Done when: docs/architecture.md carries the layout-contract + coupled-path-map note and CLAUDE.md links to it.",
       "doneNote": null
     }
   ],

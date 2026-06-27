@@ -1268,6 +1268,17 @@
       "completedDate": "2026-06-27",
       "partial": false,
       "doneNote": "Added scripts/test-flags.mjs (wired into CI) asserting that app/data.js APP_FLAGS and functions/api/config.js DEFAULTS.flags share the same flag keys AND default values — so the client↔Worker flag-default literals can't silently drift. Fails if a flag is added/changed in only one place. 5/5 passing."
+    },
+    {
+      "id": "R16",
+      "title": "Review & plan: repo/folder structure for maintainability",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "Reviewed the repo/folder structure against best practice for a build-stepless Cloudflare Pages static site. KEY FINDING: because there is NO build step, the repo root IS the deploy/web root — the folder layout is simultaneously the public URL structure AND the deploy contract (measured coupling: 23 absolute /app/ refs, 19 /assets/ refs, /data/*.json + /api/* fetches, _redirects/_headers/robots.txt/sitemap.xml + page canonicals, and hardcoded path prefixes in build-includes ['.', 'app'], build-manifest data/* filename excludes, and bump-version's prod-shipping classifier). So the textbook '/src vs /public with a bundler' reorg FIGHTS the architecture: it either changes every public URL (canonical/sitemap/_redirects/bookmark churn) or requires a build/copy step that violates the 'no build step / deploys as static files' design pillar. CONCLUSION: keep the current root=web-root layout — it is the idiomatic, correct structure for this deploy model (functions/ pinned at root as Pages requires; _headers/_redirects/robots/sitemap/favicon at root; concerns co-located in app/ partials/ data/ assets/ scripts/ functions/; tokens+partials already single-sourced via A1/A5/A6). CONSIDERED & DECLINED as not worth the churn: scripts/->tests/ split (cosmetic; CI path coupling), assets/ -> img+js split (changes ~19 URLs + favicon/OG/_headers refs), data/ subgrouping (breaks fetch URLs + manifest keys), marketing pages -> /site (SEO/canonical/sitemap churn). The ONE Pages-compatible reorg, should the root ever genuinely need it, is a public/ output-dir split (browser-served files under public/, Pages build-output-directory=public, keep functions/+scripts/+partials/+tooling at root) — URLs stay identical, but _headers/_redirects relocate into public/ and every build-script path prefix changes; deferred (cost > payoff for a small project now). SPUN OFF: A18 (guardrail — repo layout is the deploy contract; reject a /src+bundler reorg, and if ever reorganizing use the public/ output-dir approach + update the full coupled-path set in lockstep) and CH28 (document the build-stepless layout contract + path-coupling map in docs/architecture.md). Review-only; no code shipped."
     }
   ]
 }
