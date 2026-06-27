@@ -7,9 +7,10 @@
    can `await versionsReady` even on pages with no badge; the badge IIFE reassigns it below. */
 export let versionsReady = Promise.resolve(null);
 
-/* S14: the staging-launch link may carry a short-lived admin token as ?k=<token>. Strip it
-   from the URL on load so it doesn't linger in the address bar or browser history. (The
-   middleware already consumed it on the initial request; staging.html also sends no Referer.) */
+/* S14: defensively strip any legacy `?k=<token>` from the URL on load so a token can't linger
+   in the address bar or browser history. NOTE (S19): `?k=` is NO LONGER an accepted auth path —
+   the staging token travels only in the path-scoped `bb_staging` cookie — so this is just
+   belt-and-suspenders cleanup for any old link; it is not part of the auth flow. */
 (function () {
   if (typeof location === 'undefined' || !/[?&]k=/.test(location.search)) return;
   try {

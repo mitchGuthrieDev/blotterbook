@@ -42,9 +42,9 @@ either way.
   committed.
 - **ESLint** (flat config, browser/Node/Workers globals) — catches real bugs without fighting the
   terse house style; `npm run lint` is clean.
-- **Prettier** config + scripts are present, but the repo is **not yet reformatted** — a repo-wide
-  reformat is a separate, deliberately-reviewed change (see CH32) so it doesn't bury this one in a
-  3,000-line diff.
+- **Prettier** config + scripts are present and the code has been reformatted repo-wide (**CH32**,
+  done) — landed as its own `style:` commit so it didn't bury the tooling change. `.prettierignore`
+  excludes only the deliberately-unformatted surfaces (`**/*.html`, `data/`, `**/*.md`, `.github/`).
 - **CI** runs `npm ci` → lint → unit/logic tests → Playwright → the build-drift gate. The gate
   doubles as proof the tooling never wrote into the committed/shipped tree.
 

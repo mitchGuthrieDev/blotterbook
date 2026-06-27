@@ -193,10 +193,10 @@ import { esc, platformLabel } from './util.js';
     postConfig({ flags: flags }, setFlagMsg);
   });
 
-  // Launch staging: carry the short-lived admin token to the gated page TWO ways — a cookie
-  // (the navigation-safe header equivalent) AND a ?k= query-param fallback, since the cookie
-  // isn't always delivered on a window.open navigation. The middleware accepts either, so the
-  // gate passes as long as a token was issued. (Staging now fails closed without a credential,
+  // Launch staging: carry the short-lived admin token to the gated page in the path-scoped
+  // `bb_staging` cookie ONLY (the navigation-safe header equivalent). S19 deliberately removed
+  // the old `?k=` query-param fallback — a token in the URL leaks into history/referrers/access
+  // logs — so _middleware now reads only the cookie. (Staging fails closed without a credential,
   // so an empty token field means Access didn't issue one — surface that clearly.)
   document.getElementById('launchstaging').addEventListener('click', function () {
     var key = (keyInput.value || '').trim();
