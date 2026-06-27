@@ -1374,6 +1374,54 @@
       "completedDate": "2026-06-27",
       "partial": false,
       "doneNote": "Added Store.local — the single synchronous persistence seam for UI layout/workspace state — and routed ui.js (panel order/collapse) and widgets.js (workspace templates) through it, so no app/*.js touches localStorage directly. Kept synchronous so layout applies before paint. Verified layout order persists across reload via the seam."
+    },
+    {
+      "id": "B28",
+      "title": "Pending day-note autosave can resurrect a note after Erase-all/reset",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 audit (regression from F16). scheduleDaySave (app/data.js) arms a 500ms timer holding a captured snapshot, but resetApp (app/render.js ~483) and the Erase-all handler (app/main.js ~87, which calls Store.purge() then resetApp()) never clearTimeout(jSaveTimer). If a save is pending when the user erases/clears, the timer fires afterward and persistDay re-inserts the old day's journal row into the just-purged store (and re-adds its JOURNAL_DATES dot). Fix: clearTimeout(jSaveTimer); jSaveTimer=null at the top of resetApp() (and before Store.purge in the erase handler). Done when: erasing during a pending day-note edit leaves the store empty.",
+      "doneNote": null
+    },
+    {
+      "id": "B29",
+      "title": "Day-note text nits: preview entity-split + restore tag case",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 audit. (1) The Manage-data day-note preview builds esc(j.text||'').slice(0,120) (app/datamanager.js ~47) — slicing AFTER escaping can cut an HTML entity (e.g. '&amp;' → '&am'); slice first, then esc: esc((j.text||'').slice(0,120)). (2) Backup restore's cleanTag (app/store.js ~227) strips markup but does NOT lowercase, while the live editors lowercase+dedupe tags via annCapture — so restored mixed-case tags (e.g. 'FOMC') won't match the lowercased tag filter/chips. Lowercase tags on restore to match the canonical form. Done when: previews can't split an entity and restored tags match the live tag set.",
+      "doneNote": null
+    },
+    {
+      "id": "CH25",
+      "title": "Doc + cosmetic sweep: load-order comments (widgets.js) and day-editor handler consistency",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 audit. (1) The 'Loaded in order: core → render → data → ui → export → datamanager → main' header comment in all seven app/*.js files, plus the orientation block in core.js (~30-33), omits widgets.js — the real built order (partials/app-scripts.html) is '…datamanager → widgets → main'. Add '→ widgets' everywhere. (2) Minor day-editor inconsistencies in app/data.js: the blur handler (~388) calls flushDayNow() unconditionally while the input handler (~387) gates on DAY_EDIT (harmless — daySnapshot returns null — but align them); and dmOpenDay's METRICS_ALL-falsy fallback (app/datamanager.js ~104) sets selectedDate without syncing calYear/calMonth (effectively dead, but either drop the fallback or set the month). Done when: the load-order docs include widgets and the two nits are aligned.",
+      "doneNote": null
+    },
+    {
+      "id": "A14",
+      "title": "Guard the client↔Worker feature-flag default drift",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 audit (companion to F17). APP_FLAGS (app/data.js ~11) and DEFAULTS.flags (functions/api/config.js ~18) hold the SAME flag defaults as duplicated literals across the client/Worker boundary, coupled only by a 'MUST mirror' comment with no enforcement — add a flag to config.js only and the static/offline client default silently diverges. Add a tiny drift test (alongside scripts/test-*.mjs) asserting the two flag key-sets and their default values match. Done when: a test fails if the two default sets diverge.",
+      "doneNote": null
     }
   ],
   "howToDrive": [
