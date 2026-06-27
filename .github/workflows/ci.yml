@@ -29,6 +29,9 @@ jobs:
       - name: Typecheck (JSDoc via tsc --checkJs)
         run: npm run typecheck
 
+      - name: Format check (Prettier)
+        run: npm run format:check
+
       - name: Unit + logic tests (adapters / auth / version / flags / tax)
         run: npm run test:unit
 

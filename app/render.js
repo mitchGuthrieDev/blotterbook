@@ -747,7 +747,11 @@ export function renderDash() {
 }
 export function setScope(s) {
   state.SCOPE = s;
-  document.querySelectorAll('#scope button').forEach(b => b.classList.toggle('on', b.dataset.s === s));
+  document.querySelectorAll('#scope button').forEach(b => {
+    const on = b.dataset.s === s;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false'); // B41: AT state, in lockstep with .on
+  });
   renderDash();
 }
 export function setDashVisible(v) {

@@ -70,3 +70,28 @@ test('staging: day-note → curve note dot (B37) + per-trade tag persists', asyn
   await page.click('#dm_close');
   expect(errors, errors.join('\n')).toHaveLength(0);
 });
+
+// B41: toggle/collapse controls must expose ARIA state (aria-pressed / aria-expanded).
+test('toggle + collapse controls expose ARIA state (B41)', async ({ page }) => {
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('body')).toHaveClass(/loaded/);
+
+  // scope toggle: aria-pressed follows selection
+  await expect(page.locator('#scope button[data-s="all"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#scope button[data-s="month"]')).toHaveAttribute('aria-pressed', 'false');
+  await page.click('#scope button[data-s="month"]');
+  await expect(page.locator('#scope button[data-s="month"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#scope button[data-s="all"]')).toHaveAttribute('aria-pressed', 'false');
+
+  // overlay toggle: enabling Net flips its aria-pressed
+  await expect(page.locator('.curvebtn[data-k="net"]')).toHaveAttribute('aria-pressed', 'false');
+  await page.click('.curvebtn[data-k="net"]');
+  await expect(page.locator('.curvebtn[data-k="net"]')).toHaveAttribute('aria-pressed', 'true');
+
+  // panel collapse chevron: aria-expanded + label flip
+  const perfChev = page.locator('.panel[data-key="perf"] .chev');
+  await expect(perfChev).toHaveAttribute('aria-expanded', 'true');
+  await page.click('.panel[data-key="perf"] .phead');
+  await expect(perfChev).toHaveAttribute('aria-expanded', 'false');
+  await expect(perfChev).toHaveAttribute('aria-label', 'Expand');
+});

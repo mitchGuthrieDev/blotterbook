@@ -1,9 +1,9 @@
 <!-- ============ scope toggle ============ -->
   <div class="scoperow" id="scoperow" style="display:none">
     <span class="slab">Showing</span>
-    <div class="scope" id="scope">
-      <button data-s="all" class="on">All time</button>
-      <button data-s="month">Selected month</button>
+    <div class="scope" id="scope" role="group" aria-label="Scope">
+      <button data-s="all" class="on" aria-pressed="true">All time</button>
+      <button data-s="month" aria-pressed="false">Selected month</button>
     </div>
     <span class="snote" id="scopenote"></span>
   </div>

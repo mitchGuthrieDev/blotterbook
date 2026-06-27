@@ -94,7 +94,11 @@ function num(x) {
     if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g, '').replace(',', '.');
     else s = s.replace(/,/g, '');
   } else if (hasComma) {
-    // only commas: a lone comma with !=3 trailing digits is a decimal ("12,34"); else thousands ("1,234")
+    // only commas: a lone comma with !=3 trailing digits is a decimal ("12,34"); else thousands ("1,234").
+    // KNOWN LIMITATION (B24/B42): a genuine EU 3-decimal value ("0,123" = 0.123) is ambiguous with US
+    // thousands and is read here as thousands → 123. Futures PnL/prices virtually never carry exactly 3
+    // decimal places, and gating thousands on a prior separator would wrongly turn US "1,234" into 1.234,
+    // so this resolves toward thousands by design.
     const parts = s.split(',');
     s = parts.length === 2 && parts[1].length !== 3 ? parts[0] + '.' + parts[1] : s.replace(/,/g, '');
   } else if (hasDot) {

@@ -248,7 +248,7 @@ import { esc, platformLabel } from './util.js';
               var badge = i.status === 'done' ? 'done' : i.status === 'guardrail' ? 'guard' : 'open';
               return (
                 '<div class="bkrow is-' +
-                i.status +
+                esc(i.status) +
                 '"><span class="bk-id">' +
                 esc(i.id) +
                 '</span>' +
@@ -259,7 +259,7 @@ import { esc, platformLabel } from './util.js';
                 esc(i.effort) +
                 '</span>' +
                 '<span class="bk-badge ' +
-                i.status +
+                esc(i.status) +
                 '">' +
                 badge +
                 '</span></div>'

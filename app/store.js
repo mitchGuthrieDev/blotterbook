@@ -243,12 +243,10 @@ export const Store = {
     // import, which routes symbols through rootSym()). Force `root` to the safe
     // charset and strip markup-significant chars from tags, so restored data can't
     // become a stored-XSS payload in any (current or future) render sink.
-    const cleanSym = s =>
-      Adapters && Adapters.rootSym
-        ? Adapters.rootSym(String(s || ''))
-        : String(s || '')
-            .toUpperCase()
-            .replace(/[^A-Z0-9._-]/g, '');
+    // A26: `Adapters` is a static ESM import and rootSym is unconditionally exported, so the old
+    // `Adapters && Adapters.rootSym ? … : <fallback>` guard was always truthy (dead fallback +
+    // duplicated charset regex). Call rootSym directly — it's the stricter sanitizer.
+    const cleanSym = s => Adapters.rootSym(String(s || ''));
     // B29: lowercase to match the live editors' canonical form (annCapture lowercases + dedupes),
     // so restored tags match the tag filter/chips. cleanTags also dedupes, like the live path.
     const cleanTag = s =>

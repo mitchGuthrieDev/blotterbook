@@ -346,6 +346,7 @@ export async function dmClearEdit() {
 export async function dmDeleteTrade(id) {
   if (PAGE_MODE === 'demo') return; // B31
   await Store.deleteTrade(id);
+  await Store.deleteTradeMeta(id); // B40: don't orphan the trade's tags/note/screenshots
   await reloadFromStore();
   // B38: deleting the last trade leaves reloadFromStore()→resetApp() with an empty, hidden
   // dashboard — don't leave the Data-manager modal sitting over it with a stale editor. Close
@@ -402,6 +403,17 @@ export async function reloadFromStore() {
   state.TRADES = await Store.getAllTrades();
   state.JOURNAL_DATES = await Store.journalDates();
   await loadTradeMeta();
+  // B40: prune per-trade metadata with no matching trade (orphans left by an older delete path,
+  // or carried in a restored backup) so they can't inflate the Tagged-trades count / Tag filter.
+  const liveIds = new Set(state.TRADES.map(t => t.id));
+  for (const id of [...state.TRADE_META.keys()]) {
+    if (!liveIds.has(id)) {
+      state.TRADE_META.delete(id);
+      try {
+        await Store.deleteTradeMeta(id);
+      } catch (_) {}
+    }
+  }
   await loadSavedFilters();
   if (state.TRADES.length) {
     state.METRICS_ALL = compute(baseTrades());

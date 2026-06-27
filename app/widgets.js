@@ -293,7 +293,9 @@ export function cmHist(values, color) {
     if (b < 0) b = 0;
     counts[b]++;
   }
-  const mx = Math.max(...counts) || 1,
+  // B42: minMax() not Math.max(...counts) — `counts` is bounded to `bins` so the spread is safe
+  // today, but use the shared helper to keep the B11/B27 "never spread arrays into Math.max" invariant.
+  const mx = minMax(counts).hi || 1,
     bw = (W - 2 * pad) / bins;
   const bars = counts
     .map((ct, i) => {

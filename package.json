@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "description": "DEV-ONLY tooling for Blotterbook (tests + lint + format). The SHIPPED app has ZERO runtime dependencies — everything here is devDependencies that run locally/CI and never alter the deployed static files. See docs/build-step-decision.md (R19).",
   "scripts": {
-    "test": "npm run test:unit && npm run lint",
+    "test": "npm run lint && npm run typecheck && npm run format:check && npm run test:unit",
     "test:unit": "node scripts/test-adapters.mjs && node scripts/test-auth.mjs && node scripts/test-version.mjs && node scripts/test-flags.mjs && node scripts/test-tax.mjs",
     "test:e2e": "playwright test",
     "lint": "eslint .",

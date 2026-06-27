@@ -115,9 +115,9 @@
   <!-- ============ scope toggle ============ -->
   <div class="scoperow" id="scoperow" style="display:none">
     <span class="slab">Showing</span>
-    <div class="scope" id="scope">
-      <button data-s="all" class="on">All time</button>
-      <button data-s="month">Selected month</button>
+    <div class="scope" id="scope" role="group" aria-label="Scope">
+      <button data-s="all" class="on" aria-pressed="true">All time</button>
+      <button data-s="month" aria-pressed="false">Selected month</button>
     </div>
     <span class="snote" id="scopenote"></span>
   </div>
@@ -154,13 +154,13 @@
   <!-- Performance -->
     <section class="panel" data-key="perf">
       <div class="phead"><span class="grip" title="Drag to reorder">&#9776;</span>
-        <h2>Performance</h2><button class="chev" aria-label="Collapse">&#9662;</button></div>
+        <h2>Performance</h2><button class="chev" aria-label="Collapse" aria-expanded="true">&#9662;</button></div>
       <div class="pbody">
         <p class="hint">Cumulative PnL by date over the selected range. Click an overlay to show or hide it; click a calendar day to mark it here; hover for values.</p>
         <div class="curvebar">
-          <button type="button" class="curvebtn" data-k="gross"><span class="sw" style="background:var(--green)"></span>Gross</button>
-          <button type="button" class="curvebtn" data-k="net"><span class="sw" style="background:var(--accent)"></span>Net</button>
-          <button type="button" class="curvebtn" data-k="take"><span class="sw" style="background:var(--take)"></span>Take-home</button>
+          <button type="button" class="curvebtn" data-k="gross" aria-pressed="true"><span class="sw" style="background:var(--green)"></span>Gross</button>
+          <button type="button" class="curvebtn" data-k="net" aria-pressed="false"><span class="sw" style="background:var(--accent)"></span>Net</button>
+          <button type="button" class="curvebtn" data-k="take" aria-pressed="false"><span class="sw" style="background:var(--take)"></span>Take-home</button>
           <span class="chint">Net = gross − commissions − subscriptions · Take-home applies the 1256 tax</span>
         </div>
         <div class="curvewrap">
@@ -175,7 +175,7 @@
     <!-- Trading Calendar -->
     <section class="panel" data-key="cal">
       <div class="phead"><span class="grip" title="Drag to reorder">&#9776;</span>
-        <h2>Trading Calendar</h2><button class="chev" aria-label="Collapse">&#9662;</button></div>
+        <h2>Trading Calendar</h2><button class="chev" aria-label="Collapse" aria-expanded="true">&#9662;</button></div>
       <div class="pbody">
         <p class="hint">Daily realized PnL. Color by day result; the left column summarizes each week. Click a day to highlight it on the Performance graph.</p>
         <div class="calnav">
@@ -200,7 +200,7 @@
     <!-- Break-even & Cost Budget -->
     <section class="panel calc" data-key="cost">
       <div class="phead"><span class="grip" title="Drag to reorder">&#9776;</span>
-        <h2>Break-even &amp; Cost Budget</h2><button class="chev" aria-label="Collapse">&#9662;</button></div>
+        <h2>Break-even &amp; Cost Budget</h2><button class="chev" aria-label="Collapse" aria-expanded="true">&#9662;</button></div>
       <div class="pbody">
         <p class="hint">Commissions are computed per traded symbol from the selected broker's all-in rate. Subscriptions are charged as a full month per calendar month traded (not prorated). Tax is estimated on net profit only. These costs drive Net&nbsp;PnL, take-home, and the commission-adjusted Profit&nbsp;Factor in the cards above.</p>
         <div class="ccap" id="c_cap"></div>
@@ -229,7 +229,7 @@
     <!-- Advanced Statistics -->
     <section class="panel" data-key="adv">
       <div class="phead"><span class="grip" title="Drag to reorder">&#9776;</span>
-        <h2>Advanced Statistics</h2><button class="chev" aria-label="Collapse">&#9662;</button></div>
+        <h2>Advanced Statistics</h2><button class="chev" aria-label="Collapse" aria-expanded="true">&#9662;</button></div>
       <div class="pbody">
         <p class="hint">Definitions and known limitations are documented in the section below.</p>
         <div class="adv" id="adv"></div>
@@ -239,7 +239,7 @@
     <!-- Definitions & caveats -->
     <section class="panel" data-key="defs">
       <div class="phead"><span class="grip" title="Drag to reorder">&#9776;</span>
-        <h2>Definitions &amp; Caveats</h2><button class="chev" aria-label="Collapse">&#9662;</button></div>
+        <h2>Definitions &amp; Caveats</h2><button class="chev" aria-label="Collapse" aria-expanded="true">&#9662;</button></div>
       <div class="pbody">
         <div class="defbody">
           <dl>
@@ -269,7 +269,7 @@
     <!-- Activity terminal — read-only live feed of platform actions (promoted from staging, CH16) -->
     <section class="panel term" data-key="term">
       <div class="phead"><span class="grip" title="Drag to reorder">&#9776;</span>
-        <h2>Activity terminal</h2><button class="chev" aria-label="Collapse">&#9662;</button></div>
+        <h2>Activity terminal</h2><button class="chev" aria-label="Collapse" aria-expanded="true">&#9662;</button></div>
       <div class="pbody">
         <p class="hint">A live, read-only feed of actions on this workspace — CSV loads, edits, backups. Display only; it takes no input.</p>
         <!-- A12: aria-live="polite" announces each new line; NO role="log" because lines are

@@ -126,6 +126,7 @@ document.querySelectorAll('.curvebtn').forEach(btn =>
     if (curveSel[k] && selected.length === 1) return; // can't deselect the last overlay
     curveSel[k] = !curveSel[k];
     btn.classList.toggle('on', curveSel[k]);
+    btn.setAttribute('aria-pressed', curveSel[k] ? 'true' : 'false'); // B41
     if (state.METRICS_ALL) renderCurve(activeMetrics());
   })
 );
@@ -291,7 +292,10 @@ if ($('dataModal')) {
   loadFlags(); // F17: fetch admin feature flags (non-blocking; safe defaults if unavailable)
   emit('app:ready'); // widgets.js subscribes to build its terminal / session pill / workspace controls
   // Reflect the initial overlay selection on the toggle buttons.
-  document.querySelectorAll('.curvebtn').forEach(b => b.classList.toggle('on', !!curveSel[b.dataset.k]));
+  document.querySelectorAll('.curvebtn').forEach(b => {
+    b.classList.toggle('on', !!curveSel[b.dataset.k]);
+    b.setAttribute('aria-pressed', curveSel[b.dataset.k] ? 'true' : 'false'); // B41
+  });
 
   if (PAGE_MODE === 'demo') {
     runDemo();

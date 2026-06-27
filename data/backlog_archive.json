@@ -1543,6 +1543,83 @@
       "completedDate": "2026-06-27",
       "partial": false,
       "doneNote": "**Shipped:** JSDoc types + a DEV-ONLY typecheck — no TypeScript migration, no runtime/shipped dependency. Added `typescript` devDependency + jsconfig.json (allowJs, noEmit, checkJs:false, DOM+ES2022 lib) + `npm run typecheck` (`tsc -p jsconfig.json`), wired into CI after lint. New app/types.js defines the core data shapes as @typedefs (Trade, Fill, ParseResult, SymCost, CostModel, Setup, Annotation) — referenced cross-module via `import('./types.js').X` in comments (type-only, never emitted/loaded at runtime). Typechecking is OPT-IN per file via a top `// @ts-check`; enabled on the logic core — adapters.js, core.js, store.js, state.js (+types.js): the `state` object is explicitly typed, costModel() is annotated `@returns CostModel` (validates the shape), compute()/pairFills()/parse() are annotated against the typedefs, and ~6 DOM casts were added in core.js. `npm run typecheck` passes (exit 0). DOM-heavy view modules (render/data/datamanager/widgets/main/ui/export) are left for incremental `// @ts-check` opt-in — the typedefs already power editor IntelliSense there. Behavior unchanged (types are comments); ESLint + Prettier + unit + e2e all green."
+    },
+    {
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "**Shipped:** collapsed `cleanSym` in store.js importAll to `Adapters.rootSym(String(s||''))` — removed the always-truthy `Adapters && Adapters.rootSym` guard and the dead duplicated `[^A-Z0-9._-]` charset fallback (the A23 follow-up covering the `X && X.member` guard flavor). Restore still sanitizes restored symbols identically (rootSym is the stricter sanitizer). lint/typecheck/e2e green.",
+      "id": "A26",
+      "title": "Remove the dead `Adapters && Adapters.rootSym` guard + duplicated sanitizer (A23 follow-up)",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "trivial",
+      "status": "done"
+    },
+    {
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "**Shipped:** dmDeleteTrade now also calls `Store.deleteTradeMeta(id)` so a deleted trade's tags/note/screenshots don't outlive it; reloadFromStore prunes any orphan trademeta (an id with no matching trade — from an older delete path or a restored backup) from both the Store and state.TRADE_META, so the Manage-data 'Tagged trades' count and the dashboard Tag filter reflect only live trades.",
+      "id": "B40",
+      "title": "Deleting a trade orphans its per-trade metadata (tags/note/screenshots)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done"
+    },
+    {
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "**Shipped:** ARIA state on the toggle/collapse controls — `aria-pressed` on the scope toggle (render.js setScope) and the three performance-overlay `.curvebtn`s (main.js click handler + boot reflection), kept in lockstep with `.on`; `aria-expanded` + a Collapse/Expand `aria-label` on every panel chevron, synced in app/ui.js on init and on each toggle; the scope group wrapped in role=group/aria-label. Rebuilt includes; added a Playwright assertion (e2e/interactions.spec.mjs) covering scope/overlay aria-pressed + chevron aria-expanded/label (e2e now 11 tests).",
+      "id": "B41",
+      "title": "(a11y) Toggle/collapse controls expose no ARIA state (aria-pressed / aria-expanded)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done"
+    },
+    {
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "**Shipped:** cmHist (widgets.js) now uses `minMax(counts).hi` instead of `Math.max(...counts)` to uphold the B11/B27 no-array-spread invariant (counts was bounded so it was safe, but now consistent); documented num() (adapters.js) 3-digit EU-decimal ambiguity as a known limitation — a lone `0,123` resolves to thousands → 123 by design, since a prior-separator gate would wrongly turn US `1,234` into 1.234.",
+      "id": "B42",
+      "title": "Two minor parser/chart nits: cmHist bounded spread + num() 3-digit EU decimal",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done"
+    },
+    {
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "**Shipped:** wrapped the `i.status` field in esc() at both interpolation sites in assets/admin.js bkRenderList (the `is-<status>` row class and the `bk-badge <status>` class), matching the already-escaped sibling fields — defense-in-depth (source is the trusted committed backlog JSON).",
+      "id": "S23",
+      "title": "esc() the status field in the admin backlog render (defense-in-depth)",
+      "category": "SECURITY",
+      "priority": "P3",
+      "effort": "trivial",
+      "status": "done"
+    },
+    {
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "**Shipped:** gated formatting in CI — added a `Format check` step (`npm run format:check`) after lint in ci.yml so the now-Prettier-formatted repo stays formatted; and folded the fast checks into `npm test` (= lint + typecheck + format:check + test:unit) so running it locally catches what CI enforces (closes the npm-test-vs-CI typecheck divergence).",
+      "id": "CH34",
+      "title": "Reconcile dev-tooling enforcement: gate format:check + npm test/typecheck parity",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done"
+    },
+    {
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "**Shipped:** added an explicit header to app/entitlements.js marking it an INTENTIONALLY-UNLOADED scaffold (no page imports it; kept as the seam for the A4/A16 CloudStore tier) that must stay lint/typecheck-clean; verified it lints clean. Kept (not deleted) as the documented future storage-tier interface.",
+      "id": "CH35",
+      "title": "Resolve app/entitlements.js — mark as scaffold or delete (now under tooling scope)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "trivial",
+      "status": "done"
     }
   ]
 }

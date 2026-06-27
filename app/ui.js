@@ -54,14 +54,23 @@ export function initPanels() {
   dash.querySelectorAll('.panel').forEach(p => {
     if (col[p.dataset.key]) p.classList.add('collapsed');
     const head = p.querySelector('.phead'),
-      grip = p.querySelector('.grip');
+      grip = p.querySelector('.grip'),
+      chev = p.querySelector('.chev');
+    // B41: keep the chevron's aria-expanded + label in sync with the collapsed state (a11y).
+    const syncChev = () => {
+      if (!chev) return;
+      const expanded = !p.classList.contains('collapsed');
+      chev.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      chev.setAttribute('aria-label', expanded ? 'Collapse' : 'Expand');
+    };
+    syncChev(); // reflect the initial (possibly restored-collapsed) state
     head.addEventListener('click', e => {
       if (e.target.closest('.grip')) return;
       // L6: when the collapse control is hidden (non-full-width panel on the wide grid), the
       // header click is a no-op — don't toggle a state the user can't see or reverse.
-      const chev = p.querySelector('.chev');
       if (chev && getComputedStyle(chev).display === 'none') return;
       p.classList.toggle('collapsed');
+      syncChev(); // B41
       saveCollapsed();
     });
     grip.addEventListener('mousedown', () => p.setAttribute('draggable', 'true'));
