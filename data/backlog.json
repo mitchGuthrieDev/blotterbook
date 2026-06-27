@@ -173,7 +173,7 @@
       "status": "open",
       "completedDate": null,
       "partial": false,
-      "prompt": "From the R1 audit (cosmetic drift from the CH16 F14 promotion). F14's stat-card detail modal now ships on all surfaces, but three comment/labels still call it staging-only: app/widgets.js ~116 ('F14 (staging) — stat-card metric-detail modals'), app/app.css ~174 ('clickable headline cards (staging)'), and app/app.css ~388 ('stat-card detail modal (staging)'). Update them to 'all surfaces · CH16' to match render.js/widgets.js/partials, so a future reader doesn't think the feature is still gated. Also: setSession('degraded') (app/widgets.js ~29-33) handles a state no caller emits (self-labeled 'reserved/forward-looking') — either wire it or drop the dead branch. Done when: no stale '(staging)' label remains for F14 and the degraded branch is wired or removed.",
+      "prompt": "From the R1 audit (cosmetic drift from the CH16 F14 promotion). F14's stat-card detail modal now ships on all surfaces, but three comment/labels still call it staging-only: app/widgets.js ~116 ('F14 (staging) — stat-card metric-detail modals'), app/app.css ~174 ('clickable headline cards (staging)'), and app/app.css ~388 ('stat-card detail modal (staging)'). Update them to 'all surfaces · CH16' to match render.js/widgets.js/partials, so a future reader doesn't think the feature is still gated. Also: setSession('degraded') (app/widgets.js ~29-33) handles a state no caller emits (self-labeled 'reserved/forward-looking') — either wire it or drop the dead branch. Done when: no stale '(staging)' label remains for F14 and the degraded branch is wired or removed. R1 FOLLOW-UP (additional stale post-CH16 '(staging)' labels found in this audit, clear these too): app/export.js ~186 still heads the export-report modal feature 'F3 (staging)' though export.js ~177 says it was promoted to all surfaces in CH16; and scripts/build-includes.mjs ~24-26 header comment still claims the activity terminal is staging-ALONE and NOT duplicated, but CH16 promoted it to all three shells (now identical in app/demo/staging.html).",
       "doneNote": null
     },
     {
@@ -330,6 +330,66 @@
       "completedDate": null,
       "partial": false,
       "prompt": "Guardrail from R16's structure review. Because the project has NO build step, the repo root IS the Cloudflare Pages deploy/web root — the folder layout is simultaneously the public URL structure AND the deploy contract. Do NOT adopt a '/src vs /public with a bundler' reorganization: it either changes every public URL (breaking canonicals/sitemap/_redirects/bookmarks) or requires a build/copy step that violates the 'no build step / deploys as static files' design pillar. Keep root = web root (functions/ MUST stay at root for Pages Functions; _headers/_redirects/robots.txt/sitemap.xml/favicon stay at root). IF a reorg is ever truly needed, the ONLY Pages-compatible move is a public/ output-dir split (browser-served files under public/, Pages 'build output directory' = public, functions/+scripts/+partials/+tooling stay at root) — and it must update the FULL coupled set in lockstep: the absolute /app/ /assets/ /data/ URL references, _redirects, _headers, robots.txt, sitemap.xml + page canonicals (CH5/CH6), build-includes.mjs (the ['.', 'app'] HTML scan), build-manifest.mjs (data/* paths), and bump-version.mjs (the prod-shipping path prefixes). Reject piecemeal moves that update only some of these.",
+      "doneNote": null
+    },
+    {
+      "id": "S20",
+      "title": "Sanitize the meta store on backup restore (savedFilters id + arbitrary keys)",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 audit (security). Store.importAll (app/store.js ~258-262) restores the meta store VERBATIM — store.put({key:mm.key, value:mm.value}) with no validation — unlike the trades/journal/trademeta paths it sanitizes alongside (S7/S15/S17). A crafted backup can set meta:[{key:'savedFilters', value:[{id: <markup that closes the attribute and injects an img onerror tag>, name:'x', f:{}}]}]; that id is interpolated UNESCAPED into the f_saved <option> value attribute (app/data.js ~249) and three data-filter* attributes (app/datamanager.js ~71-74), so it breaks out of the attribute on restore. The strict CSP (script-src 'self', no unsafe-inline) blocks the inline-handler SCRIPT path, so this is CSP-mitigated attribute/markup injection, not live script-XSS — but it is the same trust-boundary class S7 fixed (which missed this meta path) and breaks the sanitize-at-the-boundary invariant. Fix at the boundary in importAll: allow-list restorable meta keys and validate the savedFilters shape — coerce id to [A-Za-z0-9], esc()/strip name, whitelist the f filter fields (from/to/symbol/side/session/tag/dows) — and drop unknown keys; as defense-in-depth also esc(s.id) at the two render sinks. Done when: importing a backup whose savedFilters id or meta carries markup stores a sanitized id and renders inert (no attribute breakout), normal save/apply/rename/delete of filters still works, and the auth/adapter test suites stay green.",
+      "doneNote": null
+    },
+    {
+      "id": "CH29",
+      "title": "Single-source the remaining view-layer cost/metric math (winRate, bePer, curve costModel)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 audit (duplication; continues CH23's single-sourcing). Three view-layer values are recomputed instead of read from compute()/costModel(): (1) the trade WIN RATE (m.n?100*m.wins/m.n:0).toFixed(1) is inlined in app/render.js ~20, app/export.js ~29, and app/widgets.js ~187 — compute() returns wins and n but not a rate; add a winRate field to compute()'s return and read it at all three sites. (2) BREAK-EVEN/TRADE (c.totalComm+c.fixedPeriod)/c.n is duplicated verbatim in app/render.js ~379 and app/export.js ~14 — return bePer from costModel() and consume it in both. (3) costModel(m) is recomputed inside dailySeries (app/render.js ~50) even though renderDash already computed c and threads it into renderCards/renderCalc (CH11) — renderCurve(m) bypasses it, so costModel runs 2x+ per render (and again on resize/overlay toggles); thread the shared c into renderCurve/dailySeries as an optional second arg. All three are pure refactors with no output change. Done when: winRate + bePer come from compute()/costModel(), the curve path reuses the shared c, the dashboard/report/card-modal figures are unchanged, and tests stay green.",
+      "doneNote": null
+    },
+    {
+      "id": "A19",
+      "title": "Add a state-tax-model drift test (core.js TAXMODEL fallback vs state-tax.json)",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 audit (silent-drift guard). app/core.js ~193 hardcodes TAXMODEL = {fedOrdinary:24, ltcg:15, ltcgWeight:0.6, ordinaryWeight:0.4}, identical to data/state-tax.json's model; it is overlaid by Object.assign(TAXMODEL, tax.model) at core.js ~232, so the literal is the OFFLINE/static/pre-deploy fallback — the same failure mode A14's test-flags.mjs was built to guard for APP_FLAGS — but this duplicated constant has NO drift test, so editing the JSON model silently diverges the fallback. Add a drift assertion (extend test-flags.mjs or add a sibling test, wired into CI) that parses the TAXMODEL literal from app/core.js and asserts it equals data/state-tax.json model. Done when: the test fails if the core.js TAXMODEL fallback and state-tax.json model diverge, and it is green now + in CI.",
+      "doneNote": null
+    },
+    {
+      "id": "B31",
+      "title": "(demo) Defense-in-depth: runtime-guard the data-manager mutation handlers",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 audit (demo lockdown defense-in-depth). The demo's data-mutation handlers in app/datamanager.js — dmSaveEdit (~210), dmClearEdit (~218), dmDeleteTrade (~227), dmDeleteNote (~233), dmImport (~246) — call Store.* directly with NO runtime if(PAGE_MODE==='demo') return; guard; the demo lockdown relies solely on the buttons rendering disabled. Demo trades are in-memory (TRADES), never in Store, so re-enabling a button via devtools and clicking would operate on the REAL IndexedDB. Normal behavior is correct — this is a missing defense-in-depth layer that the rest of the app already applies (data.js ~400, widgets.js ~76, main.js ~140 carry PAGE_MODE==='demo' guards; B23 added one to ws_save). Add an early if(PAGE_MODE==='demo') return; (or equivalent no-op) to each demo-disabled mutation handler. Done when: the data-manager mutation handlers no-op under PAGE_MODE==='demo' even if the disabled attribute is bypassed; the app surface is unchanged.",
+      "doneNote": null
+    },
+    {
+      "id": "B32",
+      "title": "Harden remaining unguarded DOM handlers (boot init + home.js) — B12 class",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 audit (latent boot-abort, B12 class). Two spots attach DOM handlers without the null-safe pattern the rest of the app uses (the on() helper in main.js exists precisely because a direct getElementById(id).onclick throws at module load and kills boot() — B12): (1) app/data.js initFilters/initSetup call document.getElementById('f_reset').addEventListener(...) (~232), c_feed (~505), and c_tv (~512) directly with no null check — a trimmed or changed surface that drops one id throws and aborts the rest of boot() (filters/journal/flags/app:ready never wire), with no try/catch around the init sequence. Route these through on() or add a const e=$(id); if(e) guard (the sibling bind helper at data.js ~230 already does this). (2) app/assets/home.js is bare top-level statements (no IIFE) and derefs #hdr unguarded (~2-3), unlike the IIFE-wrapped admin.js/changelog.js — wrap it in an IIFE and guard if(hdr) before attaching the scroll handler. Both are latent (the ids exist on all current surfaces). Done when: the boot-time init handlers in data.js are null-safe and home.js is IIFE-wrapped + guarded; all surfaces still wire their controls with no console errors.",
       "doneNote": null
     }
   ],
