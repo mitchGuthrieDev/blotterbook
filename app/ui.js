@@ -1,6 +1,6 @@
 "use strict";
 /* Blotterbook app · ui — collapsible/drag-to-reorder panels + file-download/setup-label helpers
-   Loaded in order: core → render → data → ui → export → datamanager → main. Split from the former single app.js (classic
+   Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
    scripts share one global scope, so cross-file functions/state resolve at runtime).
    (The activity terminal, session pill, and workspace templates live in widgets.js, loaded on every app page since CH16.) */
 

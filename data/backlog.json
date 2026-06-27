@@ -6,7 +6,7 @@
   "updated": "2026-06-27",
   "note": "Committed source of truth for the engineering backlog (replaces the retired .claude/backlog.md). The admin panel shows category/effort/status only; prompt + doneNote stay here.",
   "commitConvention": "Conventional-commit titles (enables CH12 automated versioning): when committing, and ESPECIALLY when titling a PR / squash-merge, lead the title with a conventional-commit type so the version bump can be derived automatically — `feat:` (new capability → minor), `fix:` (bug fix → patch), `chore:`/`refactor:`/`docs:`/`style:`/`test:`/`perf:` (→ patch), and append `!` (e.g. `feat!:`) or a `BREAKING CHANGE:` footer for a breaking change (→ major). Scope it when useful, e.g. `feat(staging): …`. Untyped/legacy titles default to a patch bump. Keep the existing Co-Authored-By and Claude-Session trailers on the commit body.",
-  "donePolicy": "When an item's status is set to `done`, delete its `prompt` field and keep only the `doneNote` — the doneNote is the shipped record of what was actually done, so the original prompt is redundant and only bloats this file (the admin backlog panel never renders done-item prompts anyway). Keep `prompt` on `open` and `guardrail` items, since those are still the actionable spec. Applies retroactively: a done item should never carry a prompt.",
+  "donePolicy": "When an item's status is set to `done`, delete its `prompt` field and keep only the `doneNote` — the doneNote is the shipped record of what was actually done, so the original prompt is redundant and only bloats this file (the admin backlog panel never renders done-item prompts anyway). Keep `prompt` on `open` and `guardrail` items, since those are still the actionable spec. Applies retroactively: a done item should never carry a prompt. RECURRING ITEMS: an item with `recurring: true` (e.g. R1 repo audit, CH16 staging→prod promotion) is a perpetual driver — NEVER set its status to done, set completedDate, or strip its prompt; it stays open across every run and its prompt leads with a RECURRING/REPEATABLE marker. Each run ships its output as new items, not by closing the recurring item.",
   "categories": [
     "SECURITY",
     "ARCHITECTURE / DUPLICATION",
@@ -256,10 +256,12 @@
       "category": "REVIEW / AUDIT",
       "priority": "P2",
       "effort": "medium",
-      "status": "done",
-      "completedDate": "2026-06-27",
+      "status": "open",
+      "completedDate": null,
       "partial": false,
-      "doneNote": "Second full read-only repo audit (architecture, code quality, duplication, client + server security), fanned out across four parallel auditors and the top findings hand-verified at file:line. HEADLINE: the codebase is in good shape — escaping is consistently correct (single esc() at every untrusted innerHTML sink; no proven XSS), the server functions/ layer is solid (every state-changing endpoint auth-gated with constant-time compare, admin key never sent to the browser, Access-JWT verified fail-closed, and the Stripe webhook DOES verify signatures with replay protection before provisioning — S11 already correct), and the build/versioning tooling is self-consistent with no partial/built-HTML drift. NET-NEW FINDINGS added to backlog: correctness — B24 (num() strips EU decimal commas → wrong numbers), B25 (same-second fills pair by export order → can flip PnL sign), B26 (per-row D/M/Y detection mixes formats in one file), B27 (Math.min/max spread regression in widgets.js/render.js — the large-dataset stack-overflow compute() deliberately avoids); security — S17 (restore path doesn't validate trade/journal 'date' and those hit unescaped innerHTML sinks in datamanager.js — neutralized only by CSP today), S18 (live screenshot data-URL parity + drop style-src 'unsafe-inline'), S19 (drop ?k= admin-token-in-URL + allow-list/cap config flags before F17/R15); architecture/debt — CH23 (de-duplicate drifted view-layer math: DOW buckets, drawdown walk, commission rows), CH24 (dead code: unused entitlements.js, renderAdv dead param, curveMetrics alias, schwab cPos, stale changelog fallback; unify trade-id accessor), A13 (layout/workspace localStorage bypasses the Store seam — companion to A4). Highest-value to schedule first: B24/B25/B26 (silent number/date corruption) and S17 (restore-path injection). Read-only — no code edited."
+      "recurring": true,
+      "prompt": "RECURRING — leave this item OPEN; never mark it done, set completedDate, or strip this prompt. Each run is a fresh full audit (this is the Nth, not a one-shot); the findings ship as NEW backlog items, and R1 itself stays open for the next pass. Read-only audit (NO code edits) of the current repo: architecture, code quality, duplicated code, and security posture — accounting for everything shipped since the first audit (symbol sanitization, `_headers` CSP, `tokens.css` + nav/footer partials, the `app.js` → 7-script split, screenshot downscaling). Give concrete, prioritized findings, and append any new actions to this backlog in the same format. Done when: a written, prioritized audit is delivered and new follow-ups are added to the backlog.",
+      "doneNote": null
     },
     {
       "id": "R2",
@@ -1051,11 +1053,10 @@
       "category": "FEATURES",
       "priority": "P2",
       "effort": "large",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "From the R3 design review of per-day vs per-trade notes. Today per-DAY notes (JOURNAL store) are plain text only, while per-TRADE notes (TRADEMETA) carry tags + note + screenshots — backwards, since the day is the natural home for a chart screenshot, morning plan, or an emotional-state tag. Make day notes first-class: extend the JOURNAL record to {date,text,tags:[],shots:[],updated} and reuse the per-trade editor's tag input and screenshot downscale/encode pipeline (SHOT_MAX_DIM/JPEG) verbatim. Replace the bare textarea under the calendar with a quick-capture textarea that expands to the full annotation editor (text + tags + add-image). Keep the CH11 capture-the-date autosave so a late debounce/blur can't write to the wrong day. Export: include the new fields (additive — verify old {date,text} backups still import, with tags/shots defaulting empty). Surface day screenshots/tags consistently (calendar dot could distinguish text vs image; Manage-data Day-notes list shows the same note·N img·tags markers as the trades table). Done when: a day note can carry tags + a screenshot, captured from the calendar, persisted, exported/imported, and surfaced consistently with trade notes. BUNDLED (per user request): when a calendar day is selected, also show that day's intraday trades as a list UNDER the notes block — essentially the Manage-data trades table (#dm_trades / the row renderer in app/datamanager.js) filtered to the selected date, with the same columns and per-trade markers. BEFORE implementing, review and DOCUMENT proper data handling and surface decision questions to the user for sign-off: where the day's trades come from (filter baseTrades()/TRADES by date vs a Store query), demo vs Store behaviour, how it should interact with the active filter bar + month scope, whether the list is read-only or shares the dm_trades edit/delete affordances, and reuse-vs-duplicate of the dm_trades row renderer. Done when: the existing notes-unification scope ships AND a selected day shows its trades list below the notes, after the data-handling decisions are confirmed.",
-      "doneNote": null
+      "doneNote": "Day notes are now first-class annotations: the JOURNAL record carries {text,tags[],shots[]} (additive — legacy {date,text} backups still import), and the calendar notes block is a quick-capture textarea that expands (<details>) to a tags + screenshots editor reusing the trade editor's pipeline. Autosave keeps a captured-snapshot (CH11) so a debounced/blur save lands on the right day after switching days. A selected day also shows a read-only intraday trades list under the notes, sourced from baseTrades() (respects the active filter bar + scope, per the agreed data-handling decisions) and rendered via the shared trade-row cells. Verified end-to-end (19 checks): rich notes persist + restore, screenshots round-trip, list respects filters, legacy import works; no console errors."
     },
     {
       "id": "CH18",
@@ -1074,11 +1075,10 @@
       "category": "CHORE / REFACTOR",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "From the R3 design review. Once day notes gain tags + screenshots (F16), the tags/text/screenshots capture+save logic is duplicated between the per-trade editor (renderTradeEditor / dmCaptureEdit / the SHOT downscale pipeline in datamanager.js) and the new per-day editor. Factor it into one shared component — e.g. renderAnnotationEditor(scope, key) with scope in {day,trade} — so both paths render and persist from a single function, and the screenshot pipeline lives in one place. Pairs with / depends on F16. Done when: day and trade annotation editors render from one shared component with no duplicated capture/save/downscale code, behaviour unchanged.",
-      "doneNote": null
+      "doneNote": "Extracted a shared annotation editor in datamanager.js (annTagsField / annTextField / annShotsField / annCapture / annAddShot) used by BOTH the per-trade editor and the per-day editor; the screenshot downscale/encode + Store.validShot pipeline now lives in one place. dmCaptureEdit/dmAddShot are thin wrappers so existing callers are unchanged; DM_EDIT note→text internally, mapped to `note` only at the Store boundary."
     },
     {
       "id": "CH20",
@@ -1086,11 +1086,10 @@
       "category": "CHORE / REFACTOR",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "From the R3 design review. The Manage-data 'Day notes' list already previews date + text, but each row is delete-only — you can't open or edit a day note from there (only from the calendar) — and it doesn't show the note·N img·tags markers the trades table uses. Make each Day-notes row open the day editor and show the same markers, so the day-notes and trades lists are visually and behaviourally consistent. Best done after F16/CH19 so it reuses the shared annotation editor. Done when: a Day-notes row opens the day editor for that date and shows consistent markers.",
-      "doneNote": null
+      "doneNote": "Manage-data Day-notes rows now show the same tag/image markers as trades (journalChips) and gain an 'Open' button (dmOpenDay) that closes the modal, jumps the calendar to that date, selects it, and scrolls to the notes — reusing the shared editor. Verified the row markers + Open-selects-day."
     },
     {
       "id": "B21",
@@ -1098,11 +1097,10 @@
       "category": "FIXES",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "Selecting a day/point on the performance graph draws an unwanted blue box around the whole graph. That comes from the `.curve:focus-visible{outline:2px solid var(--accent)}` rule (app/app.css:202). Remove the selection outline on the graph WITHOUT breaking keyboard accessibility: confirm whether it appears on mouse-click vs keyboard (clicking shouldn't trigger :focus-visible in most browsers, so check what's actually focusing/outlining the .curve element on day-select), then constrain the outline to genuine keyboard focus or drop it in favour of the existing on-curve day marker. Verify on the staging graph. Done when: clicking a day no longer outlines the graph and keyboard users still get a visible focus cue.",
-      "doneNote": null
+      "doneNote": "Clicking a day focuses the curve SVG (tabindex=0), which painted the UA focus ring around the whole graph. Added .curve:focus{outline:none} before the existing .curve:focus-visible accent rule, so mouse-click focus shows no box while keyboard focus keeps a 2px accent ring (ordering makes :focus-visible win when both match). Verified in-browser: mouse click → outline none, real Tab focus → solid 2px ring."
     },
     {
       "id": "L7",
@@ -1122,11 +1120,10 @@
       "category": "FIXES",
       "priority": "P2",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "On initial load (before document.body gets the `loaded` class) the Save-layout button (#ws_save, partials/app-topbar.html) and the layout-template dropdown are visible, even though the load-state CSS (app/app.css:50-56) already hides the other topbar controls (#exportBtn/#manageBtn/#purgeBtn/#filterbar/#cards/#setuphead). FIRST reproduce and confirm the layout controls really are visible pre-load, then add them to the `body:not(.loaded){display:none}` set. Done when: the Save-layout button and layout dropdown only appear once the main dashboard has loaded.",
-      "doneNote": null
+      "doneNote": "Added #wsbar (the Save-layout button + workspace-template dropdown) to the body:not(.loaded){display:none} set in app.css, so the workspace controls only appear once the dashboard loads, matching #exportBtn/#manageBtn/#filterbar/#cards. Verified #wsbar is display:none pre-load and visible after."
     },
     {
       "id": "B23",
@@ -1134,11 +1131,10 @@
       "category": "FIXES",
       "priority": "P2",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "The demo is a 1:1 mirror of prod with data-mutating actions disabled (the demo `dis`/disabled pattern, commit fe909ba). The Save-layout control (#ws_save, partials/app-topbar.html) persists layout templates to localStorage, so it should be disabled in demo too. Fold #ws_save into the same demo-disable logic that greys out the other mutating controls. Done when: in demo the Save-layout button renders disabled and can't write templates. (Pairs with B22.)",
-      "doneNote": null
+      "doneNote": "Disabled #ws_save in demo (PAGE_MODE==='demo') in initWidgets and made its click handler a no-op there — Save layout persists templates to localStorage and the demo is a 1:1 mirror with mutating actions disabled. Loading templates / '— Default —' still work. Verified disabled on demo, enabled on the app."
     },
     {
       "id": "CH21",
@@ -1146,11 +1142,10 @@
       "category": "CHORE / REFACTOR",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "On the admin page the backlog status filter (#bk_fstatus, assets/admin.js) defaults to 'all'. Default it to 'open' on load (set the select's initial value and render the list with it) so the most actionable view shows first; 'all'/'done'/'guardrail' stay selectable. Leave the per-category counts reflecting full totals (they already ignore the active filter). Done when: the admin backlog opens filtered to open items by default.",
-      "doneNote": null
+      "doneNote": "The admin backlog now opens filtered to status=open (the actionable view) by default — set in loadBacklog after the options populate, only while the filter is at its initial 'All'; All/done/guardrail stay selectable and the per-category counts still reflect full totals. Verified the select defaults to 'open' and the list shows only open items."
     },
     {
       "id": "R9",
@@ -1158,11 +1153,10 @@
       "category": "REVIEW / AUDIT",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "Review whether the admin Reference Data section and its 'bump cache version' button still earn their place (#bumpref -> POST /api/config {bumpRefData:true}, surfaced as refDataVersion / #refstate, assets/admin.js). Trace what actually consumes refDataVersion, whether bumping it produces any user-visible effect today, and recommend keep / simplify / remove. Done when: a written recommendation exists (with any follow-up items) and the button's role is either documented or removed.",
-      "doneNote": null
+      "doneNote": "Reviewed the admin Reference Data section + 'bump cache version' button. FINDING: nothing consumed refDataVersion — it only wrote a KV timestamp displayed in admin; real reference-data cache-busting is per-file hashes in data/manifest.json. A prior item had already honest-labeled it as a no-op. DECISION: remove it. Dropped the button + section (admin.html / assets/admin.js) and the refDataVersion/bumpRefData handling from functions/api/config.js. No follow-ups needed."
     },
     {
       "id": "F17",
@@ -1170,11 +1164,10 @@
       "category": "FEATURES",
       "priority": "P3",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "The admin page already drives feature flags via [data-flag] checkboxes saved to /api/config (`flags`; #saveflags in assets/admin.js, applied on load to every [data-flag] element). Add flags for capabilities worth gating: add the matching [data-flag] toggles in admin.html AND actually hook each flag into the app so it gates the corresponding behaviour end-to-end (read the flag at runtime, default off/safe). Done when: new flags exist, persist via /api/config, and demonstrably toggle real app behaviour.",
-      "doneNote": null
+      "doneNote": "The app now fetches /api/config at boot (loadFlags, non-blocking) and gates real behaviour on flags, with app-side defaults mirroring config.js DEFAULTS.flags so behaviour is unchanged offline/static/pre-deploy. Wired showBetaAdapters (manual upload picker), maintenanceBanner (top-of-app banner), and a new betaRibbon flag ('Beta' header badge); new flags are allow-listed in DEFAULTS.flags and exposed as admin toggles. Verified both ways: defaults preserve current behaviour; flags from /api/config toggle the banner, ribbon, and beta-adapter picker."
     },
     {
       "id": "R10",
@@ -1182,11 +1175,10 @@
       "category": "REVIEW / AUDIT",
       "priority": "P3",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "Audit README.md against the current codebase and flag anything stale or inaccurate (architecture, the surface/versioning model CH12/CH16, build scripts, file layout). Then analyse whether it can be condensed, clarified, and better structured WITHOUT losing the context Claude relies on to work in this repo (classic-script load order, surface classification + two-track versioning, build-includes/build-manifest, donePolicy, etc.). Done when: a written assessment exists and the README is updated to be accurate and tighter while preserving all Claude-relevant context.",
-      "doneNote": null
+      "doneNote": "Audited README.md against the current codebase and corrected the staleness that had accumulated (load order omitting widgets.js; /api/config described as carrying refDataVersion/platform versions after R9 removed them; the ?k= staging-token fallback removed by S19; app/staging.js → widgets.js after the CH16 rename; 'three stores' → four incl. trademeta; six → seven Manage-data sections incl. Saved filters; day notes now rich {text,tags,shots} + a per-day trades list; Advanced Stats metric list F15/CH18; web-grid + saved filters promoted, so roadmap 'shipped' not 'in trial'; homepage pricing Free + donation, not a '$49/mo online app'). Filled genuine Claude-context gaps: the full scripts/test suite + bump-version, and the key one — that build-includes ALSO assembles app/{app,demo,staging}.html from partials/app-*.html via <!--IF mode=…--> conditionals. Tightened by condensing the verbose admin Cloudflare-Access setup (detail lives in functions/README.md). Net result: accurate, with the surface-build + versioning + load-order context Claude relies on intact. README is a no-bump file."
     },
     {
       "id": "R11",
@@ -1381,6 +1373,62 @@
       "completedDate": "2026-06-27",
       "partial": false,
       "doneNote": "Added Store.local — the single synchronous persistence seam for UI layout/workspace state — and routed ui.js (panel order/collapse) and widgets.js (workspace templates) through it, so no app/*.js touches localStorage directly. Kept synchronous so layout applies before paint. Verified layout order persists across reload via the seam."
+    },
+    {
+      "id": "B28",
+      "title": "Pending day-note autosave can resurrect a note after Erase-all/reset",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "Added cancelDaySave() (clears jSaveTimer without persisting) and call it in resetApp() and before Store.purge() in the Erase-all handler, so a pending debounced day-note autosave can no longer resurrect a note row into a just-cleared/purged store. Verified in-browser: erasing during a pending edit leaves the store empty."
+    },
+    {
+      "id": "B29",
+      "title": "Day-note text nits: preview entity-split + restore tag case",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "(1) The Manage-data day-note preview now slices BEFORE escaping — esc((j.text||'').slice(0,120)) — so truncation can't split an HTML entity. (2) Backup restore now lowercases + dedupes tags (cleanTags) for both journal and trade meta, matching the live editors' canonical form so restored tags hit the tag filter/chips. Verified restored mixed-case/dup tags normalize to lowercase+deduped."
+    },
+    {
+      "id": "CH25",
+      "title": "Doc + cosmetic sweep: load-order comments (widgets.js) and day-editor handler consistency",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "Load-order header comments in all 7 app/*.js and the core.js orientation block now include widgets.js (real order: …datamanager → widgets → main). Aligned the day-editor blur handler's DAY_EDIT gate with its input sibling, and dmOpenDay's METRICS_ALL-falsy fallback now syncs calYear/calMonth so the selected-day highlight is visible."
+    },
+    {
+      "id": "A14",
+      "title": "Guard the client↔Worker feature-flag default drift",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-27",
+      "partial": false,
+      "doneNote": "Added scripts/test-flags.mjs (wired into CI) asserting that app/data.js APP_FLAGS and functions/api/config.js DEFAULTS.flags share the same flag keys AND default values — so the client↔Worker flag-default literals can't silently drift. Fails if a flag is added/changed in only one place. 5/5 passing."
+    },
+    {
+      "id": "CH26",
+      "title": "Clear stale \"(staging)\" labels after the F14 promotion + dead degraded-state branch",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "trivial",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 audit (cosmetic drift from the CH16 F14 promotion). F14's stat-card detail modal now ships on all surfaces, but three comment/labels still call it staging-only: app/widgets.js ~116 ('F14 (staging) — stat-card metric-detail modals'), app/app.css ~174 ('clickable headline cards (staging)'), and app/app.css ~388 ('stat-card detail modal (staging)'). Update them to 'all surfaces · CH16' to match render.js/widgets.js/partials, so a future reader doesn't think the feature is still gated. Also: setSession('degraded') (app/widgets.js ~29-33) handles a state no caller emits (self-labeled 'reserved/forward-looking') — either wire it or drop the dead branch. Done when: no stale '(staging)' label remains for F14 and the degraded branch is wired or removed.",
+      "doneNote": null
     }
   ],
   "howToDrive": [

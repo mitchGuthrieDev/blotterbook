@@ -1,6 +1,6 @@
 "use strict";
 /* Blotterbook app · main — DOM event wiring + boot()
-   Loaded in order: core → render → data → ui → export → datamanager → main. Split from the former single app.js (classic
+   Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
    scripts share one global scope, so cross-file functions/state resolve at runtime). */
 
 /* ============================================================
@@ -84,6 +84,7 @@ if($('dataModal')){
   on('dm_search','input',e=>{ DM_SEARCH=e.target.value; renderDataManager(); });
   on('dm_clear','click',async()=>{
     if(!confirm('Erase ALL trades, day-notes and per-trade tags/notes saved in this browser? This cannot be undone.')) return;
+    cancelDaySave();   // B28: cancel a pending autosave BEFORE purging so it can't re-add a note row
     await Store.purge(); JOURNAL_DATES=new Set(); TRADE_META=new Map(); DM_EDIT=null; resetApp(); renderDataManager();
     emit('data:erased');
   });
@@ -92,7 +93,9 @@ if($('dataModal')){
     const ed=e.target.closest('button[data-edit]'); if(ed){ dmOpenTradeEditor(ed.dataset.edit); return; }
     const b=e.target.closest('button[data-trade]'); if(b) dmDeleteTrade(b.dataset.trade);
   });
-  on('dm_notes','click',e=>{ const b=e.target.closest('button[data-note]');
+  on('dm_notes','click',e=>{
+    const op=e.target.closest('button[data-dayopen]'); if(op){ dmOpenDay(op.dataset.dayopen); return; }   // CH20
+    const b=e.target.closest('button[data-note]');
     if(b && confirm('Delete the note for '+b.dataset.note+'?')) dmDeleteNote(b.dataset.note); });
   // saved-filter controls (shared — all surfaces; Save is disabled on demo)
   on('dm_filters','click',e=>{
@@ -129,6 +132,7 @@ if($('dataModal')){
   initPanels();
   initFilters();
   wireJournal();
+  loadFlags();         // F17: fetch admin feature flags (non-blocking; safe defaults if unavailable)
   emit('app:ready');   // widgets.js subscribes to build its terminal / session pill / workspace controls
   // Reflect the initial overlay selection on the toggle buttons.
   document.querySelectorAll('.curvebtn').forEach(b=>b.classList.toggle('on',!!curveSel[b.dataset.k]));

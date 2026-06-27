@@ -26,6 +26,9 @@ jobs:
       - name: Version-bump logic tests
         run: node scripts/test-version.mjs
 
+      - name: Feature-flag default drift test
+        run: node scripts/test-flags.mjs
+
       - name: Regenerate partials + data manifest
         run: |
           node scripts/build-includes.mjs

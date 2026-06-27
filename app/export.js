@@ -1,6 +1,6 @@
 "use strict";
 /* Blotterbook app · export — performance report export (print → PDF)
-   Loaded in order: core → render → data → ui → export → datamanager → main. Split from the former single app.js (classic
+   Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
    scripts share one global scope, so cross-file functions/state resolve at runtime). */
 
 /* ============================================================

@@ -1,17 +1,16 @@
 "use strict";
 /* Blotterbook app · render — dashboard rendering (cards, equity curve, calendar, advanced stats, break-even) + the scope/filter/render driver
-   Loaded in order: core → render → data → ui → export → datamanager → main. Split from the former single app.js (classic
+   Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
    scripts share one global scope, so cross-file functions/state resolve at runtime). */
 
 /* ============================================================
    Rendering — cards
    ============================================================ */
 function renderCards(m, c=costModel(m)){   // c may be passed in to avoid recomputing per render (CH11)
-  // F14 (staging): the five headline cards open metric-detail modals. They become keyboard-
-  // operable buttons only on staging; on app/demo they stay plain, non-interactive cards.
-  const co = STAGING_PAGE
-    ? (key,label)=>`<div class="card clickable" role="button" tabindex="0" data-card="${key}" aria-label="${label} — open details">`
-    : ()=>`<div class="card">`;
+  // F14 (promoted to all surfaces, CH16): the five headline cards open read-only metric-detail
+  // modals. Keyboard-operable buttons on app + demo + staging (the modal is read-only, so demo
+  // mirrors it with no lock-down).
+  const co = (key,label)=>`<div class="card clickable" role="button" tabindex="0" data-card="${key}" aria-label="${label} — open details">`;
   document.getElementById('cards').innerHTML=`
    ${co('net','Net PnL')}<div class="k">Net PnL</div>
      <div class="v ${cls(c.netPreTax)}">${usd(c.netPreTax)}</div>
@@ -460,6 +459,8 @@ function renderDash(){
   const m=activeMetrics(), c=costModel(m);   // compute the cost model once, share it (CH11)
   renderCards(m,c); renderAdv(m); renderCalc(m,c);
   renderCurve(m);
+  // F16: keep the selected day's intraday trades list in sync with the active filters/scope
+  if(selectedDate && typeof renderDayTrades==='function') renderDayTrades(selectedDate);
   document.getElementById('scopenote').textContent =
     SCOPE==='all' ? `all ${METRICS_ALL.n} trades` : `${MON[calMonth]} ${calYear}`;
 }
@@ -479,6 +480,7 @@ function setDashVisible(v){
    shown via the body:not(.loaded) rule; the cards row stays empty until load. */
 function showEmpty(){ const c=$('cards'); if(c) c.innerHTML=''; }
 function resetApp(){
+  cancelDaySave();   // B28: kill any pending day-note autosave so it can't resurrect a cleared note
   TRADES=[]; METRICS_ALL=null; selectedDate=null;
   const f=$('file'); if(f) f.value='';
   setDashVisible(false);

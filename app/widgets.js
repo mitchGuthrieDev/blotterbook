@@ -70,7 +70,11 @@ function initWidgets(){
   }
   // workspace templates
   refreshWsSelect();
-  on('ws_save','click',()=>{ const name=(prompt('Name this workspace layout:')||'').trim(); if(!name) return;
+  // B23: the demo is a 1:1 mirror with data-mutating actions disabled. "Save layout" persists
+  // templates to localStorage, so disable it in demo (loading a template / "— Default —" still work,
+  // they don't write anything new).
+  if(PAGE_MODE==='demo'){ const ws=$('ws_save'); if(ws){ ws.disabled=true; ws.title='Saving layouts is disabled in the demo.'; } }
+  on('ws_save','click',()=>{ if(PAGE_MODE==='demo') return; const name=(prompt('Name this workspace layout:')||'').trim(); if(!name) return;
     const t=readWsTemplates(); t[name]=currentWorkspace(); writeWsTemplates(t); refreshWsSelect(name);
     logAction('Workspace template saved · '+name); });
   on('ws_tpl','change',e=>{ const n=e.target.value;
@@ -84,8 +88,9 @@ function initWidgets(){
   // redraw the performance graph on resize so it re-measures its (grid) width
   let _rsz=null; window.addEventListener('resize',()=>{ clearTimeout(_rsz);
     _rsz=setTimeout(()=>{ if(METRICS_ALL) renderCurve(activeMetrics()); }, 160); });
-  // F14: headline stat cards open metric-detail modals (delegated — cards re-render each pass).
-  // Inert on app/demo (cards carry no data-card there, and #cardModal is staging-only).
+  // F14 (promoted to all surfaces, CH16): headline stat cards open read-only metric-detail modals
+  // (delegated — cards re-render each pass). Active on app + demo + staging now that the cards carry
+  // data-card and #cardModal ships on every page.
   const cardsEl=document.getElementById('cards');
   if(cardsEl){
     cardsEl.addEventListener('click',e=>{ const c=e.target.closest('.card[data-card]'); if(c) openCardModal(c.dataset.card); });

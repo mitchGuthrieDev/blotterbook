@@ -4,6 +4,17 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.20.0",
+      "date": "2026-06-27",
+      "title": "Tap a stat for the full story",
+      "summary": "The five headline stat cards on your dashboard are now clickable — open any of them for a focused breakdown with its own mini-chart. Promoted from the staging sandbox to the main app and the demo.",
+      "highlights": [
+        "Click or tab+Enter on Net PnL, Win Rate, Profit Factor, Avg Win/Loss, or Max Drawdown to open a detail modal.",
+        "Each modal shows a metric-specific breakdown plus a focused inline chart (equity curve with peak→trough marks, day-of-week and per-symbol breakdowns, PnL distribution, and more).",
+        "Read-only — it's a deeper look at numbers you already have; nothing to configure or save."
+      ]
+    },
+    {
       "version": "0.17.1",
       "date": "2026-06-26",
       "title": "Filters refine the whole dashboard",

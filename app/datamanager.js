@@ -1,6 +1,6 @@
 "use strict";
 /* Blotterbook app · datamanager — Manage-data modal, per-trade editor, backup/restore
-   Loaded in order: core → render → data → ui → export → datamanager → main. Split from the former single app.js (classic
+   Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
    scripts share one global scope, so cross-file functions/state resolve at runtime). */
 
 /* ============================================================
@@ -41,9 +41,11 @@ async function renderDataManager(){
     +`<div class="dmstat"><div class="dk">Local size</div><div class="dv mono">${kb}</div></div>`;
 
   // Notes
+  // Day notes (CH20): preview text + the same tag/image markers as trades; each row opens the day editor
   if($('dm_notes')) $('dm_notes').innerHTML = notes.length
     ? notes.map(j=>`<div class="dmrow"><span class="mono dmdate">${esc(j.date)}</span>
-        <span class="dmnote">${esc(j.text).slice(0,120)}</span>
+        <span class="dmnote">${esc((j.text||'').slice(0,120))}${journalChips(j)}</span>
+        <button class="dmdel alt" data-dayopen="${esc(j.date)}" title="Open this day's notes on the calendar">Open</button>
         <button class="dmdel" data-note="${esc(j.date)}" title="Delete this note">Delete</button></div>`).join('')
     : '<div class="dmempty">No day notes saved.</div>';
 
@@ -58,9 +60,8 @@ async function renderDataManager(){
   // mirrors prod 1:1, with data-mutating actions greyed out) — `dis` is the demo lock-down.
   const dis = demo ? ' disabled' : '';
   if($('dm_trades')) $('dm_trades').innerHTML = shown.length
-    ? shown.slice().reverse().map(t=>{ const id=tradeKey(t);   // CH24: one trade-id accessor (matches render.js)
-        return `<tr><td class="mono">${esc(t.date)}</td><td>${esc(t.root)}</td>
-        <td>${esc(t.side||'—')}${metaChips(TRADE_META.get(id))}</td><td class="num mono ${cls(t.pnl)}">${usd(t.pnl)}</td>
+    ? shown.slice().reverse().map(t=>{ const id=tradeKey(t);
+        return `<tr><td class="mono">${esc(t.date)}</td>${tradeCells(t)}
         <td class="dmrowact"><button class="dmdel alt" data-edit="${id}"${dis} title="Tags, note & screenshots">Edit</button>
         <button class="dmdel" data-trade="${id}"${dis} title="Delete this trade">Delete</button></td></tr>`; }).join('')
     : `<tr><td colspan="5" class="dmempty">No matching trades.</td></tr>`;
@@ -82,65 +83,74 @@ function metaChips(m){
   if(extra.length) s+=`<span class="dmmark">${extra.join(' · ')}</span>`;
   return s;
 }
+/* same chips for a day-note record {tags,shots} (CH20 — text is already previewed alongside) */
+function journalChips(j){
+  const tags=(j.tags||[]).map(t=>`<span class="dmtag">${esc(t)}</span>`).join('');
+  const n=(j.shots||[]).length;
+  return (tags||n) ? ' '+tags+(n?`<span class="dmmark">${n} img</span>`:'') : '';
+}
+/* shared trade-row cells (symbol · side+markers · P&L) — reused by the Manage-data trades table
+   and the per-day intraday list (F16/CH23) so the markers/formatting can't drift between them */
+function tradeCells(t){
+  const id=tradeKey(t);
+  return `<td>${esc(t.root)}</td><td>${esc(t.side||'—')}${metaChips(TRADE_META.get(id))}</td>`
+    + `<td class="num mono ${cls(t.pnl)}">${usd(t.pnl)}</td>`;
+}
+/* CH20: open a day's notes from Manage data — close the modal, jump the calendar to that date,
+   select it, and scroll the notes block into view. */
+function dmOpenDay(date){
+  closeDataManager();
+  if(typeof selectFromGraph==='function' && METRICS_ALL){ selectFromGraph(date); }
+  else { selectedDate=date;   // fallback: sync the calendar to the date's month so the highlight is visible (CH25)
+    const [yy,mm]=date.split('-').map(Number); calYear=yy; calMonth=mm-1;
+    if(typeof renderCalendar==='function') renderCalendar();
+    if(typeof renderDash==='function') renderDash();
+    if(typeof updateJournalEditor==='function') updateJournalEditor(); }
+  const j=$('journal'); if(j) j.scrollIntoView({block:'center'});
+}
 
-/* ---- per-trade editor ---- */
-let DM_EDIT=null;
-function renderTradeEditor(){
-  const box=$('dm_editor'); if(!box) return;
-  if(!DM_EDIT){ box.innerHTML=''; box.style.display='none'; return; }
-  box.style.display='';
-  const e=DM_EDIT, t=e.trade;
-  box.innerHTML=
-   `<div class="dmeditcard">
-      <div class="dmedit-head"><b>${t.date} · ${esc(t.root)} ${esc(t.side||'')}</b>
-        <span class="mono ${cls(t.pnl)}">${usd(t.pnl)}</span>
-        <button class="dmx" data-editclose title="Close">&times;</button></div>
-      <label class="dmlbl" for="dm_tags">Tags <span class="dmsublbl">comma-separated</span></label>
-      <input id="dm_tags" class="dminput" value="${esc(e.tags.join(', '))}" placeholder="breakout, A+, fomo">
-      <label class="dmlbl" for="dm_note">Note</label>
-      <textarea id="dm_note" class="dmtextarea" placeholder="What happened on this trade?">${esc(e.note)}</textarea>
-      <label class="dmlbl">Screenshots</label>
-      <div class="dmshots">
-        ${e.shots.map((s,i)=>`<div class="dmshot"><img src="${esc(s)}" alt="screenshot ${i+1}"><button data-rmshot="${i}" title="Remove">&times;</button></div>`).join('')}
-        <label class="dmaddshot">+ Add image<input type="file" accept="image/*" id="dm_shotinput" hidden></label>
-      </div>
-      <div class="dmedit-actions"><button class="dmbtn" data-editsave>Save</button>
-        <button class="dmdel" data-editclear title="Remove all metadata for this trade">Clear</button>
-        <span class="dmhint" id="dm_editmsg">${e._msg||''}</span></div>
+/* ============================================================
+   Shared annotation editor (CH19) — tags + text + screenshots, used by BOTH the per-trade editor
+   (Manage data) and the per-day notes editor (calendar, data.js). State shape: {tags:[],text:'',shots:[]}.
+   The screenshot downscale/encode + data-URI validation pipeline lives here, ONCE.
+   ============================================================ */
+const SHOT_MAX_DIM = 1600, SHOT_SOFT_BYTES = 600 * 1024;
+function annTagsField(state, o){
+  return `<label class="dmlbl" for="${o.prefix}_tags">Tags <span class="dmsublbl">comma-separated</span></label>
+    <input id="${o.prefix}_tags" class="dminput" value="${esc((state.tags||[]).join(', '))}" placeholder="${esc(o.placeholder||'')}">`;
+}
+function annTextField(state, o){
+  return (o.label?`<label class="dmlbl" for="${o.prefix}_note">${esc(o.label)}</label>`:'')
+    + `<textarea id="${o.prefix}_note" class="dmtextarea" placeholder="${esc(o.placeholder||'')}">${esc(state.text||'')}</textarea>`;
+}
+function annShotsField(state, o){
+  return `<label class="dmlbl">Screenshots</label>
+    <div class="dmshots">
+      ${(state.shots||[]).map((s,i)=>`<div class="dmshot"><img src="${esc(s)}" alt="screenshot ${i+1}"><button data-rmshot="${i}" title="Remove">&times;</button></div>`).join('')}
+      <label class="dmaddshot">+ Add image<input type="file" accept="image/*" id="${o.prefix}_shotinput" hidden></label>
     </div>`;
 }
-async function dmOpenTradeEditor(id){
-  let trades=[]; try{ trades=await Store.getAllTrades(); }catch(_){}
-  const trade=trades.find(t=>tradeKey(t)===id) || {date:'?',root:'?',side:'',pnl:0};
-  const m=await Store.getTradeMeta(id);
-  DM_EDIT={ id, trade, tags:(m.tags||[]).slice(), note:m.note||'', shots:(m.shots||[]).slice(), _msg:'' };
-  renderTradeEditor();
-  const box=$('dm_editor'); if(box) box.scrollIntoView({block:'nearest'});
+// read the tags + text inputs (by id prefix) back into `state`
+function annCapture(state, prefix){
+  if(!state) return;
+  const tg=$(prefix+'_tags'), nt=$(prefix+'_note');
+  if(tg) state.tags=[...new Set(tg.value.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean))];
+  if(nt) state.text=nt.value;
 }
-function dmCaptureEdit(){
-  if(!DM_EDIT) return;
-  const tg=$('dm_tags'), nt=$('dm_note');
-  if(tg) DM_EDIT.tags=[...new Set(tg.value.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean))];
-  if(nt) DM_EDIT.note=nt.value;
-}
-/* Screenshots are stored as data-URLs in IndexedDB, so a few raw phone-camera
-   images would bloat the local DB fast. Downscale (longest side ≤ MAX_DIM) and
-   re-encode to JPEG once an image is large, keeping each stored shot bounded. */
-const SHOT_MAX_DIM = 1600, SHOT_SOFT_BYTES = 600 * 1024;
-function dmAddShot(file){
-  if(!DM_EDIT || !file) return;
+/* Screenshots are stored as data-URLs in IndexedDB, so a few raw phone-camera images would bloat
+   the local DB fast. Downscale (longest side ≤ MAX_DIM) and re-encode to JPEG once an image is
+   large, keeping each stored shot bounded. Pushes into state.shots, then onDone(message). Captures
+   the live tags/text inputs first so a re-render after the async load can't drop unsaved edits. */
+function annAddShot(state, file, prefix, onDone){
+  if(!state || !file) return;
   if(!/^image\//.test(file.type||'')){ alert('Please choose an image file.'); return; }
   const sizeLabel = n => n>=1048576 ? (n/1048576).toFixed(1)+' MB' : Math.round(n/1024)+' KB';
   const pushShot = (url, optimizedFromBytes) => {
-    // S18: enforce the same data-URI allow-list as restore — rejects SVG / non-base64 images
-    // (e.g. a decode-failure fallthrough) so a stored shot can't carry a non-image payload.
+    // S18: enforce the same data-URI allow-list as restore — rejects SVG / non-base64 images.
     if(!Store.validShot(url)){ alert('That image type isn’t supported — please use PNG, JPEG, WebP, or GIF.'); return; }
-    dmCaptureEdit();
-    DM_EDIT.shots.push(url);
-    DM_EDIT._msg = optimizedFromBytes
-      ? `Image optimized for local storage (${sizeLabel(optimizedFromBytes)} → ~${sizeLabel(url.length*0.75)}).`
-      : '';
-    renderTradeEditor();
+    annCapture(state, prefix);
+    state.shots.push(url);
+    onDone(optimizedFromBytes ? `Image optimized for local storage (${sizeLabel(optimizedFromBytes)} → ~${sizeLabel(url.length*0.75)}).` : '');
   };
   const r=new FileReader();
   r.onerror=()=>alert('Could not read that image.');
@@ -148,8 +158,7 @@ function dmAddShot(file){
     const dataUrl=String(r.result);
     const small = file.size<=SHOT_SOFT_BYTES;
     const img=new Image();
-    // if the browser can't decode it (e.g. some SVGs), just store the original
-    img.onerror=()=>pushShot(dataUrl, 0);
+    img.onerror=()=>pushShot(dataUrl, 0);   // browser can't decode (e.g. some SVGs) → original (validShot still gates it)
     img.onload=()=>{
       const longest=Math.max(img.width,img.height);
       if(small && longest<=SHOT_MAX_DIM){ pushShot(dataUrl, 0); return; }   // already compact
@@ -167,10 +176,41 @@ function dmAddShot(file){
   };
   r.readAsDataURL(file);
 }
+
+/* ---- per-trade editor (renders the shared annotation fields into the Manage-data card) ---- */
+let DM_EDIT=null;
+function renderTradeEditor(){
+  const box=$('dm_editor'); if(!box) return;
+  if(!DM_EDIT){ box.innerHTML=''; box.style.display='none'; return; }
+  box.style.display='';
+  const e=DM_EDIT, t=e.trade;
+  box.innerHTML=
+   `<div class="dmeditcard">
+      <div class="dmedit-head"><b>${esc(t.date)} · ${esc(t.root)} ${esc(t.side||'')}</b>
+        <span class="mono ${cls(t.pnl)}">${usd(t.pnl)}</span>
+        <button class="dmx" data-editclose title="Close">&times;</button></div>
+      ${annTagsField(e,{prefix:'dm',placeholder:'breakout, A+, fomo'})}
+      ${annTextField(e,{prefix:'dm',label:'Note',placeholder:'What happened on this trade?'})}
+      ${annShotsField(e,{prefix:'dm'})}
+      <div class="dmedit-actions"><button class="dmbtn" data-editsave>Save</button>
+        <button class="dmdel" data-editclear title="Remove all metadata for this trade">Clear</button>
+        <span class="dmhint" id="dm_editmsg">${esc(e._msg||'')}</span></div>
+    </div>`;
+}
+async function dmOpenTradeEditor(id){
+  let trades=[]; try{ trades=await Store.getAllTrades(); }catch(_){}
+  const trade=trades.find(t=>tradeKey(t)===id) || {date:'?',root:'?',side:'',pnl:0};
+  const m=await Store.getTradeMeta(id);
+  DM_EDIT={ id, trade, tags:(m.tags||[]).slice(), text:m.note||'', shots:(m.shots||[]).slice(), _msg:'' };
+  renderTradeEditor();
+  const box=$('dm_editor'); if(box) box.scrollIntoView({block:'nearest'});
+}
+function dmCaptureEdit(){ annCapture(DM_EDIT,'dm'); }   // thin wrapper (callers unchanged)
+function dmAddShot(file){ if(DM_EDIT) annAddShot(DM_EDIT, file, 'dm', msg=>{ DM_EDIT._msg=msg; renderTradeEditor(); }); }
 async function dmSaveEdit(){
   if(!DM_EDIT) return;
   dmCaptureEdit();
-  await Store.saveTradeMeta(DM_EDIT.id, { tags:DM_EDIT.tags, note:DM_EDIT.note, shots:DM_EDIT.shots });
+  await Store.saveTradeMeta(DM_EDIT.id, { tags:DM_EDIT.tags, note:DM_EDIT.text, shots:DM_EDIT.shots });
   await loadTradeMeta();
   if(METRICS_ALL){ syncTagFilter(); renderDash(); }
   DM_EDIT._msg='Saved'; await renderDataManager();

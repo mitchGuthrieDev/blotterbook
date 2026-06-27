@@ -53,6 +53,7 @@
   body:not(.loaded) #purgeBtn,
   body:not(.loaded) #filterbar,
   body:not(.loaded) #cards,
+  body:not(.loaded) #wsbar,
   body:not(.loaded) #setuphead{display:none}
   body.loaded #demoBtn,
   body.loaded #setupLoad,
@@ -148,6 +149,22 @@
   .journal textarea:focus{border-color:var(--accent)}
   .journal textarea:disabled{opacity:.5}
   .journal .jhint{font-size:11.5px;color:var(--faint);margin:0 0 8px}
+  /* F16: per-day annotation editor (tags + screenshots) reuses the .dm* field classes; the
+     "Tags & screenshots" disclosure keeps the common quick-note case uncluttered. */
+  .jmore{margin-top:10px;border-top:1px dashed var(--line);padding-top:6px}
+  .jmore>summary{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);
+    cursor:pointer;list-style:none;user-select:none}
+  .jmore>summary::-webkit-details-marker{display:none}
+  .jmore>summary::before{content:'▸ ';color:var(--faint)}
+  .jmore[open]>summary::before{content:'▾ '}
+  .jmore>summary:hover{color:var(--txt)}
+  /* read-only intraday trades list under the notes */
+  .jtrades{margin-top:16px}
+  .jtrades:empty{margin-top:0}
+  .jthead{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+  .jttab th,.jttab td{text-align:left}
+  .jttab .num{text-align:right}
+  .jtnone{font-size:11.5px;color:var(--faint);font-style:italic}
 
   /* ---- stat cards ---- */
   .cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
@@ -199,6 +216,10 @@
   .curvebtn[data-k="take"].on{border-color:var(--take)}
   .curvewrap{position:relative}
   .curve{width:100%;height:260px;display:block;touch-action:none}
+  /* B21: clicking a day focuses the SVG (tabindex=0), which otherwise paints the UA focus ring
+     around the whole graph. Drop it on plain :focus (mouse) but keep a ring for :focus-visible
+     (keyboard) — order matters: :focus-visible is listed AFTER so it wins when both match. */
+  .curve:focus{outline:none}
   .curve:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .curve .grid{stroke:var(--line);stroke-width:1;stroke-opacity:.7}
   .curve .vgrid{stroke:var(--line);stroke-width:1;stroke-opacity:.4}
@@ -498,6 +519,12 @@
   /* version badge in the app header */
   .ver{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--dim);
     border:1px solid var(--line);border-radius:5px;padding:1px 6px;align-self:center}
+  /* F17 admin-flag UI */
+  .betaribbon{align-self:center;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--bg);background:var(--accent);border-radius:5px;padding:2px 6px;font-weight:600}
+  .maintbanner{background:rgba(232,168,56,.14);border-bottom:1px solid rgba(232,168,56,.4);
+    color:var(--take);font-size:12.5px;text-align:center;padding:7px 14px}
+  .maintbanner[hidden]{display:none}
 
   /* ---- staging: session-status pill + popup ---- */
   .sesswrap{position:relative;display:inline-flex;align-items:center}   /* anchors the popup under the pill */

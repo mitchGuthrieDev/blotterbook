@@ -162,21 +162,15 @@
   <p class="curstate" id="verstate">Versions: loading…</p>
 
   <h2>Feature flags</h2>
-  <p>Server-side configuration stored in KV. (Scaffold — not yet consumed by the main app.)</p>
+  <p>Server-side flags stored in KV; the app reads them at boot (<code>/api/config</code>). New flags
+    must also be added to <code>DEFAULTS.flags</code> in <code>functions/api/config.js</code> (allow-list).</p>
   <div class="flags" id="flags">
-    <label class="flagrow"><input type="checkbox" data-flag="showBetaAdapters"><span>Show beta platform adapters</span></label>
-    <label class="flagrow"><input type="checkbox" data-flag="maintenanceBanner"><span>Show a maintenance banner</span></label>
+    <label class="flagrow"><input type="checkbox" data-flag="showBetaAdapters"><span>Show beta platform adapters in the upload picker</span></label>
+    <label class="flagrow"><input type="checkbox" data-flag="maintenanceBanner"><span>Show a maintenance banner in the app</span></label>
+    <label class="flagrow"><input type="checkbox" data-flag="betaRibbon"><span>Show a “Beta” badge in the app header</span></label>
   </div>
   <div class="modes"><button class="modebtn" id="saveflags"><span class="d" style="background:var(--accent)"></span>Save flags</button></div>
   <p class="amsg" id="flagmsg"></p>
-
-  <h2>Reference data</h2>
-  <p>Records a server-side timestamp in KV. (Scaffold — not yet consumed by the main app: clients
-    cache-bust reference data via per-file hashes in <code>data/manifest.json</code>, so bumping this
-    has no effect on what they re-fetch yet.)</p>
-  <p class="curstate" id="refstate">Version: loading…</p>
-  <div class="modes"><button class="modebtn" id="bumpref"><span class="d" style="background:var(--green)"></span>Bump cache version</button></div>
-  <p class="amsg" id="refmsg"></p>
 
   <h2>Backlog</h2>
   <p>Read-only view of the engineering backlog (<code>data/backlog.json</code> — the committed source of

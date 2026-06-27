@@ -1,4 +1,6 @@
 <!-- ============ top bar ============ -->
+  <!-- F17: admin-toggled maintenance banner (hidden until the maintenanceBanner flag is on) -->
+  <div class="maintbanner" id="maintBanner" hidden></div>
   <div class="top">
     <div class="brand">
       <a class="bwordmark" href="../index.html" title="Back to the Blotterbook homepage">Blotterbook</a>
@@ -9,6 +11,8 @@
 <!--ENDIF--><!--IF mode=staging-->
       <span class="ver" title="Staging version">v0.29.1</span>
 <!--ENDIF-->
+      <!-- F17: admin-toggled "Beta" badge (hidden until the betaRibbon flag is on) -->
+      <span class="betaribbon" id="betaRibbon" hidden>Beta</span>
       <!-- session-status pill — promoted to all surfaces (CH16) -->
       <span class="sesswrap">
         <button class="sesspill online" id="sesspill" title="Session status — click for details" aria-haspopup="true" aria-expanded="false">

@@ -1,21 +1,21 @@
 /* Cloudflare Pages Function — /api/config
-   Admin-managed configuration (feature flags + reference-data cache version),
-   stored in the `STATUS_KV` namespace under the `config` key.
+   Admin-managed feature flags, stored in the `STATUS_KV` namespace under the `config` key.
 
-   GET  → returns the current config (no secrets). Public-readable so the app can
-          consume flags later; today it's a scaffold.
-   POST → admin only (x-admin-key must match the ADMIN_KEY secret). Body is a
-          partial config to merge: { flags?: {...}, bumpRefData?: true }.
+   GET  → returns the current config (no secrets). Public-readable so the app consumes flags
+          at boot (app/data.js loadFlags()).
+   POST → admin only (x-admin-key must match the ADMIN_KEY secret). Body is a partial config to
+          merge: { flags?: {...} }. Flag keys are allow-listed to DEFAULTS.flags (S19).
 
-   Defaults: { flags: { showBetaAdapters:true, maintenanceBanner:false }, refDataVersion:null } */
+   Defaults: { flags: { showBetaAdapters:true, maintenanceBanner:false, betaRibbon:false } }
+   (R9: the reference-data "cache version" field was removed — nothing consumed it; reference
+   data is cache-busted by per-file hashes in data/manifest.json, not a KV timestamp.) */
 
 import { isAdminAuthorized } from '../_lib/auth.js';
 import { json, rateLimited } from '../_lib/http.js';
 
 const KEY = 'config';
 const DEFAULTS = {
-  flags: { showBetaAdapters: true, maintenanceBanner: false },
-  refDataVersion: null
+  flags: { showBetaAdapters: true, maintenanceBanner: false, betaRibbon: false }
 };
 
 async function read(kv) {
@@ -51,7 +51,6 @@ export async function onRequest(context) {
       }
     }
     // versions are no longer writable (automated); any versions field in the body is ignored.
-    if (body && body.bumpRefData) cur.refDataVersion = new Date().toISOString();
     cur.updatedAt = new Date().toISOString();
     await kv.put(KEY, JSON.stringify(cur));
     return json(cur);

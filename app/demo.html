@@ -12,12 +12,16 @@
 
   <!-- include:app-topbar mode=demo -->
   <!-- ============ top bar ============ -->
+  <!-- F17: admin-toggled maintenance banner (hidden until the maintenanceBanner flag is on) -->
+  <div class="maintbanner" id="maintBanner" hidden></div>
   <div class="top">
     <div class="brand">
       <a class="bwordmark" href="../index.html" title="Back to the Blotterbook homepage">Blotterbook</a>
 
       <span class="ver" title="Demo version">v0.19.1</span>
 
+      <!-- F17: admin-toggled "Beta" badge (hidden until the betaRibbon flag is on) -->
+      <span class="betaribbon" id="betaRibbon" hidden>Beta</span>
       <!-- session-status pill — promoted to all surfaces (CH16) -->
       <span class="sesswrap">
         <button class="sesspill online" id="sesspill" title="Session status — click for details" aria-haspopup="true" aria-expanded="false">
@@ -172,7 +176,8 @@
           <div class="jhead"><span class="jdate" id="j_date">Day notes</span>
             <span class="jstat" id="j_stat"></span></div>
           <p class="jhint" id="j_hint">Day-notes are disabled for the demo dataset.</p>
-          <textarea id="j_text" placeholder="Select a day to write notes…" disabled></textarea>
+          <div class="jbody" id="j_body"></div>
+          <div class="jtrades" id="j_trades"></div>
         </div>
       </div>
     </section>
@@ -357,6 +362,17 @@
       <button class="btn" data-expclose>Close</button>
       <span class="parsestatus" id="exp_msg"></span>
     </div>
+  </div>
+</div>
+<!-- ============ stat-card detail modal (F14, promoted to all surfaces · CH16) — one reusable
+     read-only shell, populated per metric by widgets.js openCardModal() ============ -->
+<div class="modal" id="cardModal" aria-hidden="true">
+  <div class="sheet cmsheet" role="dialog" aria-modal="true" aria-labelledby="cm_title">
+    <div class="dmhead">
+      <div><h2 id="cm_title"></h2><div class="dmsub" id="cm_sub"></div></div>
+      <button class="dmx" id="cm_close" title="Close">&times;</button>
+    </div>
+    <div class="dmbody" id="cm_body"></div>
   </div>
 </div>
   <!-- /include:app-modal -->
