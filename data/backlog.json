@@ -367,6 +367,18 @@
       "effort": "small",
       "status": "open",
       "prompt": "From R19 Tier A. Prettier is wired (.prettierrc.json + .prettierignore + `npm run format`/`format:check`) but the repo is NOT yet formatted — a repo-wide reformat is a large, opinionated diff that should land on its own so it doesn't bury feature/fix changes. When ready: review .prettierrc.json options against the house style (the code is intentionally dense — printWidth is set high to limit reflow; tune before committing), run `npm run format`, eyeball the diff (esp. app/*.js dense one-liners), re-run the full suite + e2e + build-drift gate, then commit as a standalone `style:` change. Consider adding `format:check` to CI only AFTER the repo is formatted (until then it would fail). Done when: the repo is Prettier-formatted in one reviewed commit and (optionally) format:check gates CI."
+    },
+    {
+      "id": "CH33",
+      "title": "Implement JSDoc types + a dev-only typecheck (no TypeScript migration)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From R19 (the deferred Tier A typecheck option). Add JSDoc type annotations across the app modules plus a DEV-ONLY typecheck so editors get IntelliSense and CI catches type errors — WITHOUT migrating to TypeScript and WITHOUT any runtime/shipped dependency (no-runtime-deps stays hard; this is dev-only tooling like ESLint/Playwright — honor the A25 guardrail: nothing here may alter shipped bytes; types are comments). Steps: (1) annotate the core data shapes first — the normalized trade `{time,date,pnl,symbol,root,side[,qty,entryTime,exitTime,holdMs]}` (adapters.js), the metrics object returned by compute() and the cost model from costModel() (core.js), the shared `state` object (state.js), FILTERS/curveSel, and the Store interface (store.js) — via `@typedef`s in one place and reuse them; (2) annotate public function signatures across core/render/data/store/adapters/ui/export/datamanager/widgets; (3) add a `jsconfig.json` (or tsconfig) with `checkJs:true`, `allowJs:true`, `noEmit:true`, `strict` tuned pragmatically, scoped to app/ + assets/ + functions/ + scripts/; add `typescript` as a devDependency and an `npm run typecheck` (`tsc --noEmit`) script; wire it into CI after `npm run lint`. (4) Fix the type errors it surfaces (or annotate around genuinely-dynamic spots). Keep it pragmatic — the goal is catching real shape/typo bugs, not 100% strictness. Done when: `npm run typecheck` passes in CI, the core data shapes + public function signatures carry JSDoc types, editor IntelliSense resolves them, and no TypeScript/build output ships (shipped bytes unchanged).",
+      "doneNote": null
     }
   ],
   "howToDrive": [
