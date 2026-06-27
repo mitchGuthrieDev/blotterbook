@@ -1237,6 +1237,18 @@
       "partial": false,
       "prompt": "Scope adding economic-event data (FOMC and other standard futures-relevant events) to the calendar module, user-togglable, with ~5 years of historical events backed in. Assess: data sourcing/licensing, how/where the dataset is stored and shipped (static JSON? payload size for 5 years?), how events render on the calendar without crowding the existing trade/journal data, the toggle UX, and ongoing updates/maintenance. Done when: a written effort estimate + requirements + next-step items + open questions exist.",
       "doneNote": null
+    },
+    {
+      "id": "R15",
+      "title": "Discussion & planning: Stripe integration (donations now, subscriptions later)",
+      "category": "REVIEW / AUDIT",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Scope the effort + requirements to set up Stripe. NEAR-TERM goal: accept donations — the user clicks/interacts with the pricing module on the homepage to trigger a Stripe donation flow. Cover: Stripe primitives for one-off donations (Payment Links vs Checkout Session vs Payment Element), what server side is needed on Cloudflare Pages (a Pages Function for the Checkout session + webhook, secret/key handling — no keys in the static client), the homepage UX hook on the existing pricing element, and test vs live mode. ALSO lay down scaffolding for monthly SUBSCRIPTIONS (Products/Prices, customer + billing portal, webhooks) even though subscriptions are a later goal gated on remote data storage + user accounts — note the dependency and what can be stubbed now vs deferred. Done when: a written effort estimate + requirements (donations MVP path, subscription scaffolding, server/secret needs, open questions) + concrete next-step backlog items exist.",
+      "doneNote": null
     }
   ],
   "howToDrive": [
