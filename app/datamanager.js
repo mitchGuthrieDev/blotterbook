@@ -1,6 +1,6 @@
 "use strict";
 /* Blotterbook app · datamanager — Manage-data modal, per-trade editor, backup/restore
-   Loaded in order: core → render → data → ui → export → datamanager → main. Split from the former single app.js (classic
+   Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
    scripts share one global scope, so cross-file functions/state resolve at runtime). */
 
 /* ============================================================
@@ -44,7 +44,7 @@ async function renderDataManager(){
   // Day notes (CH20): preview text + the same tag/image markers as trades; each row opens the day editor
   if($('dm_notes')) $('dm_notes').innerHTML = notes.length
     ? notes.map(j=>`<div class="dmrow"><span class="mono dmdate">${esc(j.date)}</span>
-        <span class="dmnote">${esc(j.text||'').slice(0,120)}${journalChips(j)}</span>
+        <span class="dmnote">${esc((j.text||'').slice(0,120))}${journalChips(j)}</span>
         <button class="dmdel alt" data-dayopen="${esc(j.date)}" title="Open this day's notes on the calendar">Open</button>
         <button class="dmdel" data-note="${esc(j.date)}" title="Delete this note">Delete</button></div>`).join('')
     : '<div class="dmempty">No day notes saved.</div>';
@@ -101,7 +101,11 @@ function tradeCells(t){
 function dmOpenDay(date){
   closeDataManager();
   if(typeof selectFromGraph==='function' && METRICS_ALL){ selectFromGraph(date); }
-  else { selectedDate=date; if(typeof renderDash==='function') renderDash(); if(typeof updateJournalEditor==='function') updateJournalEditor(); }
+  else { selectedDate=date;   // fallback: sync the calendar to the date's month so the highlight is visible (CH25)
+    const [yy,mm]=date.split('-').map(Number); calYear=yy; calMonth=mm-1;
+    if(typeof renderCalendar==='function') renderCalendar();
+    if(typeof renderDash==='function') renderDash();
+    if(typeof updateJournalEditor==='function') updateJournalEditor(); }
   const j=$('journal'); if(j) j.scrollIntoView({block:'center'});
 }
 

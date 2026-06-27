@@ -1,6 +1,6 @@
 "use strict";
 /* Blotterbook app · render — dashboard rendering (cards, equity curve, calendar, advanced stats, break-even) + the scope/filter/render driver
-   Loaded in order: core → render → data → ui → export → datamanager → main. Split from the former single app.js (classic
+   Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
    scripts share one global scope, so cross-file functions/state resolve at runtime). */
 
 /* ============================================================
@@ -481,6 +481,7 @@ function setDashVisible(v){
    shown via the body:not(.loaded) rule; the cards row stays empty until load. */
 function showEmpty(){ const c=$('cards'); if(c) c.innerHTML=''; }
 function resetApp(){
+  cancelDaySave();   // B28: kill any pending day-note autosave so it can't resurrect a cleared note
   TRADES=[]; METRICS_ALL=null; selectedDate=null;
   const f=$('file'); if(f) f.value='';
   setDashVisible(false);

@@ -224,7 +224,10 @@
       // become a stored-XSS payload in any (current or future) render sink.
       const cleanSym = s => (window.Adapters && Adapters.rootSym) ? Adapters.rootSym(String(s || ''))
         : String(s || '').toUpperCase().replace(/[^A-Z0-9._-]/g, '');
-      const cleanTag = s => String(s == null ? '' : s).replace(/[<>&"']/g, '');
+      // B29: lowercase to match the live editors' canonical form (annCapture lowercases + dedupes),
+      // so restored tags match the tag filter/chips. cleanTags also dedupes, like the live path.
+      const cleanTag = s => String(s == null ? '' : s).replace(/[<>&"']/g, '').trim().toLowerCase();
+      const cleanTags = a => [...new Set((Array.isArray(a) ? a : []).map(cleanTag).filter(Boolean))];
       // Restore is untrusted: keep ONLY well-formed base64 image data URIs (S15, SHOT_RE above).
       const cleanShots = a => (Array.isArray(a) ? a.filter(s => typeof s === 'string' && SHOT_RE.test(s)) : []);
       // S17: a restored `date` flows into innerHTML sinks (the data-manager trades/day-notes lists),
@@ -246,7 +249,7 @@
         for (const j of data.journal) {
           if (!j || !validDate(j.date)) continue;
           const text = String(j.text || '').trim();
-          const tags = Array.isArray(j.tags) ? j.tags.map(cleanTag).filter(Boolean) : [];   // F16: restore tags/shots too
+          const tags = cleanTags(j.tags);   // F16: restore tags/shots too (B29: lowercased + deduped)
           const shots = cleanShots(j.shots);
           if (text || tags.length || shots.length) store.put({ date: j.date, text, tags, shots, updated: j.updated || Date.now() });
         }
@@ -260,7 +263,7 @@
       if (Array.isArray(data.trademeta) && data.trademeta.length) {
         const store = await tx(TRADEMETA, 'readwrite');
         for (const tm of data.trademeta) {
-          if (tm && tm.id) store.put({ id: tm.id, tags: (tm.tags || []).map(cleanTag).filter(Boolean), note: tm.note || '', shots: cleanShots(tm.shots), updated: tm.updated || Date.now() });
+          if (tm && tm.id) store.put({ id: tm.id, tags: cleanTags(tm.tags), note: tm.note || '', shots: cleanShots(tm.shots), updated: tm.updated || Date.now() });
         }
         await done(store);
       }

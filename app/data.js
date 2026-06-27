@@ -1,6 +1,6 @@
 "use strict";
 /* Blotterbook app · data — data lifecycle: CSV staging/parse/import, demo dataset, filters, day-notes journal, session restore, setup controls
-   Loaded in order: core → render → data → ui → export → datamanager → main. Split from the former single app.js (classic
+   Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
    scripts share one global scope, so cross-file functions/state resolve at runtime). */
 
 /* ============================================================
@@ -330,6 +330,9 @@ async function persistDay(snap){
 }
 function flushDayNow(){ clearTimeout(jSaveTimer); const s=daySnapshot(); if(s) persistDay(s); }
 function scheduleDaySave(){ clearTimeout(jSaveTimer); const s=daySnapshot(); jSaveTimer=setTimeout(()=>persistDay(s),500); }
+// B28: drop a pending debounced save WITHOUT persisting — used by reset/erase so a queued snapshot
+// can't write a stale day-note row back into a just-cleared/purged store.
+function cancelDaySave(){ clearTimeout(jSaveTimer); jSaveTimer=null; }
 
 function renderDayBody(){
   const body=document.getElementById('j_body'); if(!body) return;
@@ -385,7 +388,7 @@ async function updateJournalEditor(){
 function wireJournal(){
   const journal=document.getElementById('journal'); if(!journal) return;
   journal.addEventListener('input', e=>{ if(DAY_EDIT && (e.target.id==='j_note'||e.target.id==='j_tags')) scheduleDaySave(); });
-  journal.addEventListener('blur', e=>{ if(e.target.id==='j_note'||e.target.id==='j_tags') flushDayNow(); }, true);
+  journal.addEventListener('blur', e=>{ if(DAY_EDIT && (e.target.id==='j_note'||e.target.id==='j_tags')) flushDayNow(); }, true);
   journal.addEventListener('change', e=>{ if(e.target.id==='j_shotinput' && DAY_EDIT){ const f=e.target.files[0]; if(f) annAddShot(DAY_EDIT, f, 'j', ()=>{ renderDayBody(); flushDayNow(); }); e.target.value=''; } });
   journal.addEventListener('click', e=>{ const rm=e.target.closest('[data-rmshot]'); if(rm && DAY_EDIT){ annCapture(DAY_EDIT,'j'); DAY_EDIT.shots.splice(+rm.dataset.rmshot,1); renderDayBody(); flushDayNow(); } });
 }

@@ -1,6 +1,6 @@
 "use strict";
 /* Blotterbook app · core — globals, DOM helpers, metrics, formatting, broker/cost model, reference-data loading
-   Loaded in order: core → render → data → ui → export → datamanager → main. Split from the former single app.js (classic
+   Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
    scripts share one global scope, so cross-file functions/state resolve at runtime). */
 
 const SVGNS='http://www.w3.org/2000/svg';
@@ -30,6 +30,7 @@ const STAGING_PAGE = PAGE_MODE === 'staging';
      ui           collapsible/drag panels, staging flair, file download
      export       performance report
      datamanager  Manage-data modal + per-trade editor
+     widgets      activity terminal, session pill, workspace templates, card-detail modals (CH16)
      main         DOM event wiring + boot() — runs LAST, so everything it calls exists
 
    Mode flags (derived from document.body[data-mode] above):
