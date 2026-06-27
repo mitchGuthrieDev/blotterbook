@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 132" width="220" height="132" role="img" aria-label="A cumulative equity curve with gross and net overlays, gridlines and a day marker">
+  <style>.mono{font-family:"SF Mono",SFMono-Regular,ui-monospace,Menlo,Consolas,monospace}</style>
+  <defs>
+    <linearGradient id="wpFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3fb950" stop-opacity=".34"/>
+      <stop offset="1" stop-color="#3fb950" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x=".75" y=".75" width="218.5" height="130.5" rx="12" fill="#0d1014" stroke="#262d38" stroke-width="1.5"/>
+  <!-- gridlines -->
+  <g stroke="#262d38" stroke-width="1">
+    <line x1="18" y1="28" x2="202" y2="28"/>
+    <line x1="18" y1="100" x2="202" y2="100"/>
+  </g>
+  <line x1="18" y1="64" x2="202" y2="64" stroke="#3a4150" stroke-width="1" stroke-dasharray="3 3"/>
+  <!-- area fill under gross -->
+  <path d="M18,84 L48,72 L74,40 L104,52 L134,60 L164,46 L202,40 L202,100 L18,100 Z" fill="url(#wpFill)"/>
+  <!-- gross equity curve -->
+  <path d="M18,84 L48,72 L74,40 L104,52 L134,60 L164,46 L202,40" fill="none" stroke="#3fb950" stroke-width="2.5" stroke-linejoin="round"/>
+  <!-- net overlay -->
+  <path d="M18,98 L48,88 L74,58 L104,70 L134,78 L164,66 L202,60" fill="none" stroke="#6aa0ff" stroke-width="1.8" opacity=".85" stroke-linejoin="round"/>
+  <!-- day marker + note dot -->
+  <line x1="104" y1="22" x2="104" y2="108" stroke="#6aa0ff" stroke-width="1.1" stroke-dasharray="4 3" opacity=".8"/>
+  <circle cx="104" cy="52" r="3.5" fill="#3fb950"/>
+  <circle cx="74" cy="40" r="2.6" fill="#6aa0ff"/>
+  <!-- y labels -->
+  <g class="mono" font-size="9" fill="#8a94a3" text-anchor="end">
+    <text x="14" y="31">+$2k</text>
+    <text x="14" y="103">$0</text>
+  </g>
+</svg>

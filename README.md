@@ -23,21 +23,32 @@ parsed, computed, and stored locally. No accounts, no uploads, no tracking.
 
 ## Why Blotterbook
 
-- 🔒 **Private by design.** All parsing and computation run in your browser; your trades are saved
-  locally in your browser's storage and never sent anywhere. No login, no cookie banner, no
-  tracking.
-- 💸 **Knows what trading actually costs.** Models broker commissions, exchange/clearing/NFA fees,
-  platform + data-feed subscriptions, and a Section 1256 tax estimate — so you see *take-home*, not
-  just gross PnL.
-- 📈 **The full picture.** Cumulative equity curve, a Sunday-first trading calendar of daily PnL,
-  win rate, profit factor, expectancy, drawdown, payoff ratio, streaks, Sharpe/Sortino, and more.
-- 📓 **A real journal.** Per-day and per-trade notes, tags, and screenshots; saved filter views; a
-  tag filter — so you can actually review *why* a day went the way it did.
-- 🔌 **Multi-platform import.** TradingView is fully verified; Tradovate, Rithmic, Sierra Chart,
-  TradeStation, MotiveWave, Webull, Interactive Brokers, and Schwab/thinkorswim are supported in
-  beta.
-- ⚡ **Dependency-free.** No framework, no bundler, no build step. It's static files that load
-  instantly.
+<table>
+  <tr>
+    <td width="160"><img src="assets/why-private.svg" alt="A browser window holding a padlock — data parsed and stored locally, never uploaded" width="150"></td>
+    <td><b>Private by design.</b> All parsing and computation run in your browser; your trades are saved locally in your browser's storage and never sent anywhere. No login, no cookie banner, no tracking.</td>
+  </tr>
+  <tr>
+    <td width="160"><img src="assets/why-cost.svg" alt="A cost waterfall stepping down from gross PnL through commissions, subscriptions and tax to take-home" width="150"></td>
+    <td><b>Knows what trading actually costs.</b> Models broker commissions, exchange/clearing/NFA fees, platform + data-feed subscriptions, and a Section 1256 tax estimate — so you see <i>take-home</i>, not just gross PnL.</td>
+  </tr>
+  <tr>
+    <td width="160"><img src="assets/why-picture.svg" alt="A cumulative equity curve with gross and net overlays, gridlines and a day marker" width="150"></td>
+    <td><b>The full picture.</b> Cumulative equity curve, a Sunday-first trading calendar of daily PnL, win rate, profit factor, expectancy, drawdown, payoff ratio, streaks, Sharpe/Sortino, and more.</td>
+  </tr>
+  <tr>
+    <td width="160"><img src="assets/why-journal.svg" alt="A trading-calendar month grid with green and red daily PnL cells, note dots and a tag chip" width="150"></td>
+    <td><b>A real journal.</b> Per-day and per-trade notes, tags, and screenshots; saved filter views; a tag filter — so you can actually review <i>why</i> a day went the way it did.</td>
+  </tr>
+  <tr>
+    <td width="160"><img src="assets/why-platforms.svg" alt="Several platform CSV exports auto-detected and normalized into one unified trade table" width="150"></td>
+    <td><b>Multi-platform import.</b> TradingView is fully verified; Tradovate, Rithmic, Sierra Chart, TradeStation, MotiveWave, Webull, Interactive Brokers, and Schwab/thinkorswim are supported in beta.</td>
+  </tr>
+  <tr>
+    <td width="160"><img src="assets/why-deps.svg" alt="Three self-contained static files — HTML, CSS, JS — with no external dependencies, loading instantly" width="150"></td>
+    <td><b>Dependency-free.</b> No framework, no bundler, no build step. It's static files that load instantly.</td>
+  </tr>
+</table>
 
 ## Quick start
 

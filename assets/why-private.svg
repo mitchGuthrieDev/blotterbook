@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 132" width="220" height="132" role="img" aria-label="A browser window holding a padlock — data parsed and stored locally, never uploaded">
+  <style>.mono{font-family:"SF Mono",SFMono-Regular,ui-monospace,Menlo,Consolas,monospace}</style>
+  <rect x=".75" y=".75" width="218.5" height="130.5" rx="12" fill="#0d1014" stroke="#262d38" stroke-width="1.5"/>
+  <!-- browser window -->
+  <rect x="34" y="24" width="152" height="86" rx="9" fill="#151a21" stroke="#262d38"/>
+  <line x1="34" y1="42" x2="186" y2="42" stroke="#262d38"/>
+  <circle cx="47" cy="33" r="3" fill="#3a4150"/><circle cx="58" cy="33" r="3" fill="#3a4150"/><circle cx="69" cy="33" r="3" fill="#3a4150"/>
+  <rect x="86" y="28" width="92" height="10" rx="5" fill="#0d1014" stroke="#262d38"/>
+  <!-- padlock -->
+  <path d="M99,72 v-7 a11,11 0 0 1 22,0 v7" fill="none" stroke="#6aa0ff" stroke-width="2.5"/>
+  <rect x="93" y="72" width="34" height="28" rx="5" fill="rgba(106,160,255,.14)" stroke="#6aa0ff" stroke-width="2.5"/>
+  <circle cx="110" cy="84" r="3" fill="#6aa0ff"/>
+  <rect x="108.5" y="84" width="3" height="8" rx="1.5" fill="#6aa0ff"/>
+  <!-- local check badge -->
+  <circle cx="133" cy="97" r="10" fill="#0d1014" stroke="#3fb950" stroke-width="2"/>
+  <path d="M128.5,97 l3,3 l5,-6" fill="none" stroke="#3fb950" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="110" y="122" text-anchor="middle" class="mono" font-size="10" fill="#8a94a3">stays in your browser</text>
+</svg>
