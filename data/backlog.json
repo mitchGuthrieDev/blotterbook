@@ -389,11 +389,10 @@
       "category": "REVIEW / AUDIT",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-27",
       "partial": false,
-      "prompt": "Discuss and decide what BUSINESS information needs to be added to the site — e.g. company/entity name, a business contact/address, terms of service (vs the current disclaimers), a fuller privacy policy, refund/billing terms once payments launch, and any required regulatory wording. Produce a checklist of what's needed and where it lives (legal page, footer, dedicated pages), flagging anything that's a prerequisite for monetization. Done when: a written checklist of required business info + placement exists, with must-haves-before-launch flagged.",
-      "doneNote": null
+      "doneNote": "Decided what business info the site needs and where it lives. CURRENT STATE: footer + legal.html carry good Disclaimer + Terms-of-Use + a Privacy SUMMARY + contact@blotterbook.com; but the footer has NO copyright line, the operating entity (LICENSE: 'Scaline Audio / Mitchell Guthrie') appears nowhere public, there is no formal Privacy Policy / Terms of Service / refund policy / governing-law clause, and the pricing page already advertises $25/$50 donations + a future paid add-on. OWNER DECISIONS (2026-06): governing law = Delaware; published contact = support email only (contact@blotterbook.com); paid tiers = voluntary NON-REFUNDABLE donations (no goods exchanged); operating-entity display name = TBD. CHECKLIST / PLACEMENT — Have now: not-a-broker/not-advice disclaimers (legal + footer), as-is + liability + proprietary terms (legal), privacy summary (legal), support email (footer/legal). MUST-HAVE BEFORE TAKING MONEY (gate on R15 Stripe): (1) decide + display the operating entity / seller identity (footer '© 2026 <entity>' + a 'Blotterbook is operated by <entity>' line on legal) — Stripe needs a real seller; this is the top blocker. (2) A non-refundable Donations/Refund policy on the legal page (gifts, no goods, non-refundable). (3) A governing-law/venue clause (Delaware) in the Terms. (4) Confirm the support-contact email is clearly reachable from checkout. SHOULD-HAVE soon after / before the paid synced-workspaces add-on: a fuller standalone Privacy Policy (current is a summary) and a proper Terms of Service distinct from the disclaimer bullets; billing/subscription terms when subscriptions ship. NICE-TO-HAVE: footer copyright line regardless of monetization; 'Last updated' dates per legal section. Spun off CH22 (footer copyright/operator line) and F18 (pre-monetization legal pack: ToS w/ Delaware governing law, full Privacy Policy, non-refundable Donations/Refund policy, operator identity — prereq for R15). Review-only; no app code shipped."
     },
     {
       "id": "CH2",
@@ -1248,6 +1247,30 @@
       "completedDate": null,
       "partial": false,
       "prompt": "Scope the effort + requirements to set up Stripe. NEAR-TERM goal: accept donations — the user clicks/interacts with the pricing module on the homepage to trigger a Stripe donation flow. Cover: Stripe primitives for one-off donations (Payment Links vs Checkout Session vs Payment Element), what server side is needed on Cloudflare Pages (a Pages Function for the Checkout session + webhook, secret/key handling — no keys in the static client), the homepage UX hook on the existing pricing element, and test vs live mode. ALSO lay down scaffolding for monthly SUBSCRIPTIONS (Products/Prices, customer + billing portal, webhooks) even though subscriptions are a later goal gated on remote data storage + user accounts — note the dependency and what can be stubbed now vs deferred. Done when: a written effort estimate + requirements (donations MVP path, subscription scaffolding, server/secret needs, open questions) + concrete next-step backlog items exist.",
+      "doneNote": null
+    },
+    {
+      "id": "CH22",
+      "title": "Add a copyright + operator line to the site footer",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From R7. The shared site footer (partials/footer.html) has no copyright line and never names the operating entity. Add a '© 2026 <name>' line (and, on legal.html, a 'Blotterbook is operated by <entity>' note). The exact entity display name is a pending owner decision (TBD as of R7 — 'Scaline Audio' per LICENSE); ship brand-only '© 2026 Blotterbook' now if undecided and swap in the entity once chosen. Rebuild includes so every page picks up the footer change. Done when: every page footer shows a copyright line and the operator is named once the entity is decided.",
+      "doneNote": null
+    },
+    {
+      "id": "F18",
+      "title": "Pre-monetization legal pack: ToS, Privacy Policy, Donations/Refund policy",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From R7 — prerequisite for R15 (Stripe). Before taking money, expand the legal content (legal.html / new sections or pages): (1) a real Terms of Service distinct from the current disclaimer bullets, with a governing-law/venue clause set to DELAWARE; (2) a standalone full Privacy Policy (today it's a summary) covering local-only storage, the coarse-region tax lookup, and any Stripe data once payments land; (3) a Donations/Refund policy stating the $25/$50 tiers are voluntary NON-REFUNDABLE donations with no goods/services exchanged; (4) name the operating entity / seller identity (BLOCKED on the owner's entity decision from R7). Keep the existing not-a-broker/not-advice disclaimers. Link the new docs from the footer and from the donation/checkout flow. Done when: ToS (Delaware), Privacy Policy, and the non-refundable Donations/Refund policy are published and linked, and the seller identity is shown.",
       "doneNote": null
     }
   ],
