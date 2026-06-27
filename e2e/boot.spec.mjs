@@ -19,10 +19,12 @@ const surfaces = [
     },
   },
   {
+    // Staging is the Svelte 5 app now (ADR-001/A27) — it boots straight into the Overview
+    // (no landing/Start button). Assert the Svelte overview rendered with computed metrics.
     name: 'staging',
     path: '/app/staging.html',
     check: async page => {
-      await expect(page.locator('#startBtn')).toBeEnabled();
+      await expect(page.locator('#sv-app [data-card="net"] .value')).not.toBeEmpty();
     },
   },
   { name: 'home', path: '/index.html', check: async () => {} },

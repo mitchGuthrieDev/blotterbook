@@ -108,9 +108,12 @@ stale). So:
 - **PR titles are conventional commits** and drive the version bump: `feat:` →
   minor, `fix:`/`chore:`/`refactor:` → patch, `feat!:` / `BREAKING CHANGE:` →
   major.
-- **Three app surfaces, one source.** `app/{app,demo,staging}.html` are generated
-  from `partials/app-*.html` via `<!--IF mode=app|demo|staging-->` conditionals.
-  Edit the partial, not the generated HTML.
+- **App surfaces & their sources.** `app/app.html` + `app/demo.html` are still vanilla,
+  generated from `partials/app-*.html` via `<!--IF mode=app|demo-->` conditionals — edit the
+  partial, not the generated HTML. **`app/staging.html` is now the Svelte 5 app** (ADR-001/A27):
+  a hand-authored mount point with no include markers (build-includes skips it); its UI lives in
+  `app/staging-svelte/*.svelte` and reuses the pure-logic core verbatim (A29). Don't add staging
+  markup to the partials anymore — staging diverges until prod/demo also migrate (Phase 4).
 - **Demo must never mutate or persist.** Any data-writing control needs `disabled`
   in its `<!--IF mode=demo-->` variant **and** a `DEMO_MODE` guard on the write
   path. When adding a write, confirm it can't run under `DEMO_MODE`.

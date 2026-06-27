@@ -156,11 +156,32 @@ captured by the repo changes):
   now needs them) — this reverses the A25 deploy posture. `.node-version` pins Node 22 for the build.
 - `functions/` continues to be picked up from the repo root automatically.
 
-### Phase 2 — Svelte on the staging surface *(A27)*
+### Phase 2 — Svelte on the staging surface *(A27)* — **FOUNDATION LANDED; parity in progress**
 
 - Add `svelte` + `@sveltejs/vite-plugin-svelte`.
 - Rewrite the **staging view layer** as Svelte components; mount into `app/staging.html`.
 - Import the pure-logic core **verbatim** (A29). Prod + demo stay vanilla.
+
+What shipped so far (the foundation + first vertical slice):
+
+- `svelte@5.56.4` + `@sveltejs/vite-plugin-svelte@7.1.2` (pinned); `svelte()` added to the Vite
+  plugins (a no-op for the vanilla entries). Svelte 5 **runes** (`$state`/`$derived`/`$props`).
+- `app/staging.html` is now a hand-authored **Svelte mount** (no `partials/` include markers, so
+  `build-includes` leaves it alone). The S14 `?k=` token strip + `noindex`/`no-referrer` are
+  preserved.
+- `app/staging-svelte/` — `main.js` (`mount()` + side-effect `util.js` import for S14), `App.svelte`
+  (boot: `loadRefData` → isolated `Store.init` → seed-if-empty → `compute()`), and
+  `Overview`/`StatCard` components rendering the computed metrics. All logic is **imported
+  verbatim** (A29); the only new logic-side change is extracting `demoCSV` into `app/sampledata.js`
+  (re-exported by `data.js`) so the staging bundle doesn't drag in the vanilla view layer.
+- Toolchain: `.svelte` excluded from Prettier (no plugin — A28), `app/staging-svelte/**` excluded
+  from the `tsc` JS typecheck (can't resolve `.svelte` imports), scoped component CSS.
+- **Verified:** `npm test` + `npm run test:e2e` green; staging boots into the Overview with real
+  computed metrics and the seeded data persists across reload (isolated-DB guarantee).
+
+Remaining for parity (incremental, before prod/demo migrate): performance curve, trading calendar,
+day-notes journal, advanced stats, break-even/cost (needs a small `costModel` input refactor — it
+currently reads DOM IDs), manage-data modal + per-trade editor, filters/scope, activity terminal.
 - **CSP tightening (S18) starts here.** Svelte's scoped component CSS + CSSOM (`setProperty`)
   eliminate the inline `style="…"` usages on the staging surface as a side effect of the rewrite.
   Dropping `style-src 'unsafe-inline'` *globally* needs every surface de-inlined (prod/demo via

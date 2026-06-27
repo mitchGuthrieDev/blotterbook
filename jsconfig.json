@@ -12,5 +12,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["app/**/*.js", "assets/**/*.js"]
+  "include": ["app/**/*.js", "assets/**/*.js"],
+  "//exclude": "A27: the Svelte staging app imports *.svelte modules tsc can't resolve; exclude it from the JS typecheck (it's checked by the Svelte compiler / svelte-check instead).",
+  "exclude": ["node_modules", "dist", "app/staging-svelte/**"]
 }

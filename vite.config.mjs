@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { resolve } from 'node:path';
 
 // Blotterbook build (ADR-001 / A26). Multi-page build — the marketing site stays
@@ -17,6 +18,10 @@ import { resolve } from 'node:path';
 const r = p => resolve(import.meta.dirname, p);
 
 export default defineConfig({
+  // Svelte (ADR-001 / A27): only the staging surface (app/staging.html → app/staging-svelte/)
+  // imports .svelte files; the marketing pages + app/demo + app/app stay vanilla, so the plugin
+  // is a no-op for them. Svelte 5, runes-first.
+  plugins: [svelte()],
   // Verbatim-static assets are copied by scripts/copy-static.mjs, not Vite's publicDir
   // (the source files don't live in a single directory). Keeps data/ etc. unmoved so the
   // build-manifest / bump-version path assumptions and the README image refs stay valid.

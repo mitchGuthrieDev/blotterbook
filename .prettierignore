@@ -11,6 +11,10 @@ build
 # Generated HTML (build-includes) + hand-tuned bespoke markup — don't auto-format
 **/*.html
 
+# Svelte components (A27): no prettier-plugin-svelte installed (it would be a parser error),
+# keeping the dependency surface minimal (A28). Format .svelte by hand.
+**/*.svelte
+
 # Reference + generated data (curated / hashed); never reflow JSON data files
 data/
 
