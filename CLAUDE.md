@@ -24,15 +24,21 @@ leaves the browser.** It deploys to Cloudflare Pages as static files plus
   design pillars in [`docs/architecture.md`](docs/architecture.md#design-pillars).
 - **Must be served over http(s).** The app `fetch()`es `/data/*.json`, so opening
   files from disk breaks it. Use a static server.
-- **App scripts share one global scope** and load in a fixed order (defined in
-  [`partials/app-scripts.html`](partials/app-scripts.html)):
-  `util → store → adapters → core → render → data → ui → export → datamanager →
-  widgets → main`. The `core → … → main` tail is the concern-split of the former
-  monolithic `app.js`; `util`/`store`/`adapters` are loaded first as foundations.
-  `main.js` loads last and holds all event wiring + `boot()`, so everything it
-  references is already defined. Don't reorder; don't assume module isolation.
-  *(A20 plans to migrate this to native ES modules — explicit `import`/`export`,
-  no global scope or fixed load order — with no build/deps added.)*
+- **App scripts are native ES modules** (A20) — *(hard: no build, no runtime deps;
+  this is browser-native ESM)*. [`partials/app-scripts.html`](partials/app-scripts.html)
+  is a single module entry, `<script type="module" src="main.js">`; `main.js`
+  imports the rest. Each module `export`s what others use and `import`s what it
+  needs — no shared global scope, no fixed load order, no module-isolation
+  assumptions to break. The concern-split modules are
+  `core / render / data / ui / export / datamanager / widgets`, with `store`/`adapters`
+  as foundations and [`assets/util.js`](assets/util.js) shared by the app *and* the
+  info pages. Reassignable cross-module state lives on the shared
+  [`app/state.js`](app/state.js) object (`state.X`) — ESM import bindings are
+  read-only, so a plain shared object is the seam for reassignable state; the const
+  objects `FILTERS`/`curveSel` stay plain exports. Module scripts are deferred, so
+  `boot()` (in `main.js`) still runs after the DOM is parsed; `widgets.js` is a
+  side-effect import in `main.js` so its event-bus subscriptions register before
+  `boot()` emits `app:ready`.
 - **The committed HTML and data manifest are generated artifacts** that must stay
   in sync with their sources — CI fails if they drift (see Commands).
 
@@ -43,7 +49,7 @@ leaves the browser.** It deploys to Cloudflare Pages as static files plus
 python3 -m http.server 8000      # → http://localhost:8000/app/app.html
 
 # Tests (these are the CI suite — run before pushing)
-node scripts/test-adapters.cjs   # platform CSV adapters
+node scripts/test-adapters.mjs   # platform CSV adapters
 node scripts/test-auth.mjs       # admin-token + Stripe-webhook signature
 node scripts/test-version.mjs    # version-bump logic
 node scripts/test-flags.mjs      # feature-flag default drift (data.js vs config.js)
@@ -114,14 +120,15 @@ scripts and **fails if the result differs from what's committed**. So:
   demo.html             demo on its own page (in-memory, never persists)
   staging.html          key-gated sandbox clone of the app (isolated IndexedDB)
   app.css               all app styles (shared by app/demo/staging)
-  core.js               globals, DOM helpers, metrics, formatting, cost model, ref-data loading
+  state.js              shared mutable cross-module app state (the `state.X` object — ESM seam)
+  core.js               DOM helpers, metrics, formatting, cost model, ref-data loading, event bus
   render.js             dashboard rendering (cards, curve, calendar, advanced, break-even) + scope/filter
   data.js               CSV import, demo data, filters, day-notes journal, session restore, setup
   ui.js                 collapsible/drag panels + download / setup-label helpers
   export.js             condensed performance report (print → PDF)
   datamanager.js        Manage-data modal + per-trade editor + backup/restore
   widgets.js            activity terminal, session pill, workspace templates, stat-card modals
-  main.js               DOM event wiring + boot() — LOADED LAST
+  main.js               DOM event wiring + boot() — the ES-module ENTRY (imports the rest)
   adapters.js           platform CSV adapters + format auto-detection + fills matcher
   store.js              IndexedDB persistence (trades, journal, meta, trademeta)
   entitlements.js       storage-tier resolver (scaffold; not currently loaded)
@@ -178,7 +185,7 @@ no-op with no subscriber.
 ## Adding things
 
 - **A platform adapter:** one object in `app/adapters.js` (`sniff` + `toTrades`)
-  plus a fixture in `scripts/test-adapters.cjs`. Every adapter normalizes to the
+  plus a fixture in `scripts/test-adapters.mjs`. Every adapter normalizes to the
   same trade shape `{ time, date, pnl, symbol, root, side[, qty, entryTime,
   exitTime, holdMs] }` so `compute()`/`costModel()` never change.
 - **A rate change:** edit the relevant `data/*.json`, then run

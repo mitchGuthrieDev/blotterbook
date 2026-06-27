@@ -1,3 +1,5 @@
+import { esc, platformLabel } from './util.js';
+
 (function(){
   // The admin token (S3) is a live credential — keep it in the page-session field only,
   // never localStorage (S10), so an XSS can't lift a persisted token. autoKey() re-issues

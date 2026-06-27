@@ -24,7 +24,7 @@ Scope it when useful, e.g. `feat(staging): …`. Untyped titles default to a pat
 ## Verification
 
 <!-- There is NO render/visual test coverage, so call out any manual / headless / CDP / before-after checks. -->
-- [ ] Test suite green: `node scripts/test-adapters.cjs && node scripts/test-auth.mjs && node scripts/test-version.mjs && node scripts/test-flags.mjs && node scripts/test-tax.mjs`
+- [ ] Test suite green: `node scripts/test-adapters.mjs && node scripts/test-auth.mjs && node scripts/test-version.mjs && node scripts/test-flags.mjs && node scripts/test-tax.mjs`
 - [ ] Build-drift gate clean: after `node scripts/build-includes.mjs && node scripts/build-manifest.mjs`, `git status` is clean (committed artifacts in sync)
 - [ ] Affected surfaces checked as relevant (app / demo / staging / info pages)
 - [ ] Visual / interaction verification (screenshots, before/after, CDP) — describe:

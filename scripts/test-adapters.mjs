@@ -1,8 +1,10 @@
-/* Synthetic adapter tests. Run: node scripts/test-adapters.cjs
+/* Synthetic adapter tests. Run: node scripts/test-adapters.mjs
    These exercise detection + parsing + normalization against representative
    sample exports for each platform. Real exports should still be spot-checked
-   for the beta adapters, but this guards the shape and the fills matcher. */
-const A = require('../app/adapters.js');
+   for the beta adapters, but this guards the shape and the fills matcher.
+   ESM (A20): app/adapters.js is now a native ES module, so this imports its
+   default export instead of require()-ing it. */
+import A from '../app/adapters.js';
 
 let pass = 0, fail = 0;
 function ok(name, cond, extra) {

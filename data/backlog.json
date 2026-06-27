@@ -321,18 +321,6 @@
       "doneNote": null
     },
     {
-      "id": "A20",
-      "title": "Migrate to native ES modules (kill global-scope + fixed-load-order coupling)",
-      "category": "ARCHITECTURE / DUPLICATION",
-      "priority": "P2",
-      "effort": "large",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the design-pillars review (the no-build pillar is now soft; no-RUNTIME-deps stays hard — see R19 + docs/architecture.md#design-pillars). Convert the app's classic global-scope scripts (app/*.js + the shared assets/util.js and the info-page scripts) to native ES modules — <script type=module> + explicit import/export — eliminating the current HARD constraint of one shared global scope loaded in a FIXED ORDER (util->store->adapters->core->render->data->ui->export->datamanager->widgets->main). NO build and NO dependencies: this is browser-native ESM, so the deploy stays static + dependency-free, and it is also the prerequisite IF a bundler is ever adopted (R19), so it is not throwaway work. SCOPE: each module exports what others use and imports what it needs (today's implicit globals become explicit imports); collapse partials/app-scripts.html to a single module entry (e.g. <script type=module src=/app/main.js> importing the rest); keep assets/util.js as a module imported by both the app and the info pages. WATCH: module scripts are deferred and run in module scope (boot timing/order changes — verify boot() still runs after DOM ready); CSP script-src 'self' already permits module scripts; circular-import risk between core/render/data; convert the info-site page scripts (home/admin/changelog) that also use util. VERIFY all three app surfaces + the info pages boot with zero console errors and identical behavior; run the full test suite + the build-includes/build-manifest drift gate. Done when: the app runs on native ES modules with explicit imports, no symbol relies on global-scope leakage, app-scripts is a single module entry, all surfaces verified, and NO build/deps were added.",
-      "doneNote": null
-    },
-    {
       "id": "R19",
       "title": "Discussion & planning: adopt a build step (dev-only tooling)",
       "category": "REVIEW / AUDIT",

@@ -119,11 +119,21 @@ Key globals: `TRADES`, `METRICS_ALL`, `FILTERS`, `SCOPE`, `calYear`/`calMonth`,
 `PAGE_MODE`/`STAGING_PAGE`. Boot: `loadRefData()` → `Store.init()` →
 `restoreSession()` (demo runs `runDemo()`; staging seeds its DB first).
 
-The former monolithic `app.js` is split (A2) into ordered, concern-scoped classic
-scripts — **core → render → data → ui → export → datamanager → widgets → main** —
-loaded in that sequence. They're plain `<script>`s sharing one global scope, not
-ES modules: `main.js` (loaded last) holds all event wiring + the boot IIFE, so
-every function/state it calls is already defined. No bundler, no build step.
+The former monolithic `app.js` was first split (A2) into concern-scoped scripts —
+**core / render / data / ui / export / datamanager / widgets / main** (plus the
+`store` / `adapters` foundations) — and then (A20) migrated to **native ES modules**.
+`partials/app-scripts.html` is now a single module entry,
+`<script type="module" src="main.js">`; `main.js` `import`s the rest, and each
+module `export`s what others use and `import`s what it needs — no shared global
+scope and no fixed load order. Reassignable cross-module state (the old "Key
+globals") lives on a shared object exported by `app/state.js` (`state.X`), because
+an ESM `import` binding is read-only; the const objects `FILTERS`/`curveSel` (only
+their properties mutate) stay plain exports, and `assets/util.js` is a module
+imported by both the app and the info pages. Module scripts are deferred, so
+`boot()` still runs after the DOM is parsed; `widgets.js` is a side-effect import
+in `main.js` so its event-bus subscriptions register before `boot()` emits
+`app:ready`. Still **no bundler and no build step** — this is browser-native ESM,
+shipped as static files with zero runtime deps.
 
 The activity terminal, session pill, and workspace templates live in
 `app/widgets.js` (loaded on every app page since CH16). Shared code never names a
@@ -222,7 +232,7 @@ pnl, symbol, root, side[, qty, entryTime, exitTime, holdMs] }` — so `compute()
 Supported platforms: **TradingView** (verified), plus **Tradovate, Rithmic
 R\|Trader, Sierra Chart, TradeStation, MotiveWave, Webull, Interactive Brokers,
 Schwab/thinkorswim** — these are `beta`, built from documented formats and
-exercised by `scripts/test-adapters.cjs` with synthetic samples. They're flagged
+exercised by `scripts/test-adapters.mjs` with synthetic samples. They're flagged
 *(beta — verify the numbers)* in the UI until validated against a real export.
 **Adding a platform** = one object in `adapters.js` (`sniff` + `toTrades`) and a
 fixture in the test.

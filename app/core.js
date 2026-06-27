@@ -3,21 +3,22 @@
    Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
    scripts share one global scope, so cross-file functions/state resolve at runtime). */
 
-const SVGNS='http://www.w3.org/2000/svg';
-const pad2 = n => String(n).padStart(2,'0');
-const fmtDate = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+export const SVGNS='http://www.w3.org/2000/svg';
+export const pad2 = n => String(n).padStart(2,'0');
+export const fmtDate = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 // running min/max — avoids Math.min(...arr)/Math.max(...arr), whose argument spread overflows the
 // call stack on large per-trade arrays (equity curve / pnl list). compute() walks manually for the
 // same reason; this is the shared helper for the chart code (B27).
-function minMax(arr){ let lo=Infinity,hi=-Infinity; for(const v of arr){ if(v<lo)lo=v; if(v>hi)hi=v; } return {lo,hi}; }
-const $ = id => document.getElementById(id);
+export function minMax(arr){ let lo=Infinity,hi=-Infinity; for(const v of arr){ if(v<lo)lo=v; if(v>hi)hi=v; } return {lo,hi}; }
+export const $ = id => document.getElementById(id);
+export const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
 /* Page modes (document.body[data-mode]):
      ''        — the main app
      'demo'    — in-memory sample data, never persists (its own trimmed top bar)
      'staging' — a clone of the main app on an ISOLATED IndexedDB, used to trial changes
                  before they reach the main app (features now ship to all surfaces — CH16) */
-const PAGE_MODE = (document.body && document.body.dataset.mode) || '';
-const STAGING_PAGE = PAGE_MODE === 'staging';
+export const PAGE_MODE = (document.body && document.body.dataset.mode) || '';
+export const STAGING_PAGE = PAGE_MODE === 'staging';
 
 /* ------------------------------------------------------------------
    Orientation — how the split scripts fit together (read this first)
@@ -55,17 +56,17 @@ const STAGING_PAGE = PAGE_MODE === 'staging';
    so shared code never names a widget symbol directly. Events: app:ready,
    data:imported, note:saved, trade:deleted, backup:created, data:erased.
    ------------------------------------------------------------------ */
-const BUS = new EventTarget();
-function emit(name, detail){ BUS.dispatchEvent(new CustomEvent(name, { detail })); }
-function onEvent(name, fn){ BUS.addEventListener(name, e => fn(e.detail)); }
+export const BUS = new EventTarget();
+export function emit(name, detail){ BUS.dispatchEvent(new CustomEvent(name, { detail })); }
+export function onEvent(name, fn){ BUS.addEventListener(name, e => fn(e.detail)); }
 
-/* CSV parsing now lives in adapters.js (window.Adapters) — platform-specific
+/* CSV parsing now lives in adapters.js (the imported `Adapters`) — platform-specific
    format detection + normalization to the internal trade shape below. */
 
 /* ============================================================
    Metrics
    ============================================================ */
-function compute(tr){
+export function compute(tr){
   const n=tr.length, pnls=tr.map(t=>t.pnl);
   const wins=pnls.filter(p=>p>0), losses=pnls.filter(p=>p<0), scratch=pnls.filter(p=>p===0);
   const net=pnls.reduce((a,b)=>a+b,0);
@@ -156,10 +157,10 @@ function compute(tr){
     lastDate: tr.length? tr[tr.length-1].date : '—',
     firstDate: tr.length? tr[0].date : '—'};
 }
-const DOW_LABEL=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+export const DOW_LABEL=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 // Day-of-week buckets (0=Sun..6=Sat), summing PnL + count per weekday. Shared by compute()
 // (Best/Worst Weekday) and the win-rate card modal (cmDow) so the two can't drift (CH23).
-function dowBuckets(trades){
+export function dowBuckets(trades){
   const d=Array.from({length:7},()=>({pnl:0,n:0}));
   for(const t of trades){ const wd=new Date(t.date+'T00:00:00').getDay(); d[wd].pnl+=t.pnl; d[wd].n++; }
   return d;
@@ -168,10 +169,10 @@ function dowBuckets(trades){
 /* ============================================================
    Formatting
    ============================================================ */
-const usd=(v,s=true)=>{ if(v===Infinity)return '∞'; const sign=v<0?'-':(s&&v>0?'+':'');
+export const usd=(v,s=true)=>{ if(v===Infinity)return '∞'; const sign=v<0?'-':(s&&v>0?'+':'');
   return sign+'$'+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
-const money=v=>usd(v,false);
-const cls=v=> v>0?'pos':v<0?'neg':'';
+export const money=v=>usd(v,false);
+export const cls=v=> v>0?'pos':v<0?'neg':'';
 
 /* ============================================================
    Broker / commission / cost model
@@ -183,20 +184,20 @@ const cls=v=> v>0?'pos':v<0?'neg':'';
 
 /* Reference data — loaded at runtime from /data/*.json (see loadRefData).
    Populated before any setup/render runs, so call-time access is safe. */
-let EXCH = {};                 // root -> exchange/clearing/NFA $ per side
-let MICRO = new Set();         // roots priced at the micro tier
-let EXCH_FALLBACK = {micro:0.37, std:1.50};
-let BROKERS = {};              // key -> {name, comm:{micro,std}}
-let BROKER_ORDER = [];
-let BROKER_FEEDS = {};         // key -> {group: [[label,$/mo],...]}
-let STATES = [];              // [abbr, ratePct, name]
-let TAXMODEL = {fedOrdinary:24, ltcg:15, ltcgWeight:0.6, ordinaryWeight:0.4};
+export let EXCH = {};                 // root -> exchange/clearing/NFA $ per side
+export let MICRO = new Set();         // roots priced at the micro tier
+export let EXCH_FALLBACK = {micro:0.37, std:1.50};
+export let BROKERS = {};              // key -> {name, comm:{micro,std}}
+export let BROKER_ORDER = [];
+export let BROKER_FEEDS = {};         // key -> {group: [[label,$/mo],...]}
+export let STATES = [];              // [abbr, ratePct, name]
+export let TAXMODEL = {fedOrdinary:24, ltcg:15, ltcgWeight:0.6, ordinaryWeight:0.4};
 
-function tierOf(root){ if(EXCH[root]!=null) return MICRO.has(root)?'micro':'std';
+export function tierOf(root){ if(EXCH[root]!=null) return MICRO.has(root)?'micro':'std';
   return (root[0]==='M' && root.length>=3)?'micro':'std'; }
-function exchOf(root,tier){ return EXCH[root]!=null?EXCH[root]:(tier==='micro'?EXCH_FALLBACK.micro:EXCH_FALLBACK.std); }
+export function exchOf(root,tier){ return EXCH[root]!=null?EXCH[root]:(tier==='micro'?EXCH_FALLBACK.micro:EXCH_FALLBACK.std); }
 
-const DEMO_BROKER='AMP', DEMO_FEED='Bundle — All CME markets|15', DEMO_STATE='AR';
+export const DEMO_BROKER='AMP', DEMO_FEED='Bundle — All CME markets|15', DEMO_STATE='AR';
 
 /* ------------------------------------------------------------
    Runtime fetch of reference data, cache-busted by content hash.
@@ -204,7 +205,7 @@ const DEMO_BROKER='AMP', DEMO_FEED='Bundle — All CME markets|15', DEMO_STATE='
    data file is then fetched as `<file>?v=<hash>` so it can be
    cached indefinitely yet still update the instant its bytes change.
    ------------------------------------------------------------ */
-async function loadRefData(){
+export async function loadRefData(){
   const man = await fetch('../data/manifest.json?t='+Date.now(), {cache:'no-cache'})
     .then(r=>{ if(!r.ok) throw new Error('manifest '+r.status); return r.json(); });
   const v = f => man.files && man.files[f] ? '?v='+man.files[f] : '';
@@ -240,8 +241,8 @@ async function loadRefData(){
   }
 }
 
-function curBroker(){ const e=document.getElementById('c_broker'); return (e&&e.value)?e.value:'AMP'; }
-function rateFor(brokerKey, root){
+export function curBroker(){ const e=document.getElementById('c_broker'); return (e&&e.value)?e.value:'AMP'; }
+export function rateFor(brokerKey, root){
   const b=BROKERS[brokerKey]||BROKERS.AMP;
   const tier=tierOf(root), exch=exchOf(root,tier);
   return {rate:+(b.comm[tier]+exch).toFixed(4), known:EXCH[root]!=null};
@@ -249,13 +250,13 @@ function rateFor(brokerKey, root){
 
 // Empty/NaN → 0 (an empty field shows its "0" placeholder, so it reads as 0, not a typed value);
 // clamp negatives so a typed "-5" can't manufacture a negative cost that inflates net (B13).
-function numIn(id){ const e=document.getElementById(id); const v=e?parseFloat(e.value):NaN; return isNaN(v)?0:Math.max(0,v); }
-function feedCost(){ const o=document.getElementById('c_feed'); const x=o&&o.selectedOptions[0]?parseFloat(o.selectedOptions[0].dataset.cost):NaN; return isNaN(x)?0:x; }
-function feedName(){ const o=document.getElementById('c_feed'); return (o&&o.value)?o.value.split('|')[0]:'—'; }
-function stateRate(){ const o=document.getElementById('c_state_sel'); const x=o&&o.selectedOptions[0]?parseFloat(o.selectedOptions[0].dataset.rate):NaN; return isNaN(x)?0:x; }
-function blendedRate(){ return TAXMODEL.ltcgWeight*TAXMODEL.ltcg/100 + TAXMODEL.ordinaryWeight*TAXMODEL.fedOrdinary/100 + stateRate()/100; }
+export function numIn(id){ const e=document.getElementById(id); const v=e?parseFloat(e.value):NaN; return isNaN(v)?0:Math.max(0,v); }
+export function feedCost(){ const o=document.getElementById('c_feed'); const x=o&&o.selectedOptions[0]?parseFloat(o.selectedOptions[0].dataset.cost):NaN; return isNaN(x)?0:x; }
+export function feedName(){ const o=document.getElementById('c_feed'); return (o&&o.value)?o.value.split('|')[0]:'—'; }
+export function stateRate(){ const o=document.getElementById('c_state_sel'); const x=o&&o.selectedOptions[0]?parseFloat(o.selectedOptions[0].dataset.rate):NaN; return isNaN(x)?0:x; }
+export function blendedRate(){ return TAXMODEL.ltcgWeight*TAXMODEL.ltcg/100 + TAXMODEL.ordinaryWeight*TAXMODEL.fedOrdinary/100 + stateRate()/100; }
 
-function costModel(m){
+export function costModel(m){
   const broker=curBroker(), platform=numIn('c_tv'), data=feedCost(), fixedMo=platform+data;
   const trades=(m&&m.trades)?m.trades:[];
   const bySym=new Map(); let totalComm=0, gp=0, gl=0;

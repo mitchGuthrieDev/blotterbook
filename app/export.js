@@ -1,4 +1,9 @@
 "use strict";
+import { state } from './state.js';
+import { costModel, money, cls, stateRate, fmtDate, pad2, BROKERS, feedName, DOW_LABEL } from './core.js';
+import { activeMetrics, commSymRows, scopeLabel } from './render.js';
+import { stateLabel, downloadFile, modalOpened, modalClosed } from './ui.js';
+import { esc } from '../assets/util.js';
 /* Blotterbook app · export — performance report export (print → PDF)
    Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
    scripts share one global scope, so cross-file functions/state resolve at runtime). */
@@ -8,8 +13,8 @@
    Builds a standalone document in the app's palette and prints it,
    rather than screenshotting the live dashboard.
    ============================================================ */
-function exportReport(){
-  if(!METRICS_ALL || !METRICS_ALL.n){ alert('Load data before exporting a report.'); return; }
+export function exportReport(){
+  if(!state.METRICS_ALL || !state.METRICS_ALL.n){ alert('Load data before exporting a report.'); return; }
   const m=activeMetrics(), c=costModel(m);
   const bePer = c.bePer;
   const gen=new Date();
@@ -187,9 +192,9 @@ function exportReport(){
    Reuses the .modal overlay pattern. The report renders in an isolated <iframe>
    (its own palette/CSS); Download is disabled until a real format is chosen.
    ============================================================ */
-let EXPORT_CUR=null, EXPORT_WIRED=false;
+export let EXPORT_CUR=null, EXPORT_WIRED=false;
 
-function openExportReportModal(docNoBar, parts){
+export function openExportReportModal(docNoBar, parts){
   const ov=document.getElementById('exportModal'); if(!ov) return;
   EXPORT_CUR=Object.assign({ docNoBar }, parts);
   const ifr=document.getElementById('exp_preview');
@@ -201,13 +206,13 @@ function openExportReportModal(docNoBar, parts){
   if(!EXPORT_WIRED){ wireExportModal(); EXPORT_WIRED=true; }
   modalOpened(ov);   // aria-hidden + focus trap/restore (B9)
 }
-function closeExportReportModal(){
+export function closeExportReportModal(){
   const ov=document.getElementById('exportModal'); if(!ov||!ov.classList.contains('open')) return;
   ov.classList.remove('open');
   document.body.style.overflow='';
   modalClosed(ov);
 }
-function wireExportModal(){
+export function wireExportModal(){
   const sel=document.getElementById('exp_format'),
         dl=document.getElementById('exp_download');
   if(sel) sel.addEventListener('change',()=>{ if(dl) dl.disabled=!sel.value; });
@@ -219,7 +224,7 @@ function wireExportModal(){
   if(ov) ov.addEventListener('click',e=>{ if(e.target.id==='exportModal') closeExportReportModal(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape' && ov && ov.classList.contains('open')) closeExportReportModal(); });
 }
-async function exportDownload(){
+export async function exportDownload(){
   if(!EXPORT_CUR) return;
   const fmt=(document.getElementById('exp_format')||{}).value;
   const ifr=document.getElementById('exp_preview');
@@ -241,7 +246,7 @@ async function exportDownload(){
    <foreignObject>, drawing that into a 2× canvas, then exporting a blob. The
    report uses only inline styles + system fonts + a CSS-gradient dot (no external
    images), so the canvas is not tainted. */
-function rasterizeReport(iframe, type){
+export function rasterizeReport(iframe, type){
   return new Promise((resolve,reject)=>{
     try{
       const doc=iframe.contentDocument, sheet=doc.querySelector('.sheet');

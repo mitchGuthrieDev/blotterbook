@@ -1,4 +1,6 @@
 "use strict";
+import { $, STAGING_PAGE } from './core.js';
+import { Store } from './store.js';
 /* Blotterbook app · ui — collapsible/drag-to-reorder panels + file-download/setup-label helpers
    Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
    scripts share one global scope, so cross-file functions/state resolve at runtime).
@@ -12,25 +14,25 @@
 // namespaced keys — rearranging/collapsing modules in staging must NOT leak into prod/demo (and vice
 // versa). prod + demo share one set (same environment; the demo mirrors prod 1:1). STAGING_PAGE is
 // set in core.js.
-const LS_SUFFIX = STAGING_PAGE ? '_staging' : '';
-const LS_ORDER='tj_order'+LS_SUFFIX, LS_COLLAPSE='tj_collapsed'+LS_SUFFIX;
-function saveOrder(){
+export const LS_SUFFIX = STAGING_PAGE ? '_staging' : '';
+export const LS_ORDER='tj_order'+LS_SUFFIX, LS_COLLAPSE='tj_collapsed'+LS_SUFFIX;
+export function saveOrder(){
   const ord=[...document.querySelectorAll('#dash .panel')].map(p=>p.dataset.key);
   Store.local.set(LS_ORDER, ord);
 }
-function saveCollapsed(){
+export function saveCollapsed(){
   const col={};
   document.querySelectorAll('#dash .panel').forEach(p=>{ if(p.classList.contains('collapsed'))col[p.dataset.key]=1; });
   Store.local.set(LS_COLLAPSE, col);
 }
-function panelAfter(dash,y){
+export function panelAfter(dash,y){
   const els=[...dash.querySelectorAll('.panel:not(.dragging)')];
   let closest=null, off=-Infinity;
   for(const el of els){ const b=el.getBoundingClientRect(); const d=y-b.top-b.height/2;
     if(d<0 && d>off){ off=d; closest=el; } }
   return closest;
 }
-function initPanels(){
+export function initPanels(){
   const dash=document.getElementById('dash');
   const ord=Store.local.get(LS_ORDER, null);
   if(Array.isArray(ord)) ord.forEach(k=>{ const el=dash.querySelector(`.panel[data-key="${k}"]`); if(el)dash.appendChild(el); });
@@ -63,14 +65,14 @@ function initPanels(){
    ============================================================ */
 // Accepts a string (wrapped in a Blob of `type`) OR a ready-made Blob (CH11: replaces the
 // old export-only expDlBlob helper).
-function downloadFile(name, data, type='application/json'){
+export function downloadFile(name, data, type='application/json'){
   const blob = data instanceof Blob ? data : new Blob([data], {type});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download=name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1500);
 }
-function stateLabel(){ const o=$('c_state_sel'); return (o&&o.selectedOptions[0])?o.selectedOptions[0].textContent:'—'; }
+export function stateLabel(){ const o=$('c_state_sel'); return (o&&o.selectedOptions[0])?o.selectedOptions[0].textContent:'—'; }
 
 /* ============================================================
    Modal a11y (B9) — shared by the data-manager and export modals.
@@ -78,11 +80,11 @@ function stateLabel(){ const o=$('c_state_sel'); return (o&&o.selectedOptions[0]
    and trap Tab within the dialog. modalClosed(): reverse it and restore focus.
    State is stashed on the element so the two modals never clobber each other.
    ============================================================ */
-function modalFocusables(root){
+export function modalFocusables(root){
   return [...root.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
     .filter(el=>el.offsetParent!==null);   // visible only
 }
-function modalOpened(ov){
+export function modalOpened(ov){
   if(!ov) return;
   ov.setAttribute('aria-hidden','false');
   ov._prevFocus=document.activeElement;
@@ -97,7 +99,7 @@ function modalOpened(ov){
   };
   ov.addEventListener('keydown',ov._trap);
 }
-function modalClosed(ov){
+export function modalClosed(ov){
   if(!ov) return;
   ov.setAttribute('aria-hidden','true');
   if(ov._trap){ ov.removeEventListener('keydown',ov._trap); ov._trap=null; }

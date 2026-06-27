@@ -20,7 +20,6 @@
    marked `beta:true` — built from documented formats + synthetic
    tests; verify against a real export before trusting the numbers.
    ============================================================ */
-(function () {
 
   /* ---------- low-level CSV ---------- */
   // Quote-aware splitter; auto-detects comma vs tab (Sierra Chart uses tabs).
@@ -500,7 +499,5 @@
     list: () => ADAPTERS.map(a => ({ id: a.id, label: a.label, beta: !!a.beta, kind: a.kind }))
   };
 
-  const G = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : this);
-  G.Adapters = API;
-  if (typeof module !== 'undefined' && module.exports) module.exports = API;
-})();
+  export const Adapters = API;
+  export default API;

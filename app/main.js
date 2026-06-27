@@ -1,27 +1,37 @@
 "use strict";
 /* Blotterbook app · main — DOM event wiring + boot()
-   Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
-   scripts share one global scope, so cross-file functions/state resolve at runtime). */
+   Native ES module entry point (loaded last). Split from the former single
+   app.js; cross-file functions/state now resolve via explicit imports. */
+
+import { state } from './state.js';
+import { $, on, loadRefData, emit, PAGE_MODE, STAGING_PAGE, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from './core.js';
+import { Adapters } from './adapters.js';
+import { Store } from './store.js';
+import { curveSel, renderCalendar, renderDash, renderCurve, setScope, activeMetrics, resetApp } from './render.js';
+import { stageFile, onPlatformChange, commitPending, enterStagingDashboard, jumpToLatest, selectDay, deselectDay, initSetup, initPlatformSelects, initFilters, wireJournal, loadFlags, runDemo, restoreSession, autoSelectState, demoCSV, cancelDaySave, applyFilterObj, renameSavedFilter, deleteSavedFilter } from './data.js';
+import { initPanels } from './ui.js';
+import { exportReport } from './export.js';
+import { openDataManager, closeDataManager, renderDataManager, dmExport, dmImport, dmOpenTradeEditor, dmDeleteTrade, dmOpenDay, dmDeleteNote, renderTradeEditor, dmSaveEdit, dmClearEdit, dmCaptureEdit, dmAddShot } from './datamanager.js';
+import './widgets.js';   // side-effect: registers its event-bus subscriptions before boot() emits 'app:ready'
 
 /* ============================================================
    Wiring
    ============================================================ */
-const on=(id,ev,fn)=>{ const el=$(id); if(el) el.addEventListener(ev,fn); };
 
 // Route through the null-safe on() like every other handler — a direct $('prev').onclick
 // throws at module load if the id is ever absent, which would kill boot() entirely (B12).
-on('prev','click',()=>{ if(!METRICS_ALL)return;
-  if(--calMonth<0){calMonth=11;calYear--;} renderCalendar(); if(SCOPE==='month') renderDash(); });
-on('next','click',()=>{ if(!METRICS_ALL)return;
-  if(++calMonth>11){calMonth=0;calYear++;} renderCalendar(); if(SCOPE==='month') renderDash(); });
+on('prev','click',()=>{ if(!state.METRICS_ALL)return;
+  if(--state.calMonth<0){state.calMonth=11;state.calYear--;} renderCalendar(); if(state.SCOPE==='month') renderDash(); });
+on('next','click',()=>{ if(!state.METRICS_ALL)return;
+  if(++state.calMonth>11){state.calMonth=0;state.calYear++;} renderCalendar(); if(state.SCOPE==='month') renderDash(); });
 on('caltoday','click',jumpToLatest);
 // A picked file is staged (parsed + platform-detected), not loaded immediately.
-on('file','change',e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return; stageFile(f, FILE_CTX); });
+on('file','change',e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return; stageFile(f, state.FILE_CTX); });
 on('c_platform','change',()=>onPlatformChange('landing'));
 on('dm_platform','change',()=>onPlatformChange('manage'));
 on('startBtn','click',()=>{
   // F5 (staging): with data preloaded and nothing newly staged, Start just opens the dashboard.
-  if(STAGING_PAGE && STAGING_DATA_READY && !PENDING){ enterStagingDashboard(); return; }
+  if(STAGING_PAGE && state.STAGING_DATA_READY && !state.PENDING){ enterStagingDashboard(); return; }
   commitPending('landing');
 });
 document.querySelectorAll('#scope button').forEach(b=>b.onclick=()=>setScope(b.dataset.s));
@@ -34,7 +44,7 @@ on('endDemoBtn','click',()=>{ try{ window.close(); }catch(_){}
 
 on('exportBtn','click',exportReport);
 on('manageBtn','click',openDataManager);
-on('setupLoad','click',()=>{ FILE_CTX='landing'; $('file').click(); });
+on('setupLoad','click',()=>{ state.FILE_CTX='landing'; $('file').click(); });
 on('setuphead','click',()=>$('setup').classList.toggle('collapsed'));
 // The loaded-source text opens the data manager (only once data is loaded).
 on('srcname','click',()=>{ if($('dataModal') && document.body.classList.contains('loaded')) openDataManager(); });
@@ -46,7 +56,7 @@ document.querySelectorAll('.curvebtn').forEach(btn=>btn.addEventListener('click'
   if(curveSel[k] && selected.length===1) return;   // can't deselect the last overlay
   curveSel[k]=!curveSel[k];
   btn.classList.toggle('on',curveSel[k]);
-  if(METRICS_ALL) renderCurve(activeMetrics());
+  if(state.METRICS_ALL) renderCurve(activeMetrics());
 }));
 
 on('cal','click',e=>{
@@ -64,7 +74,7 @@ on('cal','keydown',e=>{   // keyboard parity for day cells (B10)
 // the click target while it's still attached — selectFromGraph re-renders the curve on click,
 // which would otherwise detach the target and make the in-curve check miss.
 document.addEventListener('click',e=>{
-  if(!selectedDate) return;
+  if(!state.selectedDate) return;
   // also ignore clicks inside any open modal (data-manager / export) — interacting there
   // shouldn't drop the selected day, which is exactly where you delete that day's note (B18).
   if(e.target.closest('.panel[data-key="cal"]') || e.target.closest('#curve') || e.target.closest('.modal')) return;
@@ -76,16 +86,16 @@ if($('dataModal')){
   on('dm_close','click',closeDataManager);
   $('dataModal').addEventListener('click',e=>{ if(e.target.id==='dataModal') closeDataManager(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDataManager(); });
-  on('dm_load','click',()=>{ FILE_CTX='manage'; $('file').click(); });
+  on('dm_load','click',()=>{ state.FILE_CTX='manage'; $('file').click(); });
   on('dm_import','click',()=>commitPending('manage'));
   on('dm_export','click',dmExport);
   on('dm_importBtn','click',()=>$('dm_importFile').click());
   on('dm_importFile','change',e=>{ const f=e.target.files[0]; if(f) dmImport(f); e.target.value=''; });
-  on('dm_search','input',e=>{ DM_SEARCH=e.target.value; renderDataManager(); });
+  on('dm_search','input',e=>{ state.DM_SEARCH=e.target.value; renderDataManager(); });
   on('dm_clear','click',async()=>{
     if(!confirm('Erase ALL trades, day-notes and per-trade tags/notes saved in this browser? This cannot be undone.')) return;
     cancelDaySave();   // B28: cancel a pending autosave BEFORE purging so it can't re-add a note row
-    await Store.purge(); JOURNAL_DATES=new Set(); TRADE_META=new Map(); DM_EDIT=null; resetApp(); renderDataManager();
+    await Store.purge(); state.JOURNAL_DATES=new Set(); state.TRADE_META=new Map(); state.DM_EDIT=null; resetApp(); renderDataManager();
     emit('data:erased');
   });
   // delegated row actions: Edit opens the per-trade editor, Delete removes the trade
@@ -99,16 +109,16 @@ if($('dataModal')){
     if(b && confirm('Delete the note for '+b.dataset.note+'?')) dmDeleteNote(b.dataset.note); });
   // saved-filter controls (shared — all surfaces; Save is disabled on demo)
   on('dm_filters','click',e=>{
-    const ap=e.target.closest('[data-filterapply]'); if(ap){ const s=SAVED_FILTERS.find(x=>x.id===ap.dataset.filterapply); if(s){ applyFilterObj(s.f); closeDataManager(); } return; }
+    const ap=e.target.closest('[data-filterapply]'); if(ap){ const s=state.SAVED_FILTERS.find(x=>x.id===ap.dataset.filterapply); if(s){ applyFilterObj(s.f); closeDataManager(); } return; }
     const rn=e.target.closest('[data-filterrename]'); if(rn){ renameSavedFilter(rn.dataset.filterrename).then(renderDataManager); return; }
     const dl=e.target.closest('[data-filterdel]'); if(dl){ if(confirm('Delete this saved filter?')) deleteSavedFilter(dl.dataset.filterdel).then(renderDataManager); }
   });
   // per-trade editor controls
   on('dm_editor','click',e=>{
-    if(e.target.closest('[data-editclose]')){ DM_EDIT=null; renderTradeEditor(); return; }
+    if(e.target.closest('[data-editclose]')){ state.DM_EDIT=null; renderTradeEditor(); return; }
     if(e.target.closest('[data-editsave]')){ dmSaveEdit(); return; }
     if(e.target.closest('[data-editclear]')){ dmClearEdit(); return; }
-    const rm=e.target.closest('[data-rmshot]'); if(rm){ dmCaptureEdit(); DM_EDIT.shots.splice(+rm.dataset.rmshot,1); DM_EDIT._msg=''; renderTradeEditor(); }
+    const rm=e.target.closest('[data-rmshot]'); if(rm){ dmCaptureEdit(); state.DM_EDIT.shots.splice(+rm.dataset.rmshot,1); state.DM_EDIT._msg=''; renderTradeEditor(); }
   });
   on('dm_editor','change',e=>{ if(e.target.id==='dm_shotinput'){ const f=e.target.files[0]; if(f) dmAddShot(f); e.target.value=''; } });
 }

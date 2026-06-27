@@ -18,7 +18,7 @@ jobs:
           node-version: 20
 
       - name: Adapter tests
-        run: node scripts/test-adapters.cjs
+        run: node scripts/test-adapters.mjs
 
       - name: Auth tests (tokens + Stripe signature)
         run: node scripts/test-auth.mjs

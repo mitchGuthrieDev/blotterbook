@@ -1,3 +1,5 @@
+import { esc } from './util.js';
+
 (function(){
   var log=document.getElementById('log'), status=document.getElementById('clstatus');
 

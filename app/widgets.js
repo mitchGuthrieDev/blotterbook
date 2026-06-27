@@ -1,19 +1,25 @@
-"use strict";
 /* Blotterbook app · widgets — activity terminal, session-status pill, and save/load/revert
    workspace templates, plus the subscriptions that turn shared app events into terminal log
    lines. Promoted from the staging sandbox to every surface (CH16) — loaded on app, demo, and
    staging. Loaded AFTER datamanager.js and BEFORE main.js, so its event subscriptions are
    registered before boot() emits app:ready. */
 
+import { esc, versionsReady } from '../assets/util.js';
+import { Store } from './store.js';
+import { STAGING_PAGE, PAGE_MODE, $, on, onEvent, usd, cls, minMax, DOW_LABEL, dowBuckets, costModel } from './core.js';
+import { activeMetrics, renderCurve } from './render.js';
+import { saveOrder, saveCollapsed, modalOpened, modalClosed, LS_ORDER, LS_COLLAPSE } from './ui.js';
+import { state } from './state.js';
+
 // Workspace templates also live in per-origin localStorage — namespace staging so its templates
 // stay separate from prod/demo (matches LS_ORDER/LS_COLLAPSE in ui.js). STAGING_PAGE is in core.js.
-const WS_KEY='tj_ws_templates'+(STAGING_PAGE?'_staging':'');
+export const WS_KEY='tj_ws_templates'+(STAGING_PAGE?'_staging':'');
 // A12: must stay in sync with the data-key panel order in partials/app-dash.html
 // (used by the "— Default —" workspace reset to restore the original arrangement).
-const DEFAULT_DASH_ORDER=['perf','cal','cost','adv','defs','term'];
-const TERM_MAX_LINES=200;   // ring-buffer cap for the activity terminal
+export const DEFAULT_DASH_ORDER=['perf','cal','cost','adv','defs','term'];
+export const TERM_MAX_LINES=200;   // ring-buffer cap for the activity terminal
 
-function logAction(msg, kind){
+export function logAction(msg, kind){
   const win=document.getElementById('termwin'); if(!win) return;
   const line=document.createElement('div');
   line.className='tl'+(kind?(' evt-'+kind):'');
@@ -26,35 +32,35 @@ function logAction(msg, kind){
 }
 // 'degraded' is reserved/forward-looking — no caller sets it yet (the pill is honest flair,
 // per the popup copy); only 'online'/'offline' fire today from the connectivity listeners.
-function setSession(state){   // 'online' | 'offline' | 'degraded'
+export function setSession(state){   // 'online' | 'offline' | 'degraded'
   const pill=document.getElementById('sesspill'); if(!pill) return;
   pill.classList.remove('online','offline','degraded'); pill.classList.add(state);
   const txt=pill.querySelector('.sesstxt');
   if(txt) txt.textContent={online:'Online',offline:'Offline',degraded:'Degraded'}[state]||'Session';
 }
-function currentWorkspace(){
+export function currentWorkspace(){
   const order=[...document.querySelectorAll('#dash .panel')].map(p=>p.dataset.key);
   const collapsed={}; document.querySelectorAll('#dash .panel.collapsed').forEach(p=>collapsed[p.dataset.key]=1);
   return { order, collapsed };
 }
-function applyWorkspace(tpl){
+export function applyWorkspace(tpl){
   const dash=document.getElementById('dash'); if(!dash||!tpl) return;
   (tpl.order||DEFAULT_DASH_ORDER).forEach(k=>{ const el=dash.querySelector(`.panel[data-key="${k}"]`); if(el) dash.appendChild(el); });
   const col=tpl.collapsed||{};
   dash.querySelectorAll('.panel').forEach(p=>p.classList.toggle('collapsed', !!col[p.dataset.key]));
   saveOrder(); saveCollapsed();   // (shared, in ui.js)
-  if(METRICS_ALL) renderCurve(activeMetrics());
+  if(state.METRICS_ALL) renderCurve(activeMetrics());
 }
-function readWsTemplates(){ return Store.local.get(WS_KEY, {}) || {}; }   // A13: via the Store.local seam
-function writeWsTemplates(o){ Store.local.set(WS_KEY, o); }
-function refreshWsSelect(sel){
+export function readWsTemplates(){ return Store.local.get(WS_KEY, {}) || {}; }   // A13: via the Store.local seam
+export function writeWsTemplates(o){ Store.local.set(WS_KEY, o); }
+export function refreshWsSelect(sel){
   const el=document.getElementById('ws_tpl'); if(!el) return;
   const tpls=readWsTemplates();
   el.innerHTML='<option value="">— Default —</option>'
     + Object.keys(tpls).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
   if(sel) el.value=sel;
 }
-function initWidgets(){
+export function initWidgets(){
   // session pill: state follows connectivity; click toggles the legend popup
   setSession(navigator.onLine===false ? 'offline' : 'online');
   window.addEventListener('online', ()=>{ setSession('online'); logAction('Connection restored'); });
@@ -87,7 +93,7 @@ function initWidgets(){
     if(t){ applyWorkspace(t); logAction('Workspace template loaded · '+n); } });
   // redraw the performance graph on resize so it re-measures its (grid) width
   let _rsz=null; window.addEventListener('resize',()=>{ clearTimeout(_rsz);
-    _rsz=setTimeout(()=>{ if(METRICS_ALL) renderCurve(activeMetrics()); }, 160); });
+    _rsz=setTimeout(()=>{ if(state.METRICS_ALL) renderCurve(activeMetrics()); }, 160); });
   // F14 (promoted to all surfaces, CH16): headline stat cards open read-only metric-detail modals
   // (delegated — cards re-render each pass). Active on app + demo + staging now that the cards carry
   // data-card and #cardModal ships on every page.
@@ -106,7 +112,7 @@ function initWidgets(){
   // Read the version from the page badge rather than hardcoding it (single source — CH8).
   // Wait for the runtime version fetch to populate the badge first (CH12) so the log line
   // shows the live version, not the baked offline fallback.
-  Promise.resolve(window.__versionsReady).then(()=>{
+  Promise.resolve(versionsReady).then(()=>{
     const ver=(document.querySelector('.ver')||{}).textContent||'';
     logAction('Session ready'+(ver?' · '+ver.trim():''));
   });
@@ -117,13 +123,13 @@ function initWidgets(){
    #cardModal populated with a metric-specific breakdown + a focused inline-SVG chart.
    All data comes from the active metrics object (compute()); no new persistence.
    ============================================================ */
-function cmColor(x){ return x>0?'var(--green)':x<0?'var(--red)':'var(--accent)'; }
-function cmStats(pairs){
+export function cmColor(x){ return x>0?'var(--green)':x<0?'var(--red)':'var(--accent)'; }
+export function cmStats(pairs){
   return '<div class="cm-stats">'+pairs.map(([l,v,cl])=>
     `<div class="cm-stat"><div class="cl">${esc(l)}</div><div class="cv ${cl||''}">${v}</div></div>`).join('')+'</div>';
 }
-function cmChart(title, inner){ return `<div class="cmchart"><h4>${esc(title)}</h4>${inner}</div>`; }
-function cmBars(rows){   // rows: {label, value, color?, display?}
+export function cmChart(title, inner){ return `<div class="cmchart"><h4>${esc(title)}</h4>${inner}</div>`; }
+export function cmBars(rows){   // rows: {label, value, color?, display?}
   const max=Math.max(1, ...rows.map(r=>Math.abs(r.value)));
   return '<div class="cmbars">'+rows.map(r=>{
     const w=Math.round(100*Math.abs(r.value)/max), col=r.color||cmColor(r.value);
@@ -132,12 +138,12 @@ function cmBars(rows){   // rows: {label, value, color?, display?}
       +`<span class="cmbv">${r.display!=null?r.display:usd(r.value)}</span></div>`;
   }).join('')+'</div>';
 }
-function cmSplit(segs){   // proportional stacked bar; segs: {value,color,label}
+export function cmSplit(segs){   // proportional stacked bar; segs: {value,color,label}
   const tot=Math.max(1, segs.reduce((a,s)=>a+s.value,0));
   return '<div class="cmsplit">'+segs.filter(s=>s.value>0).map(s=>
     `<span class="cmseg" data-w="${(100*s.value/tot).toFixed(2)}" data-c="${s.color}" title="${esc(s.label)}: ${s.value}">${s.value}</span>`).join('')+'</div>';
 }
-function cmCurve(curve, marks){
+export function cmCurve(curve, marks){
   const W=620,H=150,pad=8;
   if(!curve||curve.length<2) return '<svg class="cmcurve" viewBox="0 0 '+W+' '+H+'"></svg>';
   const mm=minMax(curve), lo=mm.lo, hi=mm.hi, span=(hi-lo)||1;   // running min/max, no arg-spread (B27)
@@ -152,7 +158,7 @@ function cmCurve(curve, marks){
   return `<svg class="cmcurve" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${zero}`
     +`<path d="${d}" fill="none" stroke="${cmColor(curve[curve.length-1])}" stroke-width="2"/>${mk}</svg>`;
 }
-function cmHist(values, color){
+export function cmHist(values, color){
   const W=620,H=120,pad=8,bins=14;
   if(!values.length) return '<svg class="cmhist" viewBox="0 0 '+W+' '+H+'"></svg>';
   const mm=minMax(values), lo=mm.lo, hi=mm.hi, span=(hi-lo)||1;   // running min/max, no arg-spread (B27)
@@ -163,10 +169,10 @@ function cmHist(values, color){
     return `<rect x="${(pad+i*bw).toFixed(1)}" y="${(H-pad-h).toFixed(1)}" width="${(bw-1).toFixed(1)}" height="${h.toFixed(1)}" fill="${color}"/>`; }).join('');
   return `<svg class="cmhist" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${bars}</svg>`;
 }
-function cmDow(trades){   // CH23: shared dowBuckets() + DOW_LABEL from core
+export function cmDow(trades){   // CH23: shared dowBuckets() + DOW_LABEL from core
   return dowBuckets(trades).map((x,i)=>({label:DOW_LABEL[i]+' ('+x.n+')',value:x.pnl,n:x.n})).filter(x=>x.n);
 }
-function cmSymPf(trades){
+export function cmSymPf(trades){
   const map=new Map();
   for(const t of trades){ const r=t.root||'?'; if(!map.has(r))map.set(r,{gp:0,gl:0,n:0});
     const o=map.get(r); o.n++; if(t.pnl>0)o.gp+=t.pnl; else o.gl+=t.pnl; }
@@ -176,7 +182,7 @@ function cmSymPf(trades){
     +rows.map(r=>`<tr><td>${esc(r.root)}</td><td>${r.n}</td><td>${r.pf===Infinity?'∞':r.pf.toFixed(2)}</td><td class="${cls(r.net)}">${usd(r.net)}</td></tr>`).join('')
     +'</tbody></table>';
 }
-const CARD_VIEWS={
+export const CARD_VIEWS={
   net:(m,c)=>({ title:'Net PnL', sub:`${m.n} trades`,
     html: cmStats([['Gross',usd(m.net),cls(m.net)],['Net (pre-tax)',usd(c.netPreTax),cls(c.netPreTax)],['Take-home',usd(c.afterTax),cls(c.afterTax)]])
       + cmChart('Cumulative PnL (gross)', cmCurve(m.curve))
@@ -200,9 +206,9 @@ const CARD_VIEWS={
     html: cmStats([['Max drawdown',usd(-m.maxDD),'neg'],['Recovery factor',m.recovery===Infinity?'∞':(isNaN(m.recovery)?'—':m.recovery.toFixed(2))],['Net PnL',usd(m.net),cls(m.net)]])
       + cmChart('Equity curve · peak → trough', cmCurve(m.curve, {peakIdx:m.ddPeakIdx, troughIdx:m.ddTroughIdx})) }),
 };
-function openCardModal(key){
+export function openCardModal(key){
   const ov=document.getElementById('cardModal'); if(!ov) return;
-  const m=(typeof activeMetrics==='function' && METRICS_ALL)?activeMetrics():METRICS_ALL;
+  const m=(typeof activeMetrics==='function' && state.METRICS_ALL)?activeMetrics():state.METRICS_ALL;
   if(!m || !m.n) return;
   const view=CARD_VIEWS[key]; if(!view) return;
   const v=view(m, costModel(m));
@@ -216,7 +222,7 @@ function openCardModal(key){
   modalOpened(ov);
   logAction('Opened '+v.title+' details');
 }
-function closeCardModal(){ const ov=document.getElementById('cardModal');
+export function closeCardModal(){ const ov=document.getElementById('cardModal');
   if(!ov || !ov.classList.contains('open')) return;
   ov.classList.remove('open'); document.body.style.overflow=''; modalClosed(ov); }
 

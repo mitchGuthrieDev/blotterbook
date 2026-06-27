@@ -16,18 +16,17 @@
    then it always resolves to "local" and the local Store, so the
    rest of the app can already be written against this interface.
    ============================================================ */
-(function () {
-  const Entitlements = {
-    async current() {
-      // FUTURE: const r = await fetch('/api/me'); return (await r.json()).tier;
-      return { tier: 'local', cloudSync: false };
-    },
+import { Store } from './store.js';
 
-    // Returns the Store implementation backing a given tier.
-    // Both tiers use local Store today; "cloud" will gain a CloudStore later.
-    storeFor(/* tier */) {
-      return window.Store;
-    }
-  };
-  window.Entitlements = Entitlements;
-})();
+export const Entitlements = {
+  async current() {
+    // FUTURE: const r = await fetch('/api/me'); return (await r.json()).tier;
+    return { tier: 'local', cloudSync: false };
+  },
+
+  // Returns the Store implementation backing a given tier.
+  // Both tiers use local Store today; "cloud" will gain a CloudStore later.
+  storeFor(/* tier */) {
+    return Store;
+  }
+};

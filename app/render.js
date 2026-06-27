@@ -1,12 +1,16 @@
 "use strict";
+import { esc } from '../assets/util.js';
+import { Store } from './store.js';
+import { SVGNS, pad2, fmtDate, minMax, $, DOW_LABEL, usd, money, cls, compute, costModel, curBroker, rateFor, feedName, stateRate, BROKERS } from './core.js';
+import { selectFromGraph, renderDayTrades, syncFilterOptions, updateJournalEditor, cancelDaySave } from './data.js';
+import { state } from './state.js';
 /* Blotterbook app · render — dashboard rendering (cards, equity curve, calendar, advanced stats, break-even) + the scope/filter/render driver
-   Loaded in order: core → render → data → ui → export → datamanager → widgets → main. Split from the former single app.js (classic
-   scripts share one global scope, so cross-file functions/state resolve at runtime). */
+   Migrated to native ES modules (A20): explicit imports replace the former shared global scope. */
 
 /* ============================================================
    Rendering — cards
    ============================================================ */
-function renderCards(m, c=costModel(m)){   // c may be passed in to avoid recomputing per render (CH11)
+export function renderCards(m, c=costModel(m)){   // c may be passed in to avoid recomputing per render (CH11)
   // F14 (promoted to all surfaces, CH16): the five headline cards open read-only metric-detail
   // modals. Keyboard-operable buttons on app + demo + staging (the modal is read-only, so demo
   // mirrors it with no lock-down).
@@ -33,15 +37,14 @@ function renderCards(m, c=costModel(m)){   // c may be passed in to avoid recomp
 /* ============================================================
    Rendering — performance graph (date-based, overlays, hover, click marker)
    ============================================================ */
-const curveSel={gross:true, net:false, take:false};
-let selectedDate=null;     // 'YYYY-MM-DD' highlighted from the calendar
+export const curveSel={gross:true, net:false, take:false};
 
-function dateRange(m){
-  if(SCOPE==='month') return [new Date(calYear,calMonth,1), new Date(calYear,calMonth+1,0)];
+export function dateRange(m){
+  if(state.SCOPE==='month') return [new Date(state.calYear,state.calMonth,1), new Date(state.calYear,state.calMonth+1,0)];
   if(!m || m.firstDate==='—'){ const t=new Date(); return [t,t]; }
   return [new Date(m.firstDate+'T00:00:00'), new Date(m.lastDate+'T00:00:00')];
 }
-function dailySeries(m, c=costModel(m)){
+export function dailySeries(m, c=costModel(m)){
   const broker=curBroker(), map=new Map();
   for(const t of m.trades){
     if(!map.has(t.date)) map.set(t.date,{gross:0,comm:0});
@@ -62,7 +65,7 @@ function dailySeries(m, c=costModel(m)){
   return {pts,subs:c.fixedPeriod,tEff};
 }
 /* "nice" axis ticks spanning [min,max] with ~count steps, always including 0. */
-function niceTicks(min,max,count){
+export function niceTicks(min,max,count){
   const span=(max-min)||1;
   const rawStep=span/Math.max(1,count);
   const mag=Math.pow(10,Math.floor(Math.log10(rawStep)));
@@ -73,11 +76,11 @@ function niceTicks(min,max,count){
   return ticks;
 }
 /* compact money for axis labels: $1.2k / $850 / -$3.4k */
-function axMoney(v){ const a=Math.abs(v), s=v<0?'-':'';
+export function axMoney(v){ const a=Math.abs(v), s=v<0?'-':'';
   if(a>=1000) return s+'$'+(a/1000).toFixed(a>=10000?0:1)+'k';
   return s+'$'+Math.round(a); }
 
-function renderCurve(m, c=costModel(m)){
+export function renderCurve(m, c=costModel(m)){
   const svg=document.getElementById('curve'), tip=document.getElementById('curvetip');
   // Draw at the SVG's real pixel width (viewBox = pixel width) so labels aren't horizontally
   // stretched on a wide grid column (promoted from staging, CH16).
@@ -145,17 +148,17 @@ function renderCurve(m, c=costModel(m)){
 
   // selected-date marker
   let sel='';
-  if(selectedDate){ const sms=new Date(selectedDate+'T00:00:00').getTime();
+  if(state.selectedDate){ const sms=new Date(state.selectedDate+'T00:00:00').getTime();
     if(sms>=d0ms && sms<=d1ms){ const x=xMs(sms);
       sel=`<line class="selmark" x1="${x}" x2="${x}" y1="${padT}" y2="${H-padB}"/>`;
-      const sp=disp.find(p=>p.date===selectedDate);
+      const sp=disp.find(p=>p.date===state.selectedDate);
       if(sp) sel+=series.map(s=>`<circle cx="${x}" cy="${yPx(sp[s.key])}" r="3.5" fill="${s.color}"/>`).join('');
     }
   }
   // day-note indicators: a small blue dot on the curve at each date that has a note (CH16)
   let noteDots='';
-  if(JOURNAL_DATES && JOURNAL_DATES.size){
-    for(const nd of JOURNAL_DATES){
+  if(state.JOURNAL_DATES && state.JOURNAL_DATES.size){
+    for(const nd of state.JOURNAL_DATES){
       const t=new Date(nd+'T00:00:00').getTime();
       if(t<d0ms || t>d1ms) continue;
       const sp=disp.find(p=>p.date===nd);
@@ -238,29 +241,29 @@ function renderCurve(m, c=costModel(m)){
 /* ============================================================
    Rendering — calendar (Sunday-first; click to mark on graph)
    ============================================================ */
-const MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
-function renderCalendar(){
-  const m=METRICS_ALL; if(!m) return;
+export const MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
+export function renderCalendar(){
+  const m=state.METRICS_ALL; if(!m) return;
   // Preserve keyboard focus across the wholesale innerHTML rebuild: if a day cell is focused,
   // remember its date and restore focus to the same cell afterwards (B10 follow-on, B15).
   const calEl=document.getElementById('cal'), ae=document.activeElement;
   const refocusDate=(ae && calEl && calEl.contains(ae) && ae.dataset)?ae.dataset.date:null;
   const byDate=new Map(m.days.map(d=>[d.date,d]));
-  document.getElementById('mlabel').textContent=`${MON[calMonth]} ${calYear}`;
+  document.getElementById('mlabel').textContent=`${MON[state.calMonth]} ${state.calYear}`;
   let html='<div class="dow wk">Week</div>'+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div class="dow">${d}</div>`).join('');
-  const first=new Date(calYear,calMonth,1);
+  const first=new Date(state.calYear,state.calMonth,1);
   const offset=first.getDay();               // 0=Sun → Sunday-first grid
-  let cur=new Date(calYear,calMonth,1-offset);
+  let cur=new Date(state.calYear,state.calMonth,1-offset);
   for(let w=0;w<6;w++){
     const weekCells=[]; let weekPnl=0, weekDays=0, monthHit=false;
     for(let d=0;d<7;d++){
       const y=cur.getFullYear(), mo=cur.getMonth(), da=cur.getDate();
       const key=`${y}-${pad2(mo+1)}-${pad2(da)}`;
-      const inMonth=mo===calMonth;
+      const inMonth=mo===state.calMonth;
       if(inMonth)monthHit=true;
       const rec=byDate.get(key);
-      const selc = key===selectedDate?' selday':'';
-      const note = JOURNAL_DATES.has(key)?' hasnote':'';
+      const selc = key===state.selectedDate?' selday':'';
+      const note = state.JOURNAL_DATES.has(key)?' hasnote':'';
       if(!inMonth){
         weekCells.push(`<div class="cell off"></div>`);
       } else if(rec){
@@ -286,9 +289,9 @@ function renderCalendar(){
   if(refocusDate){ const c=calEl.querySelector(`.cell[data-date="${refocusDate}"]`); if(c) c.focus(); }
   // F11: keep the notes box hidden unless a day is selected (without touching its text).
   const journal=document.getElementById('journal');
-  if(journal) journal.style.display = selectedDate ? '' : 'none';
+  if(journal) journal.style.display = state.selectedDate ? '' : 'none';
 }
-function isoWeek(d){ const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+export function isoWeek(d){ const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
   const dn=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-dn+3);
   const y0=new Date(Date.UTC(t.getUTCFullYear(),0,4));
   return 1+Math.round(((t-y0)/864e5-3+((y0.getUTCDay()+6)%7))/7); }
@@ -296,7 +299,7 @@ function isoWeek(d){ const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.ge
 /* ============================================================
    Rendering — advanced statistics
    ============================================================ */
-function fmtDur(ms){
+export function fmtDur(ms){
   const s=Math.round(ms/1000);
   if(s<90) return s+'s';
   const mn=Math.round(s/60);
@@ -305,7 +308,7 @@ function fmtDur(ms){
   if(h<24) return h+'h'+(rem?' '+rem+'m':'');
   const d=Math.floor(h/24); return d+'d'+(h%24?' '+(h%24)+'h':'');
 }
-function renderAdv(m){
+export function renderAdv(m){
   // hold time is only available for fills-based platform exports (round-trip matched)
   const held=(m.trades||[]).filter(t=>t.holdMs!=null && t.holdMs>0);
   const avgHold=held.length? held.reduce((a,t)=>a+t.holdMs,0)/held.length : null;
@@ -364,7 +367,7 @@ function renderAdv(m){
 // Per-symbol commission rows + Total, single-sourced for the dashboard cost panel AND the export
 // report so the two can't drift (CH23 — the report had lost the "Cts" column). `report` switches
 // the report-style numeric cells (class="num") + plain "*" flag vs the dashboard's styled flag.
-function commSymRows(c, report){
+export function commSymRows(c, report){
   const nc = report ? ' class="num"' : '';
   const flag = s => s.known ? '' : (report ? ' *' : ' <span class="flag">*</span>');
   const body = c.bySym.map(s =>
@@ -374,7 +377,7 @@ function commSymRows(c, report){
     + `<td></td><td></td><td${nc}>${money(c.totalComm)}</td></tr>`;
   return body + total;
 }
-function renderCalc(m, c=costModel(m)){
+export function renderCalc(m, c=costModel(m)){
   const tbl=document.getElementById('c_comm_table'),
         head=document.getElementById('c_head'),
         rowsEl=document.getElementById('c_rows'),
@@ -419,61 +422,56 @@ function renderCalc(m, c=costModel(m)){
 /* ============================================================
    Scope + filters + driver
    ============================================================ */
-let TRADES=[], METRICS_ALL=null, SCOPE='all', calYear, calMonth;
-let JOURNAL_DATES=new Set();   // dates with a saved note (for calendar dots)
-let TRADE_META=new Map();      // trade id -> { id, tags:[], note, shots:[] }
-let DEMO_MODE=false;           // demo data is never persisted
-
-const tradeKey=t=> t.id || (window.Store ? Store.tradeId(t) : '');
-async function loadTradeMeta(){
-  if(!Store.available()){ TRADE_META=new Map(); return; }
-  try{ const all=await Store.allTradeMeta(); TRADE_META=new Map(all.map(m=>[m.id,m])); }
-  catch(_){ TRADE_META=new Map(); }
+export const tradeKey = t => t.id || Store.tradeId(t);
+export async function loadTradeMeta(){
+  if(!Store.available()){ state.TRADE_META=new Map(); return; }
+  try{ const all=await Store.allTradeMeta(); state.TRADE_META=new Map(all.map(m=>[m.id,m])); }
+  catch(_){ state.TRADE_META=new Map(); }
 }
 
-const FILTERS={from:'',to:'',symbol:'',side:'',session:'',tag:'',dows:new Set()};
-function filtersActive(){ return !!(FILTERS.from||FILTERS.to||FILTERS.symbol||FILTERS.side||FILTERS.session||FILTERS.tag||FILTERS.dows.size); }
+export const FILTERS={from:'',to:'',symbol:'',side:'',session:'',tag:'',dows:new Set()};
+export function filtersActive(){ return !!(FILTERS.from||FILTERS.to||FILTERS.symbol||FILTERS.side||FILTERS.session||FILTERS.tag||FILTERS.dows.size); }
 /* RTH = 09:30–16:00 by the timestamp's clock time as exported; everything else ETH. */
-function sessionOf(t){ const hm=t.time.slice(11,16); if(!hm) return 'eth';
+export function sessionOf(t){ const hm=t.time.slice(11,16); if(!hm) return 'eth';
   return (hm>='09:30' && hm<'16:00')?'rth':'eth'; }
-function applyFilters(arr){
+export function applyFilters(arr){
   return arr.filter(t=>{
     if(FILTERS.from && t.date<FILTERS.from) return false;
     if(FILTERS.to   && t.date>FILTERS.to)   return false;
     if(FILTERS.symbol && t.root!==FILTERS.symbol) return false;
     if(FILTERS.side && t.side!==FILTERS.side) return false;
     if(FILTERS.session && sessionOf(t)!==FILTERS.session) return false;
-    if(FILTERS.tag){ const m=TRADE_META.get(tradeKey(t)); if(!m || !(m.tags||[]).includes(FILTERS.tag)) return false; }
+    if(FILTERS.tag){ const m=state.TRADE_META.get(tradeKey(t)); if(!m || !(m.tags||[]).includes(FILTERS.tag)) return false; }
     if(FILTERS.dows.size && !FILTERS.dows.has(new Date(t.date+'T00:00:00').getDay())) return false;
     return true;
   });
 }
 /* Filters apply to the WHOLE dashboard — the calendar, cards, cost, stats, and the performance
    graph all reflect the active filter bar + scope. */
-function baseTrades(){ return applyFilters(TRADES); }
+export function baseTrades(){ return applyFilters(state.TRADES); }
 
-function scopeLabel(){ return SCOPE==='all' ? 'all time' : `${MON[calMonth]} ${calYear}`; }
-function activeMetrics(){
-  if(SCOPE==='all') return METRICS_ALL;
-  const mk=`${calYear}-${pad2(calMonth+1)}`;
+export function scopeLabel(){ return state.SCOPE==='all' ? 'all time' : `${MON[state.calMonth]} ${state.calYear}`; }
+export function activeMetrics(){
+  if(state.SCOPE==='all') return state.METRICS_ALL;
+  const mk=`${state.calYear}-${pad2(state.calMonth+1)}`;
   return compute(baseTrades().filter(t=>t.date.startsWith(mk)));
 }
-function renderDash(){
-  if(!METRICS_ALL) return;
+export function renderDash(){
+  if(!state.METRICS_ALL) return;
   const m=activeMetrics(), c=costModel(m);   // compute the cost model once, share it (CH11)
   renderCards(m,c); renderAdv(m); renderCalc(m,c);
   renderCurve(m,c);
   // F16: keep the selected day's intraday trades list in sync with the active filters/scope
-  if(selectedDate && typeof renderDayTrades==='function') renderDayTrades(selectedDate);
+  if(state.selectedDate && typeof renderDayTrades==='function') renderDayTrades(state.selectedDate);
   document.getElementById('scopenote').textContent =
-    SCOPE==='all' ? `all ${METRICS_ALL.n} trades` : `${MON[calMonth]} ${calYear}`;
+    state.SCOPE==='all' ? `all ${state.METRICS_ALL.n} trades` : `${MON[state.calMonth]} ${state.calYear}`;
 }
-function setScope(s){
-  SCOPE=s;
+export function setScope(s){
+  state.SCOPE=s;
   document.querySelectorAll('#scope button').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
   renderDash();
 }
-function setDashVisible(v){
+export function setDashVisible(v){
   document.getElementById('dash').style.display = v?'':'none';
   document.getElementById('scoperow').style.display = v?'':'none';
   document.body.classList.toggle('loaded', v);          // drives top-bar / setup visibility
@@ -482,10 +480,10 @@ function setDashVisible(v){
 }
 /* The not-loaded view is the centered landing block (#landing) in the markup,
    shown via the body:not(.loaded) rule; the cards row stays empty until load. */
-function showEmpty(){ const c=$('cards'); if(c) c.innerHTML=''; }
-function resetApp(){
+export function showEmpty(){ const c=$('cards'); if(c) c.innerHTML=''; }
+export function resetApp(){
   cancelDaySave();   // B28: kill any pending day-note autosave so it can't resurrect a cleared note
-  TRADES=[]; METRICS_ALL=null; selectedDate=null;
+  state.TRADES=[]; state.METRICS_ALL=null; state.selectedDate=null;
   const f=$('file'); if(f) f.value='';
   setDashVisible(false);
   $('srcmeta').innerHTML='';
@@ -495,15 +493,15 @@ function resetApp(){
 }
 
 /* Render whatever is in TRADES (already the full, merged set). */
-function renderLoaded(name, metaHtml){
-  if(!TRADES.length){ resetApp(); return; }
+export function renderLoaded(name, metaHtml){
+  if(!state.TRADES.length){ resetApp(); return; }
   setDashVisible(true);
-  selectedDate=null;
-  METRICS_ALL=compute(baseTrades());
+  state.selectedDate=null;
+  state.METRICS_ALL=compute(baseTrades());
   if(name) document.getElementById('srcname').textContent=name;
   document.getElementById('srcmeta').innerHTML=metaHtml||'';
-  const ld = METRICS_ALL.lastDate!=='—' ? METRICS_ALL.lastDate : fmtDate(new Date());
-  const [yy,mm]=ld.split('-').map(Number); calYear=yy; calMonth=mm-1;
+  const ld = state.METRICS_ALL.lastDate!=='—' ? state.METRICS_ALL.lastDate : fmtDate(new Date());
+  const [yy,mm]=ld.split('-').map(Number); state.calYear=yy; state.calMonth=mm-1;
   syncFilterOptions();
   updateJournalEditor();
   renderCalendar();
