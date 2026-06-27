@@ -72,9 +72,22 @@ function compute(tr){
   // equity curve + REALIZED max drawdown: walk closed-trade PnL, track running peak and the largest peak-to-trough drop
   // Track best/worst here (running, not Math.max(...pnls) — spreading a large array as
   // args overflows the call stack on big fills exports, blanking the whole dashboard).
-  let eq=0,peak=0,maxDD=0,best=n?-Infinity:0,worst=n?Infinity:0; const curve=[0];
-  for(const p of pnls){ eq+=p; peak=Math.max(peak,eq); maxDD=Math.max(maxDD,peak-eq); curve.push(eq);
-    if(p>best)best=p; if(p<worst)worst=p; }
+  // F15: also track the PEAK-RELATIVE drawdown %, and the drawdown DURATION (trades from the
+  // pre-drop peak to the trough). peakIdx remembers which trade set the running peak; when a new
+  // deepest drop is found we snapshot the peak value (for %) and the peak→trough span (for duration).
+  let eq=0,peak=0,peakIdx=0,maxDD=0,ddPeakVal=0,ddStart=0,ddEnd=0,best=n?-Infinity:0,worst=n?Infinity:0; const curve=[0];
+  pnls.forEach((p,idx)=>{ eq+=p;
+    if(eq>peak){ peak=eq; peakIdx=idx; }
+    const dd=peak-eq;
+    if(dd>maxDD){ maxDD=dd; ddPeakVal=peak; ddStart=peakIdx; ddEnd=idx; }
+    curve.push(eq);
+    if(p>best)best=p; if(p<worst)worst=p; });
+  const maxDDpct = ddPeakVal>0 ? maxDD/ddPeakVal*100 : 0;   // peak-relative; 0 if peak never went positive
+  const maxDDdur = maxDD>0 ? ddEnd-ddStart : 0;             // trades from peak to trough
+  // F15: profit concentration — % of total NET profit delivered by the 5 biggest winners. A high
+  // figure (or >100%, meaning the rest nets negative) flags reliance on a handful of outlier trades.
+  const top5Win = [...wins].sort((a,b)=>b-a).slice(0,5).reduce((a,b)=>a+b,0);
+  const concPct = net>0 ? top5Win/net*100 : null;          // null when there's no net profit to concentrate
   const dayMap=new Map();
   for(const t of tr){ if(!dayMap.has(t.date))dayMap.set(t.date,[]); dayMap.get(t.date).push(t.pnl); }
   const days=[...dayMap.entries()].map(([d,arr])=>({date:d,pnl:arr.reduce((a,b)=>a+b,0),
@@ -82,14 +95,26 @@ function compute(tr){
   const active=days.length;
   const winDays=days.filter(d=>d.pnl>0).length;
   // longest run of consecutive winning (mcw) / losing (mcl) trades; a scratch (0) breaks both runs
-  let mcw=0,mcl=0,cw=0,cl=0;
-  for(const p of pnls){ if(p>0){cw++;cl=0;} else if(p<0){cl++;cw=0;} else {cw=0;cl=0;} mcw=Math.max(mcw,cw); mcl=Math.max(mcl,cl); }
+  // F15: alongside the consecutive-trade COUNTS, accumulate the running $ of each streak so we can
+  // surface the largest winning / losing streak by DOLLARS (cws/cls reset whenever the run breaks).
+  let mcw=0,mcl=0,cw=0,cl=0,cws=0,cls=0,maxWinStk=0,maxLossStk=0;
+  for(const p of pnls){
+    if(p>0){cw++;cl=0;cws+=p;cls=0;}
+    else if(p<0){cl++;cw=0;cls+=p;cws=0;}
+    else {cw=0;cl=0;cws=0;cls=0;}
+    mcw=Math.max(mcw,cw); mcl=Math.max(mcl,cl);
+    maxWinStk=Math.max(maxWinStk,cws); maxLossStk=Math.min(maxLossStk,cls);
+  }
   // daily-PnL dispersion → Sharpe: population std of per-day PnL (NOT annualized — see Definitions panel caveat)
   const dv=days.map(d=>d.pnl);
   const mean=dv.reduce((a,b)=>a+b,0)/(dv.length||1);
   const variance=dv.length? dv.reduce((a,b)=>a+(b-mean)**2,0)/dv.length : 0;
   const sd=Math.sqrt(variance);
   const sharpe= sd>0 ? mean/sd : NaN;
+  // F15: Sortino — same daily mean over the DOWNSIDE deviation only (population RMS of negative days,
+  // target 0). Penalizes losing-day volatility, not the upside swings Sharpe also punishes.
+  const downside=Math.sqrt(dv.reduce((a,b)=>a+Math.min(0,b)**2,0)/(dv.length||1));
+  const sortino= downside>0 ? mean/downside : NaN;
   const months=new Set(tr.map(t=>t.date.slice(0,7))).size;
   // expectancy + per-trade dispersion
   const expectancy = n? net/n : 0;
@@ -100,23 +125,23 @@ function compute(tr){
     return {n:s.length,pnl:p,wins:s.filter(t=>t.pnl>0).length}; };
   const long=side('long'), short=side('short');
   // Day-of-week aggregation (0=Sun..6=Sat). Each trade's calendar date is bucketed by its local
-  // weekday; we sum TOTAL PnL and count per weekday. bestDow / worstDow are the active weekdays
-  // (n>0) with the highest / lowest TOTAL PnL — surfaced in Advanced Stats as "Best/Worst Weekday".
-  // CAVEAT (R5): this is *total*, not per-trade-average, PnL, so a weekday you simply trade more
-  // skews larger in magnitude, and small samples make it noisy. It's a coarse "which day treats me
-  // best" hint; CH18 tracks normalizing it (per-trade avg) or replacing it with a full weekday
-  // breakdown (the F14 Win Rate modal already shows every weekday).
+  // weekday; we sum total PnL and count per weekday, then derive the per-trade AVERAGE (avg=pnl/n).
+  // CH18: bestDow / worstDow are now the active weekdays (n>0) with the highest / lowest AVERAGE
+  // PnL per trade — surfaced as "Best/Worst Weekday". Earlier this ranked by *total* PnL, which just
+  // tracked which day you traded most/heaviest (the demo "worst" weekday was still a big profit).
+  // Averaging makes the two days comparable; the raw total + trade count stay on the object for the
+  // UI, and small per-day samples are still noisy (flagged in the Definitions panel).
   const dow=Array.from({length:7},()=>({pnl:0,n:0}));
   for(const t of tr){ const wd=new Date(t.date+'T00:00:00').getDay(); dow[wd].pnl+=t.pnl; dow[wd].n++; }
-  const dowActive=dow.map((d,i)=>({i,...d})).filter(d=>d.n);
-  const bestDow = dowActive.length? dowActive.reduce((a,b)=>b.pnl>a.pnl?b:a) : null;
-  const worstDow= dowActive.length? dowActive.reduce((a,b)=>b.pnl<a.pnl?b:a) : null;
+  const dowActive=dow.map((d,i)=>({i,...d,avg:d.n?d.pnl/d.n:0})).filter(d=>d.n);
+  const bestDow = dowActive.length? dowActive.reduce((a,b)=>b.avg>a.avg?b:a) : null;
+  const worstDow= dowActive.length? dowActive.reduce((a,b)=>b.avg<a.avg?b:a) : null;
   return {n,trades:tr,wins:wins.length,losses:losses.length,scratch:scratch.length,
-    net,gp,gl,pf,avgW,avgL,wl,maxDD,curve,pnls,months,
+    net,gp,gl,pf,avgW,avgL,wl,maxDD,maxDDpct,maxDDdur,concPct,curve,pnls,months,
     best, worst,
     days,active,winDays,avgDaily:active?net/active:0,avgTrades:active?n/active:0,
-    winDayPct:active?100*winDays/active:0, mcw,mcl,
-    recovery: maxDD>0 ? net/maxDD : (net>0?Infinity:NaN), sharpe,
+    winDayPct:active?100*winDays/active:0, mcw,mcl,maxWinStk,maxLossStk,
+    recovery: maxDD>0 ? net/maxDD : (net>0?Infinity:NaN), sharpe,sortino,
     expectancy,tStd,long,short,bestDow,worstDow,
     bestDay: days.length? days.reduce((a,b)=>b.pnl>a.pnl?b:a) : null,
     worstDay: days.length? days.reduce((a,b)=>b.pnl<a.pnl?b:a) : null,

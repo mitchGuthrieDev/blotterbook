@@ -306,32 +306,42 @@ function renderAdv(m, c=costModel(m)){
   // hold time is only available for fills-based platform exports (round-trip matched)
   const held=(m.trades||[]).filter(t=>t.holdMs!=null && t.holdMs>0);
   const avgHold=held.length? held.reduce((a,t)=>a+t.holdMs,0)/held.length : null;
+  // payoff ratio (avgW / |avgL|) shares the wl figure computed in core; treat it as healthy at ≥1
+  const payoff = m.wl===Infinity?'∞':(isNaN(m.wl)?'—':m.wl.toFixed(2));
   const rows=[
     ['head','Performance Metrics'],
     ['Avg Daily PnL', `<span class="av ${cls(m.avgDaily)}">${usd(m.avgDaily)}</span>`],
     ['Best Trade', `<span class="av pos">${usd(m.best)}</span>`],
     ['Worst Trade', `<span class="av neg">${usd(m.worst)}</span>`],
     ['Winning Days', `<span class="av">${m.winDayPct.toFixed(1)}%</span>`],
-    ['Total Commissions', `<span class="av ${c.totalComm?'neg':'na'}">${usd(-c.totalComm)}</span>`],
+    // F15: Max Drawdown as $, peak-relative %, and peak→trough span (was only on the curve / cards)
+    ['Max Drawdown', m.maxDD>0?`<span class="av neg">${usd(-m.maxDD)}</span> <span class="av na">· ${m.maxDDpct.toFixed(1)}% · ${m.maxDDdur} trade${m.maxDDdur===1?'':'s'}</span>`:`<span class="av na">—</span>`],
     ['Sharpe (daily)', `<span class="av">${isNaN(m.sharpe)?'—':m.sharpe.toFixed(2)}</span>`],
+    ['Sortino (daily)', `<span class="av">${isNaN(m.sortino)?'—':m.sortino.toFixed(2)}</span>`],
     ['head','Edge & Distribution'],
     ['Expectancy / Trade', `<span class="av ${cls(m.expectancy)}">${usd(m.expectancy)}</span>`],
+    ['Avg Winner', `<span class="av pos">${usd(m.avgW)}</span>`],
+    ['Avg Loser', `<span class="av neg">${usd(m.avgL)}</span>`],
+    ['Payoff Ratio', `<span class="av ${m.wl===Infinity||m.wl>=1?'pos':'neg'}">${payoff}</span>`],
     ['Std Dev / Trade', `<span class="av">${usd(m.tStd,false)}</span>`],
+    // F15: profit concentration — how much of net profit the top 5 winners carry (null = no net profit)
+    ['Profit Concentration', m.concPct==null?`<span class="av na">—</span>`:`<span class="av">${m.concPct.toFixed(0)}%</span> <span class="av na">· top 5</span>`],
     ['Long PnL', `<span class="av ${cls(m.long.pnl)}">${usd(m.long.pnl)}</span> <span class="av na">· ${m.long.n}</span>`],
     ['Short PnL', `<span class="av ${cls(m.short.pnl)}">${usd(m.short.pnl)}</span> <span class="av na">· ${m.short.n}</span>`],
     ['Best Day', m.bestDay?`<span class="av pos">${usd(m.bestDay.pnl)}</span> <span class="av na">· ${m.bestDay.date}</span>`:`<span class="av na">—</span>`],
     ['Worst Day', m.worstDay?`<span class="av neg">${usd(m.worstDay.pnl)}</span> <span class="av na">· ${m.worstDay.date}</span>`:`<span class="av na">—</span>`],
-    ['Best Weekday', m.bestDow?`<span class="av ${cls(m.bestDow.pnl)}">${usd(m.bestDow.pnl)}</span> <span class="av na">· ${DOW_LABEL[m.bestDow.i]}</span>`:`<span class="av na">—</span>`],
-    ['Worst Weekday', m.worstDow?`<span class="av ${cls(m.worstDow.pnl)}">${usd(m.worstDow.pnl)}</span> <span class="av na">· ${DOW_LABEL[m.worstDow.i]}</span>`:`<span class="av na">—</span>`],
+    // CH18: Best/Worst Weekday now rank by AVERAGE PnL per trade (· weekday · trade count), not total
+    ['Best Weekday', m.bestDow?`<span class="av ${cls(m.bestDow.avg)}">${usd(m.bestDow.avg)}</span> <span class="av na">· ${DOW_LABEL[m.bestDow.i]} · ${m.bestDow.n}</span>`:`<span class="av na">—</span>`],
+    ['Worst Weekday', m.worstDow?`<span class="av ${cls(m.worstDow.avg)}">${usd(m.worstDow.avg)}</span> <span class="av na">· ${DOW_LABEL[m.worstDow.i]} · ${m.worstDow.n}</span>`:`<span class="av na">—</span>`],
     ['head','Trading Patterns'],
+    ['Active Days', `<span class="av">${m.active}</span>`],
     ['Avg Trades/Day', `<span class="av">${m.avgTrades.toFixed(1)}</span>`],
     ['Recovery Factor', `<span class="av ${cls(m.recovery)}">${m.recovery===Infinity?'∞':(isNaN(m.recovery)?'—':m.recovery.toFixed(2))}</span>`],
     ['Max Consecutive Wins', `<span class="av pos">${m.mcw}</span>`],
     ['Max Consecutive Losses', `<span class="av neg">${m.mcl}</span>`],
-    ['head','Account Information'],
-    ['Active Days', `<span class="av">${m.active}</span>`],
-    ['First Trade Date', `<span class="av">${m.firstDate}</span>`],
-    ['Last Trade Date', `<span class="av">${m.lastDate}</span>`],
+    // F15: largest winning / losing streak by DOLLARS (the mcw/mcl above are trade counts)
+    ['Largest Win Streak', `<span class="av pos">${usd(m.maxWinStk)}</span>`],
+    ['Largest Loss Streak', `<span class="av neg">${usd(m.maxLossStk)}</span>`],
   ];
   if(avgHold!=null){
     rows.splice(rows.indexOf(rows.find(r=>r[0]==='Max Consecutive Losses'))+1, 0,
