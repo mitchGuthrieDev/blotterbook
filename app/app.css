@@ -53,6 +53,7 @@
   body:not(.loaded) #purgeBtn,
   body:not(.loaded) #filterbar,
   body:not(.loaded) #cards,
+  body:not(.loaded) #wsbar,
   body:not(.loaded) #setuphead{display:none}
   body.loaded #demoBtn,
   body.loaded #setupLoad,
@@ -199,6 +200,10 @@
   .curvebtn[data-k="take"].on{border-color:var(--take)}
   .curvewrap{position:relative}
   .curve{width:100%;height:260px;display:block;touch-action:none}
+  /* B21: clicking a day focuses the SVG (tabindex=0), which otherwise paints the UA focus ring
+     around the whole graph. Drop it on plain :focus (mouse) but keep a ring for :focus-visible
+     (keyboard) — order matters: :focus-visible is listed AFTER so it wins when both match. */
+  .curve:focus{outline:none}
   .curve:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .curve .grid{stroke:var(--line);stroke-width:1;stroke-opacity:.7}
   .curve .vgrid{stroke:var(--line);stroke-width:1;stroke-opacity:.4}

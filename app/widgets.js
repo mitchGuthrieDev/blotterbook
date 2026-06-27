@@ -70,7 +70,11 @@ function initWidgets(){
   }
   // workspace templates
   refreshWsSelect();
-  on('ws_save','click',()=>{ const name=(prompt('Name this workspace layout:')||'').trim(); if(!name) return;
+  // B23: the demo is a 1:1 mirror with data-mutating actions disabled. "Save layout" persists
+  // templates to localStorage, so disable it in demo (loading a template / "— Default —" still work,
+  // they don't write anything new).
+  if(PAGE_MODE==='demo'){ const ws=$('ws_save'); if(ws){ ws.disabled=true; ws.title='Saving layouts is disabled in the demo.'; } }
+  on('ws_save','click',()=>{ if(PAGE_MODE==='demo') return; const name=(prompt('Name this workspace layout:')||'').trim(); if(!name) return;
     const t=readWsTemplates(); t[name]=currentWorkspace(); writeWsTemplates(t); refreshWsSelect(name);
     logAction('Workspace template saved · '+name); });
   on('ws_tpl','change',e=>{ const n=e.target.value;

@@ -173,6 +173,9 @@
       total.innerHTML='Overall: <b>'+tDone+'</b> done · <b>'+tOpen+'</b> remaining'
         +(tGuard?(' · '+tGuard+' guardrail'):'')+' · <b>'+(grand?Math.round(100*tDone/grand):0)+'%</b> complete ('+items.length+' items)';
       bkFillOptions(items);
+      // CH21: open the backlog filtered to OPEN items (the actionable view) by default; the user can
+      // still switch to All/done/guardrail. Only applied while the filter is at its initial "All".
+      if(bkFStatus.value==='' && Array.prototype.some.call(bkFStatus.options,function(o){return o.value==='open';})) bkFStatus.value='open';
       bkRenderList();
       bmsg.textContent='';
     }).catch(function(){ bmsg.textContent='Could not load data/backlog.json.'; bmsg.className='amsg err'; });
