@@ -80,6 +80,16 @@ scripts and **fails if the result differs from what's committed**. So:
 
 ## Repo layout
 
+> **No build step → the repo root IS the Cloudflare Pages web root, so a file's
+> path IS its public URL.** Moving any browser-served file changes its URL and
+> must be updated in lockstep across `_redirects`, `_headers`, `robots.txt`,
+> `sitemap.xml` + page canonicals, the absolute `/app//assets//data/`
+> references, and the `build-includes`/`build-manifest`/`bump-version` path
+> assumptions. `functions/`, `_headers`, and `_redirects` are pinned at the root
+> by Pages. Don't reorganize into `src/`+`public/`. See
+> [the deploy contract](docs/architecture.md#repository-layout--the-deploy-contract)
+> (guardrail A18).
+
 ```
 /                       marketing + info site (bespoke CSS in index.html; site.css for the rest)
   _headers              Cloudflare Pages security headers (CSP + hardening)

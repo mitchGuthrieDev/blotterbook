@@ -12,6 +12,7 @@ CH16, F13, F14, S19, R1, …) are backlog item ids from
 ## Contents
 
 - [Design pillars](#design-pillars)
+- [Repository layout & the deploy contract](#repository-layout--the-deploy-contract)
 - [Architecture & data flow](#architecture--data-flow)
 - [Shared chrome: tokens + partials (no bundler)](#shared-chrome-tokens--partials-no-bundler)
 - [Input: the CSV](#input-the-csv)
@@ -41,6 +42,48 @@ Three intentional constraints shape every decision:
 Because the app is split across files (it used to be one `index.html`), it must
 be **served over http(s)** — opening from disk blocks the `fetch()` of the
 reference data.
+
+## Repository layout & the deploy contract
+
+**There is no build step, so the repo root *is* the Cloudflare Pages web root —
+a file's path *is* its public URL.** Pages serves the committed tree as-is
+(`build-manifest.mjs` is only a "recommended build command" that regenerates a
+file in place; the deploy works without it). This one fact makes the folder
+layout simultaneously the **URL structure** and the **deploy contract**, and it's
+why the root is deliberately flat rather than split into `src/`+`public/`.
+
+**Pinned at the deploy root** (Cloudflare Pages requires it — these cannot move):
+
+- `functions/` — Pages Functions are resolved from the project root.
+- `_headers`, `_redirects` — must sit at the output root to take effect.
+- `robots.txt`, `sitemap.xml`, the favicon, and the pages that serve at `/…`
+  (`index.html`, `howto.html`, `roadmap.html`, `changelog.html`, `legal.html`,
+  `admin.html`).
+
+**Consequence — moving any browser-served file changes its URL, and the path is
+hard-coded in ~6 places that must be updated in lockstep.** Before relocating
+anything under `app/`, `assets/`, or `data/` (or renaming a root page), update
+*all* of:
+
+| Coupling point | What it hard-codes |
+| --- | --- |
+| Absolute URL references in HTML/JS | `~23` `/app/…`, `~19` `/assets/…`, plus `/data/*.json` and `/api/*` `fetch()`es |
+| `_redirects` | `/app/ → /app/app.html` rewrite |
+| `_headers` | CSP `connect-src 'self'` assumes same-origin `/api`, `/data`, `/app` |
+| `robots.txt` / `sitemap.xml` | `/app/`, `/admin.html`, and the public-page canonical URLs (CH5/CH6) |
+| Page `<link rel="canonical">` + OG tags | the canonical URL of each marketing page (CH5) |
+| `scripts/build-includes.mjs` | scans `['.', 'app']` for `*.html`; reads `partials/` |
+| `scripts/build-manifest.mjs` | hashes `data/*.json`, with an explicit filename exclude-set |
+| `scripts/bump-version.mjs` | classifies prod-shipping surfaces by the `app/`, `partials/`, `assets/`, `data/` prefixes + specific filenames |
+
+**Do not** reorganize into `src/`+`public/` with a bundler — that requires a
+build step, which violates design pillar #2. If a reorg is ever genuinely
+warranted, the only Pages-compatible move is a **`public/` output-directory
+split** (browser-served files under `public/`, Pages "build output directory" set
+to `public`, with `functions/` + `scripts/` + `partials/` + tooling staying at
+the repo root). URLs stay identical, but `_headers`/`_redirects` relocate into
+`public/` and every path prefix in the table above changes — so it's an
+all-at-once migration, not a piecemeal one. (Tracked as guardrail **A18**.)
 
 ## Architecture & data flow
 
