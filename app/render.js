@@ -7,11 +7,10 @@
    Rendering — cards
    ============================================================ */
 function renderCards(m, c=costModel(m)){   // c may be passed in to avoid recomputing per render (CH11)
-  // F14 (staging): the five headline cards open metric-detail modals. They become keyboard-
-  // operable buttons only on staging; on app/demo they stay plain, non-interactive cards.
-  const co = STAGING_PAGE
-    ? (key,label)=>`<div class="card clickable" role="button" tabindex="0" data-card="${key}" aria-label="${label} — open details">`
-    : ()=>`<div class="card">`;
+  // F14 (promoted to all surfaces, CH16): the five headline cards open read-only metric-detail
+  // modals. Keyboard-operable buttons on app + demo + staging (the modal is read-only, so demo
+  // mirrors it with no lock-down).
+  const co = (key,label)=>`<div class="card clickable" role="button" tabindex="0" data-card="${key}" aria-label="${label} — open details">`;
   document.getElementById('cards').innerHTML=`
    ${co('net','Net PnL')}<div class="k">Net PnL</div>
      <div class="v ${cls(c.netPreTax)}">${usd(c.netPreTax)}</div>

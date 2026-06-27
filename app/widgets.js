@@ -88,8 +88,9 @@ function initWidgets(){
   // redraw the performance graph on resize so it re-measures its (grid) width
   let _rsz=null; window.addEventListener('resize',()=>{ clearTimeout(_rsz);
     _rsz=setTimeout(()=>{ if(METRICS_ALL) renderCurve(activeMetrics()); }, 160); });
-  // F14: headline stat cards open metric-detail modals (delegated — cards re-render each pass).
-  // Inert on app/demo (cards carry no data-card there, and #cardModal is staging-only).
+  // F14 (promoted to all surfaces, CH16): headline stat cards open read-only metric-detail modals
+  // (delegated — cards re-render each pass). Active on app + demo + staging now that the cards carry
+  // data-card and #cardModal ships on every page.
   const cardsEl=document.getElementById('cards');
   if(cardsEl){
     cardsEl.addEventListener('click',e=>{ const c=e.target.closest('.card[data-card]'); if(c) openCardModal(c.dataset.card); });
