@@ -4,6 +4,17 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.20.5",
+      "date": "2026-06-27",
+      "title": "Faster, more accessible, more solid under the hood",
+      "summary": "A foundation pass: the app now loads as modern, self-contained modules — nothing changes in how it looks or works — alongside a batch of accessibility, performance, and reliability fixes.",
+      "highlights": [
+        "Accessibility: the performance graph now reads each day's values aloud to screen readers as you arrow across it.",
+        "Performance: the performance graph stays snappy even with lots of day-notes saved.",
+        "Reliability: steadier trade imports and backup restores, and the data, export, and stat-detail dialogs now always release the page scroll when you close them."
+      ]
+    },
+    {
       "version": "0.20.0",
       "date": "2026-06-27",
       "title": "Tap a stat for the full story",
