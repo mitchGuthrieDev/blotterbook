@@ -1418,6 +1418,18 @@
       "completedDate": "2026-06-27",
       "partial": false,
       "doneNote": "Added scripts/test-flags.mjs (wired into CI) asserting that app/data.js APP_FLAGS and functions/api/config.js DEFAULTS.flags share the same flag keys AND default values — so the client↔Worker flag-default literals can't silently drift. Fails if a flag is added/changed in only one place. 5/5 passing."
+    },
+    {
+      "id": "CH26",
+      "title": "Clear stale \"(staging)\" labels after the F14 promotion + dead degraded-state branch",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "trivial",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 audit (cosmetic drift from the CH16 F14 promotion). F14's stat-card detail modal now ships on all surfaces, but three comment/labels still call it staging-only: app/widgets.js ~116 ('F14 (staging) — stat-card metric-detail modals'), app/app.css ~174 ('clickable headline cards (staging)'), and app/app.css ~388 ('stat-card detail modal (staging)'). Update them to 'all surfaces · CH16' to match render.js/widgets.js/partials, so a future reader doesn't think the feature is still gated. Also: setSession('degraded') (app/widgets.js ~29-33) handles a state no caller emits (self-labeled 'reserved/forward-looking') — either wire it or drop the dead branch. Done when: no stale '(staging)' label remains for F14 and the degraded branch is wired or removed.",
+      "doneNote": null
     }
   ],
   "howToDrive": [
