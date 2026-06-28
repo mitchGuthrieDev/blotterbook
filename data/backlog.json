@@ -393,15 +393,15 @@
       "doneNote": null
     },
     {
-      "id": "A75",
-      "title": "(guardrail) SvelteKit deferred — stay on Vite MPA + Svelte SPA unless a trigger fires",
-      "category": "ARCHITECTURE / DUPLICATION",
+      "id": "A62",
+      "title": "Discuss: adopt SvelteKit (pros/cons + analysis)",
+      "category": "REVIEW / AUDIT",
       "priority": "P3",
-      "effort": "ongoing",
-      "status": "guardrail",
+      "effort": "medium",
+      "status": "open",
       "completedDate": null,
       "partial": false,
-      "prompt": "Guardrail from the A62 analysis (docs/sveltekit-decision.md). SvelteKit was evaluated and DEFERRED: the current Vite multi-page + Svelte 5 SPA already covers SSG (static marketing pages), the edge layer (functions/*), and an enforced-by-construction local-compute guarantee, while SvelteKit's core load/server idiom is a standing hazard to the HARD no-trade-data-leaves-the-browser pillar and re-opens the just-stabilized A18/A26 deploy contract. Do NOT introduce SvelteKit (or `@sveltejs/kit` / `adapter-cloudflare`) as part of unrelated work. Revisit (and graduate to adr-002) only if a NAMED requirement fires per the doc's 'Trigger to revisit': (1) genuine multi-route app navigation beyond a micro-router; (2) server-rendered NON-trade surfaces that benefit from per-request SSR; (3) the functions/* layer grows enough that a unified routing model clearly outweighs rewriting the security-reviewed auth layer; (4) a team/maintenance shift toward SvelteKit-shaped contributors. Until then: do A30 (reorg) on the Vite/Svelte structure (NOT SvelteKit's src/routes), and do A69 (Svelte-ify marketing) with plain Svelte components under the existing Vite MPA build.",
+      "prompt": "DISCUSSION/ANALYSIS (no migration). Analyze adopting SvelteKit vs. the current Vite multi-page + Svelte 5 SPA (ADR-001). Cover: what SvelteKit adds (file-routing, SSR/SSG, endpoints, adapters) vs. what we actually need; the HARD local-compute pillar (no trade data leaves the browser — any SSR must never see trade data); fit with Cloudflare Pages/Functions (adapter-cloudflare) and the existing functions/ edge layer; impact on the deploy contract (A18/A26); and whether the static marketing pages would benefit from SSG. End with a recommendation + phased plan or an explicit defer. Done when: a written pros/cons + recommendation is delivered and follow-ups filed.",
       "doneNote": null
     },
     {
