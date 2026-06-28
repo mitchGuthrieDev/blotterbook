@@ -44,6 +44,66 @@
       "doneNote": null
     },
     {
+      "id": "A50",
+      "title": "Phase 4 parity gap: per-day trade table on calendar/curve day-select (Svelte)",
+      "category": "FEATURES",
+      "priority": "P1",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the 3rd R1 staging parity audit (gates A33). In the vanilla app, selecting a day — by clicking a calendar cell OR a curve point — renders a read-only INTRADAY TRADE TABLE for that day (app/data.js renderDayTrades -> #j_trades): a header 'Trades · N · <net P&L>' plus a table of each trade's Time / Symbol / Side / P&L (filtered by the active filters; shows 'No trades on this day' when empty). It ships on every surface incl. demo. The Svelte staging app shows ONLY the JournalEditor (day note) on day-select — there is NO per-day trade list. Add it: a read-only per-day trades table in the Svelte day-select area (e.g. inside the cal panel's extra snippet alongside JournalEditor, or its own block), built from the filtered active trades for selectedDate, matching vanilla's header + columns. Pure presentation (A29). Done when: selecting a day shows its intraday trades (count + net + per-trade rows), updates with the active filters, and an e2e asserts the table renders for a traded day.",
+      "doneNote": null
+    },
+    {
+      "id": "A51",
+      "title": "Phase 4 parity gap: Svelte mobile/responsive — body overflow-x + @media breakpoints",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P1",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the 3rd R1 staging parity audit (gates A33). The Svelte staging app has ZERO @media breakpoints and its <body> lacks overflow-x:hidden, whereas vanilla app.css pins body{max-width:100%;overflow-x:hidden} ('no horizontal page scroll on mobile') and has breakpoints at 900/760/620/560/460px. On a ~360-414px phone several staging layouts overflow horizontally and scroll the page: the calendar 8-col grid (52px + 7x1fr, no min-width/scroll fallback — vanilla gives it min-width + a scroll container under 620px), the manage-data wide table, and possibly the filter bar + topbar button rows. (Cost-setup + overview cards use auto-fit/minmax and are fine.) Fix: (1) add overflow-x:hidden to the Svelte :global(body); (2) make the calendar usable on mobile (horizontal-scroll container with a min-width, or collapse the layout) — never let it scroll the whole page; (3) give the manage-data table a mobile treatment (verify the existing scroll container, or hide secondary columns under a breakpoint); (4) add @media rules so the topbar/filter bar wrap cleanly at ~360-620px. Done when: at 360px and 414px there is no horizontal PAGE scroll, the calendar + manage table are usable, and the topbar/filters wrap; verify with a mobile-viewport check.",
+      "doneNote": null
+    },
+    {
+      "id": "A52",
+      "title": "Phase 4 parity gap: manage-data Overview stats section (Svelte)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the 3rd R1 staging parity audit. The vanilla data-manager modal opens with an 'Overview' stats grid (#dm_summary — app/datamanager.js ~70, partials/app-modal.html): Trades count, Date range, Day notes count, Tagged trades count, Local size (KB). The Svelte ManageData.svelte has no such section. Add an Overview stats grid at the top of the Svelte manage-data modal showing the same five stats (trade count, date range first->last, day-notes count, tagged-trades count = tradeMeta size, and an approximate local size). Pure presentation from the data already loaded. Done when: the manage-data modal shows the Overview stats, matching vanilla.",
+      "doneNote": null
+    },
+    {
+      "id": "A53",
+      "title": "Phase 4 parity gap: manage-data Saved-filters section (apply/rename/delete) (Svelte)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the 3rd R1 staging parity audit. The vanilla data-manager modal has a 'Saved filters' section (#dm_filters — app/datamanager.js ~117-125) listing each saved view with Apply / RENAME / Delete. The Svelte app manages saved views only from the FilterBar (save/apply/delete) and has NO RENAME anywhere, and no saved-filters section in the manage-data modal. Add a Saved-filters section to the Svelte ManageData modal mirroring vanilla: list each saved view with Apply, Rename (prompt for a new name, persist via the Store meta in the {id,name,f} shape), and Delete; reuse App's saveView/applyView/deleteView and add a renameView. Done when: saved views can be applied/renamed/deleted from the manage-data modal and rename persists; e2e covers rename.",
+      "doneNote": null
+    },
+    {
+      "id": "A54",
+      "title": "Phase 4 parity polish: title tooltips on Svelte interactive controls",
+      "category": "COMMENTS / READABILITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the 3rd R1 staging parity audit (cosmetic). Vanilla puts hover title tooltips on many interactive controls (panel chevron/grip, calendar nav/Latest, etc.); several Svelte equivalents have aria-label but no title (e.g. Panel.svelte .chev, CalendarMonth.svelte .today/.nav buttons). Add matching title attributes to the Svelte interactive controls for hover discoverability parity. Low priority, no behavior change. Done when: the key interactive controls carry titles matching vanilla.",
+      "doneNote": null
+    },
+    {
       "id": "A42",
       "title": "Phase 4 parity gap: Svelte modal a11y — focus trap (B9) + body scroll-lock (B36) + Escape-to-close",
       "category": "FIXES",
