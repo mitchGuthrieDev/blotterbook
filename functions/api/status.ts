@@ -11,13 +11,14 @@
    Persisted in a KV namespace bound as `STATUS_KV`. If KV isn't bound, GET falls
    back to auto and POST returns an error explaining the missing binding. */
 
-import { isAdminAuthorized } from '../_lib/auth.js';
-import { json, rateLimited } from '../_lib/http.js';
+import { isAdminAuthorized } from '../_lib/auth.ts';
+import { json, rateLimited } from '../_lib/http.ts';
+import type { Ctx } from '../_lib/types.ts';
 
 const KEY = 'live';
 const MODES = ['auto', 'live', 'offline', 'maintenance'];
 
-export async function onRequest(context) {
+export async function onRequest(context: Ctx) {
   const { request, env } = context;
   const kv = env.STATUS_KV;
 
@@ -38,7 +39,7 @@ export async function onRequest(context) {
       return json({ error: 'unauthorized' }, 401);
     }
     if (!kv) return json({ error: 'STATUS_KV namespace is not bound to this Pages project' }, 500);
-    let body;
+    let body: any;
     try {
       body = await request.json();
     } catch (_) {

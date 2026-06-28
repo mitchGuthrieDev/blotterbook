@@ -1,8 +1,8 @@
 /* Tests for functions/_lib/auth.js — admin token round-trip + Stripe webhook
    signature verification (S13). Run: node scripts/test-auth.mjs
    Uses only Node built-ins; auth.js relies on WebCrypto (global in Node 18+). */
-import { issueToken, verifyToken, verifyStripeSignature } from '../functions/_lib/auth.js';
-import { onRequest as adminKeyOnRequest } from '../functions/api/admin-key.js';
+import { issueToken, verifyToken, verifyStripeSignature } from '../functions/_lib/auth.ts';
+import { onRequest as adminKeyOnRequest } from '../functions/api/admin-key.ts';
 import { createHmac } from 'node:crypto';
 
 let pass = 0,

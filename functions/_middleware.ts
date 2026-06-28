@@ -13,9 +13,10 @@
    ADMIN_KEY is configured, staging fails CLOSED (403) so a misconfigured deploy can't
    expose the sandbox — set ALLOW_PRESENCE_AUTH=1 for local/preview to allow it (S12). */
 
-import { isAdminAuthorized } from './_lib/auth.js';
+import { isAdminAuthorized } from './_lib/auth.ts';
+import type { Ctx } from './_lib/types.ts';
 
-export async function onRequest(context) {
+export async function onRequest(context: Ctx) {
   const { request, env, next } = context;
   const url = new URL(request.url);
   const path = url.pathname;

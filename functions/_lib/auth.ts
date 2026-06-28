@@ -11,33 +11,35 @@
 
    This module only exports helpers (no onRequest), so it is never served as a route. */
 
+import type { Env } from './types.ts';
+
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-function b64urlEncode(bytes) {
+function b64urlEncode(bytes: ArrayBuffer | Uint8Array) {
   const b = new Uint8Array(bytes);
   let s = '';
   for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-function b64urlToBytes(str) {
+function b64urlToBytes(str: string) {
   const pad = '==='.slice((str.length + 3) % 4);
   const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/') + pad);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
-function b64urlToString(str) {
+function b64urlToString(str: string) {
   return dec.decode(b64urlToBytes(str));
 }
 
-async function hmacKey(secret) {
+async function hmacKey(secret: string) {
   return crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }
 
 /* Constant-time string compare that leaks neither contents nor length: HMAC both
    sides under a fresh random key (fixed 32-byte output) and compare the digests. */
-async function timingSafeEqual(a, b) {
+async function timingSafeEqual(a: unknown, b: unknown) {
   const k = await crypto.subtle.importKey('raw', crypto.getRandomValues(new Uint8Array(32)), { name: 'HMAC', hash: 'SHA-256' }, false, [
     'sign',
   ]);
@@ -49,7 +51,7 @@ async function timingSafeEqual(a, b) {
 }
 
 /* Issue an opaque token `base64url(payload).base64url(hmac)`. ttlSec = lifetime. */
-export async function issueToken(secret, ttlSec) {
+export async function issueToken(secret: string, ttlSec: number) {
   const exp = Date.now() + ttlSec * 1000;
   const payload = b64urlEncode(enc.encode(JSON.stringify({ exp })));
   const sig = await crypto.subtle.sign('HMAC', await hmacKey(secret), enc.encode(payload));
@@ -57,7 +59,7 @@ export async function issueToken(secret, ttlSec) {
 }
 
 /* Verify a token: HMAC valid (constant-time via subtle.verify) AND not expired. */
-export async function verifyToken(secret, token) {
+export async function verifyToken(secret: string, token: unknown) {
   if (!secret || typeof token !== 'string' || token.indexOf('.') < 0) return false;
   const [payload, sig] = token.split('.');
   if (!payload || !sig) return false;
@@ -73,7 +75,7 @@ export async function verifyToken(secret, token) {
 
 /* True if the request is authorized: a valid admin token OR (server-side fallback)
    the raw ADMIN_KEY, carried in the x-admin-key header (or `provided` override). */
-export async function isAdminAuthorized(request, env, provided) {
+export async function isAdminAuthorized(request: Request, env: Env, provided: string | null = null) {
   const val = provided != null ? provided : request.headers.get('x-admin-key');
   if (!val) return false;
   if (env.ADMIN_KEY && (await timingSafeEqual(val, env.ADMIN_KEY))) return true; // raw-key fallback (constant-time)
@@ -87,7 +89,7 @@ export async function isAdminAuthorized(request, env, provided) {
    HMAC-SHA256(secret, signedPayload) in hex. Verify any v1 in constant time and reject a
    timestamp outside `toleranceSec` (default 5 min) to block replay. Returns true only on a
    valid, fresh signature. The webhook handler MUST call this before acting on any event. */
-export async function verifyStripeSignature(rawBody, sigHeader, secret, toleranceSec = 300) {
+export async function verifyStripeSignature(rawBody: string, sigHeader: string | null, secret: string, toleranceSec = 300) {
   if (!rawBody || !sigHeader || !secret) return false;
   const items = String(sigHeader)
     .split(',')
@@ -106,22 +108,22 @@ export async function verifyStripeSignature(rawBody, sigHeader, secret, toleranc
 }
 
 /* ---- S4: Cloudflare Access JWT verification ---- */
-let JWKS_CACHE = { url: null, at: 0, keys: null };
+let JWKS_CACHE: any = { url: null, at: 0, keys: null };
 const JWKS_TTL = 3600 * 1000;
 
-async function getJwks(teamDomain) {
+async function getJwks(teamDomain: string) {
   const url = teamDomain.replace(/\/+$/, '') + '/cdn-cgi/access/certs';
   if (JWKS_CACHE.url === url && JWKS_CACHE.keys && Date.now() - JWKS_CACHE.at < JWKS_TTL) return JWKS_CACHE.keys;
   const r = await fetch(url, { cf: { cacheTtl: 3600 } });
   if (!r.ok) throw new Error('JWKS fetch failed: ' + r.status);
-  const j = await r.json();
+  const j: any = await r.json();
   JWKS_CACHE = { url, at: Date.now(), keys: j.keys || [] };
   return JWKS_CACHE.keys;
 }
 
 /* Verify a Cloudflare Access JWT (RS256) against the team JWKS + audience + issuer
    + expiry. Returns the decoded payload on success, or null on any failure. */
-export async function verifyAccessJwt(assertion, teamDomain, aud) {
+export async function verifyAccessJwt(assertion: string, teamDomain: string, aud: string) {
   try {
     if (!assertion || !teamDomain || !aud) return null;
     const parts = assertion.split('.');
@@ -138,7 +140,7 @@ export async function verifyAccessJwt(assertion, teamDomain, aud) {
     const auds = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
     if (!auds.includes(aud)) return null;
 
-    const jwk = (await getJwks(teamDomain)).find(k => k.kid === header.kid);
+    const jwk = (await getJwks(teamDomain)).find((k: any) => k.kid === header.kid);
     if (!jwk) return null;
     const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
     const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64urlToBytes(parts[2]), enc.encode(parts[0] + '.' + parts[1]));
@@ -153,8 +155,8 @@ export async function verifyAccessJwt(assertion, teamDomain, aud) {
    reports, separately, the signature validity and the iss/aud/exp claim checks so a
    misconfigured ACCESS_TEAM_DOMAIN/ACCESS_AUD is obvious. Returns NO secrets — only
    the token's own claims and the configured (public) team domain / AUD identifier. */
-export async function inspectAccessJwt(assertion, teamDomain, aud) {
-  const out = { present: !!assertion };
+export async function inspectAccessJwt(assertion: string | null, teamDomain?: string, aud?: string) {
+  const out: any = { present: !!assertion };
   if (!assertion) return out;
   try {
     const parts = assertion.split('.');
@@ -162,7 +164,7 @@ export async function inspectAccessJwt(assertion, teamDomain, aud) {
     if (parts.length !== 3) return out;
     const header = JSON.parse(b64urlToString(parts[0]));
     const payload = JSON.parse(b64urlToString(parts[1]));
-    const norm = s => String(s || '').replace(/\/+$/, '');
+    const norm = (s: any) => String(s || '').replace(/\/+$/, '');
     out.alg = header.alg || null;
     out.kid = header.kid || null;
     out.iss = payload.iss || null;
@@ -182,7 +184,7 @@ export async function inspectAccessJwt(assertion, teamDomain, aud) {
     // signature check, independent of the claim checks above
     if (teamDomain && header.alg === 'RS256' && header.kid) {
       try {
-        const jwk = (await getJwks(teamDomain)).find(k => k.kid === header.kid);
+        const jwk = (await getJwks(teamDomain)).find((k: any) => k.kid === header.kid);
         out.kidFound = !!jwk;
         if (jwk) {
           const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
@@ -194,11 +196,11 @@ export async function inspectAccessJwt(assertion, teamDomain, aud) {
           );
         }
       } catch (e) {
-        out.jwksError = String((e && e.message) || e).slice(0, 100);
+        out.jwksError = String((e as any)?.message || e).slice(0, 100);
       }
     }
   } catch (e) {
-    out.error = String((e && e.message) || e).slice(0, 100);
+    out.error = String((e as any)?.message || e).slice(0, 100);
   }
   return out;
 }

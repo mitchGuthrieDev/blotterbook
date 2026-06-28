@@ -1,5 +1,5 @@
 /* A14 — guard the client↔Worker feature-flag default drift. The app's APP_FLAGS (app/data.js) and
-   the Worker's DEFAULTS.flags (functions/api/config.js) are duplicated literals coupled only by a
+   the Worker's DEFAULTS.flags (functions/api/config.ts) are duplicated literals coupled only by a
    "MUST mirror" comment; if they diverge, the static/offline client silently defaults a flag wrong.
    This test fails if the two flag key-sets or their default values don't match.
    Run: node scripts/test-flags.mjs */
@@ -35,12 +35,12 @@ function flagsFrom(src, re, label) {
 
 const app = flagsFrom(readFileSync('app/data.js', 'utf8'), /APP_FLAGS\s*=\s*\{([^}]*)\}/, 'app/data.js');
 const def = flagsFrom(
-  readFileSync('functions/api/config.js', 'utf8'),
+  readFileSync('functions/api/config.ts', 'utf8'),
   /DEFAULTS\s*=\s*\{\s*flags:\s*\{([^}]*)\}/,
-  'functions/api/config.js'
+  'functions/api/config.ts'
 );
 
-console.log('A14 — feature-flag defaults: app/data.js APP_FLAGS vs functions/api/config.js DEFAULTS.flags');
+console.log('A14 — feature-flag defaults: app/data.js APP_FLAGS vs functions/api/config.ts DEFAULTS.flags');
 const ak = Object.keys(app).sort(),
   dk = Object.keys(def).sort();
 ok('non-empty flag set parsed', ak.length > 0 && dk.length > 0, `app=${ak.length} server=${dk.length}`);

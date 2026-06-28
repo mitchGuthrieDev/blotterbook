@@ -32,17 +32,17 @@ so adding the cloud tier does not touch the rest of the app.
 
 ## Endpoints (stubs)
 
-- `functions/api/checkout.js` — create a Stripe Checkout session. **Stub.**
-- `functions/api/webhook.js`  — receive + verify Stripe webhooks, provision
+- `functions/api/checkout.ts` — create a Stripe Checkout session. **Stub.**
+- `functions/api/webhook.ts`  — receive + verify Stripe webhooks, provision
   accounts/entitlements. **Stub.**
-- `functions/api/me.js`       — return the current user's storage tier. **Stub** that
+- `functions/api/me.ts`       — return the current user's storage tier. **Stub** that
   returns `{ tier: "local", cloudSync: false }` so `Entitlements.current()` has something to call.
 
 ## Public endpoints (shipped)
 
 Live today; no auth required:
 
-- `functions/api/geo.js` — returns the visitor's coarse region from Cloudflare edge metadata
+- `functions/api/geo.ts` — returns the visitor's coarse region from Cloudflare edge metadata
   (`{ country, region, regionCode }`) to pre-fill the tax state. No IP lookup, no third-party
   service, nothing stored.
 - `GET /api/status` — the homepage "Live" indicator (`{ mode, label, updatedAt }`). The **POST**
@@ -52,7 +52,7 @@ Live today; no auth required:
 ## Admin auth (shipped)
 
 `/api/admin-key`, `/api/status`, `/api/config`, and the staging gate
-(`_middleware.js`) share `_lib/auth.js`:
+(`_middleware.ts`) share `_lib/auth.ts`:
 
 - **Short-lived tokens (S3).** `/api/admin-key` returns a signed HMAC token
   (not the raw key); the admin page stores and sends the *token*. The raw

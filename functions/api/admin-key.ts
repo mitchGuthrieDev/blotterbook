@@ -10,10 +10,11 @@
    also behind Access + the _middleware gate). Off-Access it returns 401 and the
    admin page falls back to manual key entry. */
 
-import { issueToken, verifyAccessJwt, inspectAccessJwt } from '../_lib/auth.js';
-import { json, rateLimited } from '../_lib/http.js';
+import { issueToken, verifyAccessJwt, inspectAccessJwt } from '../_lib/auth.ts';
+import { json, rateLimited } from '../_lib/http.ts';
+import type { Ctx } from '../_lib/types.ts';
 
-export async function onRequest(context) {
+export async function onRequest(context: Ctx) {
   const { request, env } = context;
   if (await rateLimited(env, 'admin-key', request, 20, 60)) return json({ error: 'rate limited' }, 429);
   const assertion = request.headers.get('Cf-Access-Jwt-Assertion');

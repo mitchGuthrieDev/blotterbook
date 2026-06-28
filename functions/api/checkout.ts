@@ -18,7 +18,7 @@
  * ID ONLY from env.STRIPE_PRICE_* server-side (map the client's plan name to it) — never
  * accept a client-supplied price/amount, so a caller can't choose what they're charged.
  */
-import { json } from '../_lib/http.js';
+import { json } from '../_lib/http.ts';
 
 export function onRequestPost() {
   return json({ error: 'not_implemented', message: 'Checkout is not wired up yet.' }, 501);
