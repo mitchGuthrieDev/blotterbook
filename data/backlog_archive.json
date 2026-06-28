@@ -2004,6 +2004,18 @@
       "effort": "medium",
       "status": "done",
       "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done — discussion/analysis delivered in docs/sveltekit-decision.md. Decision: DEFER SvelteKit; stay on Vite multi-page + Svelte 5 SPA. Rationale: of SvelteKit's six pillars, SSR + form actions are non-features for a local-only app, SSG + endpoints are already covered (Vite MPA static pages; functions/* edge layer), routing is a future micro-dep, and adapter-cloudflare only exists to serve the rest. SvelteKit's load/server idiom is a standing hazard to the HARD no-trade-data-leaves-the-browser pillar (server must never see trades) and adopting it would re-open the just-stabilized A18/A26 deploy contract and churn the security-reviewed functions/* layer for zero capability gain. Recorded a revisit trigger and graduation-to-adr-002 path. Sequencing resolved: A69 gate cleared (do it with plain Svelte under Vite MPA, not SvelteKit); A30 proceeds on the Vite/Svelte structure; A61 is orthogonal. Follow-up guardrail A75 filed.",
+      "id": "A62",
+      "title": "Discuss: adopt SvelteKit (pros/cons + analysis)",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "prompt": null
     }
   ]
 }
