@@ -121,6 +121,22 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   await page.click('#sv-app .overlays button:has-text("Net")');
   await expect(page.locator('#sv-app svg.equity .line')).toHaveCount(2);
 
+  // Export report (A34): open the modal, the iframe preview renders the report sheet, switching the
+  // format dropdown enables Download, and Email a copy is a mailto link.
+  await page.click('button:has-text("Export report")');
+  await expect(page.locator('#sv-app .modal[aria-label="Export performance report"]')).toBeVisible();
+  const repFrame = page.frameLocator('iframe[title="Performance report preview"]');
+  await expect(repFrame.locator('.sheet .brandline')).toContainText('Blotterbook');
+  await expect(repFrame.locator('.tiles .rtile').first()).toBeVisible();
+  await expect(page.locator('.modal[aria-label="Export performance report"] a:has-text("Email a copy")')).toHaveAttribute(
+    'href',
+    /^mailto:/
+  );
+  await page.selectOption('.modal[aria-label="Export performance report"] select', 'md');
+  await expect(page.locator('.modal[aria-label="Export performance report"] .pri')).toBeEnabled();
+  await page.click('.modal[aria-label="Export performance report"] [data-expclose]');
+  await expect(page.locator('#sv-app .modal[aria-label="Export performance report"]')).toHaveCount(0);
+
   // A38 Tier-2 bits: filter trade-count, session pill, calendar Latest button all render.
   await expect(page.locator('#sv-app .filterbar .count')).toContainText('trade');
   await expect(page.locator('#sv-app .pill')).toBeVisible();

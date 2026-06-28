@@ -14,16 +14,20 @@
   let shots = $state([]);
   let saving = $state(false);
   let savedMsg = $state('');
+  let ready = $state(false); // false until the day's record has loaded (avoids clobbering edits — see below)
   let shotInput;
 
-  // Reload whenever the selected date changes.
+  // Reload whenever the selected date changes. The load is async (IndexedDB), so we gate the form on
+  // `ready` until it resolves — otherwise a fast edit could be overwritten by the in-flight load.
   $effect(() => {
     const d = date;
     savedMsg = '';
+    ready = false;
     store.getJournal(d).then(rec => {
       text = rec.text || '';
       tagsStr = (rec.tags || []).join(', ');
       shots = rec.shots || [];
+      ready = true;
     });
   });
 
@@ -60,8 +64,8 @@
     <h2>Day note · {date}</h2>
     <button type="button" class="x" onclick={onclose} aria-label="Close day note">×</button>
   </div>
-  <textarea bind:value={text} rows="4" placeholder={`What happened on ${date}? Setups, mistakes, market context…`}></textarea>
-  <input class="tags" type="text" bind:value={tagsStr} placeholder="tags (comma separated)" />
+  <textarea bind:value={text} rows="4" disabled={!ready} placeholder={`What happened on ${date}? Setups, mistakes, market context…`}></textarea>
+  <input class="tags" type="text" bind:value={tagsStr} disabled={!ready} placeholder="tags (comma separated)" />
   <div class="shots">
     {#each shots as s, i (i)}
       <span class="shot">
@@ -73,7 +77,7 @@
     <input bind:this={shotInput} type="file" accept="image/*" hidden onchange={addShot} />
   </div>
   <div class="actions">
-    <button type="button" class="save" onclick={save} disabled={saving}>Save note</button>
+    <button type="button" class="save" onclick={save} disabled={saving || !ready}>Save note</button>
     {#if savedMsg}<span class="ok">{savedMsg}</span>{/if}
   </div>
 </section>

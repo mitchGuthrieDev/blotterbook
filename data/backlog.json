@@ -453,15 +453,15 @@
       "prompt": "ADR-001 Phase 4c (docs/adr-001-vite-svelte-spa.md). FINAL prod/demo cutover — do AFTER A31 + A32 AND the parity gaps A34-A38 (a post-merge audit found A32 only reached ~65-70% parity; cutting over before A34-A38 close would regress prod). (1) Convert app/app.html + app/demo.html into hand-authored Svelte mounts of the shared app/svelte/ app (like staging.html), each with its data-mode; remove the partials/app-*.html include markers from them. (2) DELETE the vanilla view layer once nothing references it: app/render.js, app/ui.js, app/datamanager.js, app/widgets.js, app/export.js, app/main.js, and the view-only parts of app/data.js (keep feature-flag defaults if still used by the Svelte app). KEEP the pure-logic core: app/adapters.js, compute/costModel in app/core.js, app/store.js, app/sampledata.js, assets/util.js, app/types.js — and the node test suites covering them. (3) Update scripts/build-includes.mjs (drop the app-shell assembly; keep nav/footer for the info pages) and scripts/bump-version.mjs (app surfaces are now Svelte mounts). Remove the now-dead partials/app-*.html. (4) Finish S18: Svelte scoped CSS removes the app inline styles; move the marketing pages' inline <style> (index.html, admin.html) into linked CSS; then flip _headers CSP to style-src 'self' (drop 'unsafe-inline'). (5) VERIFY all surfaces — app: landing→load CSV→Start→dashboard→reload restores from IndexedDB; demo: explore + ASSERT nothing written to IndexedDB + write controls disabled (the demo-never-persists invariant); staging: unchanged. Done when: all three surfaces are Svelte, the vanilla view modules + app partials are deleted, build-includes/bump-version updated, style-src is 'self' with no CSP violations, and the full e2e suite (incl. the demo no-persist check) is green. Then A30 (source-tree reorg) can follow."
     },
     {
-      "completedDate": null,
+      "completedDate": "2026-06-28",
       "partial": false,
-      "doneNote": null,
+      "doneNote": "Built app/report.js — a pure buildReport(m,c,labels) + reportHtmlDoc(rep,labels,tokenBlock) shared by the on-screen iframe report, the Markdown download, and the email summary (A29; single source so they can't drift). ExportReport.svelte renders the standalone doc in an isolated, baked-token iframe (A8) and supports PDF (print iframe), PNG/JPEG (rasterize), Markdown, and Email — full parity with vanilla export.js. Wired the topbar Export-report button (shown when loaded && trades present) with broker/feed/state/scope labels from setup. e2e covers opening the modal, the iframe preview, format→Download enable, and the mailto link.",
       "id": "A34",
       "title": "Phase 4 parity gap: export / performance report (Svelte)",
       "category": "FEATURES",
       "priority": "P2",
       "effort": "large",
-      "status": "open",
+      "status": "done",
       "prompt": "ADR-001 Phase 4 parity gap (blocks A33). The vanilla app/export.js performance report (the top-bar Export button → print→PDF / image / markdown download + email-a-copy of a condensed summary) has NO Svelte equivalent. Build it for the Svelte app (app/svelte/): an Export control that produces the same condensed performance report from the active metrics + costModel. Reuse the report-DATA assembly logic verbatim where it's pure (A29); only the view/print layer is rewritten in Svelte. Cover the same outputs the vanilla report did (at minimum print→PDF; match the markdown/email summary). Done when: the Svelte app can generate the performance report on all surfaces it ships to, parity with export.js, e2e covers the report opening."
     },
     {

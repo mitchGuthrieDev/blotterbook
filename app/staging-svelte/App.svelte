@@ -10,7 +10,7 @@
   //   staging  → real IndexedDB Store (isolated blotterbookStaging DB), seeded
   // Today this app is still mounted only on staging.html; app/demo mounts land in A33.
   import { onMount, setContext } from 'svelte';
-  import { loadRefData, compute, costModel, emit, PAGE_MODE, STATES, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../core.js';
+  import { loadRefData, compute, costModel, emit, PAGE_MODE, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../core.js';
   import { Store } from '../store.js';
   import { createDemoStore } from '../demostore.js';
   import { Adapters } from '../adapters.js';
@@ -31,6 +31,7 @@
   import ActivityTerminal from './components/ActivityTerminal.svelte';
   import Definitions from './components/Definitions.svelte';
   import StatCardModal from './components/StatCardModal.svelte';
+  import ExportReport from './components/ExportReport.svelte';
   import Landing from './components/Landing.svelte';
 
   let allTrades = $state([]);
@@ -41,6 +42,7 @@
   let landingMsg = $state('');
   let online = $state(typeof navigator === 'undefined' ? true : navigator.onLine); // A38 session pill
   let cardModalKey = $state(null); // A35 stat-card detail modal
+  let exportOpen = $state(false); // A34 performance-report export
 
   // Day-notes journal: the selected calendar day + the set of dates carrying a saved note.
   let selectedDate = $state(null);
@@ -103,6 +105,17 @@
     stateRate: (STATES.find(s => s[0] === setup.stateAbbr) || [, 0])[1] || 0,
   });
   const dateRange = $derived(allTrades.length ? `${allTrades[0].date} → ${allTrades[allTrades.length - 1].date}` : '');
+  // Human-readable labels for the export report header (parity with export.js BROKERS/feedName/
+  // stateLabel/scopeLabel). feed value is "name|cost"; scope mirrors render.js scopeLabel().
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const reportLabels = $derived({
+    broker: (BROKERS[setup.broker] && BROKERS[setup.broker].name) || setup.broker || '—',
+    feed: setup.feed ? setup.feed.split('|')[0] : '—',
+    state: (STATES.find(s => s[0] === setup.stateAbbr) || [, , '—'])[2] || '—',
+    scope: filters.scope === 'all' ? 'all time' : `${MON[calMonth]} ${calYear}`,
+    stateRate: costInputs.stateRate,
+    platform: setup.platform || 0,
+  });
 
   // Persist the cost setup whenever it changes (after the initial load).
   $effect(() => {
@@ -253,6 +266,7 @@
       <span class="pill" class:off={!online} title={online ? 'Online' : 'Offline'}>{online ? 'online' : 'offline'}</span>
       <a class="link" href="../changelog.html">Changelog</a>
       <a class="link" href="mailto:contact@blotterbook.com?subject=Blotterbook">Contact</a>
+      {#if loaded && allTrades.length}<button type="button" class="exportbtn" onclick={() => (exportOpen = true)}>Export report</button>{/if}
       {#if loaded}<button type="button" class="managebtn" onclick={() => (manageOpen = true)}>Manage data</button>{/if}
     </div>
   </header>
@@ -285,9 +299,9 @@
     <p class="note">
       Svelte 5 app — core dashboard (A32): Overview, performance curve (overlays + day-notes),
       trading calendar, advanced statistics, break-even/cost, filters/scope (incl. session/tag/saved
-      views), manage-data, screenshots, activity terminal. Closing the remaining prod-parity gaps
-      (A34–A38: export report, stat-card modals, panel/workspace system, Definitions & Caveats,
-      Tier-2) before the prod/demo cutover (A33).
+      views), manage-data, screenshots, activity terminal, stat-card modals (A35), Definitions &amp;
+      Caveats (A37), export report (A34). Remaining prod-parity gap: the panel/workspace system (A36)
+      before the prod/demo cutover (A33).
     </p>
   {:else}
     <p class="msg">{status}</p>
@@ -295,6 +309,15 @@
 
   {#if cardModalKey}
     <StatCardModal cardKey={cardModalKey} metrics={metricsActive} cost={costModel(metricsActive, costInputs)} onclose={() => (cardModalKey = null)} />
+  {/if}
+
+  {#if exportOpen}
+    <ExportReport
+      metrics={metricsActive}
+      cost={costModel(metricsActive, costInputs)}
+      labels={reportLabels}
+      onclose={() => (exportOpen = false)}
+    />
   {/if}
 
   {#if manageOpen}
@@ -389,7 +412,8 @@
   .link:hover {
     text-decoration: underline;
   }
-  .managebtn {
+  .managebtn,
+  .exportbtn {
     background: var(--panel2);
     color: var(--txt);
     border: 1px solid var(--line);
@@ -398,7 +422,8 @@
     font-size: 13px;
     cursor: pointer;
   }
-  .managebtn:hover {
+  .managebtn:hover,
+  .exportbtn:hover {
     border-color: var(--hover-line);
   }
   .msg {
