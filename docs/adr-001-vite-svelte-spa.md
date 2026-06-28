@@ -225,24 +225,27 @@ shared across surfaces:
 All three HTML files become hand-authored Svelte mounts (like `staging.html`), each with its
 `data-mode`. `build-includes` no longer assembles the app shell.
 
-#### 4b. Finish prod-parity features (absorbs the A27 "deferred polish") — **PARTIAL (A32 core; gaps A34–A38)**
+#### 4b. Finish prod-parity features (absorbs the A27 "deferred polish") — **COMPLETE (A32 core + gaps A34–A38 closed)**
 
-> **Correction (post-merge audit):** A32 was initially marked "complete/parity," but a
-> feature-by-feature audit of the merged `main` found parity is only ~65–70% — several real
-> prod/demo features have no Svelte equivalent yet. A32 delivered the *core* dashboard
+> **Correction (post-merge audit) + resolution:** A32 was initially marked "complete/parity," but a
+> feature-by-feature audit of the merged `main` found parity was only ~65–70% — several real
+> prod/demo features had no Svelte equivalent yet. A32 delivered the *core* dashboard
 > (`costModel(inputs)` refactor; curve interactivity + gross/net/take-home overlays via the shared
 > `app/curveseries.js`; session/tag/saved/day-of-week filters; journal + per-trade screenshots —
 > which also fixed a `$state`→IndexedDB clone bug and a `saveTradeMeta` `validShot` gap; app-mode
-> landing). **It did NOT reach full parity.** The gaps are now tracked as A34–A38 and MUST close
-> before A33 (cutover) so prod doesn't regress:
+> landing). The remaining gaps were tracked as A34–A38 and have **all now closed**, so the Svelte
+> staging app is at prod parity and A33 (cutover) is unblocked pending the user's live review:
 >
-> - **A34** — export / performance report (print→PDF / image / markdown / email).
-> - **A35** — clickable stat cards → detail drill-down modals (F14).
+> - **A34** — export / performance report (print→PDF / image / markdown / email). **Done** — pure
+>   `app/report.js` builder shared by the iframe report + Markdown + email; `ExportReport.svelte`.
+> - **A35** — clickable stat cards → detail drill-down modals (F14). **Done.**
 > - **A36** — panel system: collapse + drag-reorder + workspace templates + layout persistence.
-> - **A37** — Definitions & Caveats panel (glossary + warnings).
+>   **Done** — `Panel.svelte` chrome + `WorkspaceBar.svelte`; order/collapsed/templates persisted via
+>   `Store.local` under staging-namespaced keys.
+> - **A37** — Definitions & Caveats panel (glossary + warnings). **Done.**
 > - **A38** — Tier-2 parity bundle (session pill; calendar week-column + jump-to-today; cost
 >   Assumptions & Caveats; manage-data day-notes list; landing platform-override; filter trade-count;
->   changelog/contact links; curve drawdown band).
+>   changelog/contact links; curve drawdown band). **Done.**
 
 
 Staging was allowed to skip these as a proving ground, but prod must **not regress** below today's
@@ -302,6 +305,9 @@ large → do it only after the Svelte app is proven on prod. SEO is unaffected (
   journal tags+screenshots; per-trade screenshots; session/tag/saved filters; landing/CSV flow; the
   `costModel(inputs)` refactor). Absorbs the A27 deferred items.
 - **A33** — Phase 4c: cut prod + demo over to Svelte and delete the vanilla view layer; update
-  `build-includes`/`bump-version`; finish S18 (`style-src 'self'`).
+  `build-includes`/`bump-version`; finish S18 (`style-src 'self'`). Unblocked — the A34–A38 parity
+  gaps are closed; held only for the user's live review of staging.
+- **A34–A38** — Phase 4b parity gaps (export report; stat-card modals; panel/workspace system;
+  Definitions & Caveats; Tier-2 bundle). **All done** — staging is at prod parity.
 
 R11/R12/R13/F23 keep their existing IDs and become Phase 3 work (now unblocked by the framework).

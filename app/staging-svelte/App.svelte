@@ -32,6 +32,7 @@
   import Definitions from './components/Definitions.svelte';
   import StatCardModal from './components/StatCardModal.svelte';
   import ExportReport from './components/ExportReport.svelte';
+  import WorkspaceBar from './components/WorkspaceBar.svelte';
   import Landing from './components/Landing.svelte';
 
   let allTrades = $state([]);
@@ -54,6 +55,95 @@
   // Cost setup (broker/feed/state/platform), lifted here (A32) so BOTH the cost panel and the
   // curve overlays share it. Persisted to the 'setup' meta.
   let setup = $state({ broker: '', feed: '', stateAbbr: '', platform: 0 });
+
+  // Panel system (A36 — parity with vanilla ui.js/widgets.js). The dashboard's reorderable,
+  // collapsible panels; order + collapsed map persist through the Store.local seam under a
+  // staging-namespaced key (so staging layout never leaks into prod/demo). Workspace templates
+  // snapshot {order, collapsed} under WS_KEY. DEFAULT_ORDER mirrors vanilla DEFAULT_DASH_ORDER.
+  const DEFAULT_ORDER = ['perf', 'cal', 'cost', 'adv', 'defs', 'term'];
+  const LS_SUFFIX = PAGE_MODE === 'staging' ? '_staging' : '';
+  const LS_ORDER = 'tj_order' + LS_SUFFIX;
+  const LS_COLLAPSE = 'tj_collapsed' + LS_SUFFIX;
+  const WS_KEY = 'tj_ws_templates' + LS_SUFFIX;
+  const sanitizeOrder = ord => {
+    if (!Array.isArray(ord)) return [...DEFAULT_ORDER];
+    const known = ord.filter(k => DEFAULT_ORDER.includes(k));
+    return [...known, ...DEFAULT_ORDER.filter(k => !known.includes(k))];
+  };
+  // Initialize synchronously from localStorage so the restored layout paints without a flash.
+  let panelOrder = $state(sanitizeOrder(Store.local.get(LS_ORDER, null)));
+  let collapsedPanels = $state(Store.local.get(LS_COLLAPSE, {}) || {});
+  let draggingKey = $state(null);
+  let wsNames = $state(Object.keys(Store.local.get(WS_KEY, {}) || {}));
+  let wsSelected = $state('');
+
+  const persistOrder = () => Store.local.set(LS_ORDER, $state.snapshot(panelOrder));
+  const persistCollapsed = () => Store.local.set(LS_COLLAPSE, $state.snapshot(collapsedPanels));
+
+  function togglePanel(key) {
+    const next = { ...collapsedPanels };
+    if (next[key]) delete next[key];
+    else next[key] = 1;
+    collapsedPanels = next;
+    persistCollapsed();
+  }
+  function reorderOver(e, overKey) {
+    if (!draggingKey || draggingKey === overKey) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    const next = panelOrder.filter(k => k !== draggingKey);
+    const idx = next.indexOf(overKey);
+    if (idx < 0) return;
+    next.splice(idx + (after ? 1 : 0), 0, draggingKey);
+    panelOrder = next;
+  }
+  // The prop bundle each panel forwards to its <Panel> chrome.
+  const panelBundle = key => ({
+    pkey: key,
+    collapsed: !!collapsedPanels[key],
+    dragging: draggingKey === key,
+    ontoggle: () => togglePanel(key),
+    onreorderstart: () => (draggingKey = key),
+    onreorderend: () => {
+      draggingKey = null;
+      persistOrder();
+    },
+    onreorderover: e => reorderOver(e, key),
+  });
+
+  // Workspace templates (Store.local seam).
+  const readWs = () => Store.local.get(WS_KEY, {}) || {};
+  function saveWorkspace() {
+    if (PAGE_MODE === 'demo') return; // demo never persists new layouts (B23)
+    const name = (window.prompt('Name this workspace layout:') || '').trim();
+    if (!name) return;
+    const t = readWs();
+    t[name] = { order: $state.snapshot(panelOrder), collapsed: $state.snapshot(collapsedPanels) };
+    Store.local.set(WS_KEY, t);
+    wsNames = Object.keys(t);
+    wsSelected = name;
+    emit('ws:saved', { name });
+  }
+  function selectWorkspace(name) {
+    wsSelected = name;
+    if (!name) {
+      // "— Default —" → drop the saved layout and restore the default arrangement.
+      Store.local.remove(LS_ORDER);
+      Store.local.remove(LS_COLLAPSE);
+      panelOrder = [...DEFAULT_ORDER];
+      collapsedPanels = {};
+      emit('ws:reverted', {});
+      return;
+    }
+    const t = readWs()[name];
+    if (t) {
+      panelOrder = sanitizeOrder(t.order);
+      collapsedPanels = { ...(t.collapsed || {}) };
+      persistOrder();
+      persistCollapsed();
+      emit('ws:loaded', { name });
+    }
+  }
 
   // Filters drive the whole dashboard (a shared reactive object). scope = all-time vs the
   // calendar's current month. The cursor (calYear/calMonth) lives here so scope can read it.
@@ -278,30 +368,36 @@
   {:else if loaded}
     <FilterBar {filters} {roots} {tags} {savedFilters} count={metricsActive.n} onclear={clearFilters} onsave={saveView} onapply={applyView} ondelete={deleteView} />
     <Overview metrics={metricsActive} tradeCount={metricsActive.n} oncard={k => (cardModalKey = k)} />
-    <EquityCurve metrics={metricsAll} {costInputs} {journalDates} {selectedDate} onselect={d => (selectedDate = d)} />
-    <CalendarMonth
-      metrics={metricsAll}
-      year={calYear}
-      month={calMonth}
-      onnav={navMonth}
-      onjump={jumpToLatest}
-      {selectedDate}
-      {journalDates}
-      onselect={d => (selectedDate = d)}
-    />
-    {#if selectedDate}
-      <JournalEditor date={selectedDate} onsaved={refreshNotes} onclose={() => (selectedDate = null)} />
-    {/if}
-    <AdvancedStats metrics={metricsActive} />
-    <CostPanel metrics={metricsActive} {setup} {costInputs} />
-    <Definitions />
-    <ActivityTerminal />
+    <WorkspaceBar names={wsNames} value={wsSelected} onsave={saveWorkspace} onselect={selectWorkspace} saveDisabled={PAGE_MODE === 'demo'} />
+    <div class="dash" role="region" aria-label="Dashboard panels">
+      {#each panelOrder as key (key)}
+        {#if key === 'perf'}
+          <EquityCurve panel={panelBundle(key)} metrics={metricsAll} {costInputs} {journalDates} {selectedDate} onselect={d => (selectedDate = d)} />
+        {:else if key === 'cal'}
+          <CalendarMonth panel={panelBundle(key)} metrics={metricsAll} year={calYear} month={calMonth} onnav={navMonth} onjump={jumpToLatest} {selectedDate} {journalDates} onselect={d => (selectedDate = d)}>
+            {#snippet extra()}
+              {#if selectedDate}
+                <JournalEditor date={selectedDate} onsaved={refreshNotes} onclose={() => (selectedDate = null)} />
+              {/if}
+            {/snippet}
+          </CalendarMonth>
+        {:else if key === 'cost'}
+          <CostPanel panel={panelBundle(key)} metrics={metricsActive} {setup} {costInputs} />
+        {:else if key === 'adv'}
+          <AdvancedStats panel={panelBundle(key)} metrics={metricsActive} />
+        {:else if key === 'defs'}
+          <Definitions panel={panelBundle(key)} />
+        {:else if key === 'term'}
+          <ActivityTerminal panel={panelBundle(key)} />
+        {/if}
+      {/each}
+    </div>
     <p class="note">
-      Svelte 5 app — core dashboard (A32): Overview, performance curve (overlays + day-notes),
+      Svelte 5 app at prod parity (A32 + A34–A38): Overview, performance curve (overlays + day-notes),
       trading calendar, advanced statistics, break-even/cost, filters/scope (incl. session/tag/saved
       views), manage-data, screenshots, activity terminal, stat-card modals (A35), Definitions &amp;
-      Caveats (A37), export report (A34). Remaining prod-parity gap: the panel/workspace system (A36)
-      before the prod/demo cutover (A33).
+      Caveats (A37), export report (A34), and collapsible/drag-to-reorder panels with workspace
+      templates (A36). Pending the prod/demo cutover (A33) after live review.
     </p>
   {:else}
     <p class="msg">{status}</p>

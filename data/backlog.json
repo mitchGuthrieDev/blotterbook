@@ -477,15 +477,15 @@
       "prompt": "ADR-001 Phase 4 parity gap (blocks A33). In vanilla (widgets.js openCardModal / CARD_VIEWS), the headline Overview cards are CLICKABLE and open detail drill-down modals: Net PnL (cumulative curve + cost waterfall gross→commissions→subscriptions→net→tax→take-home), Win Rate (win/loss/scratch + PnL-by-weekday + long vs short), Profit Factor (gross profit vs loss + per-symbol profitability), Avg Win/Loss (win/loss histograms), Max Drawdown (equity curve with peak→trough markers). The Svelte Overview cards are static. Make them clickable and build the detail modals as Svelte components, deriving everything from the compute()/costModel() metrics (A29 — reuse the dowBuckets etc. helpers from core). Done when: the relevant Overview cards open faithful detail modals, parity with F14; e2e covers opening a card modal."
     },
     {
-      "completedDate": null,
+      "completedDate": "2026-06-28",
       "partial": false,
-      "doneNote": null,
+      "doneNote": "Built a Svelte panel framework: Panel.svelte provides unified chrome (drag grip, title, actions snippet, collapse chevron with aria-expanded/label — B41) and a collapsible body; the six dashboard sections (perf/cal/cost/adv/defs/term) each render their own <Panel> and forward a per-key prop bundle from App. App owns panelOrder + collapsedPanels + the draggingKey, persisted through the Store.local seam under staging-namespaced keys (tj_order_staging / tj_collapsed_staging), with whole-panel drag-to-reorder (grip arms draggable; dragover reorders by pointer midpoint). WorkspaceBar.svelte + App save/load/revert named workspace templates (tj_ws_templates_staging); '— Default —' restores DEFAULT_ORDER. Save is guarded off in demo (B23). The day-note editor rides inside the cal panel via a snippet so it moves/collapses with it. ActivityTerminal logs ws:saved/loaded/reverted. e2e covers collapse + reload persistence + template save/revert/reload. Parity with vanilla ui.js/widgets.js (drag simulation itself not asserted — HTML5 DnD is unreliable under Playwright).",
       "id": "A36",
       "title": "Phase 4 parity gap: panel system (collapse + drag-reorder + workspace templates + layout persistence)",
       "category": "FEATURES",
       "priority": "P2",
       "effort": "large",
-      "status": "open",
+      "status": "done",
       "prompt": "ADR-001 Phase 4 parity gap (blocks A33). The vanilla dashboard panels are user-customizable (app/ui.js + app/widgets.js): collapsible panels (chevron toggle + aria-expanded — B41), drag-to-reorder by grip handle, workspace/layout TEMPLATES (save/load/reset to DEFAULT_DASH_ORDER), all persisted to localStorage (tj_order / tj_collapsed / tj_ws_templates, _staging-suffixed on staging) via the Store.local seam. The Svelte app renders a FIXED layout with none of this. Build a Svelte panel framework: a reusable Panel wrapper (title + collapse chevron with aria-expanded, drag handle) that the dashboard sections use; persist order + collapsed state + named workspace templates via Store.local (per-mode keys); a top-bar workspace dropdown + save/reset. Done when: panels collapse, reorder by drag, and layouts persist + restore across reload (per surface); workspace templates save/load/reset; parity with ui.js/widgets.js; e2e covers collapse + persistence."
     },
     {

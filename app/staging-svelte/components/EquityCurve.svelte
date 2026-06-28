@@ -5,8 +5,9 @@
   // tooltip (B33), and click-to-select-day cross-link (B37).
   import { usd, money, blendedRateFor } from '../../core.js';
   import { dailySeries } from '../../curveseries.js';
+  import Panel from './Panel.svelte';
 
-  let { metrics, costInputs, journalDates = new Set(), selectedDate = null, onselect = () => {} } = $props();
+  let { metrics, costInputs, journalDates = new Set(), selectedDate = null, onselect = () => {}, panel = {} } = $props();
 
   const W = 800;
   const H = 240;
@@ -107,15 +108,14 @@
   }
 </script>
 
-<section class="panel">
-  <div class="phead">
-    <h2>Performance</h2>
+<Panel {...panel} title="Performance">
+  {#snippet actions()}
     <div class="overlays" role="group" aria-label="Curve overlays">
       {#each SERIES as s (s.key)}
         <button type="button" class:on={sel[s.key]} aria-pressed={sel[s.key]} style="--sw:{s.color}" onclick={() => toggle(s.key)}>{s.label}</button>
       {/each}
     </div>
-  </div>
+  {/snippet}
 
   {#if view}
     <svg
@@ -159,31 +159,9 @@
   {:else}
     <p class="empty">Not enough trades to plot a curve.</p>
   {/if}
-</section>
+</Panel>
 
 <style>
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px 16px 12px;
-    margin-top: 16px;
-  }
-  .phead {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 10px;
-  }
-  h2 {
-    margin: 0;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--faint);
-    font-weight: 700;
-  }
   .overlays {
     display: flex;
     gap: 4px;

@@ -140,7 +140,7 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   // A38 Tier-2 bits: filter trade-count, session pill, calendar Latest button all render.
   await expect(page.locator('#sv-app .filterbar .count')).toContainText('trade');
   await expect(page.locator('#sv-app .pill')).toBeVisible();
-  await expect(page.locator('#sv-app .calendar .today')).toBeVisible();
+  await expect(page.locator('#sv-app .panel[data-key="cal"] .nav .today')).toBeVisible();
 
   // Manage data: open the modal, edit a trade's tags via the Store, and see them in the table.
   await page.click('.managebtn');
@@ -187,6 +187,40 @@ test('staging (Svelte): session filter narrows the dataset', async ({ page }) =>
   await page.fill('#sv-app .saved .vname', 'rth view');
   await page.click('#sv-app .saved .savebtn');
   await expect(page.locator('#sv-app .saved .chip .apply')).toContainText('rth view');
+});
+
+// A36: the dashboard panel system — collapse (with ARIA + persistence) and workspace templates.
+test('staging (Svelte): panel collapse persists + workspace templates (A36)', async ({ page }) => {
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  const perf = page.locator('#sv-app .panel[data-key="perf"]');
+  await expect(perf).toBeVisible();
+  await expect(perf.locator('svg.equity')).toBeVisible();
+
+  // Collapse via the header: the chevron flips aria-expanded/label (B41) and the body is removed.
+  const chev = perf.locator('.chev');
+  await expect(chev).toHaveAttribute('aria-expanded', 'true');
+  await perf.locator('.phead').click();
+  await expect(chev).toHaveAttribute('aria-expanded', 'false');
+  await expect(chev).toHaveAttribute('aria-label', 'Expand');
+  await expect(perf.locator('svg.equity')).toHaveCount(0);
+
+  // The collapsed state persists across a reload (Store.local seam, staging-namespaced key).
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app .panel[data-key="perf"] .chev')).toHaveAttribute('aria-expanded', 'false');
+
+  // Workspace templates: save the current (perf-collapsed) layout under a name → it joins the select.
+  page.on('dialog', d => d.accept('My Layout'));
+  await page.click('#sv-app .wsbar .wssave');
+  await expect(page.locator('#sv-app .wsbar select option', { hasText: 'My Layout' })).toHaveCount(1);
+
+  // "— Default —" reverts to the default arrangement → the perf panel expands again.
+  await page.selectOption('#sv-app .wsbar select', '');
+  await expect(page.locator('#sv-app .panel[data-key="perf"] .chev')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#sv-app .panel[data-key="perf"] svg.equity')).toBeVisible();
+
+  // Reloading the default layout selection → loads my saved template back (perf collapsed again).
+  await page.selectOption('#sv-app .wsbar select', 'My Layout');
+  await expect(page.locator('#sv-app .panel[data-key="perf"] .chev')).toHaveAttribute('aria-expanded', 'false');
 });
 
 // B41: toggle/collapse controls must expose ARIA state (aria-pressed / aria-expanded).

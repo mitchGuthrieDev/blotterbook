@@ -3,8 +3,9 @@
   // App and shared with the curve overlays — this panel binds its form to the shared `setup` object
   // and renders the breakdown from costModel(metrics, costInputs). No DOM-id coupling; App persists.
   import { costModel, BROKERS, BROKER_ORDER, BROKER_FEEDS, STATES, usd, money } from '../../core.js';
+  import Panel from './Panel.svelte';
 
-  let { metrics, setup, costInputs } = $props();
+  let { metrics, setup, costInputs, panel = {} } = $props();
 
   const feedGroups = $derived(BROKER_FEEDS[setup.broker] || {});
   const stateOpts = $derived(STATES.slice().sort((a, b) => (a[2] < b[2] ? -1 : 1)));
@@ -17,9 +18,8 @@
   }
 </script>
 
-<section class="panel costpanel">
-  <div class="phead"><h2>Break-even &amp; Cost</h2></div>
-
+<Panel {...panel} title="Break-even &amp; Cost">
+  <div class="costpanel">
   <div class="setup">
     <label>
       <span>Broker</span>
@@ -96,27 +96,10 @@
       </ul>
     </details>
   {/if}
-</section>
+  </div>
+</Panel>
 
 <style>
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px 16px 16px;
-    margin-top: 16px;
-  }
-  .phead {
-    margin-bottom: 12px;
-  }
-  h2 {
-    margin: 0;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--faint);
-    font-weight: 700;
-  }
   .setup {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));

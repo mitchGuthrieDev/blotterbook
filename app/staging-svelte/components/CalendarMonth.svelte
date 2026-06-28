@@ -3,12 +3,14 @@
   // recomputation). The cursor starts on the latest trade's month. Day-notes dots, selection →
   // dashboard scoping, and the curve cross-link from the vanilla calendar come in later A27 slices.
   import { pad2, usd, money } from '../../core.js';
+  import Panel from './Panel.svelte';
 
   // year/month are owned by App (so the all-time/month scope toggle can read the same cursor);
   // onnav(delta) asks App to shift the month. metrics here is the FILTERED all-time set, so the
   // grid colors reflect the active filters regardless of scope. selectedDate + journalDates +
   // onselect wire the day-notes journal: clicking a day selects it; days with a note get a dot.
-  let { metrics, year, month, onnav, onjump = () => {}, selectedDate = null, journalDates = new Set(), onselect = () => {} } = $props();
+  // `extra` is App's snippet for the contextual day-note editor, rendered inside this panel's body.
+  let { metrics, year, month, onnav, onjump = () => {}, selectedDate = null, journalDates = new Set(), onselect = () => {}, panel = {}, extra } = $props();
 
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -34,9 +36,8 @@
   const compact = v => (v < 0 ? '-' : '+') + '$' + Math.abs(Math.round(v)).toLocaleString('en-US');
 </script>
 
-<section class="panel calendar">
-  <div class="phead">
-    <h2>Trading Calendar</h2>
+<Panel {...panel} title="Trading Calendar">
+  {#snippet actions()}
     <div class="nav">
       <button type="button" aria-label="Previous month" onclick={() => onnav(-1)}>‹</button>
       <span class="label">{MONTHS[month]} {year}</span>
@@ -44,8 +45,9 @@
       <button type="button" class="today" onclick={() => onjump()}>Latest</button>
     </div>
     <span class="mnet" class:neg={monthNet < 0}>{usd(monthNet)}</span>
-  </div>
+  {/snippet}
 
+  <div class="calendar">
   <div class="dow">
     {#each DOW as d (d)}<span>{d}</span>{/each}
   </div>
@@ -79,31 +81,11 @@
       {/if}
     {/each}
   </div>
-</section>
+  </div>
+  {@render extra?.()}
+</Panel>
 
 <style>
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px 16px 16px;
-    margin-top: 16px;
-  }
-  .phead {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
-  h2 {
-    margin: 0;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--faint);
-    font-weight: 700;
-  }
   .nav {
     display: flex;
     align-items: center;

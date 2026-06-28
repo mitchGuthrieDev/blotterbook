@@ -1,11 +1,13 @@
 <script>
   // Definitions & Caveats (A37 — parity with the vanilla data-key="defs" panel). Static glossary +
   // warnings; the text is ported verbatim from partials/app-dash.html so the two read identically.
+  import Panel from './Panel.svelte';
+
+  let { panel = {} } = $props();
 </script>
 
-<section class="panel defs">
-  <div class="phead"><h2>Definitions &amp; Caveats</h2></div>
-  <div class="defbody">
+<Panel {...panel} title="Definitions &amp; Caveats">
+  <div class="defs defbody">
     <dl>
       <dt>Trade = one closed position</dt>
       <dd>Each trade is one realized-PnL event. Depending on the platform Blotterbook auto-detects, that's either one row per closed position (close-event exports like TradingView) or entry/exit fills paired into round-trips by a FIFO matcher (which also recovers hold time). TradingView is verified; the other eight adapters are beta — verify the parsed numbers against your statement.</dd>
@@ -43,24 +45,9 @@
       <dd>Timestamps are read as written, in the export's own clock — no timezone conversion. Dates parse as US <b>M/D/Y</b>; an unambiguous day &gt; 12 (e.g. 25/06) is auto-detected as D/M/Y, but ambiguous non-US dates can land on the wrong day. Session (RTH/ETH) classification assumes US Eastern time. Export in a US/ET format, or verify the parsed dates before trusting day/week/month grouping.</dd>
     </dl>
   </div>
-</section>
+</Panel>
 
 <style>
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px 16px 16px;
-    margin-top: 16px;
-  }
-  h2 {
-    margin: 0 0 10px;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--faint);
-    font-weight: 700;
-  }
   .defbody {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
