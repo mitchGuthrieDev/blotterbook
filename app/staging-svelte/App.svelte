@@ -8,9 +8,9 @@
   //   app      → real IndexedDB Store (blotterbook DB), no seed (real user data; landing flow is A32)
   //   demo     → in-memory DemoStore (never persists), seeded
   //   staging  → real IndexedDB Store (isolated blotterbookStaging DB), seeded
-  // Today this app is still mounted only on staging.html; app/demo mounts land in A33.
+  // This app currently mounts only on staging.html; the app/demo mounts come with the A33 cutover.
   import { onMount, setContext } from 'svelte';
-  import { loadRefData, compute, costModel, emit, PAGE_MODE, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../core.js';
+  import { loadRefData, compute, costModel, emit, sessionOf, PAGE_MODE, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../core.js';
   import { Store } from '../store.js';
   import { createDemoStore } from '../demostore.js';
   import { Adapters } from '../adapters.js';
@@ -155,11 +155,8 @@
     const d = new Date(t.date + 'T00:00:00');
     return d.getFullYear() === y && d.getMonth() === m;
   };
-  // RTH = 09:30–16:00 by the exported clock time, else ETH (matches render.js sessionOf).
-  const sessionOf = t => {
-    const hm = (t.time || '').slice(11, 16);
-    return hm && hm >= '09:30' && hm < '16:00' ? 'rth' : 'eth';
-  };
+  // sessionOf (RTH 09:30–16:00 vs ETH) is shared from core.js so the Svelte filter and the vanilla
+  // render.js filter use ONE definition (A29/A41).
 
   function applyFilters(trades, f) {
     return trades.filter(t => {

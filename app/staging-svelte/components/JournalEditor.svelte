@@ -5,6 +5,7 @@
   // store.validShot allow-list (base64 images only — S15/S18). An empty save deletes the row.
   import { getContext } from 'svelte';
   import { emit } from '../../core.js';
+  import { readImage } from '../util.js';
 
   let { date, onsaved, onclose } = $props();
   const store = getContext('bb:store');
@@ -30,14 +31,6 @@
       ready = true;
     });
   });
-
-  const readImage = file =>
-    new Promise(res => {
-      const r = new FileReader();
-      r.onload = () => res(r.result);
-      r.onerror = () => res(null);
-      r.readAsDataURL(file);
-    });
 
   async function addShot(e) {
     const f = e.currentTarget.files[0];

@@ -6,6 +6,7 @@
   // iframe, PNG/JPEG rasterize it, Markdown/Email reuse the builder's strings.
   import { buildReport, reportHtmlDoc } from '../../report.js';
   import { fmtDate } from '../../core.js';
+  import { downloadBlob } from '../util.js';
 
   let { metrics: m, cost: c, labels, onclose } = $props();
 
@@ -30,17 +31,6 @@
   function setNote(t, k = '') {
     note = t || '';
     noteKind = k;
-  }
-
-  function download(name, blob) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   // Rasterize the report node (serialized HTML + CSS in an SVG <foreignObject> → 2× canvas → blob).
@@ -92,12 +82,12 @@
         iframeEl.contentWindow.focus();
         iframeEl.contentWindow.print();
       } else if (format === 'md') {
-        download(fname + '.md', new Blob([rep.reportMd], { type: 'text/markdown;charset=utf-8' }));
+        downloadBlob(fname + '.md', new Blob([rep.reportMd], { type: 'text/markdown;charset=utf-8' }));
         setNote('Markdown downloaded.', 'ok');
       } else if (format === 'png' || format === 'jpeg') {
         setNote('Rendering image…');
         const blob = await rasterize(format === 'png' ? 'image/png' : 'image/jpeg');
-        download(fname + '.' + format, blob);
+        downloadBlob(fname + '.' + format, blob);
         setNote('');
       }
     } catch (err) {

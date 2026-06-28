@@ -30,7 +30,10 @@
 
   onMount(() => {
     add('staging app ready');
-    for (const [ev, fmt] of Object.entries(FMT)) onEvent(ev, d => add(fmt(d)));
+    // onEvent returns an unsubscribe (core.js); collect them so the bus subscriptions are released
+    // if this panel ever unmounts — no duplicate log lines on a remount.
+    const offs = Object.entries(FMT).map(([ev, fmt]) => onEvent(ev, d => add(fmt(d))));
+    return () => offs.forEach(off => off());
   });
 
   // Auto-scroll to the newest line.

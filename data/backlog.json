@@ -49,11 +49,11 @@
       "category": "FEATURES",
       "priority": "P2",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-28",
       "partial": false,
       "prompt": "From the R1 staging-app audit (final pre-cutover review). The vanilla dashboard shows FIVE headline cards — net, win, pf, wl (Avg Win/Loss / payoff ratio), dd (render.js renderCards ~49-51) — each with an F14 detail modal (widgets.js CARD_VIEWS.wl ~396). The Svelte Overview (app/staging-svelte/components/Overview.svelte) renders a richer 10-card set but DROPPED the 'wl' card, and StatCardModal's MODAL_KEYS only covers net/win/pf/dd. The avg-win/avg-loss/payoff data still appears in Advanced Statistics, so this is a missing headline card + drill-down, not lost data. Restore parity: add a 'wl' (Avg Win/Loss) card to the Svelte Overview (value m.wl, sub avgW/avgL) and a 'wl' branch to StatCardModal mirroring vanilla CARD_VIEWS.wl (avg win/loss, long vs short, payoff). Add it to MODAL_KEYS. Reuse the pure metrics verbatim (A29). Done when: the Svelte Overview shows the Avg Win/Loss card, clicking it opens the wl drill-down, and an e2e asserts it. Blocks/feeds A33 (prod-cutover parity).",
-      "doneNote": null
+      "doneNote": "Added the Avg Win/Loss headline card to the Svelte Overview (value ratio(m.wl), sub avgW/avgL) and a 'wl' branch to StatCardModal — avg win/loss/ratio stats + win & loss distribution histograms (hist()), mirroring vanilla CARD_VIEWS.wl; added 'wl' to MODAL_KEYS. Pure metrics (m.wl/avgW/avgL/pnls) reused verbatim (A29). e2e asserts the card renders and its modal opens with the distribution."
     },
     {
       "id": "A40",
@@ -61,11 +61,11 @@
       "category": "FEATURES",
       "priority": "P2",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-28",
       "partial": false,
       "prompt": "From the R1 staging-app audit (final pre-cutover review). The vanilla trading calendar renders a left 'Week' column per row — ISO week number + that week's P&L total + traded-day count (render.js renderCalendar ~417, ~455-459; uses isoWeek()). The Svelte CalendarMonth (app/staging-svelte/components/CalendarMonth.svelte) is a plain 7-column Sunday-first grid with no week column. Restore parity: add the leading Week cell to each calendar row (ISO week no. via the shared isoWeek helper, weekly P&L from the same per-day metrics, day count), matching the vanilla layout/classes (.wkcell/.wl/.wp/.wd). Pure presentation of compute()'s m.days (A29 — no recomputation). Done when: the Svelte calendar shows the Week column with week number + weekly P&L + day count, styled to match, and an e2e asserts a week cell renders. Blocks/feeds A33 (prod-cutover parity).",
-      "doneNote": null
+      "doneNote": "Rebuilt CalendarMonth's grid as a 6-row Sunday-first sweep (buildWeeks) mirroring vanilla render.js: each row gets a leading .wkcell with ISO week no. (shared isoWeek, moved to core.js) + weekly P&L (.wkpnl pos/neg) + traded-day count. Grid is now 8-col (52px Week + 7 days); off-month days render as empty cells; rows past the month stop (w>0 && !monthHit). monthNet sums the weekly totals. Pure presentation of m.days (A29). e2e asserts a week cell renders its 'Wk N'."
     },
     {
       "id": "A41",
@@ -73,9 +73,10 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P3",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": true,
+      "doneNote": "Export report tiles now color-code: buildReport carries a per-row tone (cls) and reportHtmlDoc applies it, mirroring export.js. Hoisted sessionOf + isoWeek to core.js as the single source — render.js and the Svelte App/CalendarMonth import them; the duplicate definitions are gone. Hoisted ratio/num to core.js (used by Overview/AdvancedStats/StatCardModal) and readImage/downloadBlob to app/staging-svelte/util.js (JournalEditor/ManageData/ExportReport), unifying the revokeObjectURL timing. onEvent now returns an unsubscribe and ActivityTerminal releases its bus subscriptions on unmount. Corrected the stale A27/A33 comments in App.svelte + CalendarMonth. PARTIAL: the optional shared <Modal> overlay wrapper (ExportReport/StatCardModal/ManageData still repeat the overlay markup) was left as future polish — not worth the churn pre-cutover.",
       "prompt": "From the R1 staging-app audit (final pre-cutover review). A bundle of low-risk cleanups in the Svelte staging app (app/staging-svelte/**) — none block cutover, but they reduce drift before prod/demo migrate. (1) Export report headline tiles lose pos/neg color-coding except Max drawdown: vanilla export.js applies cls() per tile, but app/report.js reportHtmlDoc (~106) only marks 'Max drawdown' neg. Carry a per-row tone from buildReport (or apply cls to Net/Take-home/Gross) so the exported tiles color-code like vanilla. (2) Duplicated sessionOf (RTH 09:30-16:00 vs ETH) lives in both App.svelte (~159) and render.js (~674) — drift risk; hoist a single sessionOf to core.js and import in both. (3) Hoist small duplicated Svelte helpers: readImage (JournalEditor + ManageData), the blob-download helper (ExportReport + ManageData — also unify the revokeObjectURL timing), and the ratio()/num() formatters (Overview + AdvancedStats + StatCardModal) into a shared module (e.g. core.js for the pure formatters, a small svelte util for readImage/download); optionally extract a shared Modal overlay wrapper used by ExportReport/StatCardModal/ManageData (one place for the overlay a11y/scroll-lock pattern). (4) Stale comments now that A34-A38 shipped: App.svelte (~11) 'app/demo mounts land in A33' and CalendarMonth's 'come in later A27 slices' note. (5) Latent: ActivityTerminal subscribes to the event bus with no unsubscribe (core.js has no offEvent); harmless today (the component never remounts — keyed reorder moves the instance, collapse hides only the body) but add offEvent + cleanup if components may remount. NOTE: two audit candidates were checked and are NOT bugs — saveTradeMeta already rebuilds tags/shots into plain arrays so no $state proxy reaches IndexedDB (store.js ~217-219), and the `void [setup...]` effect is the repo's intended dependency-tracking idiom. Done when: tiles color-code on export, sessionOf is single-sourced, the duplicated helpers are hoisted, stale comments are corrected, and lint/tests/e2e stay green.",
       "doneNote": null
     },

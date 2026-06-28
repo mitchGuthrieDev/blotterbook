@@ -4,7 +4,7 @@
    compute() metrics + costModel result + setup labels — ONE source for the on-screen report, the
    Markdown download, and the email summary (so they can't drift, like the vanilla export.js).
    Depends only on core formatters. */
-import { money, DOW_LABEL, fmtDate, pad2 } from './core.js';
+import { money, cls, DOW_LABEL, fmtDate, pad2 } from './core.js';
 import { esc } from '../assets/util.js';
 
 /**
@@ -18,15 +18,16 @@ export function buildReport(m, c, labels) {
   const genStr = `${fmtDate(gen)} ${pad2(gen.getHours())}:${pad2(gen.getMinutes())}`;
   const head = `${labels.broker} · Feed: ${labels.feed} · State: ${labels.state}`;
 
+  // [label, value, toneClass] — tone mirrors vanilla export.js so the tiles color-code identically.
   const headline = [
-    ['Net P&L (pre-tax)', money(c.netPreTax)],
-    ['Take-home (post-tax)', money(c.afterTax)],
-    ['Gross P&L', money(c.gross)],
-    ['Win rate', m.winRate.toFixed(1) + '%'],
-    ['Profit factor', c.pf === Infinity ? '∞' : c.pf.toFixed(2)],
-    ['Max drawdown', money(-m.maxDD)],
-    ['Trades', String(m.n)],
-    ['Active days', String(m.active)],
+    ['Net P&L (pre-tax)', money(c.netPreTax), cls(c.netPreTax)],
+    ['Take-home (post-tax)', money(c.afterTax), cls(c.afterTax)],
+    ['Gross P&L', money(c.gross), cls(c.gross)],
+    ['Win rate', m.winRate.toFixed(1) + '%', ''],
+    ['Profit factor', c.pf === Infinity ? '∞' : c.pf.toFixed(2), ''],
+    ['Max drawdown', money(-m.maxDD), 'neg'],
+    ['Trades', String(m.n), ''],
+    ['Active days', String(m.active), ''],
   ];
   const costRows = [
     ['Gross P&L', money(c.gross)],
@@ -103,7 +104,7 @@ export function buildReport(m, c, labels) {
    getComputedStyle so the report palette tracks tokens.css (A8) without this module touching the DOM. */
 export function reportHtmlDoc(rep, labels, tokenBlock) {
   const tile = (k, v, cl = '') => `<div class="rtile"><div class="rk">${esc(k)}</div><div class="rv ${cl}">${esc(v)}</div></div>`;
-  const tiles = rep.headline.map(([k, v]) => tile(k, v, k === 'Max drawdown' ? 'neg' : '')).join('');
+  const tiles = rep.headline.map(([k, v, tone]) => tile(k, v, tone || '')).join('');
   const COST_CLASS = {
     'Net P&L (pre-tax)': 'tot',
     'After-tax take-home': 'tot',

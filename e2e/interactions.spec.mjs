@@ -72,12 +72,21 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   await expect(page.locator('.modal[aria-label="Net PnL"] .bars')).toContainText('Take-home');
   await page.click('.modal[aria-label="Net PnL"] .x');
 
+  // Avg Win/Loss card + its detail modal (A39 — parity with vanilla's 5th headline card).
+  await expect(page.locator('#sv-app [data-card="wl"] .value')).toBeVisible();
+  await page.click('#sv-app [data-card="wl"]');
+  await expect(page.locator('.modal[aria-label="Avg Win / Loss"]')).toBeVisible();
+  await expect(page.locator('.modal[aria-label="Avg Win / Loss"]')).toContainText('Win distribution');
+  await page.click('.modal[aria-label="Avg Win / Loss"] .x');
+
   // Performance equity curve renders an SVG path from compute()'s m.curve.
   const curve = page.locator('#sv-app svg.equity path.line');
   await expect(curve).toHaveAttribute('d', /^M[\d.]+,[\d.]+ L/);
 
   // Trading calendar renders day cells, including traded (colored) days from m.days.
   await expect(page.locator('#sv-app .calendar .calgrid .cell.traded').first()).toBeVisible();
+  // Calendar Week column (A40): each row carries an ISO week number + weekly P&L.
+  await expect(page.locator('#sv-app .calendar .calgrid .wkcell .wkno').first()).toContainText('Wk');
 
   // Advanced statistics panel renders its metric rows from compute().
   await expect(page.locator('#sv-app .advstats .row').first()).toBeVisible();

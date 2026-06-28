@@ -1,14 +1,11 @@
 <script>
   // Overview cards — derived purely from the compute() metrics object (A29: no recomputation,
   // just presentation). Formatters (usd/money/cls) are imported verbatim from the core.
-  import { usd, money, cls } from '../../core.js';
+  import { usd, money, cls, ratio, num } from '../../core.js';
   import StatCard from './StatCard.svelte';
 
   let { metrics, tradeCount, oncard = () => {} } = $props();
-  const MODAL_KEYS = new Set(['net', 'win', 'pf', 'dd']); // cards with F14 detail modals
-
-  const ratio = v => (v === Infinity ? '∞' : Number.isFinite(v) ? v.toFixed(2) : '—');
-  const num = v => (Number.isFinite(v) ? v.toFixed(2) : '—');
+  const MODAL_KEYS = new Set(['net', 'win', 'pf', 'wl', 'dd']); // cards with F14 detail modals
 
   const cards = $derived(build(metrics, tradeCount));
 
@@ -18,6 +15,7 @@
       { key: 'net', label: 'Net P&L', value: usd(m.net), tone: cls(m.net) },
       { key: 'win', label: 'Win rate', value: m.winRate.toFixed(1) + '%', sub: `${m.wins}W · ${m.losses}L · ${m.scratch}S` },
       { key: 'pf', label: 'Profit factor', value: ratio(m.pf), tone: cls(m.pf - 1) },
+      { key: 'wl', label: 'Avg win / loss', value: ratio(m.wl), sub: `${usd(m.avgW)} / ${usd(m.avgL)}` },
       { key: 'exp', label: 'Expectancy / trade', value: usd(m.expectancy), tone: cls(m.expectancy) },
       { key: 'trades', label: 'Trades', value: String(n), sub: `${m.active} trading days` },
       { key: 'avgday', label: 'Avg daily P&L', value: usd(m.avgDaily), tone: cls(m.avgDaily) },

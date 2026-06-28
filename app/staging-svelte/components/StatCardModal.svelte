@@ -2,11 +2,9 @@
   // Stat-card detail modal (A35 — parity with vanilla widgets.js CARD_VIEWS / openCardModal, F14).
   // Clicking a headline Overview card opens this drill-down. All data comes from compute() metrics +
   // costModel (A29 — reuses dowBuckets/DOW_LABEL/minMax from core); charts are small inline SVG/bars.
-  import { usd, money, cls, minMax, dowBuckets, DOW_LABEL } from '../../core.js';
+  import { usd, money, cls, ratio, minMax, dowBuckets, DOW_LABEL } from '../../core.js';
 
   let { cardKey, metrics: m, cost: c, onclose } = $props();
-
-  const ratio = v => (v === Infinity ? '∞' : Number.isFinite(v) ? v.toFixed(2) : '—');
 
   // Signed horizontal bars scaled to the max abs value.
   function bars(rows) {
@@ -32,7 +30,7 @@
     const bins = new Array(8).fill(0);
     for (const v of values) bins[Math.min(7, Math.floor(((v - lo) / span) * 8))]++;
     const max = Math.max(1, ...bins);
-    return bins.map((n, i) => ({ pct: (n / max) * 100, lo: lo + (span * i) / 8 }));
+    return bins.map((n, i) => ({ pct: (n / max) * 100, lo: lo + (span * i) / 8, n }));
   }
   function symPf(trades) {
     const map = new Map();
@@ -41,7 +39,7 @@
   }
 
   const title = $derived(
-    { net: 'Net PnL', win: 'Win Rate', pf: 'Profit Factor', dd: 'Max Drawdown' }[cardKey] || 'Detail'
+    { net: 'Net PnL', win: 'Win Rate', pf: 'Profit Factor', wl: 'Avg Win / Loss', dd: 'Max Drawdown' }[cardKey] || 'Detail'
   );
   const ddCurve = $derived(cardKey === 'dd' || cardKey === 'net' ? curvePath(m.curve) : null);
 </script>
@@ -91,6 +89,16 @@
         ]))}
         <h3>By symbol (net PnL)</h3>
         {@render barList(bars(symPf(m.trades)))}
+      {:else if cardKey === 'wl'}
+        <div class="stats">
+          <span><b class="pos">{usd(m.avgW)}</b> Avg win</span>
+          <span><b class="neg">{usd(m.avgL)}</b> Avg loss</span>
+          <span><b>{ratio(m.wl)}</b> Ratio</span>
+        </div>
+        <h3>Win distribution</h3>
+        {@render histChart(m.pnls.filter(p => p > 0), 'var(--green)')}
+        <h3>Loss distribution (absolute)</h3>
+        {@render histChart(m.pnls.filter(p => p < 0).map(p => -p), 'var(--red)')}
       {:else if cardKey === 'dd'}
         <div class="stats">
           <span><b class="neg">{usd(-m.maxDD)}</b> Max drawdown</span>
@@ -111,6 +119,22 @@
     </div>
   </div>
 </div>
+
+{#snippet histChart(values, color)}
+  {#if values.length}
+    <div class="bars">
+      {#each hist(values) as b, i (i)}
+        <div class="bar">
+          <span class="bl">≥ {money(b.lo)}</span>
+          <span class="bt"><span class="fill" style="width:{b.pct}%;background:{color}"></span></span>
+          <span class="bv">{b.n}</span>
+        </div>
+      {/each}
+    </div>
+  {:else}
+    <p class="empty">No trades in this bucket.</p>
+  {/if}
+{/snippet}
 
 {#snippet barList(rows)}
   <div class="bars">

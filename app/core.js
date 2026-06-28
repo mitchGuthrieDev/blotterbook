@@ -80,8 +80,12 @@ export const BUS = new EventTarget();
 export function emit(name, detail) {
   BUS.dispatchEvent(new CustomEvent(name, { detail }));
 }
+// Subscribe to a bus event; returns an unsubscribe function (callers that don't need cleanup —
+// the vanilla widgets — can ignore it; the Svelte components capture it for onMount teardown).
 export function onEvent(name, fn) {
-  BUS.addEventListener(name, e => fn(/** @type {CustomEvent} */ (e).detail));
+  const handler = e => fn(/** @type {CustomEvent} */ (e).detail);
+  BUS.addEventListener(name, handler);
+  return () => BUS.removeEventListener(name, handler);
 }
 
 /* CSV parsing now lives in adapters.js (the imported `Adapters`) — platform-specific
@@ -305,6 +309,27 @@ export const usd = (v, s = true) => {
 };
 export const money = v => usd(v, false);
 export const cls = v => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
+// Ratio/number formatters shared by the Svelte overview / advanced-stats / stat-card modal so the
+// "∞ / —" handling can't drift between them.
+export const ratio = v => (v === Infinity ? '∞' : Number.isFinite(v) ? v.toFixed(2) : '—');
+export const num = v => (Number.isFinite(v) ? v.toFixed(2) : '—');
+
+/* ============================================================
+   Trade/date classifiers shared across surfaces (kept here so the vanilla view and the Svelte
+   app use ONE definition — A29). sessionOf: RTH = 09:30–16:00 by the export's own clock time,
+   else ETH (extended). isoWeek: ISO-8601 week number for the calendar's Week column.
+   ============================================================ */
+export const sessionOf = t => {
+  const hm = (t.time || '').slice(11, 16);
+  return hm && hm >= '09:30' && hm < '16:00' ? 'rth' : 'eth';
+};
+export function isoWeek(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dn = (t.getUTCDay() + 6) % 7;
+  t.setUTCDate(t.getUTCDate() - dn + 3);
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
+  return 1 + Math.round(((t.getTime() - y0.getTime()) / 864e5 - 3 + ((y0.getUTCDay() + 6) % 7)) / 7);
+}
 
 /* ============================================================
    Broker / commission / cost model

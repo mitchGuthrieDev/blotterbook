@@ -2,13 +2,11 @@
   // Advanced statistics — the deeper compute() metrics not shown in the Overview, presented as
   // label/value rows (A29: pure presentation of the existing metrics object). DOW_LABEL/usd/cls
   // are imported verbatim from the core.
-  import { usd, cls, DOW_LABEL } from '../../core.js';
+  import { usd, cls, ratio, num, DOW_LABEL } from '../../core.js';
   import Panel from './Panel.svelte';
 
   let { metrics, panel = {} } = $props();
 
-  const ratio = v => (v === Infinity ? '∞' : Number.isFinite(v) ? v.toFixed(2) : '—');
-  const num = v => (Number.isFinite(v) ? v.toFixed(2) : '—');
   const dow = d => (d ? `${DOW_LABEL[d.i]} · ${usd(d.avg)}/trade` : '—');
 
   const rows = $derived(build(metrics));

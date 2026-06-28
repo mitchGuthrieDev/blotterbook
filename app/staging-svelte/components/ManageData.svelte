@@ -6,6 +6,7 @@
   import { onMount, getContext } from 'svelte';
   import { Adapters } from '../../adapters.js';
   import { usd, money, emit } from '../../core.js';
+  import { readImage, downloadBlob } from '../util.js';
 
   let { onclose, onchanged, onopenday = () => {} } = $props();
   const store = getContext('bb:store'); // A31: Store or DemoStore, chosen by App per mode
@@ -23,14 +24,6 @@
   let csvInput;
   let backupInput;
   let editShotInput;
-
-  const readImage = file =>
-    new Promise(res => {
-      const r = new FileReader();
-      r.onload = () => res(r.result);
-      r.onerror = () => res(null);
-      r.readAsDataURL(file);
-    });
 
   const filtered = $derived(
     search.trim()
@@ -99,18 +92,9 @@
     onchanged();
   }
 
-  function download(name, text) {
-    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   async function exportBackup() {
     const data = await store.exportAll();
-    download(`blotterbook-staging-backup.json`, JSON.stringify(data));
+    downloadBlob('blotterbook-staging-backup.json', new Blob([JSON.stringify(data)], { type: 'application/json' }));
     msg = 'Backup downloaded.';
     emit('backup:created');
   }
