@@ -8,12 +8,12 @@ accounts/payments/admin backend is in
 
 ## What this is
 
-**Blotterbook** is a dependency-free, client-side trading journal and cost
-dashboard for futures traders. It parses a balance-history CSV (TradingView and
-other platforms) entirely in the browser, stores it locally in IndexedDB, and
-renders performance / calendar / cost / tax / stats views. **No trade data ever
-leaves the browser.** It deploys to Cloudflare Pages as static files plus
-`/functions/*` edge functions.
+**Blotterbook** is a client-side trading journal and cost dashboard for futures
+traders. It parses a balance-history CSV (TradingView and other platforms)
+entirely in the browser, stores it locally in IndexedDB, and renders
+performance / calendar / cost / tax / stats views. **No trade data ever leaves
+the browser.** It's a Vite-built Svelte 5 SPA (ADR-001) that deploys to
+Cloudflare Pages (build → `dist/`) plus `/functions/*` edge functions.
 
 ## Hard constraints (do not break these)
 

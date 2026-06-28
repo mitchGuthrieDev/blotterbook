@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img alt="No dependencies" src="https://img.shields.io/badge/dependencies-none-3fb950?style=flat-square&labelColor=151a21">
+  <img alt="Minimal dependencies" src="https://img.shields.io/badge/dependencies-minimal%20%26%20pinned-3fb950?style=flat-square&labelColor=151a21">
   <img alt="Runs in browser" src="https://img.shields.io/badge/compute-browser%20only-d6dde6?style=flat-square&labelColor=151a21">
   <img alt="Local storage" src="https://img.shields.io/badge/storage-IndexedDB%20(local)-6aa0ff?style=flat-square&labelColor=151a21">
   <img alt="Hosting" src="https://img.shields.io/badge/hosting-Cloudflare%20Pages-e3b341?style=flat-square&labelColor=151a21">
@@ -45,8 +45,8 @@ parsed, computed, and stored locally. No accounts, no uploads, no tracking.
     <td><b>Multi-platform import.</b> TradingView is fully verified; Tradovate, Rithmic, Sierra Chart, TradeStation, MotiveWave, Webull, Interactive Brokers, and Schwab/thinkorswim are supported in beta.</td>
   </tr>
   <tr>
-    <td width="160"><img src="assets/why-deps.svg" alt="Three self-contained static files — HTML, CSS, JS — with no external dependencies, loading instantly" width="150"></td>
-    <td><b>Dependency-free.</b> No framework, no bundler, no build step. It's static files that load instantly.</td>
+    <td width="160"><img src="assets/why-deps.svg" alt="A small content-hashed bundle built from a few pinned dependencies, loading fast" width="150"></td>
+    <td><b>Lean and fast.</b> Built with Vite + Svelte on a minimal, pinned, audited dependency set — it ships a small, content-hashed bundle that loads fast.</td>
   </tr>
 </table>
 
@@ -55,11 +55,12 @@ parsed, computed, and stored locally. No accounts, no uploads, no tracking.
 1. **Open the app.** From the homepage, click **Launch Blotterbook** — or run it locally:
 
    ```bash
-   python3 -m http.server 8000      # then visit http://localhost:8000/app/app.html
+   npm install      # one-time: install the pinned deps from the lockfile
+   npm run dev      # Vite dev server (HMR) — open the printed URL, then /app/app.html
    ```
 
-   (It must be served over http — opening the files from disk won't work, because the app loads its
-   reference data over the network.)
+   (To preview the production build instead: `npm run build` emits `dist/`, then `npm run preview`.
+   It must be served over http — the app loads its reference data over the network.)
 
 2. **Set up costs.** In the **Broker & Costs** panel, pick your **Broker**, **Data feed**, and
    **State**, and set your monthly **Platform fee**.
@@ -105,8 +106,8 @@ and the only planned paid feature is cross-device sync.
 ## Documentation
 
 - **[`docs/architecture.md`](docs/architecture.md)** — how Blotterbook works under the hood: data
-  flow, the platform adapters, the cost/tax model, the staging→prod promotion model, versioning, and
-  the no-bundler build system. Start here to contribute.
+  flow, the platform adapters, the cost/tax model, the Vite build + Svelte SPA (ADR-001), and
+  versioning. Start here to contribute.
 - **[`CLAUDE.md`](CLAUDE.md)** — quick operational reference: commands, the file-by-file map, and
   the conventions to follow when changing the code.
 - **[`functions/README.md`](functions/README.md)** — the Cloudflare Pages Functions backend

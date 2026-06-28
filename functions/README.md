@@ -35,8 +35,19 @@ so adding the cloud tier does not touch the rest of the app.
 - `functions/api/checkout.js` — create a Stripe Checkout session. **Stub.**
 - `functions/api/webhook.js`  — receive + verify Stripe webhooks, provision
   accounts/entitlements. **Stub.**
-- `functions/api/me.js`       — return the current user's tier. **Stub** that
-  returns `{ tier: "local" }` so `Entitlements.current()` has something to call.
+- `functions/api/me.js`       — return the current user's storage tier. **Stub** that
+  returns `{ tier: "local", cloudSync: false }` so `Entitlements.current()` has something to call.
+
+## Public endpoints (shipped)
+
+Live today; no auth required:
+
+- `functions/api/geo.js` — returns the visitor's coarse region from Cloudflare edge metadata
+  (`{ country, region, regionCode }`) to pre-fill the tax state. No IP lookup, no third-party
+  service, nothing stored.
+- `GET /api/status` — the homepage "Live" indicator (`{ mode, label, updatedAt }`). The **POST**
+  is admin-only (see below).
+- `GET /api/config` — feature flags the app reads at boot (no secrets). The **POST** is admin-only.
 
 ## Admin auth (shipped)
 

@@ -14,7 +14,7 @@ CH16, F13, F14, S19, R1, …) are backlog item ids from
 - [Design pillars](#design-pillars)
 - [Repository layout & the deploy contract](#repository-layout--the-deploy-contract)
 - [Architecture & data flow](#architecture--data-flow)
-- [Shared chrome: tokens + partials (no bundler)](#shared-chrome-tokens--partials-no-bundler)
+- [Shared chrome: tokens + partials](#shared-chrome-tokens--partials)
 - [Input: the CSV](#input-the-csv)
 - [Platform adapters & auto-detection](#platform-adapters--auto-detection)
 - [Cost model](#cost-model)

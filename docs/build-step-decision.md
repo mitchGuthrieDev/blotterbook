@@ -9,10 +9,12 @@
 **Status:** decided 2026-06-27 — adopt Tier A (dev-only tooling); Tier B was deferred here, then
 **accepted 2026-06-27 in [ADR-001](adr-001-vite-svelte-spa.md)** (see banner above).
 
-This records the outcome of backlog item **R19** ("adopt a build step?"). It sits under the
-[design pillars](architecture.md#design-pillars): the no-build pillar is *soft*, but **no *runtime*
-dependencies stays HARD** — the shipped app loads zero third-party/runtime code. The only question
-R19 settled is build-*time*/dev tooling.
+This records the outcome of backlog item **R19** ("adopt a build step?"). When written it sat under
+the original [design pillars](architecture.md#design-pillars) — "no build step" (soft) and "no
+runtime dependencies" (then treated as hard). **ADR-001 has since re-ranked both:** a build step is
+adopted and "no runtime dependencies" is relaxed to *minimal, pinned, audited dependencies* (the
+shipped app now bundles Svelte via Vite). The one pillar that stays **HARD** is local compute — no
+trade data ever leaves the browser. R19 itself only settled build-*time* / dev tooling (Tier A).
 
 ## The key distinction: two separable tiers
 
