@@ -15,61 +15,13 @@
 <meta property="og:image" content="https://blotterbook.com/assets/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://blotterbook.com/assets/og-image.png">
-<link rel="stylesheet" href="styles/site.css">
+<!-- A69: tokens stay the single source; the page CSS ships as the Svelte components' scoped stylesheet. -->
+<link rel="stylesheet" href="styles/tokens.css">
 </head>
 <body>
-
-<header>
-  <!-- include:nav active=changelog -->
-  <nav class="nav">
-    <a class="wordmark" href="index.html"><span class="dot"></span>Blotterbook</a>
-    <input type="checkbox" id="navtoggle" class="navtoggle" aria-label="Toggle navigation menu">
-    <div class="navlinks">
-      <a data-nav="features" href="index.html#features">Features</a>
-      <a data-nav="platforms" href="index.html#platforms">Platforms</a>
-      <a data-nav="pricing" href="index.html#pricing">Pricing</a>
-      <a data-nav="faq" href="index.html#faq">FAQ</a>
-      <a data-nav="howto" href="howto.html">How&nbsp;To</a>
-      <a data-nav="roadmap" href="roadmap.html">Roadmap</a>
-      <a data-nav="changelog" class="active" href="changelog.html">Changelog</a>
-      <a class="navlaunch" href="/app/">Launch Blotterbook &rarr;</a>
-    </div>
-    <a class="cta" href="/app/">Launch Blotterbook &rarr;</a>
-    <label class="hamburger" for="navtoggle" title="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></label>
-  </nav>
-  <!-- /include:nav -->
-</header>
-
-<div class="wrap">
-  <p class="eyebrow">The Blotterlog</p>
-  <h1>Changelog</h1>
-  <p class="blurb">Release notes for <b>Blotterbook</b> — what shipped in each version, newest first.
-    Tracks the live production app and demo.</p>
-  <p class="clstatus" id="clstatus">Loading the latest changes…</p>
-
-  <div class="log" id="log"></div>
-</div>
-
-<!-- include:footer -->
-  <footer class="site">
-  <div class="frow">
-    <span class="fbrand"><span class="dot"></span>Blotterbook</span>
-    <div class="flinks">
-      <a href="index.html">Home</a>
-      <a href="howto.html">How To</a>
-      <a href="roadmap.html">Roadmap</a>
-      <a href="changelog.html">Changelog</a>
-      <a href="legal.html">Legal</a>
-      <a href="/app/">Launch</a>
-      <a href="mailto:contact@blotterbook.com?subject=Blotterbook">Contact</a>
-    </div>
-    <p class="disclaimer">Blotterbook is a trading journal and estimation tool — <b>not a broker</b>,
-      and not financial, investment, or tax advice. All figures are estimates. Trading involves risk of loss.</p>
-  </div>
-</footer>
-  <!-- /include:footer -->
-
-<script type="module" src="site/lib/changelog.js"></script>
-
+<!-- A69 SSG: Changelog.svelte is server-rendered into this outlet at build time (the inline fallback
+     notes, for SEO + first paint), then hydrated; onMount fetches the live notes. -->
+<div id="app"><!--ssg-outlet--></div>
+<script type="module" src="site/entries/changelog.ts"></script>
 </body>
 </html>
