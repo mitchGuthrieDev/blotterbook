@@ -76,6 +76,9 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   // Advanced statistics panel renders its metric rows from compute().
   await expect(page.locator('#sv-app .advstats .row').first()).toBeVisible();
 
+  // Break-even/cost panel reuses costModel() verbatim against the seeded setup → take-home shows.
+  await expect(page.locator('#sv-app .costpanel [data-cost-takehome]')).toContainText('$');
+
   // Reload: the isolated staging DB already has the seed, so the count is identical (no re-seed
   // duplication) and the app still boots clean from persisted data.
   await page.reload({ waitUntil: 'networkidle' });
