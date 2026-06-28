@@ -203,20 +203,71 @@ and per-trade screenshots in the editors; session/tag filters + saved-filter vie
 Trade replay (R11, `lightweight-charts`), module menu (R12), resizable/snapping modules (R13),
 Trade Blotter (F23) — built as Svelte components behind the staging gate, promoted via CH16.
 
-### Phase 4 — Migrate prod + demo to Svelte (+ the source-tree reorg, A30)
+### Phase 4 — Migrate prod + demo to Svelte (SCOPE)
 
-Once staging is proven, migrate `app/app.html` + `app/demo.html` to the Svelte app and retire the
-vanilla view layer. Marketing pages remain static. Re-verify the demo-never-persists invariant.
+Goal: `app/app.html` + `app/demo.html` become Svelte mounts of the **same** app the staging surface
+uses, the vanilla view layer is deleted, and the pure-logic core is preserved. Marketing pages stay
+static. The hard invariant: **demo never persists.**
 
-This is also the right moment for the **source-tree reorg (A30)**, now *unblocked* by A26: the Vite
-build decoupled the source layout from the public URL structure, so the A18 ban on a `/src` reorg no
-longer applies — it's an optional cleanup (separate served source from tooling; split the mixed
-`assets/` into bundled vs a single static dir, letting `copy-static.mjs` be replaced by Vite's native
-`publicDir`; adopt a Svelte-shaped `components/lib/` structure). It's deferred to here rather than
-done now because it's an all-at-once lockstep migration (path prefixes + every relative import),
-doing it mid-A27 would bury the real diffs, the final shape depends on the Svelte structure, and the
-flat layout's last advantage (root tree directly servable un-built) erodes to nothing exactly as the
-Svelte migration completes — so the cost/benefit only improves up to Phase 4.
+#### 4a. Unify into one mode-aware Svelte app
+
+Today `app/staging-svelte/` is staging-only. Make it the **shared** app (rename to `app/svelte/`)
+that adapts by `PAGE_MODE` (`document.body.dataset.mode`), mirroring how the vanilla `app/*.js` are
+shared across surfaces:
+
+- **app** — IndexedDB `Store` (`blotterbook` DB); the landing/setup → CSV-load → Start flow (not
+  needed on staging, which seeds); restore last session on boot.
+- **demo** — an **in-memory `DemoStore`** implementing the exact `Store` interface (A4) backed by
+  Maps, so writes go nowhere persistent; trade-mutating controls additionally `disabled`/hidden. The
+  Store seam was designed for exactly this swap — pick the implementation by mode at boot.
+- **staging** — isolated `blotterbookStaging` DB + seed + key-gate (unchanged).
+
+All three HTML files become hand-authored Svelte mounts (like `staging.html`), each with its
+`data-mode`. `build-includes` no longer assembles the app shell.
+
+#### 4b. Finish prod-parity features (absorbs the A27 "deferred polish")
+
+Staging was allowed to skip these as a proving ground, but prod must **not regress** below today's
+vanilla app — so the deferred items become Phase-4 parity requirements, not optional polish:
+
+| Deferred item | Phase-4 disposition |
+| --- | --- |
+| Equity-curve overlays (gross/net/take-home), hover tooltip, keyboard a11y, note dots | **Port — required** (prod has them today). The curve↔calendar day cross-link too. |
+| Per-day tags + screenshots; per-trade screenshots | **Port — required** (vanilla journal/editor have them; screenshots go through the `Store.validShot` allow-list, S15/S18). |
+| Session filter + tag filter + saved-filter views | **Port — required** (prod filter bar has them). |
+| Landing / setup / CSV-load gate flow | **Build — required for prod** (staging seeds instead). |
+| `costModel(inputs)` refactor | **Do here** — replace the A27 DOM-input reuse with a clean param signature in `core.js` (behavior-preserving; defaults retained), then drop the DOM controls the cost panel renders only to feed it. |
+| `style-src 'unsafe-inline'` drop (S18) | **Finish here** — Svelte scoped CSS removes the app inline styles; also move the marketing pages' inline `<style>` into linked CSS, then flip `_headers` to `style-src 'self'`. |
+
+#### 4c. Cut over + delete the vanilla view layer
+
+Switch the Pages-served app to Svelte, then **delete** the vanilla view modules
+(`render.js`, `ui.js`, `datamanager.js`, `widgets.js`, `export.js`, `main.js`, the view-only parts of
+`data.js`) and the `partials/app-*.html`. **Keep** the pure-logic core (`adapters.js`,
+`compute`/`costModel` in `core.js`, `store.js`, `sampledata.js`, `util.js`, `types.js`) and the
+node test suites that cover it. Update `build-includes.mjs` (drop the app-shell assembly; keep
+nav/footer for info pages) and `bump-version.mjs` (the app surfaces are now Svelte mounts).
+
+#### 4d. Then the source-tree reorg (A30)
+
+With all surfaces Svelte, do the reorg A26 unblocked: separate served source from tooling, split the
+mixed `assets/` (bundled JS vs verbatim static), retire `copy-static.mjs` for Vite's native
+`publicDir`, and adopt a Svelte-shaped `components/lib/` layout. All-at-once lockstep (path prefixes +
+imports); URLs stay 1:1.
+
+#### Verification gate
+
+- **app:** landing → load a CSV → Start → dashboard renders → reload restores from IndexedDB.
+- **demo:** explore freely; **assert nothing is written to IndexedDB** (an e2e check on the DB) and
+  trade-mutating controls are disabled.
+- **staging:** unchanged (isolated DB + key-gate).
+- Full Playwright suite green; `style-src 'self'` with no console CSP violations.
+
+#### Risks
+
+Demo-never-persists is the top risk → mitigated by the `DemoStore` swap + disabled controls + an
+explicit e2e DB assertion. The prod landing/CSV flow is net-new UI. The vanilla-view deletion is
+large → do it only after the Svelte app is proven on prod. SEO is unaffected (marketing stays static).
 
 ## Spawned backlog items
 
@@ -226,6 +277,13 @@ Svelte migration completes — so the cost/benefit only improves up to Phase 4.
   control; local-compute pillar gates every dep.
 - **A29** — *(guardrail)* preserve the pure-logic core verbatim through the framework migration.
 - **A30** — source-tree reorg (`src/` + static split; retire `copy-static.mjs` for `publicDir`),
-  unblocked by A26, deferred to Phase 4.
+  unblocked by A26, deferred to Phase 4 (step 4d).
+- **A31** — Phase 4a: unify the staging Svelte app into one mode-aware app (`app`/`demo`/`staging`);
+  add the in-memory `DemoStore` so demo never persists.
+- **A32** — Phase 4b: finish prod-parity on the Svelte app (curve overlays/hover/a11y/note-dots;
+  journal tags+screenshots; per-trade screenshots; session/tag/saved filters; landing/CSV flow; the
+  `costModel(inputs)` refactor). Absorbs the A27 deferred items.
+- **A33** — Phase 4c: cut prod + demo over to Svelte and delete the vanilla view layer; update
+  `build-includes`/`bump-version`; finish S18 (`style-src 'self'`).
 
 R11/R12/R13/F23 keep their existing IDs and become Phase 3 work (now unblocked by the framework).
