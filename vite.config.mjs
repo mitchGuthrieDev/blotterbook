@@ -18,9 +18,9 @@ import { resolve } from 'node:path';
 const r = p => resolve(import.meta.dirname, p);
 
 export default defineConfig({
-  // Svelte (ADR-001 / A27): only the staging surface (app/staging.html → app/staging-svelte/)
-  // imports .svelte files; the marketing pages + app/demo + app/app stay vanilla, so the plugin
-  // is a no-op for them. Svelte 5, runes-first.
+  // Svelte (ADR-001): post-A33, all three app surfaces (app/app.html, app/demo.html,
+  // app/staging.html) mount the Svelte app in app/staging-svelte/; the marketing/info pages carry
+  // no .svelte imports, so the plugin is a no-op for them. Svelte 5, runes-first.
   plugins: [svelte()],
   // Verbatim-static assets are copied by scripts/copy-static.mjs, not Vite's publicDir
   // (the source files don't live in a single directory). Keeps data/ etc. unmoved so the

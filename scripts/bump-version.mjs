@@ -104,19 +104,9 @@ export function platformLabel(prod) {
   return (major < 1 ? 'Beta ' : '') + prod;
 }
 
-/* Keep the offline-fallback `.ver` literals in the top-bar partial in sync with the live
-   versions (B17), so a user who hits the fallback (the runtime /data/versions.json fetch
-   failed) doesn't see a stale version. The workflow then runs build-includes to propagate
-   the partial into the generated app pages. */
-function syncBakedBadges(root, next) {
-  const file = root + 'partials/app-topbar.html';
-  let s = readFileSync(file, 'utf8');
-  s = s
-    .replace(/(title="Main app version">)v[\d.]+/, `$1v${next.prod}`)
-    .replace(/(title="Demo version">)v[\d.]+/, `$1v${next.prod}`)
-    .replace(/(title="Staging version">)v[\d.]+/, `$1v${next.staging}`);
-  writeFileSync(file, s);
-}
+/* A33: version badges are no longer baked into the markup. The app surfaces are Svelte mounts that
+   read the live versions from /data/versions.json at runtime (the old `.ver` literals in the deleted
+   app-topbar partial are gone), so data/versions.json is the single source — no badge sync step. */
 
 function main() {
   const root = fileURLToPath(new URL('..', import.meta.url));
@@ -152,7 +142,6 @@ function main() {
   }
   const updated = { ...cur, prod: next.prod, staging: next.staging };
   writeFileSync(file, JSON.stringify(updated, null, 2) + '\n');
-  syncBakedBadges(root, updated);
   console.log(
     `Bumped (${level}): prod ${cur.prod}->${next.prod}${bumpedProd ? '' : ' (unchanged)'}, ` +
       `staging ${cur.staging}->${next.staging}${bumpedStaging ? '' : ' (unchanged)'}`

@@ -29,7 +29,10 @@
   let cw = $state(0); // measured plot width (px) → viewBox width, so labels don't stretch
 
   const W = $derived(Math.max(560, cw || 800));
-  const enabled = $derived(SERIES.filter(s => sel[s.key]).length ? SERIES.filter(s => sel[s.key]) : [SERIES[0]]);
+  const enabled = $derived.by(() => {
+    const on = SERIES.filter(s => sel[s.key]);
+    return on.length ? on : [SERIES[0]];
+  });
   const view = $derived(build(metrics, costInputs, enabled, W));
   const tip = $derived(
     view && cursor != null && view.pts[cursor].date

@@ -1,6 +1,7 @@
 {
   "name": "blotterbook",
   "private": true,
+  "type": "module",
   "version": "0.0.0",
   "description": "Blotterbook tooling + build (ADR-001 / A26). Vite builds the static site + the /app/ surface into dist/ (the Cloudflare Pages output dir); dependencies are minimal/pinned/audited (guardrail A28) and the local-compute pillar is hard (no telemetry/egress). Dev-only tooling (ESLint/Prettier/Playwright) came in R19 Tier A.",
   "scripts": {

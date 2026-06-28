@@ -44,6 +44,30 @@
       "doneNote": null
     },
     {
+      "id": "A57",
+      "title": "R1 audit: fix post-A33 release pipeline + code-quality cleanups",
+      "category": "FIXES",
+      "priority": "P1",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "prompt": null,
+      "doneNote": "From the full-project R1 audit (4 agents; security came back clean — no new items, only the tracked S18/A55 debt). TWO P1 RELEASE BLOCKERS introduced by the A33 deletion, both fixed: (1) scripts/bump-version.mjs syncBakedBadges() read/wrote the deleted partials/app-topbar.html — removed it (version badges are no longer baked into markup; the Svelte app reads /data/versions.json at runtime, so versions.json is the single source); (2) .github/workflows/version-bump.yml `git add` listed the deleted partial + the now-badge-less app HTML — reduced to `git add data/versions.json`, and bumped its node-version 20→22 to match .node-version. Also cheap cleanups: added \"type\":\"module\" to package.json (silences the MODULE_TYPELESS warning; no CJS files), refreshed the stale vite.config comment, gave ActivityTerminal stable per-line keys (was index-keyed ring buffer), and switched EquityCurve's `enabled` to $derived.by (no double-filter). build/npm test (34)/e2e (14) green."
+    },
+    {
+      "id": "A58",
+      "title": "R1 audit: deferred polish — dead core exports, costModel inputs-only, minor dedup",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the full-project R1 audit (deferred, tree-shaken so zero runtime cost — bundle them with the A30 reorg). (1) core.js has exports orphaned by the A33 vanilla deletion: SVGNS, the DOM helpers $/on, feedName (0 refs anywhere), and the DOM-input cost helpers curBroker/numIn/feedCost/stateRate/blendedRate which are used ONLY by costModel()'s legacy no-inputs DOM-fallback branch. The Svelte app ALWAYS calls costModel(m, inputs), so simplify costModel to require `inputs` and delete the DOM-fallback branch + those helper exports (keep rateFor/tierOf/exchOf — used by curveseries; keep blendedRateFor). Verify no caller/test uses the no-inputs path first. (2) isoWeek (core.js) builds a UTC date from LOCAL getters and CalendarMonth feeds it `cur.getTime() - 4*864e5` (raw ms) — verbatim from the old vanilla render.js, but can be off by one near DST/year boundaries in non-UTC tz; make the Wednesday-of-row computation date-based (setDate) for robustness. (3) tiny dedup if they grow past 2 uses: sortedStates sort (Landing + CostPanel) and the `(t.time||'').slice(11,16)` HH:MM slice (DayTrades + ManageData) — extract to core only if a 3rd use appears. Done when: dead exports gone + costModel is inputs-only + isoWeek is DST-safe + lint/typecheck/tests green.",
+      "doneNote": null
+    },
+    {
       "id": "A55",
       "title": "Finish S18: CSP style-src 'self' (drop unsafe-inline)",
       "category": "SECURITY",
