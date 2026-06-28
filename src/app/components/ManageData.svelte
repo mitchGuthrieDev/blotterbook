@@ -6,7 +6,7 @@
   import { onMount, getContext } from 'svelte';
   import { Adapters } from '../../lib/adapters.ts';
   import { usd, money, emit, PAGE_MODE } from '../../lib/core.ts';
-  import type { Trade, TradeMeta, SavedFilter, StoreLike } from '../../lib/types.ts';
+  import type { Trade, TradeMeta, StoredJournal, StoredTradeMeta, SavedFilter, StoreLike } from '../../lib/types.ts';
   import { readImage, downloadBlob } from '../lib/files.ts';
   import { modal } from '../lib/modal.ts';
 
@@ -33,8 +33,8 @@
   const store = getContext('bb:store') as StoreLike; // A31: Store or DemoStore, chosen by App per mode
 
   let trades = $state<Trade[]>([]);
-  let metaMap = $state(new Map<string, Record<string, unknown>>());
-  let dayNotes = $state<Array<Record<string, any>>>([]);
+  let metaMap = $state(new Map<string, StoredTradeMeta>());
+  let dayNotes = $state<StoredJournal[]>([]);
   let localKb = $state('—'); // A52: approximate local footprint
   let search = $state('');
 
@@ -61,7 +61,7 @@
   async function reload() {
     trades = await store.getAllTrades();
     const all = await store.allTradeMeta();
-    metaMap = new Map(all.map(m => [m.id as string, m]));
+    metaMap = new Map(all.map(m => [m.id, m] as const));
     dayNotes = await store.getAllJournal();
     try {
       localKb = (new Blob([JSON.stringify(await store.exportAll())]).size / 1024).toFixed(1) + ' KB';

@@ -38,7 +38,7 @@
   function applyStyles() {
     if (!iframeEl || !iframeEl.contentWindow || !iframeEl.contentDocument) return;
     try {
-      const sheet = new (iframeEl.contentWindow as any).CSSStyleSheet();
+      const sheet = new (iframeEl.contentWindow as Window & typeof globalThis).CSSStyleSheet();
       sheet.replaceSync(built.css);
       iframeEl.contentDocument.adoptedStyleSheets = [sheet];
     } catch (_) {

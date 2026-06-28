@@ -2108,6 +2108,17 @@
       "completedDate": "2026-06-28",
       "partial": false,
       "doneNote": "**Shipped:** the marketing/info site is now Svelte under the existing Vite MPA build (no SvelteKit — A62 deferred). A small build-only SSG plugin (`vite-ssg.mjs`) server-renders each page component with `svelte/server` `render()` into its committed template's `<!--ssg-outlet-->`, so every page ships as static, fully-rendered HTML (SEO + first paint) and hydrates in place — NOT behind the app SPA shell (ADR-001). Authored `Home/Howto/Roadmap/Changelog/Legal/Admin.svelte` (`src/site/components/`) + shared `Nav/Footer/SiteShell.svelte` (`src/site/lib/`) + per-page client entries (`src/site/entries/`); ported `home.js`/`changelog.js`/`admin.js` into onMount logic (Svelte auto-escaping replaced `esc()`). Folded `home.css`/`site.css`/`admin.css` into scoped component `<style>` (tokens.css stays the single source); CSP `style-src 'self'` preserved (a client-only CSSOM action sets the one dynamic backlog-bar width, matching A55). Retired `partials/{nav,footer}.html` + `scripts/build-includes.mjs` and the build-includes half of the CI drift gate; updated package.json, vite.config (ssg plugin), bump-version (classifies `src/site/**` non-admin as prod-only; admin = neither) + test-version, tsconfig.svelte/eslint globs. URLs verified 1:1 (/, /howto.html, /roadmap.html, /changelog.html, /legal.html, /admin.html); favicons/OG meta intact; admin stays Cloudflare Access–gated + noindex. e2e adds server-side SSR-content assertions (ssg.spec) + boots all six pages — npm test + build + 23 e2e green."
+    },
+    {
+      "id": "A84",
+      "title": "Fix the broken README SVG image paths",
+      "category": "COMMENTS / READABILITY",
+      "priority": "P3",
+      "effort": "trivial",
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "**Fixed:** the seven README images (banner.svg + the six why-*.svg feature graphics) pointed at root-relative `assets/*.svg`, but the A30 source reorg moved them to `src/assets/`, so they rendered as broken images on GitHub. Repointed every `<img src>` in README.md to `src/assets/…`; the absolute shields.io badge URLs were already correct and untouched. Verified all seven targets exist under src/assets/."
     }
   ]
 }

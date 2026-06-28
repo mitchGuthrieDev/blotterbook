@@ -132,6 +132,50 @@ So:
 - **The user-facing changelog is hand-curated** in `data/changelog.json` (not raw
   commits). Add an entry when `prod` bumps.
 
+## Svelte MCP server
+
+The official Svelte remote MCP server is wired up in
+[`.claude/settings.json`](.claude/settings.json) (`https://mcp.svelte.dev/mcp`). Use its tools when
+writing or changing any Svelte code:
+
+- **`list-sections`** — call FIRST to discover the available Svelte 5 docs sections.
+- **`get-documentation`** — after `list-sections`, fetch every section relevant to the task before
+  writing code.
+- **`svelte-autofixer`** — run on ALL Svelte code before presenting it; keep calling until it
+  returns no issues/suggestions.
+- **`playground-link`** — only when the user explicitly asks, and NEVER for code already written to
+  files in this repo.
+
+## Frontend conventions (Svelte 5 / TS / JSDoc)
+
+This is a Svelte 5 SPA in TypeScript built with Vite — **not SvelteKit** (A62). The repo already
+conforms to the rules below; keep it that way.
+
+- **Svelte 5 runes only.** Props are `$props()` (never `export let`); reactive state is `$state()`
+  (never a bare `let`); derived values are `$derived()` (never `$:`); side effects are `$effect()`
+  (never `$:` blocks). Don't introduce `createEventDispatcher` — use callback props. Cross-component
+  state here is Svelte **runes + `context('bb:store')`**, not a globals object or `svelte/store`
+  writables; a shared-reactive-state module would be a `.svelte.ts` file, but none exist today.
+- **File extensions.** Components with a template → `.svelte` (all carry `<script lang="ts">`, A61);
+  shared reactive-state-with-runes modules → `.svelte.ts`; pure logic / utilities / API calls /
+  types → `.ts`. No hand-written `.js` in `src/` (the pure-logic core is native TS — A61).
+- **TypeScript.** `src/` is `any`-free — keep it that way: prefer proper types or `unknown`, and put
+  shared interfaces in [`src/lib/types.ts`](src/lib/types.ts), not inline. Type fetched/persisted JSON
+  at the boundary rather than reaching for `any` (e.g. the `Stored*` persistence shapes in `types.ts`,
+  or page-local interfaces like the backlog/status shapes in `src/site/components/Admin.svelte`).
+- **JSDoc.** Don't restate types in JSDoc (`@param {type}`/`@returns {type}`) — tsc owns that.
+  JSDoc is for prose on non-obvious behavior, `@deprecated`, and `@example`; skip it entirely when
+  the name + types are self-evident.
+
+> **Caveat vs. the generic "Svelte 5 SPA" template:** this repo is a **multi-page** Vite build, so a
+> few one-size-fits-all conventions don't apply literally. The Vite config is the multi-page
+> [`vite.config.mjs`](vite.config.mjs) (9 HTML entries + the [`vite-ssg.mjs`](vite-ssg.mjs) plugin),
+> **not** a 4-line `vite.config.ts`. SPA routing lives in [`static/_redirects`](static/_redirects)
+> (Vite's `publicDir` is `static/`, **there is no `public/`**) and rewrites `/app/` → `/app/app.html`
+> — a `/* /index.html 200` catch-all would break the marketing pages and the demo/staging surfaces.
+> The source layout is `src/{lib,app,site}` (see **Repo layout** below), not `src/{components,pages,
+> state}`.
+
 ## Repo layout
 
 > **Vite builds `src/` → `dist/` (ADR-001/A26; source-tree reorg A30); Pages serves `dist/`.** The

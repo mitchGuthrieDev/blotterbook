@@ -145,6 +145,25 @@ export interface TradeMeta {
   shots?: string[];
 }
 
+/** A persisted per-day journal record (the `journal` object store row written by saveJournal). */
+export interface StoredJournal {
+  date: string;
+  text: string;
+  tags: string[];
+  shots: string[];
+  updated: number;
+}
+
+/** A persisted per-trade metadata record (the `trademeta` object store row; `id` + normalized fields). */
+export interface StoredTradeMeta {
+  id: string;
+  tags: string[];
+  note: string;
+  shots: string[];
+  /** Epoch ms of the last write; absent on the empty default returned by getTradeMeta. */
+  updated?: number;
+}
+
 /** Human-readable labels for the performance report header (report.ts buildReport). */
 export interface ReportLabels {
   broker: string;
@@ -240,13 +259,13 @@ export interface StoreLike {
   saveJournal(date: string, rec: string | Annotation): Promise<unknown>;
   getJournal(date: string): Promise<Required<Annotation>>;
   journalDates(): Promise<Set<string>>;
-  getAllJournal(): Promise<Array<Record<string, unknown>>>;
+  getAllJournal(): Promise<StoredJournal[]>;
   deleteJournal(date: string): Promise<unknown>;
   getAllMeta(): Promise<Array<{ key: string; value: unknown }>>;
-  getTradeMeta(id: string): Promise<Record<string, unknown>>;
+  getTradeMeta(id: string): Promise<StoredTradeMeta>;
   saveTradeMeta(id: string, m: TradeMeta): Promise<unknown>;
   deleteTradeMeta(id: string): Promise<unknown>;
-  allTradeMeta(): Promise<Array<Record<string, unknown>>>;
+  allTradeMeta(): Promise<StoredTradeMeta[]>;
   exportAll(): Promise<Record<string, unknown>>;
   importAll(data: Record<string, unknown>): Promise<{ added: number; dup: number }>;
   setMeta(key: string, value: unknown): Promise<unknown>;

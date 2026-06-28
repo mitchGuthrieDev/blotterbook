@@ -8,13 +8,42 @@
   import SiteShell from '../lib/SiteShell.svelte';
   import { platformLabel } from '../../lib/format.ts';
 
+  // Shapes of the admin-only JSON this page fetches (status override, versions, backlog). Local to
+  // this view — they aren't part of the shared pure-logic core (src/lib/types.ts).
+  interface StatusInfo {
+    mode?: string;
+    label?: string;
+    updatedAt?: number | string;
+  }
+  interface Versions {
+    prod?: string;
+    staging?: string;
+    schemaVersion?: number;
+  }
+  interface BacklogItem {
+    id: string;
+    title: string;
+    category: string;
+    status: string;
+    effort: string;
+    priority?: string;
+    completedDate?: string | null;
+    partial?: boolean;
+    prompt?: string;
+    doneNote?: string | null;
+  }
+  interface BacklogData {
+    items?: BacklogItem[];
+    categories?: string[];
+  }
+
   // The admin token (S3) is a live credential — kept in this page-session field only, never
   // localStorage (S10). autoKey() re-issues a fresh token on each load via Access.
   let adminKey = $state('');
   let label = $state('');
 
   // ---- live-status override ----
-  let status = $state<any>(null);
+  let status = $state<StatusInfo | null>(null);
   let statusErr = $state(false);
   let amsg = $state({ text: '', kind: '' });
   function setMsg(text: string, kind = '') {
@@ -29,14 +58,14 @@
   ];
   let flags = $state<Record<string, boolean>>({});
   let flagmsg = $state({ text: '', kind: '' });
-  let versions = $state<any>(null);
+  let versions = $state<Versions | null>(null);
   let verErr = $state(false);
   let authnote = $state('');
   let stagemsg = $state({ text: '', kind: '' });
 
   // ---- backlog (read-only) ----
-  let bkData = $state<any>(null);
-  let bkArchive = $state<any>(null);
+  let bkData = $state<BacklogData | null>(null);
+  let bkArchive = $state<BacklogData | null>(null);
   let bkErr = $state(false);
   let fStatus = $state('');
   let fEffort = $state('');
@@ -50,31 +79,31 @@
 
   const bkItems = $derived(bkData ? [...(bkData.items || []), ...((bkArchive && bkArchive.items) || [])] : []);
   const bkCats = $derived((bkData && bkData.categories) || []);
-  const bkStatuses = $derived([...new Set(bkItems.map((i: any) => i.status).filter(Boolean))].sort());
-  const bkEfforts = $derived([...new Set(bkItems.map((i: any) => i.effort).filter(Boolean))].sort());
+  const bkStatuses = $derived([...new Set(bkItems.map(i => i.status).filter(Boolean))].sort());
+  const bkEfforts = $derived([...new Set(bkItems.map(i => i.effort).filter(Boolean))].sort());
   // Per-category counts always reflect full totals (project health), not the active filter.
   const bkCounts = $derived(
     bkCats.map((c: string) => {
-      const its = bkItems.filter((i: any) => i.category === c);
-      const done = its.filter((i: any) => i.status === 'done').length;
-      const open = its.filter((i: any) => i.status === 'open').length;
-      const guard = its.filter((i: any) => i.status === 'guardrail').length;
+      const its = bkItems.filter(i => i.category === c);
+      const done = its.filter(i => i.status === 'done').length;
+      const open = its.filter(i => i.status === 'open').length;
+      const guard = its.filter(i => i.status === 'guardrail').length;
       const tot = done + open;
       return { cat: c, done, open, guard, tot, pct: tot ? Math.round((100 * done) / tot) : 0 };
     })
   );
-  const tDone = $derived(bkCounts.reduce((a: number, c: any) => a + c.done, 0));
-  const tOpen = $derived(bkCounts.reduce((a: number, c: any) => a + c.open, 0));
-  const tGuard = $derived(bkCounts.reduce((a: number, c: any) => a + c.guard, 0));
+  const tDone = $derived(bkCounts.reduce((a, c) => a + c.done, 0));
+  const tOpen = $derived(bkCounts.reduce((a, c) => a + c.open, 0));
+  const tGuard = $derived(bkCounts.reduce((a, c) => a + c.guard, 0));
   const bkGrand = $derived(tDone + tOpen);
   // The item list honors the status + effort filters, grouped by category.
   const bkGroups = $derived(
     bkCats
       .map((c: string) => ({
         cat: c,
-        items: bkItems.filter((i: any) => i.category === c && (!fStatus || i.status === fStatus) && (!fEffort || i.effort === fEffort)),
+        items: bkItems.filter(i => i.category === c && (!fStatus || i.status === fStatus) && (!fEffort || i.effort === fEffort)),
       }))
-      .filter((g: any) => g.items.length)
+      .filter(g => g.items.length)
   );
   const badgeText = (s: string) => (s === 'done' ? 'done' : s === 'guardrail' ? 'guard' : 'open');
 
@@ -121,7 +150,7 @@
 
   function loadStatus() {
     fetchT('/api/status', { cache: 'no-store' })
-      .then(r => r.json())
+      .then(r => r.json() as Promise<StatusInfo>)
       .then(d => {
         status = d;
         statusErr = false;
@@ -171,7 +200,7 @@
   // CH12: read versions straight from the public source of truth (no server self-fetch).
   function loadVersions() {
     fetchT('/data/versions.json', { cache: 'no-store' })
-      .then(r => r.json())
+      .then(r => r.json() as Promise<Versions>)
       .then(v => {
         versions = v;
         verErr = false;
@@ -224,10 +253,10 @@
     Promise.all([
       fetch('/data/backlog.json', { cache: 'no-store' }).then(r => {
         if (!r.ok) throw new Error(String(r.status));
-        return r.json();
+        return r.json() as Promise<BacklogData>;
       }),
       fetch('/data/backlog_archive.json', { cache: 'no-store' })
-        .then(r => (r.ok ? r.json() : null))
+        .then(r => (r.ok ? (r.json() as Promise<BacklogData>) : null))
         .catch(() => null),
     ])
       .then(([b, arch]) => {
@@ -235,7 +264,7 @@
         bkArchive = arch;
         bkErr = false;
         // CH21: default to the actionable OPEN view if the filter is still at its initial "All".
-        if (fStatus === '' && (b.items || []).concat((arch && arch.items) || []).some((i: any) => i.status === 'open')) fStatus = 'open';
+        if (fStatus === '' && (b.items || []).concat((arch && arch.items) || []).some(i => i.status === 'open')) fStatus = 'open';
       })
       .catch(() => {
         bkErr = true;

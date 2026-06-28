@@ -15,7 +15,7 @@
   import { createDemoStore } from '../lib/demostore.ts';
   import { Adapters } from '../lib/adapters.ts';
   import { demoCSV } from '../lib/sampledata.ts';
-  import type { Trade, FilterState, SavedFilter, SavedFilterDef, AppSetup, PanelBundle } from '../lib/types.ts';
+  import type { Trade, FilterState, SavedFilter, SavedFilterDef, AppSetup, PanelBundle, Setup, StoredTradeMeta } from '../lib/types.ts';
 
   // Pick the backend by mode and share it with every child (they read getContext('bb:store')).
   const store = PAGE_MODE === 'demo' ? createDemoStore() : Store;
@@ -52,7 +52,7 @@
   let selectedDate = $state<string | null>(null);
   let journalDates = $state<Set<string>>(new Set());
   // Per-trade metadata (id -> {tags,note,...}) for the tag filter + manage-data table.
-  let tradeMeta = $state<Map<string, any>>(new Map());
+  let tradeMeta = $state<Map<string, StoredTradeMeta>>(new Map());
   // Saved filter views ([{id,name,f}]), persisted to Store meta in the vanilla-compatible shape.
   let savedFilters = $state<SavedFilter[]>([]);
   // Cost setup (broker/feed/state/platform), lifted here (A32) so BOTH the cost panel and the
@@ -239,9 +239,9 @@
     const trades = await store.getAllTrades();
     allTrades = trades;
     journalDates = await store.journalDates();
-    tradeMeta = new Map((await store.allTradeMeta()).map((m: any) => [m.id, m]));
+    tradeMeta = new Map((await store.allTradeMeta()).map(m => [m.id, m] as const));
     savedFilters = ((await store.getMeta('savedFilters')) as SavedFilter[]) || [];
-    const su = ((await store.getMeta('setup')) as any) || {};
+    const su = ((await store.getMeta('setup')) as Partial<Setup>) || {};
     setup = { broker: su.broker || '', feed: su.feed || '', stateAbbr: su.state || '', platform: Number(su.platform) || 0 };
     const last = trades.length ? trades[trades.length - 1].date : null;
     calYear = last ? +last.slice(0, 4) : new Date().getFullYear();
@@ -260,7 +260,7 @@
   async function reloadAll() {
     allTrades = await store.getAllTrades();
     journalDates = await store.journalDates();
-    tradeMeta = new Map((await store.allTradeMeta()).map((m: any) => [m.id, m]));
+    tradeMeta = new Map((await store.allTradeMeta()).map(m => [m.id, m] as const));
     savedFilters = ((await store.getMeta('savedFilters')) as SavedFilter[]) || []; // A49: a backup-restore can replace these
   }
 
@@ -340,9 +340,9 @@
   }
 
   onMount(() => {
-    boot().catch((e: any) => {
+    boot().catch((e: unknown) => {
       console.error('staging boot failed', e);
-      error = String(e && e.message ? e.message : e);
+      error = e instanceof Error ? e.message : String(e);
       status = '';
     });
     const on = () => (online = true);

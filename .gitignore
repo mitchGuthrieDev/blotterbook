@@ -1,5 +1,8 @@
-# Claude Code local tooling (preview server config, etc.)
-.claude/
+# Claude Code: ignore local tooling/state, but commit the shared project
+# settings (settings.json) so cloud sessions pick up the MCP config on a fresh
+# clone. Personal overrides (settings.local.json) stay ignored via *.local.
+.claude/*
+!.claude/settings.json
 
 # OS junk
 .DS_Store
