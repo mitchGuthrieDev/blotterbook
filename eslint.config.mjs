@@ -1,8 +1,22 @@
 // ESLint flat config — DEV-ONLY (R19 Tier A). Catches real bugs (undeclared names,
 // duplicate keys, unreachable code, …) without fighting the codebase's intentionally
-// terse, hand-written style. Never runs at deploy; the shipped app stays dependency-free.
+// terse, hand-written style. Never runs at deploy; the shipped app stays minimal-dep.
 import js from '@eslint/js';
 import globals from 'globals';
+import tseslint from 'typescript-eslint';
+
+// House-style rules for the hand-written TypeScript tree (the pure-logic core + Svelte app glue
+// under src/, and the Cloudflare Pages Functions under functions/). tsc / svelte-check own type
+// checking and undefined-name resolution, so ESLint here only adds the lint-style bug checks from
+// js.configs.recommended, with the @typescript-eslint/no-unused-vars variant matching the JS house
+// style. Kept MINIMAL (A79/A28) — NOT the opinionated typescript-eslint recommended set.
+const tsRules = {
+  // tsc resolves names/globals/types; the core rule false-positives on type-only references.
+  'no-undef': 'off',
+  // Replaced by the TS-aware variant so type-only and `_`-prefixed names aren't flagged.
+  'no-unused-vars': 'off',
+  '@typescript-eslint/no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }],
+};
 
 export default [
   { ignores: ['node_modules/**', 'playwright-report/**', 'test-results/**', 'dist/**', 'build/**'] },
@@ -20,24 +34,34 @@ export default [
     },
   },
 
-  // Browser-served scripts (native ES modules). After A69 the marketing/info site is Svelte +
-  // TypeScript (src/site/**: .svelte components + .ts client entries) and the core/app are
-  // .ts/.svelte too — all skipped by ESLint and type-checked by tsc/svelte-check instead (A79). No
-  // hand-written .js remains under src/; this block stays as a guard for any future browser .js.
+  // TypeScript — the pure-logic core + Svelte app glue (src/**/*.ts, browser runtime). A79:
+  // typescript-eslint 8.62 added ESLint 10 support, so .ts is now linted (was tsc-only). The parser
+  // handles TS syntax; rules stay minimal. (.svelte components are type-checked by svelte-check.)
   {
-    files: ['src/**/*.js'],
-    languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.browser } },
+    files: ['src/**/*.ts'],
+    languageOptions: {
+      parser: tseslint.parser,
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: { ...globals.browser },
+    },
+    plugins: { '@typescript-eslint': tseslint.plugin },
+    rules: tsRules,
   },
 
-  // Cloudflare Pages Functions — Workers runtime (Response/Request/crypto/fetch/URL/…)
-  // plus a few Node-ish globals. NOTE (A78): the functions are now TypeScript (.ts). ESLint
-  // can't parse .ts without typescript-eslint, which doesn't yet support ESLint 10 (peer-dep
-  // conflict) — so .ts files are skipped by ESLint for now and type-checked by
-  // `tsc -p tsconfig.functions.json` instead (tracked as A79). This block stays a .js glob so
-  // espree never tries to parse the .ts (it would error); it re-activates once .ts linting lands.
+  // Cloudflare Pages Functions — Workers runtime (Response/Request/crypto/fetch/URL/…) plus a few
+  // Node-ish globals. TypeScript since A78; linted via typescript-eslint since A79 (was tsc-only,
+  // `tsc -p tsconfig.functions.json`).
   {
-    files: ['functions/**/*.js'],
-    languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.browser, ...globals.node } },
+    files: ['functions/**/*.ts'],
+    languageOptions: {
+      parser: tseslint.parser,
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: { ...globals.browser, ...globals.node },
+    },
+    plugins: { '@typescript-eslint': tseslint.plugin },
+    rules: tsRules,
   },
 
   // Node tooling: build scripts, the test suite, and the config files themselves.

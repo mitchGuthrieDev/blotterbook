@@ -1,6 +1,6 @@
 'use strict';
 import { Adapters } from './adapters.ts';
-import type { Trade, Annotation, TradeMeta, StoredJournal, StoredTradeMeta, StoreLike } from './types.ts';
+import type { Trade, Annotation, StoredJournal, StoredTradeMeta, StoreLike } from './types.ts';
 /* ============================================================
    Local persistence — IndexedDB
 

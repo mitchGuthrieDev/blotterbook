@@ -309,18 +309,6 @@
       "prompt": "Guardrail from ADR-001 (docs/adr-001-vite-svelte-spa.md). The Svelte migration (A27 + later Phase 4) must touch the VIEW LAYER ONLY. The pure-logic modules are the hard-won, test-covered value and must be imported into components VERBATIM, not rewritten: app/adapters.js (platform CSV adapters + detection + pairFills), compute() (metrics), costModel() (commissions/subscriptions/tax/take-home), the Section-1256 tax model, app/store.js (the Store seam — A4), and assets/util.js. They stay framework-agnostic so the node test suites (test-adapters/test-version/test-auth/test-flags/test-tax) keep covering them unchanged. Reject a framework PR that reimplements adapter parsing, the metrics/cost/tax math, or persistence inside a component instead of importing the existing module. The Store interface (A4) remains the only persistence seam. TYPESCRIPT CLARIFICATION (A61, docs/typescript-decision.md): converting the core from JSDoc-typed .js to native .ts (folded into the A30 reorg) is PERMITTED — it changes the syntax host (.js→.ts, JSDoc→inline types), NOT the algorithms. 'Verbatim' here means NO logic rewrite, not 'never touch the file'. The gate is that the node suites pass IDENTICALLY before/after the conversion (they are the behavior-preserving safety net). Still reject any change that reimplements the parsing/metrics/cost/tax/persistence logic under cover of the TS migration."
     },
     {
-      "id": "A79",
-      "title": "Lint TypeScript with typescript-eslint once it supports ESLint 10",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From A78. ESLint can't parse .ts without typescript-eslint, which (as of 2026-06) has no ESLint 10 support — its peer dep is `eslint@^8.57 || ^9` and this repo is on eslint@^10.6 (eresolve conflict). So the .ts files (functions today; the whole tree after the A30 conversion) are currently SKIPPED by ESLint and only type-checked by tsc/svelte-check. When typescript-eslint ships ESLint 10 support (or we pin a compatible matrix): add `typescript-eslint` (dev-only — A28), register a `**/*.ts` flat-config block using its parser, and re-activate linting for the functions (and the converted app/core). Keep it MINIMAL — parser + the existing house-style relaxations (the @typescript-eslint/no-unused-vars variant; disable no-undef for .ts since tsc covers it), NOT the full opinionated recommended set, to avoid churn on the terse hand-written style. Reconcile the eslint.config.mjs functions block (currently a dead .js glob kept so espree never parses .ts). Done when: `eslint .` lints .ts files cleanly with a minimal TS ruleset and the functions block is re-activated.",
-      "doneNote": null
-    },
-    {
       "id": "A63",
       "title": "Review PR history + backfill the changelog",
       "category": "CHORE / REFACTOR",

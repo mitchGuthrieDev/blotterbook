@@ -2185,6 +2185,17 @@
       "completedDate": "2026-06-28",
       "partial": false,
       "doneNote": "**Moot — not reproducible:** verified on staging via Playwright that clicking a calendar day does NOT highlight the performance graph. After a day-select the activeElement is the calendar cell (not the curve); `svg.equity` reports `:focus-visible` false and `outline: none`; only the intended `.sel` cross-link line (B37) draws. The old vanilla focus/outline bug is gone in the Svelte rewrite, and genuine keyboard focus styling on the graph remains intact."
+    },
+    {
+      "id": "A79",
+      "title": "Lint TypeScript with typescript-eslint once it supports ESLint 10",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "**Done — the A78 blocker resolved.** typescript-eslint 8.62 now supports ESLint 10 (peer `eslint: ^8.57 || ^9 || ^10`, typescript `<6.1` — repo is on eslint 10.6 / typescript 6.0), so .ts is now linted instead of tsc-only. Added typescript-eslint (dev-only, A28) and two minimal `**/*.ts` flat-config blocks (src/ browser, functions/ Workers runtime) using its parser + the `@typescript-eslint/no-unused-vars` house-style variant (args none, caughtErrors none, `^_` ignore); core `no-undef`/`no-unused-vars` are off for .ts since tsc/svelte-check own those. Retired the two dead `.js` globs (no hand-written .js remains under src/ or functions/). The new linting immediately caught and fixed a real unused `TradeMeta` type import in store.ts. `eslint .` lints the whole .ts tree cleanly; npm test green. (oxlint 1.71 / Biome 2.5 were evaluated as no-peer-dep alternatives but are unnecessary now and would overlap Prettier.)"
     }
   ]
 }
