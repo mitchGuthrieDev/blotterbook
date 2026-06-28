@@ -3,7 +3,7 @@
   "title": "Blotterbook — improvement backlog (paste-ready prompts)",
   "intro": "From the 2026-06-25 audit. Each item is a self-contained prompt: scope, goal, constraints, \"done when\".",
   "tags": "Tags: P1 do-soon · P2 durable win · P3 polish. Send them one at a time (one surface/concern per turn).",
-  "updated": "2026-06-27",
+  "updated": "2026-06-28",
   "note": "Committed source of truth for the ACTIVE engineering backlog (open + guardrail items; replaces the retired .claude/backlog.md). Completed (Done) items are archived in data/backlog_archive.json to keep this file lean — the admin Backlog panel reads BOTH and merges them, so done items stay visible. The admin panel shows category/effort/status only; prompt + doneNote stay in the JSON.",
   "commitConvention": "Conventional-commit titles (enables CH12 automated versioning): when committing, and ESPECIALLY when titling a PR / squash-merge, lead the title with a conventional-commit type so the version bump can be derived automatically — `feat:` (new capability → minor), `fix:` (bug fix → patch), `chore:`/`refactor:`/`docs:`/`style:`/`test:`/`perf:` (→ patch), and append `!` (e.g. `feat!:`) or a `BREAKING CHANGE:` footer for a breaking change (→ major). Scope it when useful, e.g. `feat(staging): …`. Untyped/legacy titles default to a patch bump. Keep the existing Co-Authored-By and Claude-Session trailers on the commit body.",
   "donePolicy": "When an item's status is set to `done`, delete its `prompt` field and keep only the `doneNote` — the doneNote is the shipped record of what was actually done, so the original prompt is redundant and only bloats this file (the admin backlog panel never renders done-item prompts anyway). Keep `prompt` on `open` and `guardrail` items, since those are still the actionable spec. Applies retroactively: a done item should never carry a prompt. RECURRING ITEMS: an item with `recurring: true` (e.g. R1 repo audit, CH16 staging→prod promotion) is a perpetual driver — NEVER set its status to done, set completedDate, or strip its prompt; it stays open across every run and its prompt leads with a RECURRING/REPEATABLE marker. Each run ships its output as new items, not by closing the recurring item. ARCHIVE (post-split): completed items now live in `data/backlog_archive.json`. When you set an item to `done` and strip its prompt, MOVE the item object out of backlog.json into backlog_archive.json (the admin panel merges both). Recurring items never move — they stay open in backlog.json.",
@@ -41,6 +41,43 @@
       "partial": false,
       "recurring": true,
       "prompt": "RECURRING — leave this item OPEN; never mark it done, set completedDate, or strip this prompt. Each run is a fresh full audit (this is the Nth, not a one-shot); the findings ship as NEW backlog items, and R1 itself stays open for the next pass. Read-only audit (NO code edits) of the current repo: architecture, code quality, duplicated code, and security posture — accounting for everything shipped since the first audit (symbol sanitization, `_headers` CSP, `tokens.css` + nav/footer partials, the `app.js` → 7-script split and the subsequent A20 migration to native ES modules — `state.js` shared-state object, single `<script type=module src=main.js>` entry, no build/deps, screenshot downscaling). Give concrete, prioritized findings, and append any new actions to this backlog in the same format. Done when: a written, prioritized audit is delivered and new follow-ups are added to the backlog.",
+      "doneNote": null
+    },
+    {
+      "id": "A39",
+      "title": "Phase 4 parity gap: Avg Win/Loss headline card + its detail modal (Svelte)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "prompt": "From the R1 staging-app audit (final pre-cutover review). The vanilla dashboard shows FIVE headline cards — net, win, pf, wl (Avg Win/Loss / payoff ratio), dd (render.js renderCards ~49-51) — each with an F14 detail modal (widgets.js CARD_VIEWS.wl ~396). The Svelte Overview (app/staging-svelte/components/Overview.svelte) renders a richer 10-card set but DROPPED the 'wl' card, and StatCardModal's MODAL_KEYS only covers net/win/pf/dd. The avg-win/avg-loss/payoff data still appears in Advanced Statistics, so this is a missing headline card + drill-down, not lost data. Restore parity: add a 'wl' (Avg Win/Loss) card to the Svelte Overview (value m.wl, sub avgW/avgL) and a 'wl' branch to StatCardModal mirroring vanilla CARD_VIEWS.wl (avg win/loss, long vs short, payoff). Add it to MODAL_KEYS. Reuse the pure metrics verbatim (A29). Done when: the Svelte Overview shows the Avg Win/Loss card, clicking it opens the wl drill-down, and an e2e asserts it. Blocks/feeds A33 (prod-cutover parity).",
+      "doneNote": "Added the Avg Win/Loss headline card to the Svelte Overview (value ratio(m.wl), sub avgW/avgL) and a 'wl' branch to StatCardModal — avg win/loss/ratio stats + win & loss distribution histograms (hist()), mirroring vanilla CARD_VIEWS.wl; added 'wl' to MODAL_KEYS. Pure metrics (m.wl/avgW/avgL/pnls) reused verbatim (A29). e2e asserts the card renders and its modal opens with the distribution."
+    },
+    {
+      "id": "A40",
+      "title": "Phase 4 parity gap: calendar Week column (ISO week + weekly P&L) (Svelte)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "prompt": "From the R1 staging-app audit (final pre-cutover review). The vanilla trading calendar renders a left 'Week' column per row — ISO week number + that week's P&L total + traded-day count (render.js renderCalendar ~417, ~455-459; uses isoWeek()). The Svelte CalendarMonth (app/staging-svelte/components/CalendarMonth.svelte) is a plain 7-column Sunday-first grid with no week column. Restore parity: add the leading Week cell to each calendar row (ISO week no. via the shared isoWeek helper, weekly P&L from the same per-day metrics, day count), matching the vanilla layout/classes (.wkcell/.wl/.wp/.wd). Pure presentation of compute()'s m.days (A29 — no recomputation). Done when: the Svelte calendar shows the Week column with week number + weekly P&L + day count, styled to match, and an e2e asserts a week cell renders. Blocks/feeds A33 (prod-cutover parity).",
+      "doneNote": "Rebuilt CalendarMonth's grid as a 6-row Sunday-first sweep (buildWeeks) mirroring vanilla render.js: each row gets a leading .wkcell with ISO week no. (shared isoWeek, moved to core.js) + weekly P&L (.wkpnl pos/neg) + traded-day count. Grid is now 8-col (52px Week + 7 days); off-month days render as empty cells; rows past the month stop (w>0 && !monthHit). monthNet sums the weekly totals. Pure presentation of m.days (A29). e2e asserts a week cell renders its 'Wk N'."
+    },
+    {
+      "id": "A41",
+      "title": "R1 staging-app cleanup: export tile colors, shared helpers/dedup, stale comments",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": true,
+      "doneNote": "Export report tiles now color-code: buildReport carries a per-row tone (cls) and reportHtmlDoc applies it, mirroring export.js. Hoisted sessionOf + isoWeek to core.js as the single source — render.js and the Svelte App/CalendarMonth import them; the duplicate definitions are gone. Hoisted ratio/num to core.js (used by Overview/AdvancedStats/StatCardModal) and readImage/downloadBlob to app/staging-svelte/util.js (JournalEditor/ManageData/ExportReport), unifying the revokeObjectURL timing. onEvent now returns an unsubscribe and ActivityTerminal releases its bus subscriptions on unmount. Corrected the stale A27/A33 comments in App.svelte + CalendarMonth. PARTIAL: the optional shared <Modal> overlay wrapper (ExportReport/StatCardModal/ManageData still repeat the overlay markup) was left as future polish — not worth the churn pre-cutover.",
+      "prompt": "From the R1 staging-app audit (final pre-cutover review). A bundle of low-risk cleanups in the Svelte staging app (app/staging-svelte/**) — none block cutover, but they reduce drift before prod/demo migrate. (1) Export report headline tiles lose pos/neg color-coding except Max drawdown: vanilla export.js applies cls() per tile, but app/report.js reportHtmlDoc (~106) only marks 'Max drawdown' neg. Carry a per-row tone from buildReport (or apply cls to Net/Take-home/Gross) so the exported tiles color-code like vanilla. (2) Duplicated sessionOf (RTH 09:30-16:00 vs ETH) lives in both App.svelte (~159) and render.js (~674) — drift risk; hoist a single sessionOf to core.js and import in both. (3) Hoist small duplicated Svelte helpers: readImage (JournalEditor + ManageData), the blob-download helper (ExportReport + ManageData — also unify the revokeObjectURL timing), and the ratio()/num() formatters (Overview + AdvancedStats + StatCardModal) into a shared module (e.g. core.js for the pure formatters, a small svelte util for readImage/download); optionally extract a shared Modal overlay wrapper used by ExportReport/StatCardModal/ManageData (one place for the overlay a11y/scroll-lock pattern). (4) Stale comments now that A34-A38 shipped: App.svelte (~11) 'app/demo mounts land in A33' and CalendarMonth's 'come in later A27 slices' note. (5) Latent: ActivityTerminal subscribes to the event bus with no unsubscribe (core.js has no offEvent); harmless today (the component never remounts — keyed reorder moves the instance, collapse hides only the body) but add offEvent + cleanup if components may remount. NOTE: two audit candidates were checked and are NOT bugs — saveTradeMeta already rebuilds tags/shots into plain arrays so no $state proxy reaches IndexedDB (store.js ~217-219), and the `void [setup...]` effect is the repo's intended dependency-tracking idiom. Done when: tiles color-code on export, sessionOf is single-sourced, the duplicated helpers are hoisted, stale comments are corrected, and lint/tests/e2e stay green.",
       "doneNote": null
     },
     {
@@ -438,7 +475,7 @@
       "priority": "P2",
       "effort": "large",
       "status": "open",
-      "prompt": "ADR-001 Phase 4b (docs/adr-001-vite-svelte-spa.md). Bring the Svelte app to FULL parity with the vanilla prod app BEFORE cutting prod/demo over (A33) — prod must not regress below today's features. These are the A27-deferred items, now required: (1) Equity curve — gross/net/take-home overlays (toggle), hover tooltip (aria-live), keyboard a11y, day note-dots, and the curve↔calendar day cross-link. (2) Journal — per-day tags + screenshots; per-trade screenshots in the editor (route ALL screenshots through Store.validShot's base64-image allow-list, S15/S18). (3) Filters — session filter + tag filter + saved-filter views (persisted via Store meta). (4) Landing/setup/CSV-load gate flow for 'app' mode (broker/feed/state required before Start; staging seeds instead). (5) costModel(inputs) refactor: replace the A27 DOM-input reuse with a clean param signature in core.js (behavior-preserving — default to the current DOM reads so any remaining vanilla caller is unchanged), then remove the DOM controls CostPanel.svelte renders only to feed costModel. Keep reusing the pure-logic core verbatim otherwise (A29). Done when: every vanilla prod dashboard feature has a Svelte equivalent, costModel takes inputs, and the staging Svelte app is at parity; tests + e2e green. STATUS (branch claude/phase4-prod-demo-svelte): COMPLETE. Shipped as sub-slices: costModel(inputs) refactor (CostPanel drops the DOM-id hack); curve interactivity (note-dots, cursor+aria-live tooltip, click-to-select); session/day-of-week/tag filters; saved-filter views; curve gross/net/take-home overlays (extracted pure app/curveseries.js shared with vanilla render.js; cost setup lifted to App); journal per-day tags+screenshots + per-trade screenshots (also fixed a Svelte $state-proxy → IndexedDB clone bug + closed a saveTradeMeta validShot gap); app-mode landing/CSV-load flow. All verified (6 unit suites + 12 e2e). Landing is live-verified when prod mounts in A33."
+      "prompt": "ADR-001 Phase 4b (docs/adr-001-vite-svelte-spa.md). Bring the Svelte app to FULL parity with the vanilla prod app BEFORE cutting prod/demo over (A33) — prod must not regress below today's features. These are the A27-deferred items, now required: (1) Equity curve — gross/net/take-home overlays (toggle), hover tooltip (aria-live), keyboard a11y, day note-dots, and the curve↔calendar day cross-link. (2) Journal — per-day tags + screenshots; per-trade screenshots in the editor (route ALL screenshots through Store.validShot's base64-image allow-list, S15/S18). (3) Filters — session filter + tag filter + saved-filter views (persisted via Store meta). (4) Landing/setup/CSV-load gate flow for 'app' mode (broker/feed/state required before Start; staging seeds instead). (5) costModel(inputs) refactor: replace the A27 DOM-input reuse with a clean param signature in core.js (behavior-preserving — default to the current DOM reads so any remaining vanilla caller is unchanged), then remove the DOM controls CostPanel.svelte renders only to feed costModel. Keep reusing the pure-logic core verbatim otherwise (A29). Done when: every vanilla prod dashboard feature has a Svelte equivalent, costModel takes inputs, and the staging Svelte app is at parity; tests + e2e green. STATUS (merged to main): CORE COMPLETE, NOT FULL PARITY. Shipped as sub-slices: costModel(inputs) refactor (CostPanel drops the DOM-id hack); curve interactivity (note-dots, cursor+aria-live tooltip, click-to-select); session/day-of-week/tag filters; saved-filter views; curve gross/net/take-home overlays (extracted pure app/curveseries.js shared with vanilla render.js; cost setup lifted to App); journal per-day tags+screenshots + per-trade screenshots (also fixed a Svelte $state-proxy → IndexedDB clone bug + closed a saveTradeMeta validShot gap); app-mode landing/CSV-load flow. CORRECTION: a post-merge feature-by-feature audit found parity is only ~65-70% — 'complete' was over-claimed. The remaining prod/demo features (export report, stat-card detail modals, panel collapse/drag/workspace system, Definitions & Caveats, plus Tier-2 items) are now tracked as A34-A38 and MUST land before A33 so prod doesn't regress. A33 stays blocked until A34-A38 close."
     },
     {
       "completedDate": null,
@@ -450,7 +487,67 @@
       "priority": "P2",
       "effort": "large",
       "status": "open",
-      "prompt": "ADR-001 Phase 4c (docs/adr-001-vite-svelte-spa.md). FINAL prod/demo cutover — do AFTER A31 + A32. (1) Convert app/app.html + app/demo.html into hand-authored Svelte mounts of the shared app/svelte/ app (like staging.html), each with its data-mode; remove the partials/app-*.html include markers from them. (2) DELETE the vanilla view layer once nothing references it: app/render.js, app/ui.js, app/datamanager.js, app/widgets.js, app/export.js, app/main.js, and the view-only parts of app/data.js (keep feature-flag defaults if still used by the Svelte app). KEEP the pure-logic core: app/adapters.js, compute/costModel in app/core.js, app/store.js, app/sampledata.js, assets/util.js, app/types.js — and the node test suites covering them. (3) Update scripts/build-includes.mjs (drop the app-shell assembly; keep nav/footer for the info pages) and scripts/bump-version.mjs (app surfaces are now Svelte mounts). Remove the now-dead partials/app-*.html. (4) Finish S18: Svelte scoped CSS removes the app inline styles; move the marketing pages' inline <style> (index.html, admin.html) into linked CSS; then flip _headers CSP to style-src 'self' (drop 'unsafe-inline'). (5) VERIFY all surfaces — app: landing→load CSV→Start→dashboard→reload restores from IndexedDB; demo: explore + ASSERT nothing written to IndexedDB + write controls disabled (the demo-never-persists invariant); staging: unchanged. Done when: all three surfaces are Svelte, the vanilla view modules + app partials are deleted, build-includes/bump-version updated, style-src is 'self' with no CSP violations, and the full e2e suite (incl. the demo no-persist check) is green. Then A30 (source-tree reorg) can follow."
+      "prompt": "ADR-001 Phase 4c (docs/adr-001-vite-svelte-spa.md). FINAL prod/demo cutover — do AFTER A31 + A32 AND the parity gaps A34-A38 (a post-merge audit found A32 only reached ~65-70% parity; cutting over before A34-A38 close would regress prod). (1) Convert app/app.html + app/demo.html into hand-authored Svelte mounts of the shared app/svelte/ app (like staging.html), each with its data-mode; remove the partials/app-*.html include markers from them. (2) DELETE the vanilla view layer once nothing references it: app/render.js, app/ui.js, app/datamanager.js, app/widgets.js, app/export.js, app/main.js, and the view-only parts of app/data.js (keep feature-flag defaults if still used by the Svelte app). KEEP the pure-logic core: app/adapters.js, compute/costModel in app/core.js, app/store.js, app/sampledata.js, assets/util.js, app/types.js — and the node test suites covering them. (3) Update scripts/build-includes.mjs (drop the app-shell assembly; keep nav/footer for the info pages) and scripts/bump-version.mjs (app surfaces are now Svelte mounts). Remove the now-dead partials/app-*.html. (4) Finish S18: Svelte scoped CSS removes the app inline styles; move the marketing pages' inline <style> (index.html, admin.html) into linked CSS; then flip _headers CSP to style-src 'self' (drop 'unsafe-inline'). (5) VERIFY all surfaces — app: landing→load CSV→Start→dashboard→reload restores from IndexedDB; demo: explore + ASSERT nothing written to IndexedDB + write controls disabled (the demo-never-persists invariant); staging: unchanged. Done when: all three surfaces are Svelte, the vanilla view modules + app partials are deleted, build-includes/bump-version updated, style-src is 'self' with no CSP violations, and the full e2e suite (incl. the demo no-persist check) is green. Then A30 (source-tree reorg) can follow."
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Built app/report.js — a pure buildReport(m,c,labels) + reportHtmlDoc(rep,labels,tokenBlock) shared by the on-screen iframe report, the Markdown download, and the email summary (A29; single source so they can't drift). ExportReport.svelte renders the standalone doc in an isolated, baked-token iframe (A8) and supports PDF (print iframe), PNG/JPEG (rasterize), Markdown, and Email — full parity with vanilla export.js. Wired the topbar Export-report button (shown when loaded && trades present) with broker/feed/state/scope labels from setup. e2e covers opening the modal, the iframe preview, format→Download enable, and the mailto link.",
+      "id": "A34",
+      "title": "Phase 4 parity gap: export / performance report (Svelte)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "prompt": "ADR-001 Phase 4 parity gap (blocks A33). The vanilla app/export.js performance report (the top-bar Export button → print→PDF / image / markdown download + email-a-copy of a condensed summary) has NO Svelte equivalent. Build it for the Svelte app (app/svelte/): an Export control that produces the same condensed performance report from the active metrics + costModel. Reuse the report-DATA assembly logic verbatim where it's pure (A29); only the view/print layer is rewritten in Svelte. Cover the same outputs the vanilla report did (at minimum print→PDF; match the markdown/email summary). Done when: the Svelte app can generate the performance report on all surfaces it ships to, parity with export.js, e2e covers the report opening."
+    },
+    {
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "id": "A35",
+      "title": "Phase 4 parity gap: clickable stat-card detail modals (F14)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "open",
+      "prompt": "ADR-001 Phase 4 parity gap (blocks A33). In vanilla (widgets.js openCardModal / CARD_VIEWS), the headline Overview cards are CLICKABLE and open detail drill-down modals: Net PnL (cumulative curve + cost waterfall gross→commissions→subscriptions→net→tax→take-home), Win Rate (win/loss/scratch + PnL-by-weekday + long vs short), Profit Factor (gross profit vs loss + per-symbol profitability), Avg Win/Loss (win/loss histograms), Max Drawdown (equity curve with peak→trough markers). The Svelte Overview cards are static. Make them clickable and build the detail modals as Svelte components, deriving everything from the compute()/costModel() metrics (A29 — reuse the dowBuckets etc. helpers from core). Done when: the relevant Overview cards open faithful detail modals, parity with F14; e2e covers opening a card modal."
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Built a Svelte panel framework: Panel.svelte provides unified chrome (drag grip, title, actions snippet, collapse chevron with aria-expanded/label — B41) and a collapsible body; the six dashboard sections (perf/cal/cost/adv/defs/term) each render their own <Panel> and forward a per-key prop bundle from App. App owns panelOrder + collapsedPanels + the draggingKey, persisted through the Store.local seam under staging-namespaced keys (tj_order_staging / tj_collapsed_staging), with whole-panel drag-to-reorder (grip arms draggable; dragover reorders by pointer midpoint). WorkspaceBar.svelte + App save/load/revert named workspace templates (tj_ws_templates_staging); '— Default —' restores DEFAULT_ORDER. Save is guarded off in demo (B23). The day-note editor rides inside the cal panel via a snippet so it moves/collapses with it. ActivityTerminal logs ws:saved/loaded/reverted. e2e covers collapse + reload persistence + template save/revert/reload. Parity with vanilla ui.js/widgets.js (drag simulation itself not asserted — HTML5 DnD is unreliable under Playwright).",
+      "id": "A36",
+      "title": "Phase 4 parity gap: panel system (collapse + drag-reorder + workspace templates + layout persistence)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "prompt": "ADR-001 Phase 4 parity gap (blocks A33). The vanilla dashboard panels are user-customizable (app/ui.js + app/widgets.js): collapsible panels (chevron toggle + aria-expanded — B41), drag-to-reorder by grip handle, workspace/layout TEMPLATES (save/load/reset to DEFAULT_DASH_ORDER), all persisted to localStorage (tj_order / tj_collapsed / tj_ws_templates, _staging-suffixed on staging) via the Store.local seam. The Svelte app renders a FIXED layout with none of this. Build a Svelte panel framework: a reusable Panel wrapper (title + collapse chevron with aria-expanded, drag handle) that the dashboard sections use; persist order + collapsed state + named workspace templates via Store.local (per-mode keys); a top-bar workspace dropdown + save/reset. Done when: panels collapse, reorder by drag, and layouts persist + restore across reload (per surface); workspace templates save/load/reset; parity with ui.js/widgets.js; e2e covers collapse + persistence."
+    },
+    {
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "id": "A37",
+      "title": "Phase 4 parity gap: Definitions & Caveats panel",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "open",
+      "prompt": "ADR-001 Phase 4 parity gap (blocks A33). The vanilla dashboard has a Definitions & Caveats panel (partials/app-dash.html data-key=defs): a glossary (Trade, Win/Loss/Scratch, Net PnL, performance graph, broker & costs, scope toggle, …) + a Warnings section (max drawdown is realized-only, weekday/streak sample sizes can be thin, commissions are modeled estimates, calendar-day grouping, US dates & Eastern time assumed). No Svelte equivalent. Port it as a Svelte panel with the same content (single-sourced text). Done when: the Svelte dashboard shows Definitions & Caveats at parity; e2e smoke that it renders."
+    },
+    {
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "id": "A38",
+      "title": "Phase 4 parity gap: Tier-2 bundle (session pill, calendar/cost/manage-data/landing/filter polish)",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "open",
+      "prompt": "ADR-001 Phase 4 parity gap (Tier-2; should land before A33). Smaller vanilla features missing from the Svelte app: (1) session status pill (online/offline) — widgets.js setSession; (2) Trading Calendar week-summary column + jump-to-today button; (3) Cost panel 'Assumptions & Caveats' subsection (round-turn commission, per-symbol, subscription accrual, tax blend, break-even formula); (4) Manage-data DAY-NOTES list (the notes table, distinct from the per-trade editor — view/open/delete a day's note); (5) Landing platform-override dropdown (manual platform pick when Adapters.detect is wrong — Adapters.parse(text, platformId)); (6) filter-bar live trade-count (matching trades); (7) top-bar Changelog + Contact links; (8) performance-curve drawdown band when gross is the sole overlay. Port each at parity. Done when: each Tier-2 item has a Svelte equivalent; e2e covers the higher-value ones (session pill, calendar jump-to-today, day-notes list)."
     }
   ],
   "howToDrive": [

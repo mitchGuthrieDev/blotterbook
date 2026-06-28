@@ -66,18 +66,34 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   const seededCount = Number((tradesText || '').trim());
   expect(seededCount).toBeGreaterThan(0);
 
+  // Stat-card detail modal (A35): clicking the Net card opens the drill-down with the waterfall.
+  await page.click('#sv-app [data-card="net"]');
+  await expect(page.locator('.modal[aria-label="Net PnL"]')).toBeVisible();
+  await expect(page.locator('.modal[aria-label="Net PnL"] .bars')).toContainText('Take-home');
+  await page.click('.modal[aria-label="Net PnL"] .x');
+
+  // Avg Win/Loss card + its detail modal (A39 — parity with vanilla's 5th headline card).
+  await expect(page.locator('#sv-app [data-card="wl"] .value')).toBeVisible();
+  await page.click('#sv-app [data-card="wl"]');
+  await expect(page.locator('.modal[aria-label="Avg Win / Loss"]')).toBeVisible();
+  await expect(page.locator('.modal[aria-label="Avg Win / Loss"]')).toContainText('Win distribution');
+  await page.click('.modal[aria-label="Avg Win / Loss"] .x');
+
   // Performance equity curve renders an SVG path from compute()'s m.curve.
   const curve = page.locator('#sv-app svg.equity path.line');
   await expect(curve).toHaveAttribute('d', /^M[\d.]+,[\d.]+ L/);
 
   // Trading calendar renders day cells, including traded (colored) days from m.days.
   await expect(page.locator('#sv-app .calendar .calgrid .cell.traded').first()).toBeVisible();
+  // Calendar Week column (A40): each row carries an ISO week number + weekly P&L.
+  await expect(page.locator('#sv-app .calendar .calgrid .wkcell .wkno').first()).toContainText('Wk');
 
   // Advanced statistics panel renders its metric rows from compute().
   await expect(page.locator('#sv-app .advstats .row').first()).toBeVisible();
 
   // Break-even/cost panel reuses costModel() verbatim against the seeded setup → take-home shows.
   await expect(page.locator('#sv-app .costpanel [data-cost-takehome]')).toContainText('$');
+  await expect(page.locator('#sv-app .costpanel .caveats summary')).toBeVisible(); // A38
 
   // Filters/scope: switching to the calendar-month scope narrows the active trade count.
   await page.click('#sv-app .filterbar .scope button:last-child');
@@ -99,6 +115,9 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   // Activity terminal logs bus events — the note save above should appear.
   await expect(page.locator('#sv-app .terminal .log')).toContainText('note saved');
 
+  // Definitions & Caveats panel (A37) renders its glossary.
+  await expect(page.locator('#sv-app .defs')).toContainText('Win / Loss / Scratch');
+
   // Equity curve interactivity (A32): the journaled day shows a note-dot on the curve, and the
   // keyboard cursor fills the aria-live tooltip (B33).
   await expect(page.locator('#sv-app svg.equity .notedot').first()).toBeVisible();
@@ -111,9 +130,32 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   await page.click('#sv-app .overlays button:has-text("Net")');
   await expect(page.locator('#sv-app svg.equity .line')).toHaveCount(2);
 
+  // Export report (A34): open the modal, the iframe preview renders the report sheet, switching the
+  // format dropdown enables Download, and Email a copy is a mailto link.
+  await page.click('button:has-text("Export report")');
+  await expect(page.locator('#sv-app .modal[aria-label="Export performance report"]')).toBeVisible();
+  const repFrame = page.frameLocator('iframe[title="Performance report preview"]');
+  await expect(repFrame.locator('.sheet .brandline')).toContainText('Blotterbook');
+  await expect(repFrame.locator('.tiles .rtile').first()).toBeVisible();
+  await expect(page.locator('.modal[aria-label="Export performance report"] a:has-text("Email a copy")')).toHaveAttribute(
+    'href',
+    /^mailto:/
+  );
+  await page.selectOption('.modal[aria-label="Export performance report"] select', 'md');
+  await expect(page.locator('.modal[aria-label="Export performance report"] .pri')).toBeEnabled();
+  await page.click('.modal[aria-label="Export performance report"] [data-expclose]');
+  await expect(page.locator('#sv-app .modal[aria-label="Export performance report"]')).toHaveCount(0);
+
+  // A38 Tier-2 bits: filter trade-count, session pill, calendar Latest button all render.
+  await expect(page.locator('#sv-app .filterbar .count')).toContainText('trade');
+  await expect(page.locator('#sv-app .pill')).toBeVisible();
+  await expect(page.locator('#sv-app .panel[data-key="cal"] .nav .today')).toBeVisible();
+
   // Manage data: open the modal, edit a trade's tags via the Store, and see them in the table.
   await page.click('.managebtn');
   await expect(page.locator('.modal table tbody tr').first()).toBeVisible();
+  // A38: the day-notes list shows the note saved earlier.
+  await expect(page.locator('.modal .daynotes')).toContainText('e2e day note');
   await page.locator('.modal .edit').first().click();
   await page.fill('.modal .etags', 'e2e, setup');
   await page.click('.modal .editrow .save');
@@ -154,6 +196,40 @@ test('staging (Svelte): session filter narrows the dataset', async ({ page }) =>
   await page.fill('#sv-app .saved .vname', 'rth view');
   await page.click('#sv-app .saved .savebtn');
   await expect(page.locator('#sv-app .saved .chip .apply')).toContainText('rth view');
+});
+
+// A36: the dashboard panel system — collapse (with ARIA + persistence) and workspace templates.
+test('staging (Svelte): panel collapse persists + workspace templates (A36)', async ({ page }) => {
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  const perf = page.locator('#sv-app .panel[data-key="perf"]');
+  await expect(perf).toBeVisible();
+  await expect(perf.locator('svg.equity')).toBeVisible();
+
+  // Collapse via the header: the chevron flips aria-expanded/label (B41) and the body is removed.
+  const chev = perf.locator('.chev');
+  await expect(chev).toHaveAttribute('aria-expanded', 'true');
+  await perf.locator('.phead').click();
+  await expect(chev).toHaveAttribute('aria-expanded', 'false');
+  await expect(chev).toHaveAttribute('aria-label', 'Expand');
+  await expect(perf.locator('svg.equity')).toHaveCount(0);
+
+  // The collapsed state persists across a reload (Store.local seam, staging-namespaced key).
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app .panel[data-key="perf"] .chev')).toHaveAttribute('aria-expanded', 'false');
+
+  // Workspace templates: save the current (perf-collapsed) layout under a name → it joins the select.
+  page.on('dialog', d => d.accept('My Layout'));
+  await page.click('#sv-app .wsbar .wssave');
+  await expect(page.locator('#sv-app .wsbar select option', { hasText: 'My Layout' })).toHaveCount(1);
+
+  // "— Default —" reverts to the default arrangement → the perf panel expands again.
+  await page.selectOption('#sv-app .wsbar select', '');
+  await expect(page.locator('#sv-app .panel[data-key="perf"] .chev')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#sv-app .panel[data-key="perf"] svg.equity')).toBeVisible();
+
+  // Reloading the default layout selection → loads my saved template back (perf collapsed again).
+  await page.selectOption('#sv-app .wsbar select', 'My Layout');
+  await expect(page.locator('#sv-app .panel[data-key="perf"] .chev')).toHaveAttribute('aria-expanded', 'false');
 });
 
 // B41: toggle/collapse controls must expose ARIA state (aria-pressed / aria-expanded).

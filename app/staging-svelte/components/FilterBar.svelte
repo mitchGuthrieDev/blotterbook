@@ -3,7 +3,7 @@
   // set and recomputes metrics. `filters` is a shared reactive object (mutated in place — Svelte 5
   // deep reactivity propagates to App's deriveds). Scope = all-time vs the calendar's current month.
   // Session + tag filters and saved-filter views from the vanilla bar are deferred to a later slice.
-  let { filters, roots, tags = [], savedFilters = [], onclear, onsave = () => {}, onapply = () => {}, ondelete = () => {} } = $props();
+  let { filters, roots, tags = [], savedFilters = [], count = 0, onclear, onsave = () => {}, onapply = () => {}, ondelete = () => {} } = $props();
   let viewName = $state('');
   const save = () => {
     onsave(viewName);
@@ -59,6 +59,7 @@
       <button type="button" class:on={filters.dows.includes(i)} aria-pressed={filters.dows.includes(i)} onclick={() => toggleDow(i)}>{d}</button>
     {/each}
   </div>
+  <span class="count">{count} trade{count === 1 ? '' : 's'}</span>
   <button type="button" class="clear" onclick={onclear}>Clear</button>
 </section>
 
@@ -153,6 +154,13 @@
     border-color: var(--accent);
     font-weight: 700;
   }
+  .count {
+    margin-left: auto;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--faint);
+    align-self: center;
+  }
   .clear {
     background: transparent;
     color: var(--dim);
@@ -161,7 +169,6 @@
     padding: 7px 12px;
     font-size: 12px;
     cursor: pointer;
-    margin-left: auto;
   }
   .clear:hover {
     border-color: var(--hover-line);

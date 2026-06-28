@@ -3,8 +3,9 @@
   // App and shared with the curve overlays — this panel binds its form to the shared `setup` object
   // and renders the breakdown from costModel(metrics, costInputs). No DOM-id coupling; App persists.
   import { costModel, BROKERS, BROKER_ORDER, BROKER_FEEDS, STATES, usd, money } from '../../core.js';
+  import Panel from './Panel.svelte';
 
-  let { metrics, setup, costInputs } = $props();
+  let { metrics, setup, costInputs, panel = {} } = $props();
 
   const feedGroups = $derived(BROKER_FEEDS[setup.broker] || {});
   const stateOpts = $derived(STATES.slice().sort((a, b) => (a[2] < b[2] ? -1 : 1)));
@@ -17,9 +18,8 @@
   }
 </script>
 
-<section class="panel costpanel">
-  <div class="phead"><h2>Break-even &amp; Cost</h2></div>
-
+<Panel {...panel} title="Break-even &amp; Cost">
+  <div class="costpanel">
   <div class="setup">
     <label>
       <span>Broker</span>
@@ -84,28 +84,22 @@
         </tbody>
       </table>
     {/if}
+
+    <details class="caveats">
+      <summary>Assumptions &amp; caveats</summary>
+      <ul>
+        <li><b>Round-turn commission, per contract.</b> Each trade is a closed position; the round-turn commission — 2 × the symbol's per-side rate — is charged once per contract (× the trade's quantity).</li>
+        <li><b>Per-symbol commissions.</b> The symbol root is priced as the selected broker's commission plus the contract's CME exchange/clearing/NFA fee. Symbols without a known exchange fee use a fallback and are flagged with *. All rates are editable estimates — verify against your account.</li>
+        <li><b>Subscriptions are not prorated.</b> A full month of platform + data fee is charged for every distinct calendar month in the active scope.</li>
+        <li><b>Tax = blended 1256 rate:</b> 60% × 15% long-term + 40% × 24% ordinary (assumed bracket) + your state's top rate, applied only when net profit is positive.</li>
+        <li><b>Break-even / trade</b> = total period costs ÷ trade count: the average gross each trade needed to clear costs.</li>
+      </ul>
+    </details>
   {/if}
-</section>
+  </div>
+</Panel>
 
 <style>
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px 16px 16px;
-    margin-top: 16px;
-  }
-  .phead {
-    margin-bottom: 12px;
-  }
-  h2 {
-    margin: 0;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--faint);
-    font-weight: 700;
-  }
   .setup {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -212,5 +206,31 @@
   .est {
     color: var(--warn);
     margin-left: 2px;
+  }
+  .caveats {
+    margin-top: 14px;
+    border-top: 1px solid var(--line);
+    padding-top: 10px;
+  }
+  .caveats summary {
+    font-size: 12px;
+    color: var(--faint);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+  }
+  .caveats ul {
+    margin: 10px 0 0;
+    padding-left: 18px;
+  }
+  .caveats li {
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--dim);
+    margin-bottom: 6px;
+  }
+  .caveats b {
+    color: var(--txt);
   }
 </style>

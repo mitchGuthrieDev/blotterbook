@@ -2,12 +2,11 @@
   // Advanced statistics — the deeper compute() metrics not shown in the Overview, presented as
   // label/value rows (A29: pure presentation of the existing metrics object). DOW_LABEL/usd/cls
   // are imported verbatim from the core.
-  import { usd, cls, DOW_LABEL } from '../../core.js';
+  import { usd, cls, ratio, num, DOW_LABEL } from '../../core.js';
+  import Panel from './Panel.svelte';
 
-  let { metrics } = $props();
+  let { metrics, panel = {} } = $props();
 
-  const ratio = v => (v === Infinity ? '∞' : Number.isFinite(v) ? v.toFixed(2) : '—');
-  const num = v => (Number.isFinite(v) ? v.toFixed(2) : '—');
   const dow = d => (d ? `${DOW_LABEL[d.i]} · ${usd(d.avg)}/trade` : '—');
 
   const rows = $derived(build(metrics));
@@ -38,9 +37,8 @@
   }
 </script>
 
-<section class="panel advstats">
-  <div class="phead"><h2>Advanced Statistics</h2></div>
-  <div class="rows">
+<Panel {...panel} title="Advanced Statistics">
+  <div class="advstats rows">
     {#each rows as r (r.k)}
       <div class="row">
         <span class="k">{r.k}</span>
@@ -48,27 +46,9 @@
       </div>
     {/each}
   </div>
-</section>
+</Panel>
 
 <style>
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px 16px 12px;
-    margin-top: 16px;
-  }
-  .phead {
-    margin-bottom: 10px;
-  }
-  h2 {
-    margin: 0;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--faint);
-    font-weight: 700;
-  }
   .rows {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

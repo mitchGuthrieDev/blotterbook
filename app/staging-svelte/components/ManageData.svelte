@@ -6,12 +6,14 @@
   import { onMount, getContext } from 'svelte';
   import { Adapters } from '../../adapters.js';
   import { usd, money, emit } from '../../core.js';
+  import { readImage, downloadBlob } from '../util.js';
 
-  let { onclose, onchanged } = $props();
+  let { onclose, onchanged, onopenday = () => {} } = $props();
   const store = getContext('bb:store'); // A31: Store or DemoStore, chosen by App per mode
 
   let trades = $state([]);
   let metaMap = $state(new Map());
+  let dayNotes = $state([]);
   let search = $state('');
   let editing = $state(null); // trade id under edit
   let editTags = $state('');
@@ -22,14 +24,6 @@
   let csvInput;
   let backupInput;
   let editShotInput;
-
-  const readImage = file =>
-    new Promise(res => {
-      const r = new FileReader();
-      r.onload = () => res(r.result);
-      r.onerror = () => res(null);
-      r.readAsDataURL(file);
-    });
 
   const filtered = $derived(
     search.trim()
@@ -43,6 +37,14 @@
     trades = await store.getAllTrades();
     const all = await store.allTradeMeta();
     metaMap = new Map(all.map(m => [m.id, m]));
+    dayNotes = await store.getAllJournal();
+  }
+
+  async function deleteDay(date) {
+    if (!confirm(`Delete the note for ${date}?`)) return;
+    await store.deleteJournal(date);
+    await reload();
+    onchanged();
   }
 
   const metaOf = t => metaMap.get(store.tradeId(t)) || { tags: [], note: '', shots: [] };
@@ -90,18 +92,9 @@
     onchanged();
   }
 
-  function download(name, text) {
-    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   async function exportBackup() {
     const data = await store.exportAll();
-    download(`blotterbook-staging-backup.json`, JSON.stringify(data));
+    downloadBlob('blotterbook-staging-backup.json', new Blob([JSON.stringify(data)], { type: 'application/json' }));
     msg = 'Backup downloaded.';
     emit('backup:created');
   }
@@ -154,6 +147,22 @@
       <input bind:this={backupInput} type="file" accept="application/json,.json" hidden onchange={importBackup} />
     </div>
     {#if msg}<p class="msg">{msg}</p>{/if}
+
+    {#if dayNotes.length}
+      <details class="daynotes">
+        <summary>Day notes ({dayNotes.length})</summary>
+        <ul>
+          {#each dayNotes as n (n.date)}
+            <li>
+              <button type="button" class="opends" onclick={() => onopenday(n.date)}>{n.date}</button>
+              <span class="dntext">{n.text || '(tags/screenshots only)'}</span>
+              {#if (n.tags || []).length}<span class="dntags">{n.tags.join(', ')}</span>{/if}
+              <button type="button" class="dndel" aria-label="Delete day note" onclick={() => deleteDay(n.date)}>×</button>
+            </li>
+          {/each}
+        </ul>
+      </details>
+    {/if}
 
     <div class="tablewrap">
       <table>
@@ -283,6 +292,65 @@
     font-size: 12px;
     color: var(--accent);
     border-bottom: 1px solid var(--line);
+  }
+  .daynotes {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .daynotes summary {
+    font-size: 12px;
+    color: var(--faint);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+  }
+  .daynotes ul {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+  }
+  .daynotes li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 12px;
+  }
+  .opends {
+    background: var(--panel2);
+    color: var(--accent);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 3px 9px;
+    font-family: var(--mono);
+    cursor: pointer;
+    flex: none;
+  }
+  .dntext {
+    flex: 1;
+    color: var(--dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dntags {
+    color: var(--faint);
+    font-family: var(--mono);
+    flex: none;
+  }
+  .dndel {
+    background: transparent;
+    border: 0;
+    color: var(--faint);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    flex: none;
+  }
+  .dndel:hover {
+    color: var(--red);
   }
   .tablewrap {
     overflow: auto;

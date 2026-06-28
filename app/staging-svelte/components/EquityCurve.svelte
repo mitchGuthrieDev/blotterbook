@@ -5,8 +5,9 @@
   // tooltip (B33), and click-to-select-day cross-link (B37).
   import { usd, money, blendedRateFor } from '../../core.js';
   import { dailySeries } from '../../curveseries.js';
+  import Panel from './Panel.svelte';
 
-  let { metrics, costInputs, journalDates = new Set(), selectedDate = null, onselect = () => {} } = $props();
+  let { metrics, costInputs, journalDates = new Set(), selectedDate = null, onselect = () => {}, panel = {} } = $props();
 
   const W = 800;
   const H = 240;
@@ -29,6 +30,7 @@
       : ''
   );
   const selIdx = $derived(view && selectedDate ? (view.idxByDate.get(selectedDate) ?? null) : null);
+  const grossOnly = $derived(enabled.length === 1 && enabled[0].key === 'gross');
 
   function build(m, ci, ser) {
     const { pts: raw } = dailySeries(m, {
@@ -56,7 +58,26 @@
     pts.forEach((p, i) => p.date && idxByDate.set(p.date, i));
     const notes = [];
     for (const [date, i] of idxByDate) if (journalDates.has(date)) notes.push({ x: x(i), y: y(pts[i][prim]), date });
-    return { pts, x, y, lo, hi, len: pts.length, lines, area, prim, idxByDate, notes, primColor: ser[0].color, zeroY: lo <= 0 && hi >= 0 ? y(0) : null };
+    // Realized drawdown peak→trough on the gross series (shaded only when gross is the sole overlay).
+    let gpeak = -Infinity,
+      gpeakI = 0,
+      maxDD = 0,
+      ddP = 0,
+      ddT = 0;
+    pts.forEach((p, i) => {
+      if (p.gross > gpeak) {
+        gpeak = p.gross;
+        gpeakI = i;
+      }
+      const d = gpeak - p.gross;
+      if (d > maxDD) {
+        maxDD = d;
+        ddP = gpeakI;
+        ddT = i;
+      }
+    });
+    const dd = maxDD > 0 ? { x0: x(ddP), x1: x(ddT) } : null;
+    return { pts, x, y, lo, hi, len: pts.length, lines, area, prim, idxByDate, notes, dd, primColor: ser[0].color, zeroY: lo <= 0 && hi >= 0 ? y(0) : null };
   }
 
   function toggle(key) {
@@ -87,15 +108,14 @@
   }
 </script>
 
-<section class="panel">
-  <div class="phead">
-    <h2>Performance</h2>
+<Panel {...panel} title="Performance">
+  {#snippet actions()}
     <div class="overlays" role="group" aria-label="Curve overlays">
       {#each SERIES as s (s.key)}
         <button type="button" class:on={sel[s.key]} aria-pressed={sel[s.key]} style="--sw:{s.color}" onclick={() => toggle(s.key)}>{s.label}</button>
       {/each}
     </div>
-  </div>
+  {/snippet}
 
   {#if view}
     <svg
@@ -117,6 +137,7 @@
         </linearGradient>
       </defs>
       <path d={view.area} fill="url(#eqfill)" />
+      {#if grossOnly && view.dd}<rect class="ddband" x={view.dd.x0} y={PY} width={Math.max(0, view.dd.x1 - view.dd.x0)} height={H - 2 * PY} />{/if}
       {#if view.zeroY != null}<line class="zero" x1={PX} y1={view.zeroY} x2={W - PX} y2={view.zeroY} vector-effect="non-scaling-stroke" />{/if}
       {#if selIdx != null}<line class="sel" x1={view.x(selIdx)} y1={PY} x2={view.x(selIdx)} y2={H - PY} vector-effect="non-scaling-stroke" />{/if}
       {#each view.lines as ln (ln.key)}
@@ -138,31 +159,9 @@
   {:else}
     <p class="empty">Not enough trades to plot a curve.</p>
   {/if}
-</section>
+</Panel>
 
 <style>
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px 16px 12px;
-    margin-top: 16px;
-  }
-  .phead {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 10px;
-  }
-  h2 {
-    margin: 0;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--faint);
-    font-weight: 700;
-  }
   .overlays {
     display: flex;
     gap: 4px;
@@ -200,6 +199,10 @@
     stroke: var(--line);
     stroke-width: 1;
     stroke-dasharray: 3 3;
+  }
+  .ddband {
+    fill: var(--red);
+    opacity: 0.08;
   }
   .sel {
     stroke: var(--accent);

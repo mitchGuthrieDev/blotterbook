@@ -4,7 +4,9 @@
   // The vanilla terminal does the same; here the Svelte components fire the emits.
   import { onMount } from 'svelte';
   import { onEvent, pad2 } from '../../core.js';
+  import Panel from './Panel.svelte';
 
+  let { panel = {} } = $props();
   let lines = $state([]);
   let box;
 
@@ -15,6 +17,9 @@
     'trade:edited': () => 'trade metadata updated',
     'backup:created': () => 'backup downloaded',
     'data:erased': () => 'all staging data erased',
+    'ws:saved': d => `workspace saved · ${d && d.name ? d.name : ''}`,
+    'ws:loaded': d => `workspace loaded · ${d && d.name ? d.name : ''}`,
+    'ws:reverted': () => 'layout reverted to default',
   };
 
   function add(msg) {
@@ -25,7 +30,10 @@
 
   onMount(() => {
     add('staging app ready');
-    for (const [ev, fmt] of Object.entries(FMT)) onEvent(ev, d => add(fmt(d)));
+    // onEvent returns an unsubscribe (core.js); collect them so the bus subscriptions are released
+    // if this panel ever unmounts — no duplicate log lines on a remount.
+    const offs = Object.entries(FMT).map(([ev, fmt]) => onEvent(ev, d => add(fmt(d))));
+    return () => offs.forEach(off => off());
   });
 
   // Auto-scroll to the newest line.
@@ -35,34 +43,17 @@
   });
 </script>
 
-<section class="panel terminal">
-  <div class="phead"><h2>Activity</h2></div>
-  <div class="log" bind:this={box} role="log" aria-live="polite">
-    {#each lines as l, i (i)}
-      <div class="row"><span class="ts">{l.ts}</span><span class="msg">{l.msg}</span></div>
-    {/each}
+<Panel {...panel} title="Activity">
+  <div class="terminal">
+    <div class="log" bind:this={box} role="log" aria-live="polite">
+      {#each lines as l, i (i)}
+        <div class="row"><span class="ts">{l.ts}</span><span class="msg">{l.msg}</span></div>
+      {/each}
+    </div>
   </div>
-</section>
+</Panel>
 
 <style>
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px 16px 12px;
-    margin-top: 16px;
-  }
-  .phead {
-    margin-bottom: 10px;
-  }
-  h2 {
-    margin: 0;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--faint);
-    font-weight: 700;
-  }
   .log {
     max-height: 160px;
     overflow: auto;

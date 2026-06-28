@@ -3,14 +3,17 @@
   // seed instead). Set up costs (broker/feed/state/platform — bound to the shared setup) and load a
   // balance-history CSV; a successful load populates the Store and App switches to the dashboard.
   import { BROKERS, BROKER_ORDER, BROKER_FEEDS, STATES } from '../../core.js';
+  import { Adapters } from '../../adapters.js';
 
   let { setup, onload, msg = '' } = $props();
 
   const feedGroups = $derived(BROKER_FEEDS[setup.broker] || {});
   const stateOpts = $derived(STATES.slice().sort((a, b) => (a[2] < b[2] ? -1 : 1)));
   const ready = $derived(!!(setup.broker && setup.feed && setup.stateAbbr));
+  const platforms = Adapters.list(); // [{id,label,beta}] for the override dropdown
 
   let fileInput;
+  let platformId = $state(''); // '' = auto-detect
   function onBroker(e) {
     setup.broker = e.currentTarget.value;
     setup.feed = '';
@@ -18,7 +21,7 @@
   function pick(e) {
     const f = e.currentTarget.files[0];
     e.currentTarget.value = '';
-    if (f) onload(f);
+    if (f) onload(f, platformId);
   }
 </script>
 
@@ -60,6 +63,13 @@
 
   <div class="load">
     <button type="button" class="cta" onclick={() => fileInput.click()}>Load CSV</button>
+    <label class="platform">
+      <span>Platform</span>
+      <select bind:value={platformId}>
+        <option value="">Auto-detect</option>
+        {#each platforms as p (p.id)}<option value={p.id}>{p.label}{p.beta ? ' (beta)' : ''}</option>{/each}
+      </select>
+    </label>
     <input bind:this={fileInput} type="file" accept=".csv,text/csv" hidden onchange={pick} />
     {#if !ready}<span class="gate">Tip: pick broker, data feed and state so the cost/tax model is complete.</span>{/if}
   </div>

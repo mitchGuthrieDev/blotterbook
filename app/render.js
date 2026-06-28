@@ -19,6 +19,8 @@ import {
   feedName,
   stateRate,
   BROKERS,
+  sessionOf,
+  isoWeek,
 } from './core.js';
 import { selectFromGraph, renderDayTrades, syncFilterOptions, updateJournalEditor, cancelDaySave } from './data.js';
 import { state } from './state.js';
@@ -467,13 +469,6 @@ export function renderCalendar() {
   const journal = document.getElementById('journal');
   if (journal) journal.style.display = state.selectedDate ? '' : 'none';
 }
-export function isoWeek(d) {
-  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dn = (t.getUTCDay() + 6) % 7;
-  t.setUTCDate(t.getUTCDate() - dn + 3);
-  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
-  return 1 + Math.round(((t - y0) / 864e5 - 3 + ((y0.getUTCDay() + 6) % 7)) / 7);
-}
 
 /* ============================================================
    Rendering — advanced statistics
@@ -669,12 +664,6 @@ export async function loadTradeMeta() {
 export const FILTERS = { from: '', to: '', symbol: '', side: '', session: '', tag: '', dows: new Set() };
 export function filtersActive() {
   return !!(FILTERS.from || FILTERS.to || FILTERS.symbol || FILTERS.side || FILTERS.session || FILTERS.tag || FILTERS.dows.size);
-}
-/* RTH = 09:30–16:00 by the timestamp's clock time as exported; everything else ETH. */
-export function sessionOf(t) {
-  const hm = t.time.slice(11, 16);
-  if (!hm) return 'eth';
-  return hm >= '09:30' && hm < '16:00' ? 'rth' : 'eth';
 }
 export function applyFilters(arr) {
   return arr.filter(t => {
