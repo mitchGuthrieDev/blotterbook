@@ -6,8 +6,9 @@
 
   // year/month are owned by App (so the all-time/month scope toggle can read the same cursor);
   // onnav(delta) asks App to shift the month. metrics here is the FILTERED all-time set, so the
-  // grid colors reflect the active filters regardless of scope.
-  let { metrics, year, month, onnav } = $props();
+  // grid colors reflect the active filters regardless of scope. selectedDate + journalDates +
+  // onselect wire the day-notes journal: clicking a day selects it; days with a note get a dot.
+  let { metrics, year, month, onnav, selectedDate = null, journalDates = new Set(), onselect = () => {} } = $props();
 
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -56,10 +57,20 @@
           class:traded={c.pnl != null}
           class:pos={c.pnl != null && c.pnl > 0}
           class:neg={c.pnl != null && c.pnl < 0}
+          class:selected={selectedDate === c.date}
           data-date={c.date}
+          role="button"
+          tabindex="0"
           title={c.pnl != null ? `${c.date}: ${money(c.pnl)} · ${c.trades} trade${c.trades === 1 ? '' : 's'}` : c.date}
+          onclick={() => onselect(c.date)}
+          onkeydown={e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onselect(c.date);
+            }
+          }}
         >
-          <span class="dnum">{c.d}</span>
+          <span class="dnum">{c.d}{#if journalDates.has(c.date)}<span class="notedot" aria-label="has a note"></span>{/if}</span>
           {#if c.pnl != null}<span class="dpnl">{compact(c.pnl)}</span>{/if}
         </div>
       {:else}
@@ -146,9 +157,31 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    cursor: pointer;
+  }
+  .cell:hover {
+    border-color: var(--hover-line);
+  }
+  .cell:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .cell.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent) inset;
   }
   .cell.empty {
     border-color: transparent;
+    cursor: default;
+  }
+  .notedot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-left: 4px;
+    vertical-align: middle;
   }
   .cell.pos {
     background: var(--green-bg);

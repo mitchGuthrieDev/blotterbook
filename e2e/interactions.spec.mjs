@@ -84,6 +84,12 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   const monthText = await page.locator('#sv-app [data-card="trades"] .value').textContent();
   expect(Number((monthText || '').trim())).toBeLessThan(seededCount);
 
+  // Day-notes journal: select a calendar day, write a note, save → a note dot appears + persists.
+  await page.locator('#sv-app .calendar .calgrid .cell.traded').first().click();
+  await page.fill('#sv-app .journal textarea', 'e2e day note');
+  await page.click('#sv-app .journal .save');
+  await expect(page.locator('#sv-app .calendar .calgrid .cell .notedot').first()).toBeVisible();
+
   // Reload: the isolated staging DB already has the seed, so the count is identical (no re-seed
   // duplication) and the app still boots clean from persisted data.
   await page.reload({ waitUntil: 'networkidle' });

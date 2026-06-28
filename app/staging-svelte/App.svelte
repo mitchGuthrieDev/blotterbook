@@ -14,11 +14,16 @@
   import AdvancedStats from './components/AdvancedStats.svelte';
   import CostPanel from './components/CostPanel.svelte';
   import FilterBar from './components/FilterBar.svelte';
+  import JournalEditor from './components/JournalEditor.svelte';
 
   let allTrades = $state([]);
   let loaded = $state(false);
   let status = $state('Loading…');
   let error = $state('');
+
+  // Day-notes journal: the selected calendar day + the set of dates carrying a saved note.
+  let selectedDate = $state(null);
+  let journalDates = $state(new Set());
 
   // Filters drive the whole dashboard (a shared reactive object). scope = all-time vs the
   // calendar's current month. The cursor (calYear/calMonth) lives here so scope can read it.
@@ -69,11 +74,16 @@
     await seedIfEmpty();
     const trades = await Store.getAllTrades();
     allTrades = trades;
+    journalDates = await Store.journalDates();
     const last = trades.length ? trades[trades.length - 1].date : null;
     calYear = last ? +last.slice(0, 4) : new Date().getFullYear();
     calMonth = last ? +last.slice(5, 7) - 1 : new Date().getMonth();
     loaded = true;
     status = '';
+  }
+
+  async function refreshNotes() {
+    journalDates = await Store.journalDates(); // reassign → reactive
   }
 
   function navMonth(delta) {
@@ -123,13 +133,24 @@
     <FilterBar {filters} {roots} onclear={clearFilters} />
     <Overview metrics={metricsActive} tradeCount={metricsActive.n} />
     <EquityCurve metrics={metricsAll} />
-    <CalendarMonth metrics={metricsAll} year={calYear} month={calMonth} onnav={navMonth} />
+    <CalendarMonth
+      metrics={metricsAll}
+      year={calYear}
+      month={calMonth}
+      onnav={navMonth}
+      {selectedDate}
+      {journalDates}
+      onselect={d => (selectedDate = d)}
+    />
+    {#if selectedDate}
+      <JournalEditor date={selectedDate} onsaved={refreshNotes} onclose={() => (selectedDate = null)} />
+    {/if}
     <AdvancedStats metrics={metricsActive} />
     <CostPanel metrics={metricsActive} />
     <p class="note">
-      Migration in progress (A27): Overview, performance curve, trading calendar, advanced
-      statistics, break-even/cost and filters/scope are live in Svelte. Day-notes journal,
-      manage-data and the activity terminal are next.
+      Migration in progress (A27): Overview, performance curve, trading calendar (with day notes),
+      advanced statistics, break-even/cost and filters/scope are live in Svelte. Manage-data and the
+      activity terminal are next.
     </p>
   {:else}
     <p class="msg">{status}</p>
