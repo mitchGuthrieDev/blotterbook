@@ -4,6 +4,7 @@
   // date changes; saving an empty note deletes the row (Store handles that). Per-day tags + screenshots
   // from the vanilla annotation system are deferred to a later slice.
   import { Store } from '../../store.js';
+  import { emit } from '../../core.js';
 
   let { date, onsaved, onclose } = $props();
 
@@ -25,6 +26,7 @@
     await Store.saveJournal(date, { text });
     saving = false;
     savedMsg = text.trim() ? 'Saved' : 'Cleared';
+    emit('note:saved', { date });
     onsaved();
   }
 </script>

@@ -4,7 +4,7 @@
   // (this component + children) is the only thing rewritten in Svelte. demoCSV is imported from
   // data.js (no logic duplicated); the seed mirrors main.js's seedStagingIfEmpty().
   import { onMount } from 'svelte';
-  import { loadRefData, compute, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../core.js';
+  import { loadRefData, compute, emit, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../core.js';
   import { Store } from '../store.js';
   import { Adapters } from '../adapters.js';
   import { demoCSV } from '../sampledata.js';
@@ -16,6 +16,7 @@
   import FilterBar from './components/FilterBar.svelte';
   import JournalEditor from './components/JournalEditor.svelte';
   import ManageData from './components/ManageData.svelte';
+  import ActivityTerminal from './components/ActivityTerminal.svelte';
 
   let allTrades = $state([]);
   let loaded = $state(false);
@@ -82,6 +83,7 @@
     calMonth = last ? +last.slice(5, 7) - 1 : new Date().getMonth();
     loaded = true;
     status = '';
+    emit('data:loaded', { count: trades.length });
   }
 
   async function refreshNotes() {
@@ -157,10 +159,12 @@
     {/if}
     <AdvancedStats metrics={metricsActive} />
     <CostPanel metrics={metricsActive} />
+    <ActivityTerminal />
     <p class="note">
-      Migration in progress (A27): Overview, performance curve, trading calendar (with day notes),
-      advanced statistics, break-even/cost, filters/scope and manage-data are live in Svelte. The
-      activity terminal is next.
+      A27 staging migration: Overview, performance curve, trading calendar (with day notes),
+      advanced statistics, break-even/cost, filters/scope, manage-data and the activity terminal are
+      all live in Svelte 5. Next up (ADR-001 Phase 4): migrate prod + demo, then the source-tree
+      reorg (A30).
     </p>
   {:else}
     <p class="msg">{status}</p>

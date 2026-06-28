@@ -6,7 +6,7 @@
   import { onMount } from 'svelte';
   import { Store } from '../../store.js';
   import { Adapters } from '../../adapters.js';
-  import { usd, money } from '../../core.js';
+  import { usd, money, emit } from '../../core.js';
 
   let { onclose, onchanged } = $props();
 
@@ -49,6 +49,7 @@
     const tags = [...new Set(editTags.split(',').map(s => s.trim().toLowerCase()).filter(Boolean))];
     await Store.saveTradeMeta(editing, { tags, note: editNote });
     editing = null;
+    emit('trade:edited');
     await reload();
     onchanged();
   }
@@ -64,6 +65,7 @@
     }
     const res = await Store.addTrades(r.trades);
     msg = `Imported ${res.added} new trade${res.added === 1 ? '' : 's'} (${res.duplicate} duplicate).`;
+    emit('data:imported', { added: res.added });
     await reload();
     onchanged();
   }
@@ -81,6 +83,7 @@
     const data = await Store.exportAll();
     download(`blotterbook-staging-backup.json`, JSON.stringify(data));
     msg = 'Backup downloaded.';
+    emit('backup:created');
   }
 
   async function importBackup(e) {
@@ -90,6 +93,7 @@
     try {
       const res = await Store.importAll(JSON.parse(await f.text()));
       msg = `Restored ${res.added} trade${res.added === 1 ? '' : 's'} (${res.dup} duplicate).`;
+      emit('data:imported', { added: res.added });
       await reload();
       onchanged();
     } catch (err) {
@@ -101,6 +105,7 @@
     if (!confirm('Erase ALL trades, day-notes and per-trade tags/notes in this staging sandbox? This cannot be undone.')) return;
     await Store.purge();
     msg = 'All staging data erased.';
+    emit('data:erased');
     await reload();
     onchanged();
   }

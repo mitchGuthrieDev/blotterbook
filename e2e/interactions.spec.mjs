@@ -90,6 +90,9 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   await page.click('#sv-app .journal .save');
   await expect(page.locator('#sv-app .calendar .calgrid .cell .notedot').first()).toBeVisible();
 
+  // Activity terminal logs bus events — the note save above should appear.
+  await expect(page.locator('#sv-app .terminal .log')).toContainText('note saved');
+
   // Manage data: open the modal, edit a trade's tags via the Store, and see them in the table.
   await page.click('.managebtn');
   await expect(page.locator('.modal table tbody tr').first()).toBeVisible();

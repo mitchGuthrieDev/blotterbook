@@ -156,7 +156,7 @@ captured by the repo changes):
   now needs them) — this reverses the A25 deploy posture. `.node-version` pins Node 22 for the build.
 - `functions/` continues to be picked up from the repo root automatically.
 
-### Phase 2 — Svelte on the staging surface *(A27)* — **FOUNDATION LANDED; parity in progress**
+### Phase 2 — Svelte on the staging surface *(A27)* — **CORE DASHBOARD COMPLETE**
 
 - Add `svelte` + `@sveltejs/vite-plugin-svelte`.
 - Rewrite the **staging view layer** as Svelte components; mount into `app/staging.html`.
@@ -179,9 +179,17 @@ What shipped so far (the foundation + first vertical slice):
 - **Verified:** `npm test` + `npm run test:e2e` green; staging boots into the Overview with real
   computed metrics and the seeded data persists across reload (isolated-DB guarantee).
 
-Remaining for parity (incremental, before prod/demo migrate): performance curve, trading calendar,
-day-notes journal, advanced stats, break-even/cost (needs a small `costModel` input refactor — it
-currently reads DOM IDs), manage-data modal + per-trade editor, filters/scope, activity terminal.
+All major panels are now live in Svelte on staging: Overview, performance equity curve, trading
+calendar, **day-notes journal**, advanced statistics, **break-even/cost**, **filters + scope**,
+**manage-data modal + per-trade editor**, and the **activity terminal**. Each reuses the pure-logic
+core verbatim (A29); the cost panel reuses `costModel()` as-is by rendering the DOM inputs it reads
+(the `costModel(inputs)` refactor stays deferred to Phase 4 per the owner's call). Every slice is
+covered by the Playwright staging spec.
+
+Deferred sub-features (polish, not blockers — picked up during/after Phase 4): the equity curve's
+gross/net/take-home overlays + hover tooltip + keyboard a11y + note dots; per-day tags/screenshots
+and per-trade screenshots in the editors; session/tag filters + saved-filter views; and the
+`style-src 'unsafe-inline'` CSP drop (S18), which lands once all surfaces are de-inlined.
 - **CSP tightening (S18) starts here.** Svelte's scoped component CSS + CSSOM (`setProperty`)
   eliminate the inline `style="…"` usages on the staging surface as a side effect of the rewrite.
   Dropping `style-src 'unsafe-inline'` *globally* needs every surface de-inlined (prod/demo via
