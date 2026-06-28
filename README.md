@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="Blotterbook — private futures journal and cost dashboard" width="100%">
+  <img src="src/assets/banner.svg" alt="Blotterbook — private futures journal and cost dashboard" width="100%">
 </p>
 
 <p align="center">
@@ -25,27 +25,27 @@ parsed, computed, and stored locally. No accounts, no uploads, no tracking.
 
 <table>
   <tr>
-    <td width="160"><img src="assets/why-private.svg" alt="A browser window holding a padlock — data parsed and stored locally, never uploaded" width="150"></td>
+    <td width="160"><img src="src/assets/why-private.svg" alt="A browser window holding a padlock — data parsed and stored locally, never uploaded" width="150"></td>
     <td><b>Private by design.</b> All parsing and computation run in your browser; your trades are saved locally in your browser's storage and never sent anywhere. No login, no cookie banner, no tracking.</td>
   </tr>
   <tr>
-    <td width="160"><img src="assets/why-cost.svg" alt="A cost waterfall stepping down from gross PnL through commissions, subscriptions and tax to take-home" width="150"></td>
+    <td width="160"><img src="src/assets/why-cost.svg" alt="A cost waterfall stepping down from gross PnL through commissions, subscriptions and tax to take-home" width="150"></td>
     <td><b>Knows what trading actually costs.</b> Models broker commissions, exchange/clearing/NFA fees, platform + data-feed subscriptions, and a Section 1256 tax estimate — so you see <i>take-home</i>, not just gross PnL.</td>
   </tr>
   <tr>
-    <td width="160"><img src="assets/why-picture.svg" alt="A cumulative equity curve with gross and net overlays, gridlines and a day marker" width="150"></td>
+    <td width="160"><img src="src/assets/why-picture.svg" alt="A cumulative equity curve with gross and net overlays, gridlines and a day marker" width="150"></td>
     <td><b>The full picture.</b> Cumulative equity curve, a Sunday-first trading calendar of daily PnL, win rate, profit factor, expectancy, drawdown, payoff ratio, streaks, Sharpe/Sortino, and more.</td>
   </tr>
   <tr>
-    <td width="160"><img src="assets/why-journal.svg" alt="A trading-calendar month grid with green and red daily PnL cells, note dots and a tag chip" width="150"></td>
+    <td width="160"><img src="src/assets/why-journal.svg" alt="A trading-calendar month grid with green and red daily PnL cells, note dots and a tag chip" width="150"></td>
     <td><b>A real journal.</b> Per-day and per-trade notes, tags, and screenshots; saved filter views; a tag filter — so you can actually review <i>why</i> a day went the way it did.</td>
   </tr>
   <tr>
-    <td width="160"><img src="assets/why-platforms.svg" alt="Several platform CSV exports auto-detected and normalized into one unified trade table" width="150"></td>
+    <td width="160"><img src="src/assets/why-platforms.svg" alt="Several platform CSV exports auto-detected and normalized into one unified trade table" width="150"></td>
     <td><b>Multi-platform import.</b> TradingView is fully verified; Tradovate, Rithmic, Sierra Chart, TradeStation, MotiveWave, Webull, Interactive Brokers, and Schwab/thinkorswim are supported in beta.</td>
   </tr>
   <tr>
-    <td width="160"><img src="assets/why-deps.svg" alt="A small content-hashed bundle built from a few pinned dependencies, loading fast" width="150"></td>
+    <td width="160"><img src="src/assets/why-deps.svg" alt="A small content-hashed bundle built from a few pinned dependencies, loading fast" width="150"></td>
     <td><b>Lean and fast.</b> Built with Vite + Svelte on a minimal, pinned, audited dependency set — it ships a small, content-hashed bundle that loads fast.</td>
   </tr>
 </table>

@@ -535,18 +535,6 @@
       "partial": false,
       "prompt": "`npm run typecheck` (svelte-check) currently reports 12 warnings across 6 files - mostly accessibility: `a11y_label_has_associated_control` on the decorative mock setup fields in src/site/components/Howto.svelte (x6), plus interactive-element issues in EquityCurve.svelte (svg drag handlers / noninteractive tabindex), Panel.svelte and StatCard.svelte (tabindex / role / focus), and Home.svelte (tablist tabindex). Resolve them: associate or stop using `<label>` for the Howto mock fields, give the drag/click-handler elements proper roles + keyboard handlers + focus, and fix the tablist/tabindex roles - without regressing layout or the CSP `style-src 'self'` rule (A55). Also clear the one non-a11y warning in the same output (`editShotInput` should be declared with `$state(...)` in ManageData.svelte) so the check goes fully clean. Done when: `npm run typecheck` reports 0 warnings and the e2e interaction/a11y specs still pass.",
       "doneNote": null
-    },
-    {
-      "id": "A84",
-      "title": "Fix the broken README SVG image paths",
-      "category": "COMMENTS / READABILITY",
-      "priority": "P3",
-      "effort": "trivial",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "The README images broke after the A30 source reorg: `README.md` references `assets/banner.svg` and the six `assets/why-*.svg` feature graphics with paths relative to the repo root, but those SVGs now live in `src/assets/` (banner.svg + why-private / why-cost / why-picture / why-journal / why-platforms / why-deps.svg). On GitHub the README renders all seven as broken images. Fix the `src=` paths (e.g. `assets/banner.svg` -> `src/assets/banner.svg`) so they resolve from the repo root; the absolute shields.io badge URLs are fine and need no change. Confirm by previewing README.md on the branch. Done when: every image in README.md renders on GitHub and no relative image path still points at the non-existent root `assets/` directory.",
-      "doneNote": null
     }
   ],
   "howToDrive": [
