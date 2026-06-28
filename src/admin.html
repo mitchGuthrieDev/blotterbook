@@ -6,126 +6,13 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <title>Admin — Blotterbook</title>
-<link rel="stylesheet" href="styles/site.css">
-<link rel="stylesheet" href="styles/admin.css">
+<!-- A69: tokens stay the single source; the page CSS ships as the Svelte components' scoped stylesheet. -->
+<link rel="stylesheet" href="styles/tokens.css">
 </head>
 <body>
-
-<!-- A9: the admin panel keeps a BESPOKE, trimmed nav + footer, intentionally NOT fed by
-     partials/nav.html · partials/footer.html. It's an internal tool — a minimal 2/3-link
-     nav and an "internal admin page" disclaimer, deliberately distinct from the public
-     info-site chrome so admin never surfaces marketing links. Edit here. -->
-<header>
-  <nav class="nav">
-    <a class="wordmark" href="index.html"><span class="dot"></span>Blotterbook</a>
-    <input type="checkbox" id="navtoggle" class="navtoggle" aria-label="Toggle navigation menu">
-    <div class="navlinks">
-      <a href="index.html">Home</a>
-      <a href="changelog.html">Changelog</a>
-      <a class="navlaunch" href="/app/">Launch Blotterbook &rarr;</a>
-    </div>
-    <a class="cta" href="/app/">Launch Blotterbook &rarr;</a>
-    <label class="hamburger" for="navtoggle" title="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></label>
-  </nav>
-</header>
-
-<div class="wrap">
-  <p class="eyebrow">Admin</p>
-  <h1>Configuration</h1>
-  <p class="blurb">Internal controls for Blotterbook. This page should be locked down with
-    <b>Cloudflare Access</b>; changes also require the admin key below.</p>
-
-  <div class="note warn"><b>Access-controlled.</b> Protect this page (and ideally
-    <code>admin.blotterbook.com</code>) with Cloudflare Access. Writes additionally require the
-    <code>ADMIN_KEY</code> secret, and the status is stored in the <code>STATUS_KV</code> namespace.</div>
-
-  <h2>Homepage “Live” indicator</h2>
-  <p>Override the status pill shown on the marketing homepage. <b>Auto</b> hands control back to the
-    automatic check (pings <code>/app/</code>); the others force a fixed state.</p>
-
-  <p class="curstate" id="curstate">Current: loading…</p>
-
-  <p class="authnote" id="authnote"></p>
-  <div class="adminkeyrow">
-    <div class="fld"><label for="label">Custom label (optional)</label>
-      <input type="text" id="label" maxlength="40" placeholder="e.g. Back at 5pm ET"></div>
-  </div>
-
-  <!-- The admin credential is auto-issued as a short-lived token via Cloudflare Access
-       (S3/S4). This manual field is a tucked-away fallback: only needed off-Access or if
-       the token didn't issue. -->
-  <details class="advkey">
-    <summary>Advanced — manual admin key</summary>
-    <p class="advkey-note">Auto-filled from Cloudflare Access. Enter the raw <code>ADMIN_KEY</code> here
-      only if you're working off-Access or the token didn't issue.</p>
-    <div class="fld"><label for="adminkey">Admin key</label>
-      <input type="password" id="adminkey" placeholder="ADMIN_KEY" autocomplete="off"></div>
-  </details>
-
-  <div class="modes" id="modes">
-    <button class="modebtn" data-mode="auto"><span class="d"></span>Auto-detect</button>
-    <button class="modebtn" data-mode="live"><span class="d"></span>Live</button>
-    <button class="modebtn" data-mode="offline"><span class="d"></span>Offline</button>
-    <button class="modebtn" data-mode="maintenance"><span class="d"></span>Maintenance</button>
-  </div>
-  <p class="amsg" id="amsg"></p>
-
-  <h2>Staging environment</h2>
-  <p>A 1:1 sandbox copy of the app on sample data, for trialling UI/behavior changes before they
-    reach the main app. The page is gated by the admin key — this button carries it for you (sets a
-    short-lived <code>bb_staging</code> cookie, then opens staging).</p>
-  <div class="modes"><button class="modebtn" id="launchstaging"><span class="d warn"></span>Launch staging env &rarr;</button></div>
-  <p class="amsg" id="stagemsg"></p>
-
-  <h2>Platform versions</h2>
-  <p>Read-only. Versions are <b>automated</b> (CH12): a merge to main derives the bump from the
-    PR's conventional-commit type and changed paths, and writes <code>data/versions.json</code> —
-    the single source of truth every surface reads at load. The platform phase (Beta → stable) is
-    derived from the prod major. There's nothing to set here.</p>
-  <p class="curstate" id="verstate">Versions: loading…</p>
-
-  <h2>Feature flags</h2>
-  <p>Server-side flags stored in KV; the app reads them at boot (<code>/api/config</code>). New flags
-    must also be added to <code>DEFAULTS.flags</code> in <code>functions/api/config.js</code> (allow-list).</p>
-  <div class="flags" id="flags">
-    <label class="flagrow"><input type="checkbox" data-flag="showBetaAdapters"><span>Show beta platform adapters in the upload picker</span></label>
-    <label class="flagrow"><input type="checkbox" data-flag="maintenanceBanner"><span>Show a maintenance banner in the app</span></label>
-    <label class="flagrow"><input type="checkbox" data-flag="betaRibbon"><span>Show a “Beta” badge in the app header</span></label>
-  </div>
-  <div class="modes"><button class="modebtn" id="saveflags"><span class="d accent"></span>Save flags</button></div>
-  <p class="amsg" id="flagmsg"></p>
-
-  <h2>Backlog</h2>
-  <p>Read-only view of the engineering backlog — active items from <code>data/backlog.json</code> merged with
-    completed items archived in <code>data/backlog_archive.json</code> (filter by Status to see done items).
-    Per-item prompts and done-notes live in the files but are not shown here.</p>
-  <div class="bkcounts" id="bk_counts"></div>
-  <div class="bktotal" id="bk_total"></div>
-  <div class="bkfilters" id="bk_filters">
-    <div class="fld"><label class="lbl" for="bk_fstatus">Status</label>
-      <select id="bk_fstatus"><option value="">All</option></select></div>
-    <div class="fld"><label class="lbl" for="bk_feffort">Effort</label>
-      <select id="bk_feffort"><option value="">All</option></select></div>
-    <button type="button" class="bkclear" id="bk_fclear">Clear filters</button>
-    <span class="bkfnote">Counts above are full totals; filters narrow the list only.</span>
-  </div>
-  <div class="bklist" id="bk_list"></div>
-  <p class="amsg" id="bk_msg"></p>
-</div>
-
-<footer class="site">
-  <div class="frow">
-    <span class="fbrand"><span class="dot"></span>Blotterbook</span>
-    <div class="flinks">
-      <a href="index.html">Home</a>
-      <a href="changelog.html">Changelog</a>
-      <a href="legal.html">Legal</a>
-    </div>
-    <p class="disclaimer">Internal admin page — not for public use.</p>
-  </div>
-</footer>
-
-<script type="module" src="site/lib/admin.js"></script>
-
+<!-- A69 SSG: Admin.svelte is server-rendered into this outlet at build time (initial loading state),
+     then hydrated; onMount issues the Access token and fetches status/config/versions/backlog. -->
+<div id="app"><!--ssg-outlet--></div>
+<script type="module" src="site/entries/admin.ts"></script>
 </body>
 </html>
