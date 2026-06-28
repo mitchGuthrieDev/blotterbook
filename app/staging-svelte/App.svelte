@@ -152,9 +152,10 @@
   }
 
   // App-mode landing: parse + persist a CSV, then the dashboard takes over (allTrades non-empty).
-  async function loadCSV(file) {
+  // platformId overrides auto-detect when the user picks a platform in the landing dropdown.
+  async function loadCSV(file, platformId) {
     landingMsg = '';
-    const r = Adapters.parse(await file.text());
+    const r = Adapters.parse(await file.text(), platformId || undefined);
     if (!r.ok) {
       landingMsg = r.error || 'Could not parse that CSV.';
       return;
@@ -249,6 +250,7 @@
     <div class="topactions">
       <span class="pill" class:off={!online} title={online ? 'Online' : 'Offline'}>{online ? 'online' : 'offline'}</span>
       <a class="link" href="../changelog.html">Changelog</a>
+      <a class="link" href="mailto:contact@blotterbook.com?subject=Blotterbook">Contact</a>
       {#if loaded}<button type="button" class="managebtn" onclick={() => (manageOpen = true)}>Manage data</button>{/if}
     </div>
   </header>

@@ -29,6 +29,7 @@
       : ''
   );
   const selIdx = $derived(view && selectedDate ? (view.idxByDate.get(selectedDate) ?? null) : null);
+  const grossOnly = $derived(enabled.length === 1 && enabled[0].key === 'gross');
 
   function build(m, ci, ser) {
     const { pts: raw } = dailySeries(m, {
@@ -56,7 +57,26 @@
     pts.forEach((p, i) => p.date && idxByDate.set(p.date, i));
     const notes = [];
     for (const [date, i] of idxByDate) if (journalDates.has(date)) notes.push({ x: x(i), y: y(pts[i][prim]), date });
-    return { pts, x, y, lo, hi, len: pts.length, lines, area, prim, idxByDate, notes, primColor: ser[0].color, zeroY: lo <= 0 && hi >= 0 ? y(0) : null };
+    // Realized drawdown peak→trough on the gross series (shaded only when gross is the sole overlay).
+    let gpeak = -Infinity,
+      gpeakI = 0,
+      maxDD = 0,
+      ddP = 0,
+      ddT = 0;
+    pts.forEach((p, i) => {
+      if (p.gross > gpeak) {
+        gpeak = p.gross;
+        gpeakI = i;
+      }
+      const d = gpeak - p.gross;
+      if (d > maxDD) {
+        maxDD = d;
+        ddP = gpeakI;
+        ddT = i;
+      }
+    });
+    const dd = maxDD > 0 ? { x0: x(ddP), x1: x(ddT) } : null;
+    return { pts, x, y, lo, hi, len: pts.length, lines, area, prim, idxByDate, notes, dd, primColor: ser[0].color, zeroY: lo <= 0 && hi >= 0 ? y(0) : null };
   }
 
   function toggle(key) {
@@ -117,6 +137,7 @@
         </linearGradient>
       </defs>
       <path d={view.area} fill="url(#eqfill)" />
+      {#if grossOnly && view.dd}<rect class="ddband" x={view.dd.x0} y={PY} width={Math.max(0, view.dd.x1 - view.dd.x0)} height={H - 2 * PY} />{/if}
       {#if view.zeroY != null}<line class="zero" x1={PX} y1={view.zeroY} x2={W - PX} y2={view.zeroY} vector-effect="non-scaling-stroke" />{/if}
       {#if selIdx != null}<line class="sel" x1={view.x(selIdx)} y1={PY} x2={view.x(selIdx)} y2={H - PY} vector-effect="non-scaling-stroke" />{/if}
       {#each view.lines as ln (ln.key)}
@@ -200,6 +221,10 @@
     stroke: var(--line);
     stroke-width: 1;
     stroke-dasharray: 3 3;
+  }
+  .ddband {
+    fill: var(--red);
+    opacity: 0.08;
   }
   .sel {
     stroke: var(--accent);

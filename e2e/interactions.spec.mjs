@@ -78,6 +78,7 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
 
   // Break-even/cost panel reuses costModel() verbatim against the seeded setup → take-home shows.
   await expect(page.locator('#sv-app .costpanel [data-cost-takehome]')).toContainText('$');
+  await expect(page.locator('#sv-app .costpanel .caveats summary')).toBeVisible(); // A38
 
   // Filters/scope: switching to the calendar-month scope narrows the active trade count.
   await page.click('#sv-app .filterbar .scope button:last-child');

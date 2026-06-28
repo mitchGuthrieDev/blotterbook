@@ -84,6 +84,17 @@
         </tbody>
       </table>
     {/if}
+
+    <details class="caveats">
+      <summary>Assumptions &amp; caveats</summary>
+      <ul>
+        <li><b>Round-turn commission, per contract.</b> Each trade is a closed position; the round-turn commission — 2 × the symbol's per-side rate — is charged once per contract (× the trade's quantity).</li>
+        <li><b>Per-symbol commissions.</b> The symbol root is priced as the selected broker's commission plus the contract's CME exchange/clearing/NFA fee. Symbols without a known exchange fee use a fallback and are flagged with *. All rates are editable estimates — verify against your account.</li>
+        <li><b>Subscriptions are not prorated.</b> A full month of platform + data fee is charged for every distinct calendar month in the active scope.</li>
+        <li><b>Tax = blended 1256 rate:</b> 60% × 15% long-term + 40% × 24% ordinary (assumed bracket) + your state's top rate, applied only when net profit is positive.</li>
+        <li><b>Break-even / trade</b> = total period costs ÷ trade count: the average gross each trade needed to clear costs.</li>
+      </ul>
+    </details>
   {/if}
 </section>
 
@@ -212,5 +223,31 @@
   .est {
     color: var(--warn);
     margin-left: 2px;
+  }
+  .caveats {
+    margin-top: 14px;
+    border-top: 1px solid var(--line);
+    padding-top: 10px;
+  }
+  .caveats summary {
+    font-size: 12px;
+    color: var(--faint);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+  }
+  .caveats ul {
+    margin: 10px 0 0;
+    padding-left: 18px;
+  }
+  .caveats li {
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--dim);
+    margin-bottom: 6px;
+  }
+  .caveats b {
+    color: var(--txt);
   }
 </style>
