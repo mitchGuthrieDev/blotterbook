@@ -72,7 +72,7 @@ npm run format                   # Prettier
 # (the node suites still run standalone too, e.g. `node scripts/test-adapters.mjs`)
 
 # Build sub-steps (idempotent; commit their output — they write COMMITTED sources, not dist/)
-node scripts/build-includes.mjs  # regenerate app/{app,demo,staging}.html + info-page nav/footer from partials/
+node scripts/build-includes.mjs  # inject the info-page nav/footer from partials/ (app surfaces are hand-authored Svelte mounts — untouched)
 node scripts/build-manifest.mjs  # regenerate data/manifest.json content hashes (cache-busting)
 # scripts/copy-static.mjs runs as part of `npm run build` (copies verbatim files into dist/)
 ```
@@ -82,7 +82,8 @@ node scripts/build-manifest.mjs  # regenerate data/manifest.json content hashes 
 > 1:1, source files were not moved, and `functions/`/`scripts/`/`partials/` stay at the root
 > (unserved). Pages dashboard settings (build command `npm run build`, output dir `dist`, unset
 > `SKIP_DEPENDENCY_INSTALL`) are recorded in [the ADR](docs/adr-001-vite-svelte-spa.md). The Svelte
-> migration of the `/app/` surface is A27 (not yet started — the app is still vanilla ESM).
+> migration is complete: A27 brought Svelte to staging, and the **A33 cutover** moved all three
+> surfaces (app/demo/staging) to the Svelte SPA and deleted the vanilla view layer.
 
 CI (`.github/workflows/ci.yml`) runs `npm ci` → lint → typecheck → format → the unit/logic
 tests → **the Vite build** → the Playwright render tests (against `dist/`), then re-runs both
@@ -90,8 +91,9 @@ include/manifest build scripts and **fails if the result differs from what's com
 gate; `dist/` is gitignored, so this proves the build-time tooling didn't leave committed sources
 stale). So:
 
-- **After editing any `partials/*` →** run `build-includes.mjs` and commit the
-  regenerated `app/*.html` / info pages.
+- **After editing `partials/nav.html` or `partials/footer.html` →** run `build-includes.mjs` and
+  commit the regenerated info pages (changelog/roadmap/legal/howto). The app surfaces are
+  hand-authored Svelte mounts — they carry no include markers and are not regenerated.
 - **After editing any `data/*.json` →** run `build-manifest.mjs` and commit the
   regenerated `data/manifest.json`.
 
@@ -141,11 +143,13 @@ stale). So:
   _headers              Cloudflare Pages security headers (CSP + hardening)
   tokens.css            design tokens (colors + fonts) — single source for every surface
   index.html            homepage: hero + features + use cases + platforms + pricing + FAQ
+  home.css              homepage styles (extracted from index.html's inline <style> for CSP — A55)
   howto.html            "How To" wiki: getting-started + per-platform import guides
   roadmap.html          shipped vs. planned checklist
   changelog.html        "Blotterlog" — versioned release notes (reads data/changelog.json)
   legal.html            disclaimers, terms, privacy summary
   admin.html            internal admin controls (Cloudflare Access–gated)
+  admin.css             admin-panel styles (extracted from admin.html's inline <style> for CSP — A55)
   site.css              shared styles for howto/roadmap/changelog/legal/admin (@imports tokens.css)
 /partials/              shared HTML fragments injected at build time (single source)
   nav.html, footer.html the info-site nav + footer (the only partials left; app-*.html removed in A33)
@@ -182,7 +186,7 @@ stale). So:
   api/admin-key.js      returns ADMIN_KEY token to Access-authenticated admins
   api/{me,checkout,webhook}.js   Stripe/accounts scaffold
 /scripts/
-  build-includes.mjs    assembles info pages + the three app surfaces from partials/
+  build-includes.mjs    injects the nav/footer partials into the info pages (app surfaces are hand-authored Svelte mounts — skipped)
   build-manifest.mjs    regenerates data/manifest.json content hashes
   copy-static.mjs       copies verbatim-static files (data/, _headers, _redirects, robots, sitemap, og-image) into dist/ (A26)
   bump-version.mjs      two-track version bump from a merge commit (run by CI)
@@ -208,19 +212,19 @@ CSV text
   → applyFilters()  active filter set → working trade list
   → compute()       trades → metrics (PnL, win rate, drawdown, curve, expectancy, …)
   → costModel()     metrics + setup inputs → commissions, subscriptions, tax, take-home
-  → render*()       → cards / curve / calendar / advanced / break-even
+  → Svelte app      → reactive components render cards / curve / calendar / advanced / break-even
 ```
 
-Key globals: `TRADES`, `METRICS_ALL`, `FILTERS`, `SCOPE`, `calYear`/`calMonth`,
-`selectedDate`, `JOURNAL_DATES`, `TRADE_META`, `SAVED_FILTERS`, `DEMO_MODE`,
-`PAGE_MODE`/`STAGING_PAGE`. Boot order: `loadRefData()` → `Store.init()` →
-`restoreSession()` (demo runs `runDemo()`; staging seeds its DB first).
+The compute pipeline (`adapters`/`compute`/`costModel`) is the **pure-logic core**, reused
+verbatim (A29). The Svelte app drives it: reactive state lives in runes (`$state`/`$derived`)
+inside the components, the active `Store` is provided via `context('bb:store')` (real IndexedDB
+for app/staging, in-memory `DemoStore` for demo), and `PAGE_MODE`/`STAGING_PAGE` adapt per
+surface. Boot: `loadRefData()` → `Store.init()` → `restoreSession()` (demo seeds in-memory;
+staging seeds its DB first) → `mount()`.
 
-Shared code never names a widget symbol directly — `core.js` exposes an event bus
-(`emit`/`onEvent` over an `EventTarget`); shared actions fire events
-(`app:ready`, `data:loaded`, `data:imported`, `note:saved`, `trade:deleted`,
-`backup:created`, `data:erased`) that `widgets.js` subscribes to. The bus is a
-no-op with no subscriber.
+The `core.js` event bus survives the cutover: shared actions fire events (`app:ready`,
+`data:loaded`, `data:imported`, `note:saved`, `trade:deleted`, `backup:created`, `data:erased`)
+over an `EventTarget` for any listener. The bus is a no-op with no subscriber.
 
 ## Adding things
 
@@ -230,10 +234,12 @@ no-op with no subscriber.
   exitTime, holdMs] }` so `compute()`/`costModel()` never change.
 - **A rate change:** edit the relevant `data/*.json`, then run
   `build-manifest.mjs`. No app code changes.
-- **Promoting a staging feature to prod + demo:** follow the checklist in
-  [docs/architecture.md](docs/architecture.md#promoting-a-feature-staging--prod).
+- **A new feature:** add/extend a Svelte component in `app/staging-svelte/`; it ships to all three
+  surfaces at once (no promotion step since the A33 cutover). Gate per surface in the component
+  (`PAGE_MODE`/`isDemo`/`STAGING_PAGE`) and keep demo non-mutating. See the checklist in
+  [docs/architecture.md](docs/architecture.md#building-a-feature-all-surfaces-share-one-spa).
 
 ## Deployment
 
-Cloudflare Pages, static files; `/functions/*` are edge functions automatically.
-Recommended Pages build command: `node scripts/build-manifest.mjs`.
+Cloudflare Pages: `npm run build` emits `dist/` (Vite) and Pages serves it; `/functions/*` are
+edge functions automatically. Build command `npm run build`, output dir `dist` (ADR-001/A26).

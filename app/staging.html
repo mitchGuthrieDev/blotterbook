@@ -1,17 +1,12 @@
 <!doctype html>
 <!--
-  Blotterbook — STAGING surface (ADR-001 / A27).
+  Blotterbook — STAGING surface (ADR-001 / A27 → A33 cutover).
 
-  Unlike app/app.html and app/demo.html (still vanilla, generated from partials/ by
-  build-includes.mjs), staging is the Svelte 5 proving ground: this page is a hand-authored
-  Svelte mount point, NOT assembled from partials, so build-includes leaves it untouched (it
-  carries no include markers). The Svelte app lives in app/staging-svelte/ and reuses the
-  pure-logic core (compute/costModel/Store/adapters) verbatim (A29). Staging stays key-gated by
+  Hand-authored Svelte 5 mount point, like app/app.html and app/demo.html (all three surfaces are
+  now Svelte — the A33 cutover deleted the vanilla view layer). NOT assembled from partials/ (no
+  include markers → build-includes skips it). The Svelte app lives in app/staging-svelte/ and reuses
+  the pure-logic core (compute/costModel/Store/adapters) verbatim (A29). Staging stays key-gated by
   functions/_middleware.js and uses an isolated IndexedDB (store.js keys the DB off data-mode).
-
-  MIGRATION IN PROGRESS: the Svelte staging app currently renders the Overview (computed metrics);
-  the remaining panels (calendar, performance curve, advanced stats, break-even, manage-data,
-  journal) are ported incrementally under A27 before staging reaches parity and prod/demo migrate.
 -->
 <html lang="en">
   <head>

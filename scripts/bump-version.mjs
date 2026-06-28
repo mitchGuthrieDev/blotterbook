@@ -27,14 +27,15 @@ export function bumpLevel(message) {
   return m && m[1].toLowerCase() === 'feat' ? 'minor' : 'patch';
 }
 
-// After CH16 the staging FEATURES were promoted to all surfaces (the old app/staging.js became
-// app/widgets.js, shared). Only the staging ENVIRONMENT page itself is staging-exclusive now.
+// The Svelte SPA (app/staging-svelte/) is shared by all three surfaces since the A33 cutover, so the
+// only staging-EXCLUSIVE file is the staging ENVIRONMENT page itself; everything else under app/ ships
+// to every surface (see isProdShipping).
 const STAGING_ONLY = new Set(['app/staging.html']);
 
 // Production-only surfaces: the public marketing homepage + info pages + their CSS ship to
 // prod (main+demo deployment) but are NOT part of the staging sandbox, so they bump PROD only
 // (B16 — previously these were classified as nothing, so homepage changes never bumped).
-const PROD_ONLY = new Set(['index.html', 'site.css', 'howto.html', 'roadmap.html', 'legal.html', 'changelog.html']);
+const PROD_ONLY = new Set(['index.html', 'home.css', 'site.css', 'howto.html', 'roadmap.html', 'legal.html', 'changelog.html']);
 
 /* A file shared across the app surfaces (main + demo + staging). Shared app JS/CSS, the app+demo
    shells, partials, assets, tokens, and reference data — but NOT versions.json, the admin-only
@@ -43,8 +44,12 @@ const PROD_ONLY = new Set(['index.html', 'site.css', 'howto.html', 'roadmap.html
    trail by a release and every notes edit would fire another, undocumented, release.) */
 const NON_SHIPPING_DATA = new Set(['data/versions.json', 'data/backlog.json', 'data/backlog_archive.json', 'data/changelog.json']);
 export function isProdShipping(f) {
-  if (f === 'app/app.html' || f === 'app/demo.html' || f === 'app/app.css' || f === 'tokens.css') return true;
-  if (/^app\/[^/]+\.js$/.test(f)) return true; // shared app modules (all app JS ships to every surface)
+  if (f === 'app/app.html' || f === 'app/demo.html' || f === 'tokens.css') return true; // app/app.css removed in A33 (CSS is component-scoped now)
+  // A59: every JS/Svelte module under app/ ships to every surface — the pure-logic core (app/*.js)
+  // AND the Svelte SPA (app/staging-svelte/**, shared by app/demo/staging since the A33 cutover).
+  // Must be nested-aware: the old /^app\/[^/]+\.js$/ missed app/staging-svelte/*, so component
+  // changes silently bumped NEITHER track.
+  if (/^app\/.*\.(?:js|svelte)$/.test(f)) return true;
   if (/^partials\//.test(f) || /^assets\//.test(f)) return true;
   if (/^data\//.test(f) && !NON_SHIPPING_DATA.has(f)) return true;
   return false;
