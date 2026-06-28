@@ -3,7 +3,7 @@
   "title": "Blotterbook — improvement backlog (paste-ready prompts)",
   "intro": "From the 2026-06-25 audit. Each item is a self-contained prompt: scope, goal, constraints, \"done when\".",
   "tags": "Tags: P1 do-soon · P2 durable win · P3 polish. Send them one at a time (one surface/concern per turn).",
-  "updated": "2026-06-27",
+  "updated": "2026-06-28",
   "note": "Committed source of truth for the ACTIVE engineering backlog (open + guardrail items; replaces the retired .claude/backlog.md). Completed (Done) items are archived in data/backlog_archive.json to keep this file lean — the admin Backlog panel reads BOTH and merges them, so done items stay visible. The admin panel shows category/effort/status only; prompt + doneNote stay in the JSON.",
   "commitConvention": "Conventional-commit titles (enables CH12 automated versioning): when committing, and ESPECIALLY when titling a PR / squash-merge, lead the title with a conventional-commit type so the version bump can be derived automatically — `feat:` (new capability → minor), `fix:` (bug fix → patch), `chore:`/`refactor:`/`docs:`/`style:`/`test:`/`perf:` (→ patch), and append `!` (e.g. `feat!:`) or a `BREAKING CHANGE:` footer for a breaking change (→ major). Scope it when useful, e.g. `feat(staging): …`. Untyped/legacy titles default to a patch bump. Keep the existing Co-Authored-By and Claude-Session trailers on the commit body.",
   "donePolicy": "When an item's status is set to `done`, delete its `prompt` field and keep only the `doneNote` — the doneNote is the shipped record of what was actually done, so the original prompt is redundant and only bloats this file (the admin backlog panel never renders done-item prompts anyway). Keep `prompt` on `open` and `guardrail` items, since those are still the actionable spec. Applies retroactively: a done item should never carry a prompt. RECURRING ITEMS: an item with `recurring: true` (e.g. R1 repo audit, CH16 staging→prod promotion) is a perpetual driver — NEVER set its status to done, set completedDate, or strip its prompt; it stays open across every run and its prompt leads with a RECURRING/REPEATABLE marker. Each run ships its output as new items, not by closing the recurring item. ARCHIVE (post-split): completed items now live in `data/backlog_archive.json`. When you set an item to `done` and strip its prompt, MOVE the item object out of backlog.json into backlog_archive.json (the admin panel merges both). Recurring items never move — they stay open in backlog.json.",
@@ -41,6 +41,42 @@
       "partial": false,
       "recurring": true,
       "prompt": "RECURRING — leave this item OPEN; never mark it done, set completedDate, or strip this prompt. Each run is a fresh full audit (this is the Nth, not a one-shot); the findings ship as NEW backlog items, and R1 itself stays open for the next pass. Read-only audit (NO code edits) of the current repo: architecture, code quality, duplicated code, and security posture — accounting for everything shipped since the first audit (symbol sanitization, `_headers` CSP, `tokens.css` + nav/footer partials, the `app.js` → 7-script split and the subsequent A20 migration to native ES modules — `state.js` shared-state object, single `<script type=module src=main.js>` entry, no build/deps, screenshot downscaling). Give concrete, prioritized findings, and append any new actions to this backlog in the same format. Done when: a written, prioritized audit is delivered and new follow-ups are added to the backlog.",
+      "doneNote": null
+    },
+    {
+      "id": "A39",
+      "title": "Phase 4 parity gap: Avg Win/Loss headline card + its detail modal (Svelte)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 staging-app audit (final pre-cutover review). The vanilla dashboard shows FIVE headline cards — net, win, pf, wl (Avg Win/Loss / payoff ratio), dd (render.js renderCards ~49-51) — each with an F14 detail modal (widgets.js CARD_VIEWS.wl ~396). The Svelte Overview (app/staging-svelte/components/Overview.svelte) renders a richer 10-card set but DROPPED the 'wl' card, and StatCardModal's MODAL_KEYS only covers net/win/pf/dd. The avg-win/avg-loss/payoff data still appears in Advanced Statistics, so this is a missing headline card + drill-down, not lost data. Restore parity: add a 'wl' (Avg Win/Loss) card to the Svelte Overview (value m.wl, sub avgW/avgL) and a 'wl' branch to StatCardModal mirroring vanilla CARD_VIEWS.wl (avg win/loss, long vs short, payoff). Add it to MODAL_KEYS. Reuse the pure metrics verbatim (A29). Done when: the Svelte Overview shows the Avg Win/Loss card, clicking it opens the wl drill-down, and an e2e asserts it. Blocks/feeds A33 (prod-cutover parity).",
+      "doneNote": null
+    },
+    {
+      "id": "A40",
+      "title": "Phase 4 parity gap: calendar Week column (ISO week + weekly P&L) (Svelte)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 staging-app audit (final pre-cutover review). The vanilla trading calendar renders a left 'Week' column per row — ISO week number + that week's P&L total + traded-day count (render.js renderCalendar ~417, ~455-459; uses isoWeek()). The Svelte CalendarMonth (app/staging-svelte/components/CalendarMonth.svelte) is a plain 7-column Sunday-first grid with no week column. Restore parity: add the leading Week cell to each calendar row (ISO week no. via the shared isoWeek helper, weekly P&L from the same per-day metrics, day count), matching the vanilla layout/classes (.wkcell/.wl/.wp/.wd). Pure presentation of compute()'s m.days (A29 — no recomputation). Done when: the Svelte calendar shows the Week column with week number + weekly P&L + day count, styled to match, and an e2e asserts a week cell renders. Blocks/feeds A33 (prod-cutover parity).",
+      "doneNote": null
+    },
+    {
+      "id": "A41",
+      "title": "R1 staging-app cleanup: export tile colors, shared helpers/dedup, stale comments",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the R1 staging-app audit (final pre-cutover review). A bundle of low-risk cleanups in the Svelte staging app (app/staging-svelte/**) — none block cutover, but they reduce drift before prod/demo migrate. (1) Export report headline tiles lose pos/neg color-coding except Max drawdown: vanilla export.js applies cls() per tile, but app/report.js reportHtmlDoc (~106) only marks 'Max drawdown' neg. Carry a per-row tone from buildReport (or apply cls to Net/Take-home/Gross) so the exported tiles color-code like vanilla. (2) Duplicated sessionOf (RTH 09:30-16:00 vs ETH) lives in both App.svelte (~159) and render.js (~674) — drift risk; hoist a single sessionOf to core.js and import in both. (3) Hoist small duplicated Svelte helpers: readImage (JournalEditor + ManageData), the blob-download helper (ExportReport + ManageData — also unify the revokeObjectURL timing), and the ratio()/num() formatters (Overview + AdvancedStats + StatCardModal) into a shared module (e.g. core.js for the pure formatters, a small svelte util for readImage/download); optionally extract a shared Modal overlay wrapper used by ExportReport/StatCardModal/ManageData (one place for the overlay a11y/scroll-lock pattern). (4) Stale comments now that A34-A38 shipped: App.svelte (~11) 'app/demo mounts land in A33' and CalendarMonth's 'come in later A27 slices' note. (5) Latent: ActivityTerminal subscribes to the event bus with no unsubscribe (core.js has no offEvent); harmless today (the component never remounts — keyed reorder moves the instance, collapse hides only the body) but add offEvent + cleanup if components may remount. NOTE: two audit candidates were checked and are NOT bugs — saveTradeMeta already rebuilds tags/shots into plain arrays so no $state proxy reaches IndexedDB (store.js ~217-219), and the `void [setup...]` effect is the repo's intended dependency-tracking idiom. Done when: tiles color-code on export, sessionOf is single-sourced, the duplicated helpers are hoisted, stale comments are corrected, and lint/tests/e2e stay green.",
       "doneNote": null
     },
     {
