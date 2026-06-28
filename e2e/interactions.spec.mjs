@@ -70,6 +70,9 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   const curve = page.locator('#sv-app svg.equity path.line');
   await expect(curve).toHaveAttribute('d', /^M[\d.]+,[\d.]+ L/);
 
+  // Trading calendar renders day cells, including traded (colored) days from m.days.
+  await expect(page.locator('#sv-app .calendar .calgrid .cell.traded').first()).toBeVisible();
+
   // Reload: the isolated staging DB already has the seed, so the count is identical (no re-seed
   // duplication) and the app still boots clean from persisted data.
   await page.reload({ waitUntil: 'networkidle' });

@@ -10,6 +10,7 @@
   import { demoCSV } from '../sampledata.js';
   import Overview from './components/Overview.svelte';
   import EquityCurve from './components/EquityCurve.svelte';
+  import CalendarMonth from './components/CalendarMonth.svelte';
 
   let metrics = $state(null);
   let tradeCount = $state(0);
@@ -63,9 +64,10 @@
   {:else if metrics}
     <Overview {metrics} {tradeCount} />
     <EquityCurve {metrics} />
+    <CalendarMonth {metrics} />
     <p class="note">
-      Migration in progress (A27): Overview + performance curve are live in Svelte. Calendar,
-      advanced stats, break-even, journal and manage-data are being ported next.
+      Migration in progress (A27): Overview, performance curve and trading calendar are live in
+      Svelte. Advanced stats, break-even, journal and manage-data are being ported next.
     </p>
   {:else}
     <p class="msg">{status}</p>
