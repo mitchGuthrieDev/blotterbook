@@ -1,6 +1,6 @@
 'use strict';
 import { Adapters } from './adapters.ts';
-import type { Trade, Annotation, TradeMeta, StoreLike } from './types.ts';
+import type { Trade, Annotation, TradeMeta, StoredJournal, StoredTradeMeta, StoreLike } from './types.ts';
 /* ============================================================
    Local persistence — IndexedDB
 
@@ -75,7 +75,7 @@ function done(t: IDBObjectStore): Promise<void> {
     t.transaction.onabort = () => reject(t.transaction.error);
   });
 }
-function reqP<T = any>(r: IDBRequest<T>): Promise<T> {
+function reqP<T = unknown>(r: IDBRequest<T>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     r.onsuccess = () => resolve(r.result);
     r.onerror = () => reject(r.error);
@@ -188,7 +188,7 @@ export const Store: StoreLike = {
 
   async getAllJournal() {
     const store = await tx(JOURNAL, 'readonly');
-    const all = await reqP(store.getAll());
+    const all = await reqP<StoredJournal[]>(store.getAll());
     all.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)); // newest first
     return all;
   },
@@ -207,7 +207,7 @@ export const Store: StoreLike = {
   /* ---- per-trade metadata: { id, tags:[], note:'', shots:[dataURL], updated } ---- */
   async getTradeMeta(id) {
     const store = await tx(TRADEMETA, 'readonly');
-    const rec = await reqP(store.get(id));
+    const rec = await reqP<StoredTradeMeta | undefined>(store.get(id));
     return rec || { id, tags: [], note: '', shots: [] };
   },
   async saveTradeMeta(id, m) {
@@ -228,7 +228,7 @@ export const Store: StoreLike = {
   },
   async allTradeMeta() {
     const store = await tx(TRADEMETA, 'readonly');
-    return reqP(store.getAll());
+    return reqP<StoredTradeMeta[]>(store.getAll());
   },
 
   /* Full local snapshot — for the data manager's backup/export. */
@@ -298,8 +298,9 @@ export const Store: StoreLike = {
     const FILTER_FIELDS = ['from', 'to', 'symbol', 'side', 'session', 'tag'];
     const cleanSavedFilters = (a: unknown) =>
       (Array.isArray(a) ? a : [])
-        .map((s: any) => {
-          if (!s || typeof s !== 'object') return null;
+        .map((entry: unknown) => {
+          if (!entry || typeof entry !== 'object') return null;
+          const s = entry as Record<string, unknown>;
           const id = String(s.id == null ? '' : s.id)
             .replace(/[^A-Za-z0-9]/g, '')
             .slice(0, 32);
@@ -308,7 +309,7 @@ export const Store: StoreLike = {
             .replace(/[<>&"']/g, '')
             .trim()
             .slice(0, 80);
-          const src = s.f && typeof s.f === 'object' ? s.f : {};
+          const src: Record<string, unknown> = s.f && typeof s.f === 'object' ? (s.f as Record<string, unknown>) : {};
           const f: Record<string, unknown> = {};
           for (const k of FILTER_FIELDS)
             f[k] = String(src[k] == null ? '' : src[k])

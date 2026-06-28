@@ -13,6 +13,14 @@
     msg: string;
   }
 
+  // The (optional) detail payloads the core event bus carries for the events logged below.
+  interface EventDetail {
+    count?: number;
+    added?: number;
+    date?: string;
+    name?: string;
+  }
+
   interface Props {
     panel?: PanelBundle;
   }
@@ -21,7 +29,7 @@
   let nextId = 0; // stable per-line key so the ring buffer doesn't reindex on wrap
   let box: HTMLDivElement | undefined;
 
-  const FMT: Record<string, (d?: any) => string> = {
+  const FMT: Record<string, (d?: EventDetail) => string> = {
     'data:loaded': d => `loaded ${d && d.count != null ? d.count : '?'} trades`,
     'data:imported': d => `imported ${d && d.added != null ? d.added : '?'} new trades`,
     'note:saved': d => `note saved · ${d && d.date ? d.date : ''}`,
@@ -44,7 +52,7 @@
     add('staging app ready');
     // onEvent returns an unsubscribe (core.js); collect them so the bus subscriptions are released
     // if this panel ever unmounts — no duplicate log lines on a remount.
-    const offs = Object.entries(FMT).map(([ev, fmt]) => onEvent(ev, d => add(fmt(d))));
+    const offs = Object.entries(FMT).map(([ev, fmt]) => onEvent(ev, d => add(fmt(d as EventDetail))));
     return () => offs.forEach(off => off());
   });
 

@@ -159,10 +159,10 @@ conforms to the rules below; keep it that way.
 - **File extensions.** Components with a template → `.svelte` (all carry `<script lang="ts">`, A61);
   shared reactive-state-with-runes modules → `.svelte.ts`; pure logic / utilities / API calls /
   types → `.ts`. No hand-written `.js` in `src/` (the pure-logic core is native TS — A61).
-- **TypeScript.** Prefer proper types or `unknown` over `any`; put shared interfaces in
-  [`src/lib/types.ts`](src/lib/types.ts), not inline. *(Known pragmatic `any` islands remain for
-  untyped JSON shapes — mainly `src/site/components/Admin.svelte` (backlog), plus a few in
-  `store.ts`/`App.svelte`/`ExportReport.svelte`; don't add more, and tighten when you touch them.)*
+- **TypeScript.** `src/` is `any`-free — keep it that way: prefer proper types or `unknown`, and put
+  shared interfaces in [`src/lib/types.ts`](src/lib/types.ts), not inline. Type fetched/persisted JSON
+  at the boundary rather than reaching for `any` (e.g. the `Stored*` persistence shapes in `types.ts`,
+  or page-local interfaces like the backlog/status shapes in `src/site/components/Admin.svelte`).
 - **JSDoc.** Don't restate types in JSDoc (`@param {type}`/`@returns {type}`) — tsc owns that.
   JSDoc is for prose on non-obvious behavior, `@deprecated`, and `@example`; skip it entirely when
   the name + types are self-evident.

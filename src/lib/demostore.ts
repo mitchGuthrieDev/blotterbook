@@ -11,14 +11,14 @@
    store.js (A29) so they can never drift from the real backend. Backup restore (importAll) is a
    no-op in demo (restore is disabled), avoiding any duplication of store.js's sanitization. */
 import { tradeId, validShot } from './store.ts';
-import type { Annotation, Trade, StoreLike } from './types.ts';
+import type { Annotation, Trade, StoredJournal, StoredTradeMeta, StoreLike } from './types.ts';
 
 export function createDemoStore(): StoreLike {
-  const trades = new Map<string, any>(); // id -> {id, ...trade}
-  const journal = new Map<string, any>(); // date -> {date,text,tags,shots,updated}
-  const meta = new Map<string, any>(); // key -> value
-  const trademeta = new Map<string, any>(); // id -> {id,tags,note,shots,updated}
-  const mem = new Map<string, any>(); // in-memory stand-in for Store.local (no localStorage)
+  const trades = new Map<string, Trade>(); // id -> {id, ...trade}
+  const journal = new Map<string, StoredJournal>(); // date -> {date,text,tags,shots,updated}
+  const meta = new Map<string, unknown>(); // key -> value
+  const trademeta = new Map<string, StoredTradeMeta>(); // id -> {id,tags,note,shots,updated}
+  const mem = new Map<string, unknown>(); // in-memory stand-in for Store.local (no localStorage)
 
   const sortByTime = (arr: Trade[]) => arr.slice().sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
 
