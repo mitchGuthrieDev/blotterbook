@@ -421,18 +421,27 @@ export function stateRate() {
   const x = o && o.selectedOptions[0] ? parseFloat(o.selectedOptions[0].dataset.rate) : NaN;
   return isNaN(x) ? 0 : x;
 }
+// Section-1256 blended federal rate + a given state rate (%). blendedRate() reads the live DOM
+// state select; blendedRateFor() takes the rate as a param so the Svelte cost panel (A32) can pass
+// its own value instead of relying on DOM ids.
+export function blendedRateFor(stateRatePct) {
+  return (TAXMODEL.ltcgWeight * TAXMODEL.ltcg) / 100 + (TAXMODEL.ordinaryWeight * TAXMODEL.fedOrdinary) / 100 + (+stateRatePct || 0) / 100;
+}
 export function blendedRate() {
-  return (TAXMODEL.ltcgWeight * TAXMODEL.ltcg) / 100 + (TAXMODEL.ordinaryWeight * TAXMODEL.fedOrdinary) / 100 + stateRate() / 100;
+  return blendedRateFor(stateRate());
 }
 
 /**
  * @param {*} m  Active metrics (compute() result) — reads m.trades / m.net / m.months.
+ * @param {*} [inputs]  Optional { broker, platform, feedCost, stateRate } (A32). When omitted the
+ *   setup is read from the live DOM (#c_broker/#c_tv/#c_feed/#c_state_sel) — the vanilla path,
+ *   unchanged. Negatives are clamped to 0 like numIn()/feedCost() (B13).
  * @returns {import('./types.js').CostModel}
  */
-export function costModel(m) {
-  const broker = curBroker(),
-    platform = numIn('c_tv'),
-    data = feedCost(),
+export function costModel(m, inputs) {
+  const broker = inputs ? inputs.broker || 'AMP' : curBroker(),
+    platform = inputs ? Math.max(0, +inputs.platform || 0) : numIn('c_tv'),
+    data = inputs ? Math.max(0, +inputs.feedCost || 0) : feedCost(),
     fixedMo = platform + data;
   const trades = m && m.trades ? m.trades : [];
   const bySym = new Map();
@@ -460,7 +469,7 @@ export function costModel(m) {
   const fixedPeriod = fixedMo * months;
   const gross = m ? m.net : 0;
   const netPreTax = gross - totalComm - fixedPeriod;
-  const tEff = blendedRate();
+  const tEff = inputs ? blendedRateFor(inputs.stateRate) : blendedRate();
   const tax = netPreTax > 0 ? netPreTax * tEff : 0;
   const afterTax = netPreTax - tax;
   const pf = gl !== 0 ? gp / Math.abs(gl) : gp > 0 ? Infinity : 0;

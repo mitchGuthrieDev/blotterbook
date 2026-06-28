@@ -3,12 +3,24 @@
   // set and recomputes metrics. `filters` is a shared reactive object (mutated in place — Svelte 5
   // deep reactivity propagates to App's deriveds). Scope = all-time vs the calendar's current month.
   // Session + tag filters and saved-filter views from the vanilla bar are deferred to a later slice.
-  let { filters, roots, onclear } = $props();
+  let { filters, roots, tags = [], savedFilters = [], onclear, onsave = () => {}, onapply = () => {}, ondelete = () => {} } = $props();
+  let viewName = $state('');
+  const save = () => {
+    onsave(viewName);
+    viewName = '';
+  };
   const SIDES = [
     ['', 'Both sides'],
     ['long', 'Long'],
     ['short', 'Short'],
   ];
+  const SESSIONS = [
+    ['', 'All sessions'],
+    ['rth', 'RTH'],
+    ['eth', 'ETH'],
+  ];
+  const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  const toggleDow = d => (filters.dows = filters.dows.includes(d) ? filters.dows.filter(x => x !== d) : [...filters.dows, d]);
 </script>
 
 <section class="filterbar">
@@ -29,7 +41,36 @@
       {#each SIDES as [v, l] (v)}<option value={v}>{l}</option>{/each}
     </select>
   </label>
+  <label>Session
+    <select bind:value={filters.session}>
+      {#each SESSIONS as [v, l] (v)}<option value={v}>{l}</option>{/each}
+    </select>
+  </label>
+  {#if tags.length}
+    <label>Tag
+      <select bind:value={filters.tag}>
+        <option value="">All tags</option>
+        {#each tags as tg (tg)}<option value={tg}>{tg}</option>{/each}
+      </select>
+    </label>
+  {/if}
+  <div class="dows" role="group" aria-label="Day of week">
+    {#each DOW as d, i (d)}
+      <button type="button" class:on={filters.dows.includes(i)} aria-pressed={filters.dows.includes(i)} onclick={() => toggleDow(i)}>{d}</button>
+    {/each}
+  </div>
   <button type="button" class="clear" onclick={onclear}>Clear</button>
+</section>
+
+<section class="saved">
+  <input class="vname" type="text" placeholder="Name this view…" bind:value={viewName} onkeydown={e => e.key === 'Enter' && save()} />
+  <button type="button" class="savebtn" onclick={save}>Save view</button>
+  {#each savedFilters as sf (sf.id)}
+    <span class="chip">
+      <button type="button" class="apply" onclick={() => onapply(sf)}>{sf.name}</button>
+      <button type="button" class="del" aria-label="Delete view {sf.name}" onclick={() => ondelete(sf.id)}>×</button>
+    </span>
+  {/each}
 </section>
 
 <style>
@@ -91,6 +132,27 @@
     outline: none;
     border-color: var(--accent);
   }
+  .dows {
+    display: flex;
+    gap: 3px;
+    align-self: flex-end;
+  }
+  .dows button {
+    background: var(--panel2);
+    color: var(--dim);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 6px 7px;
+    font-size: 11px;
+    font-family: var(--mono);
+    cursor: pointer;
+  }
+  .dows button.on {
+    background: var(--accent);
+    color: #0d1014;
+    border-color: var(--accent);
+    font-weight: 700;
+  }
   .clear {
     background: transparent;
     color: var(--dim);
@@ -104,5 +166,55 @@
   .clear:hover {
     border-color: var(--hover-line);
     color: var(--txt);
+  }
+  .saved {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: -8px 0 16px;
+  }
+  .vname {
+    background: var(--panel2);
+    color: var(--txt);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .savebtn {
+    background: var(--panel2);
+    color: var(--txt);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .chip .apply {
+    background: var(--panel);
+    color: var(--accent);
+    border: 0;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .chip .del {
+    background: var(--panel);
+    color: var(--faint);
+    border: 0;
+    border-left: 1px solid var(--line);
+    padding: 6px 8px;
+    cursor: pointer;
+  }
+  .chip .del:hover {
+    color: var(--red);
   }
 </style>

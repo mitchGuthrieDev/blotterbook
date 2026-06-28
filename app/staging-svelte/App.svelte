@@ -1,13 +1,25 @@
 <script>
-  // Staging app root (A27). Boots by REUSING the vanilla pure-logic core verbatim (A29):
-  // loadRefData + Store (isolated staging IndexedDB) + Adapters + compute(). The view layer
-  // (this component + children) is the only thing rewritten in Svelte. demoCSV is imported from
-  // data.js (no logic duplicated); the seed mirrors main.js's seedStagingIfEmpty().
-  import { onMount } from 'svelte';
-  import { loadRefData, compute, emit, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../core.js';
+  // App root (A27 staging; A31 made it mode-aware for the coming prod/demo migration). Boots by
+  // REUSING the vanilla pure-logic core verbatim (A29): loadRefData + a Store + Adapters + compute().
+  // The view layer (this component + children) is the only thing rewritten in Svelte.
+  //
+  // A31: the persistence backend is chosen by PAGE_MODE and provided to the children via context
+  // ('bb:store'), so the same components work on every surface:
+  //   app      → real IndexedDB Store (blotterbook DB), no seed (real user data; landing flow is A32)
+  //   demo     → in-memory DemoStore (never persists), seeded
+  //   staging  → real IndexedDB Store (isolated blotterbookStaging DB), seeded
+  // Today this app is still mounted only on staging.html; app/demo mounts land in A33.
+  import { onMount, setContext } from 'svelte';
+  import { loadRefData, compute, emit, PAGE_MODE, STATES, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../core.js';
   import { Store } from '../store.js';
+  import { createDemoStore } from '../demostore.js';
   import { Adapters } from '../adapters.js';
   import { demoCSV } from '../sampledata.js';
+
+  // Pick the backend by mode and share it with every child (they read getContext('bb:store')).
+  const store = PAGE_MODE === 'demo' ? createDemoStore() : Store;
+  const SEEDED = PAGE_MODE === 'staging' || PAGE_MODE === 'demo';
+  setContext('bb:store', store);
   import Overview from './components/Overview.svelte';
   import EquityCurve from './components/EquityCurve.svelte';
   import CalendarMonth from './components/CalendarMonth.svelte';
@@ -17,26 +29,40 @@
   import JournalEditor from './components/JournalEditor.svelte';
   import ManageData from './components/ManageData.svelte';
   import ActivityTerminal from './components/ActivityTerminal.svelte';
+  import Landing from './components/Landing.svelte';
 
   let allTrades = $state([]);
   let loaded = $state(false);
   let status = $state('Loading…');
   let error = $state('');
   let manageOpen = $state(false);
+  let landingMsg = $state('');
 
   // Day-notes journal: the selected calendar day + the set of dates carrying a saved note.
   let selectedDate = $state(null);
   let journalDates = $state(new Set());
+  // Per-trade metadata (id -> {tags,note,...}) for the tag filter + manage-data table.
+  let tradeMeta = $state(new Map());
+  // Saved filter views ([{id,name,f}]), persisted to Store meta in the vanilla-compatible shape.
+  let savedFilters = $state([]);
+  // Cost setup (broker/feed/state/platform), lifted here (A32) so BOTH the cost panel and the
+  // curve overlays share it. Persisted to the 'setup' meta.
+  let setup = $state({ broker: '', feed: '', stateAbbr: '', platform: 0 });
 
   // Filters drive the whole dashboard (a shared reactive object). scope = all-time vs the
   // calendar's current month. The cursor (calYear/calMonth) lives here so scope can read it.
-  let filters = $state({ scope: 'all', from: '', to: '', root: '', side: '' });
+  let filters = $state({ scope: 'all', from: '', to: '', root: '', side: '', session: '', tag: '', dows: [] });
   let calYear = $state(new Date().getFullYear());
   let calMonth = $state(new Date().getMonth());
 
   const inMonth = (t, y, m) => {
     const d = new Date(t.date + 'T00:00:00');
     return d.getFullYear() === y && d.getMonth() === m;
+  };
+  // RTH = 09:30–16:00 by the exported clock time, else ETH (matches render.js sessionOf).
+  const sessionOf = t => {
+    const hm = (t.time || '').slice(11, 16);
+    return hm && hm >= '09:30' && hm < '16:00' ? 'rth' : 'eth';
   };
 
   function applyFilters(trades, f) {
@@ -45,6 +71,12 @@
       if (f.to && t.date > f.to) return false;
       if (f.root && t.root !== f.root) return false;
       if (f.side && t.side !== f.side) return false;
+      if (f.session && sessionOf(t) !== f.session) return false;
+      if (f.tag) {
+        const m = tradeMeta.get(store.tradeId(t));
+        if (!m || !(m.tags || []).includes(f.tag)) return false;
+      }
+      if (f.dows.length && !f.dows.includes(new Date(t.date + 'T00:00:00').getDay())) return false;
       return true;
     });
   }
@@ -58,26 +90,45 @@
     filters.scope === 'month' ? compute(filtered.filter(t => inMonth(t, calYear, calMonth))) : metricsAll
   );
   const roots = $derived([...new Set(allTrades.map(t => t.root).filter(Boolean))].sort());
+  const tags = $derived([...new Set([...tradeMeta.values()].flatMap(m => m.tags || []))].sort());
+  // Cost/tax inputs derived from the setup (feed value is "name|cost"; rate from the STATES table).
+  const costInputs = $derived({
+    broker: setup.broker,
+    platform: setup.platform,
+    feedCost: setup.feed ? parseFloat(setup.feed.split('|')[1]) || 0 : 0,
+    stateRate: (STATES.find(s => s[0] === setup.stateAbbr) || [, 0])[1] || 0,
+  });
   const dateRange = $derived(allTrades.length ? `${allTrades[0].date} → ${allTrades[allTrades.length - 1].date}` : '');
 
-  // Seed the isolated staging DB once (same dataset + setup as the vanilla seedStagingIfEmpty).
+  // Persist the cost setup whenever it changes (after the initial load).
+  $effect(() => {
+    if (!loaded) return;
+    void [setup.broker, setup.feed, setup.stateAbbr, setup.platform];
+    store.setMeta('setup', { broker: setup.broker, feed: setup.feed, state: setup.stateAbbr, platform: String(setup.platform) });
+  });
+
+  // Seed the dataset once if the backend is empty (seeded surfaces only: staging + demo).
   async function seedIfEmpty() {
-    if ((await Store.tradeCount()) > 0) return;
+    if ((await store.tradeCount()) > 0) return;
     const r = Adapters.parse(demoCSV(), 'tradingview');
     if (r.ok && r.trades.length) {
-      await Store.addTrades(r.trades);
-      await Store.setMeta('setup', { broker: DEMO_BROKER, feed: DEMO_FEED, state: DEMO_STATE, platform: '35' });
+      await store.addTrades(r.trades);
+      await store.setMeta('setup', { broker: DEMO_BROKER, feed: DEMO_FEED, state: DEMO_STATE, platform: '35' });
     }
   }
 
   async function boot() {
     await loadRefData();
-    if (!Store.available()) throw new Error('IndexedDB is unavailable in this browser');
-    await Store.init();
-    await seedIfEmpty();
-    const trades = await Store.getAllTrades();
+    if (!store.available()) throw new Error('Local storage is unavailable in this browser');
+    await store.init();
+    if (SEEDED) await seedIfEmpty();
+    const trades = await store.getAllTrades();
     allTrades = trades;
-    journalDates = await Store.journalDates();
+    journalDates = await store.journalDates();
+    tradeMeta = new Map((await store.allTradeMeta()).map(m => [m.id, m]));
+    savedFilters = (await store.getMeta('savedFilters')) || [];
+    const su = (await store.getMeta('setup')) || {};
+    setup = { broker: su.broker || '', feed: su.feed || '', stateAbbr: su.state || '', platform: Number(su.platform) || 0 };
     const last = trades.length ? trades[trades.length - 1].date : null;
     calYear = last ? +last.slice(0, 4) : new Date().getFullYear();
     calMonth = last ? +last.slice(5, 7) - 1 : new Date().getMonth();
@@ -87,14 +138,28 @@
   }
 
   async function refreshNotes() {
-    journalDates = await Store.journalDates(); // reassign → reactive
+    journalDates = await store.journalDates(); // reassign → reactive
   }
 
   // After manage-data changes the dataset (import / restore / erase / per-trade edit), reload
   // everything the dashboard derives from.
   async function reloadAll() {
-    allTrades = await Store.getAllTrades();
-    journalDates = await Store.journalDates();
+    allTrades = await store.getAllTrades();
+    journalDates = await store.journalDates();
+    tradeMeta = new Map((await store.allTradeMeta()).map(m => [m.id, m]));
+  }
+
+  // App-mode landing: parse + persist a CSV, then the dashboard takes over (allTrades non-empty).
+  async function loadCSV(file) {
+    landingMsg = '';
+    const r = Adapters.parse(await file.text());
+    if (!r.ok) {
+      landingMsg = r.error || 'Could not parse that CSV.';
+      return;
+    }
+    await store.addTrades(r.trades);
+    emit('data:imported', { added: r.trades.length });
+    await reloadAll();
   }
 
   function navMonth(delta) {
@@ -117,6 +182,32 @@
     filters.to = '';
     filters.root = '';
     filters.side = '';
+    filters.session = '';
+    filters.tag = '';
+    filters.dows = [];
+  }
+
+  // Saved filter views — persisted in the vanilla-compatible {id,name,f} shape (f.symbol holds the
+  // root value, matching render.js + the Store.importAll sanitizer's FILTER_FIELDS).
+  async function saveView(name) {
+    const f = { from: filters.from, to: filters.to, symbol: filters.root, side: filters.side, session: filters.session, tag: filters.tag, dows: [...filters.dows] };
+    const id = Date.now().toString(36) + savedFilters.length;
+    savedFilters = [...savedFilters, { id, name: (name || '').trim() || `View ${savedFilters.length + 1}`, f }];
+    await store.setMeta('savedFilters', $state.snapshot(savedFilters)); // plain clone — IndexedDB can't clone a $state proxy
+  }
+  function applyView(sf) {
+    const f = sf.f || {};
+    filters.from = f.from || '';
+    filters.to = f.to || '';
+    filters.root = f.symbol || '';
+    filters.side = f.side || '';
+    filters.session = f.session || '';
+    filters.tag = f.tag || '';
+    filters.dows = Array.isArray(f.dows) ? [...f.dows] : [];
+  }
+  async function deleteView(id) {
+    savedFilters = savedFilters.filter(s => s.id !== id);
+    await store.setMeta('savedFilters', $state.snapshot(savedFilters));
   }
 
   onMount(() => {
@@ -141,10 +232,12 @@
 
   {#if error}
     <p class="msg error" role="alert">Could not start the staging app: {error}</p>
+  {:else if loaded && PAGE_MODE === 'app' && !allTrades.length}
+    <Landing {setup} onload={loadCSV} msg={landingMsg} />
   {:else if loaded}
-    <FilterBar {filters} {roots} onclear={clearFilters} />
+    <FilterBar {filters} {roots} {tags} {savedFilters} onclear={clearFilters} onsave={saveView} onapply={applyView} ondelete={deleteView} />
     <Overview metrics={metricsActive} tradeCount={metricsActive.n} />
-    <EquityCurve metrics={metricsAll} />
+    <EquityCurve metrics={metricsAll} {costInputs} {journalDates} {selectedDate} onselect={d => (selectedDate = d)} />
     <CalendarMonth
       metrics={metricsAll}
       year={calYear}
@@ -158,13 +251,13 @@
       <JournalEditor date={selectedDate} onsaved={refreshNotes} onclose={() => (selectedDate = null)} />
     {/if}
     <AdvancedStats metrics={metricsActive} />
-    <CostPanel metrics={metricsActive} />
+    <CostPanel metrics={metricsActive} {setup} {costInputs} />
     <ActivityTerminal />
     <p class="note">
-      A27 staging migration: Overview, performance curve, trading calendar (with day notes),
-      advanced statistics, break-even/cost, filters/scope, manage-data and the activity terminal are
-      all live in Svelte 5. Next up (ADR-001 Phase 4): migrate prod + demo, then the source-tree
-      reorg (A30).
+      Svelte 5 app at prod parity (A32): Overview, performance curve (overlays + day-notes),
+      trading calendar, advanced statistics, break-even/cost, filters/scope (incl. session/tag/saved
+      views), manage-data, screenshots, and the activity terminal — all reusing the pure-logic core.
+      Next (ADR-001 Phase 4c/A33): cut prod + demo over to this app and retire the vanilla layer.
     </p>
   {:else}
     <p class="msg">{status}</p>

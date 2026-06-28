@@ -68,7 +68,7 @@ npm run preview                  # serve the built dist/ locally (production-lik
 
 # Tests / lint (the CI suite — run before pushing)
 npm test                         # = lint + typecheck + format:check + test:unit
-npm run test:unit                # the 5 node suites: adapters / auth / version / flags / tax
+npm run test:unit                # the 6 node suites: adapters / auth / version / flags / tax / demostore
 npm run lint                     # ESLint (flat config)
 npm run typecheck                # tsc --checkJs over the JSDoc-typed modules (CH33; opt-in via // @ts-check)
 npm run test:e2e                 # Playwright render tests — BUILDS then serves dist/, boots every surface

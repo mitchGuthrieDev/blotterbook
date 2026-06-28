@@ -90,8 +90,26 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   await page.click('#sv-app .journal .save');
   await expect(page.locator('#sv-app .calendar .calgrid .cell .notedot').first()).toBeVisible();
 
+  // Day-note screenshot (A32): uploading an image adds a thumbnail (validShot allow-list).
+  await page
+    .locator('#sv-app .journal input[type=file]')
+    .setInputFiles({ name: 'shot.png', mimeType: 'image/png', buffer: Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex') });
+  await expect(page.locator('#sv-app .journal .shot img')).toHaveCount(1);
+
   // Activity terminal logs bus events — the note save above should appear.
   await expect(page.locator('#sv-app .terminal .log')).toContainText('note saved');
+
+  // Equity curve interactivity (A32): the journaled day shows a note-dot on the curve, and the
+  // keyboard cursor fills the aria-live tooltip (B33).
+  await expect(page.locator('#sv-app svg.equity .notedot').first()).toBeVisible();
+  await page.locator('#sv-app svg.equity').focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('#sv-app .axis .tip')).not.toHaveText('cumulative P&L');
+
+  // Overlays (A32): default is gross-only (1 line); enabling Net adds a second series line.
+  await expect(page.locator('#sv-app svg.equity .line')).toHaveCount(1);
+  await page.click('#sv-app .overlays button:has-text("Net")');
+  await expect(page.locator('#sv-app svg.equity .line')).toHaveCount(2);
 
   // Manage data: open the modal, edit a trade's tags via the Store, and see them in the table.
   await page.click('.managebtn');
@@ -101,6 +119,17 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   await page.click('.modal .editrow .save');
   await expect(page.locator('.modal table tbody tr .tags').first()).toContainText('e2e');
 
+  // Per-trade screenshot (A32): upload → save → reopen shows it persisted (saveTradeMeta path).
+  await page.locator('.modal .edit').first().click();
+  await page
+    .locator('.modal .editshots input[type=file]')
+    .setInputFiles({ name: 't.png', mimeType: 'image/png', buffer: Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex') });
+  await expect(page.locator('.modal .editshots .shot img')).toHaveCount(1);
+  await page.click('.modal .editrow .save');
+  await page.locator('.modal .edit').first().click();
+  await expect(page.locator('.modal .editshots .shot img')).toHaveCount(1);
+  await page.click('.modal .editrow .save');
+
   // Reload: the isolated staging DB already has the seed, so the count is identical (no re-seed
   // duplication) and the app still boots clean from persisted data.
   await page.reload({ waitUntil: 'networkidle' });
@@ -109,6 +138,22 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   expect(Number((afterText || '').trim())).toBe(seededCount);
 
   expect(errors, errors.join('\n')).toHaveLength(0);
+});
+
+// A32: the staging filter bar's session (RTH/ETH) filter narrows the active dataset.
+test('staging (Svelte): session filter narrows the dataset', async ({ page }) => {
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  const trades = page.locator('#sv-app [data-card="trades"] .value');
+  const all = Number(((await trades.textContent()) || '').trim());
+  expect(all).toBeGreaterThan(0);
+  await page.getByLabel('Session').selectOption('rth');
+  await expect(trades).not.toHaveText(String(all)); // RTH-only is a strict subset
+  expect(Number(((await trades.textContent()) || '').trim())).toBeLessThan(all);
+
+  // Saved-filter views: save the current filter set → a chip appears (persists to the Store).
+  await page.fill('#sv-app .saved .vname', 'rth view');
+  await page.click('#sv-app .saved .savebtn');
+  await expect(page.locator('#sv-app .saved .chip .apply')).toContainText('rth view');
 });
 
 // B41: toggle/collapse controls must expose ARIA state (aria-pressed / aria-expanded).

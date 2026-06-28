@@ -39,7 +39,12 @@ const TRADEMETA = 'trademeta'; // per-trade tags / note / screenshots, keyed by 
 // Screenshots are inlined data: URIs rendered straight into an <img src>. Only well-formed base64
 // image data URIs are allowed — this drops any `javascript:`/`data:text/html`/SVG payload before it
 // can reach a render sink (S15/S18). Shared by importAll (restore) and the live capture path.
-const SHOT_RE = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+// Exported so the in-memory DemoStore (A31) reuses the EXACT screenshot allow-list (no drift).
+export const SHOT_RE = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+// Standalone validator (Store.validShot delegates) — shared with DemoStore.
+export function validShot(s) {
+  return typeof s === 'string' && SHOT_RE.test(s);
+}
 
 let dbp = null; // cached open-promise
 
@@ -80,7 +85,7 @@ function reqP(r) {
 /* Stable, order-independent dedupe key for a trade. Two CSV exports
    that overlap will produce identical ids for the shared rows, so a
    re-upload only inserts the genuinely new trades. */
-function tradeId(t) {
+export function tradeId(t) {
   const raw = `${t.time}|${t.symbol}|${t.side}|${t.pnl}`;
   // FNV-1a 32-bit — small, dependency-free, good enough for dedupe.
   let h = 0x811c9dc5;
@@ -209,7 +214,9 @@ export const Store = {
     const store = await tx(TRADEMETA, 'readwrite');
     const tags = (m.tags || []).filter(Boolean);
     const note = (m.note || '').trim();
-    const shots = m.shots || [];
+    // Enforce the screenshot allow-list here too (matches saveJournal — S15/S18); .filter also
+    // yields a plain array, so a Svelte $state proxy can't reach IndexedDB's structured clone.
+    const shots = (m.shots || []).filter(s => validShot(s));
     if (tags.length || note || shots.length) store.put({ id, tags, note, shots, updated: Date.now() });
     else store.delete(id); // empty → remove the record
     return done(store);
@@ -363,10 +370,9 @@ export const Store = {
   },
 
   // S18: shared screenshot validator so the live capture path enforces the same data-URI
-  // allow-list as restore (rejects SVG / javascript: / data:text payloads).
-  validShot(s) {
-    return typeof s === 'string' && SHOT_RE.test(s);
-  },
+  // allow-list as restore (rejects SVG / javascript: / data:text payloads). Delegates to the
+  // module-level validShot (also reused by DemoStore) so the rule has one definition.
+  validShot,
 
   // A13: the ONE synchronous persistence seam for small UI state (panel layout, workspace
   // templates) that must apply before paint, so it can't use the async IndexedDB path. Keeping

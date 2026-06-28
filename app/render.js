@@ -1,6 +1,7 @@
 'use strict';
 import { esc } from '../assets/util.js';
 import { Store } from './store.js';
+import { dailySeries as computeDailySeries } from './curveseries.js';
 import {
   SVGNS,
   pad2,
@@ -66,39 +67,11 @@ export function dateRange(m) {
   }
   return [new Date(m.firstDate + 'T00:00:00'), new Date(m.lastDate + 'T00:00:00')];
 }
+// A32: the per-day gross/net/take math moved to the pure curveseries.js (shared with the Svelte
+// curve). This wrapper feeds it the live DOM-derived setup so vanilla behavior is unchanged.
 export function dailySeries(m, c = costModel(m)) {
-  const broker = curBroker(),
-    map = new Map();
-  for (const t of m.trades) {
-    if (!map.has(t.date)) map.set(t.date, { gross: 0, comm: 0 });
-    const e = map.get(t.date);
-    e.gross += t.pnl;
-    e.comm += rateFor(broker, t.root).rate * 2 * (t.qty || 1); // per-contract (B4)
-  }
-  const tEff = c.tEff,
-    fixedMo = c.fixedMo;
-  // Accrue the monthly subscription as each new calendar month is entered (B8), instead of
-  // dropping the whole period's subscriptions at day 0. The endpoint still equals
-  // costModel.fixedPeriod (fixedMo × distinct months), so totals are unchanged.
-  let cg = 0,
-    cn = 0,
-    subAcc = 0;
-  const pts = [],
-    seenMonths = new Set();
-  for (const d of [...map.keys()].sort()) {
-    const mo = d.slice(0, 7);
-    if (!seenMonths.has(mo)) {
-      seenMonths.add(mo);
-      subAcc += fixedMo;
-    }
-    const e = map.get(d);
-    cg += e.gross;
-    cn += e.gross - e.comm;
-    const net = cn - subAcc,
-      take = net - (net > 0 ? net * tEff : 0);
-    pts.push({ date: d, gross: cg, net, take });
-  }
-  return { pts, subs: c.fixedPeriod, tEff };
+  const { pts } = computeDailySeries(m, { broker: curBroker(), tEff: c.tEff, fixedMo: c.fixedMo });
+  return { pts, subs: c.fixedPeriod, tEff: c.tEff };
 }
 /* "nice" axis ticks spanning [min,max] with ~count steps, always including 0. */
 export function niceTicks(min, max, count) {
