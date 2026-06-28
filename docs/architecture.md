@@ -61,53 +61,55 @@ reference data.
 
 ## Repository layout & the deploy contract
 
-> **Updated by ADR-001 / A26.** There is now a Vite build: `npm run build` bundles the site into
-> **`dist/`**, and Cloudflare Pages serves `dist/` (build command `npm run build`, output dir
-> `dist`). **URLs are preserved 1:1** — source files were not moved, so a file's source path still
-> mirrors its public URL, and the coupled-path table below still holds for any *future* move. What
-> changed is only the deploy mechanism: Pages builds + serves an output dir instead of serving the
-> committed tree as-is. The pre-Vite text below is kept because the couplings it documents remain
-> accurate.
+> **Updated by ADR-001 / A26, then the A30 source-tree reorg.** There is a Vite build: `npm run
+> build` bundles the site into **`dist/`**, and Cloudflare Pages serves `dist/` (build command `npm
+> run build`, output dir `dist`). **A30 moved the source into a Vite/Svelte-shaped tree** — `src/`
+> (the Vite `root`, everything bundled/served) + `static/` (Vite's `publicDir`, copied verbatim) —
+> with `functions/` and tooling pinned at the repo root. **URLs are preserved 1:1**: each HTML
+> entry's path *relative to `src/`* is mirrored into `dist/` (`src/index.html` → `/`,
+> `src/app/app.html` → `/app/app.html`), and `static/` is copied to the `dist/` root
+> (`static/data` → `/data`, `static/_headers` → `/_headers`, `static/assets/og-image.png` →
+> `/assets/og-image.png`). Source paths are now **decoupled** from URLs.
 
-**The repo root is the *source* root, and (preserving URLs) a file's path still maps to its public
-URL.** Vite fingerprints the JS/CSS it bundles and rewrites the HTML references; the verbatim-static
-set (`data/*.json`, `_headers`, `_redirects`, `robots.txt`, `sitemap.xml`, `assets/og-image.png`) is
-copied into `dist/` by `scripts/copy-static.mjs`. `functions/`, `scripts/`, `partials/`, and tooling
-stay at the root, unserved. The folder layout still doubles as the **URL structure** and the
-**deploy contract**; the root is deliberately flat (no `src/`+`public/` source reorg — A26 reversed
-the contract via a build *output* dir, `dist/`, not by moving sources).
+**Guardrail A18 is RETIRED (superseded by A26 + A30).** A18 banned a `src/`+`public/` reorg on the
+grounds that "repo root = web root = deploy contract." A26 dissolved that by introducing a build
+*output* dir (`dist/`), and A30 then executed the reorg: a file's source path no longer mirrors its
+URL — Vite's `root` + per-entry input mapping + `publicDir` reproduce today's URLs exactly. The one
+remaining hard constraint is that **`functions/` stays pinned at the repo root** (Pages resolves it
+from there). See [`docs/structure-reorg-plan.md`](structure-reorg-plan.md) for the executed layout.
+
+**The source tree (`src/` + `static/`).** Vite fingerprints the JS/CSS it bundles (output under
+`/assets/…`) and rewrites the HTML references; the verbatim-static set (`static/data/*.json`,
+`static/_headers`, `static/_redirects`, `static/robots.txt`, `static/sitemap.xml`,
+`static/assets/og-image.png`) is copied by Vite's `publicDir` (this retired `scripts/copy-static.mjs`).
+`functions/`, `scripts/`, `partials/`, and tooling stay at the repo root, unserved.
 
 **Pinned at the deploy root** (Cloudflare Pages requires it — these cannot move):
 
 - `functions/` — Pages Functions are resolved from the project root.
-- `_headers`, `_redirects` — must sit at the output root to take effect.
-- `robots.txt`, `sitemap.xml`, the favicon, and the pages that serve at `/…`
-  (`index.html`, `howto.html`, `roadmap.html`, `changelog.html`, `legal.html`,
-  `admin.html`).
+- `static/_headers`, `static/_redirects` — copied to the output root, where they take effect.
+- `static/robots.txt`, `static/sitemap.xml`, the favicon (`src/assets/favicon.svg`), and the pages
+  that serve at `/…` (`src/index.html`, `src/howto.html`, `src/roadmap.html`, `src/changelog.html`,
+  `src/legal.html`, `src/admin.html`).
 
-**Consequence — moving any browser-served file changes its URL, and the path is
-hard-coded in ~6 places that must be updated in lockstep.** Before relocating
-anything under `app/`, `assets/`, or `data/` (or renaming a root page), update
-*all* of:
+**Consequence — moving any browser-served file changes its URL, hard-coded in several places that
+must be updated in lockstep.** Before relocating anything under `src/` or `static/` (or renaming a
+page), update *all* of:
 
 | Coupling point | What it hard-codes |
 | --- | --- |
-| Absolute URL references in HTML/JS | `~23` `/app/…`, `~19` `/assets/…`, plus `/data/*.json` and `/api/*` `fetch()`es |
-| `_redirects` | `/app/ → /app/app.html` rewrite |
-| `_headers` | CSP `connect-src 'self'` assumes same-origin `/api`, `/data`, `/app` |
-| `robots.txt` / `sitemap.xml` | `/app/`, `/admin.html`, and the public-page canonical URLs (CH5/CH6) |
+| Absolute URL references in HTML/JS | `/app/…`, `/assets/…`, `/data/*.json`, `/api/*` `fetch()`es |
+| `static/_redirects` | `/app/ → /app/app.html` rewrite |
+| `static/_headers` | CSP `connect-src 'self'` assumes same-origin `/api`, `/data`, `/app` |
+| `static/robots.txt` / `static/sitemap.xml` | `/app/`, `/admin.html`, and the public-page canonical URLs (CH5/CH6) |
 | Page `<link rel="canonical">` + OG tags | the canonical URL of each marketing page (CH5) |
-| `scripts/build-includes.mjs` | scans `['.', 'app']` for `*.html`; reads `partials/` |
-| `scripts/build-manifest.mjs` | hashes `data/*.json`, with an explicit filename exclude-set |
-| `scripts/bump-version.mjs` | classifies prod-shipping surfaces by the `app/`, `partials/`, `assets/`, `data/` prefixes + specific filenames |
+| `vite.config.mjs` | `root: 'src'`, `publicDir: static/`, `outDir: dist/`, the 9 `rollupOptions.input` entry paths |
+| `scripts/build-includes.mjs` | scans `src/` for `*.html`; reads `partials/` |
+| `scripts/build-manifest.mjs` | hashes `static/data/*.json`, with an explicit filename exclude-set |
+| `scripts/bump-version.mjs` | classifies prod-shipping surfaces by the `src/app/`, `src/lib/`, `src/site/`, `src/assets/`, `static/data/` prefixes + specific filenames |
 
-**A build step now exists** (Vite → `dist/`, adopted in ADR-001/A26 — the old "no build
-step" pillar was relaxed), but the **source layout stays flat**: do not reorganize into
-`src/`+`public/`. A26 reversed the deploy contract via a build *output* dir (`dist/`), not by
-moving sources — the repo root remains the source root and the canonical URL map, so the
-coupled-path table above still governs any future move. `dist/` is gitignored; CI's drift gate
-proves the build-time tooling didn't leave committed sources stale. (Tracked as guardrail
-**A18**, realized by A26.)
+`dist/` is gitignored; CI's drift gate proves the build-time tooling (`build-includes` /
+`build-manifest`) didn't leave committed sources stale.
 
 ## Architecture & data flow
 

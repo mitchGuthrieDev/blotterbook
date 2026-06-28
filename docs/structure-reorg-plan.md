@@ -1,6 +1,8 @@
 # Project-structure audit & target-layout plan (A70 → A30/A69)
 
-**Status:** audit complete · target layout decided · 2026-06-28
+**Status:** audit complete · target layout decided · **EXECUTED by A30 + A76 (2026-06-28)** —
+the `src/` + `static/` split below is now live (folded together with the A61 full-TS conversion);
+A18 retired. A69 (marketing → Svelte) fills the prepared `src/site/` homes next.
 
 > Deliverable for backlog **A70** ("audit project structure to optimize for Vite + Svelte"). It is a
 > **read-only audit** plus the **concrete target layout** that **A30** (source-tree reorg) executes.

@@ -20,9 +20,11 @@ export default [
     },
   },
 
-  // Browser app + info-page scripts (native ES modules, A20).
+  // Browser-served scripts (native ES modules). After the A30 reorg the only remaining .js under
+  // src/ is the marketing/info JS (src/site/**) — the typed core/app are .ts/.svelte (skipped by
+  // ESLint; type-checked by tsc/svelte-check, tracked as A79). ESLint lints .js by default.
   {
-    files: ['app/**/*.js', 'assets/**/*.js'],
+    files: ['src/**/*.js'],
     languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.browser } },
   },
 

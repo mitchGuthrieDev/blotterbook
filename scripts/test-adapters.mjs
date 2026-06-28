@@ -4,7 +4,7 @@
    for the beta adapters, but this guards the shape and the fills matcher.
    ESM (A20): app/adapters.js is now a native ES module, so this imports its
    default export instead of require()-ing it. */
-import A from '../app/adapters.ts';
+import A from '../src/lib/adapters.ts';
 
 let pass = 0,
   fail = 0;

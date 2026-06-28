@@ -15,8 +15,8 @@ build
 # keeping the dependency surface minimal (A28). Format .svelte by hand.
 **/*.svelte
 
-# Reference + generated data (curated / hashed); never reflow JSON data files
-data/
+# Reference + generated data (curated / hashed); never reflow JSON data files (A30: now under static/)
+static/data/
 
 # Hand-authored prose + workflow YAML — leave their formatting alone (CH32 is about
 # code consistency, not reflowing docs/tables or CI YAML)

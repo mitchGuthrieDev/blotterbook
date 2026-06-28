@@ -1,5 +1,5 @@
 {
-  "//": "TS config (A61). The pure-logic core is now native .ts and STRICT (A61 'strict from the start'). allowJs stays on because a few non-core .js files remain this pass — the app glue (app/staging-svelte/{modal,util,actions}.js) and the marketing/info JS (assets/*.js, A69 scope) — and checkJs:false leaves those unchecked (they are not @ts-check). svelte-check type-checks the .svelte components separately (tsc can't resolve .svelte imports), against the same strict base via tsconfig.svelte.json.",
+  "//": "TS config (A61/A30). Base config: `tsc -p tsconfig.json` type-checks the pure-logic core (src/lib/**, native .ts, STRICT). The Svelte SPA (src/app/**: App.svelte + components + main.ts + lib/*.ts) is checked by svelte-check (tsconfig.svelte.json) instead, because plain tsc can't resolve .svelte imports (main.ts imports App.svelte). The marketing JS (src/site/**/*.js) stays untyped this pass (A69 converts it to Svelte). allowJs/checkJs are retained for the transition.",
   "compilerOptions": {
     "allowJs": true,
     "checkJs": false,
@@ -13,6 +13,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["app/**/*.ts", "app/**/*.js", "assets/**/*.js"],
-  "exclude": ["node_modules", "dist", "app/staging-svelte/**"]
+  "include": ["src/lib/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

@@ -33,7 +33,7 @@ function flagsFrom(src, re, label) {
   return obj;
 }
 
-const app = flagsFrom(readFileSync('app/data.ts', 'utf8'), /APP_FLAGS\s*=\s*\{([^}]*)\}/, 'app/data.ts');
+const app = flagsFrom(readFileSync('src/app/lib/flags.ts', 'utf8'), /APP_FLAGS\s*=\s*\{([^}]*)\}/, 'src/app/lib/flags.ts');
 const def = flagsFrom(
   readFileSync('functions/api/config.ts', 'utf8'),
   /DEFAULTS\s*=\s*\{\s*flags:\s*\{([^}]*)\}/,

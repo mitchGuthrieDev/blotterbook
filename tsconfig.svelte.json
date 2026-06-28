@@ -1,6 +1,6 @@
 {
-  "//": "svelte-check config (A77). Extends the base tsconfig and points svelte-check at the Svelte component dir (which the base tsconfig excludes so plain `tsc` doesn't choke on .svelte import resolution). svelte-check understands .svelte and resolves the verbatim core imports.",
+  "//": "svelte-check config (A77/A30). Extends the strict base and points svelte-check at the Svelte SPA (src/app/**: the .svelte components AND the .ts glue/entry that imports them). svelte-check understands .svelte and resolves the verbatim core imports from src/lib/.",
   "extends": "./tsconfig.json",
-  "include": ["app/staging-svelte/**/*.svelte", "app/staging-svelte/**/*.js"],
+  "include": ["src/app/**/*.svelte", "src/app/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

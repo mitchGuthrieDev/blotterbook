@@ -57,24 +57,24 @@ Cloudflare Pages (build → `dist/`) plus `/functions/*` edge functions.
 # One-time: install pinned deps (Vite + dev tooling) from the lockfile
 npm ci
 
-# Build the deploy artifact (ADR-001/A26). Emits dist/ = what Cloudflare Pages serves.
-npm run build                    # build-includes + build-manifest + vite build + copy-static → dist/
+# Build the deploy artifact (ADR-001/A26; A30 src/+static split). Emits dist/ = what Pages serves.
+npm run build                    # build-includes + build-manifest + vite build (root:src, publicDir:static) → dist/
 npm run dev                      # Vite dev server (HMR) for local development
 npm run preview                  # serve the built dist/ locally (production-like)
 
 # Tests / lint (the CI suite — run before pushing)
 npm test                         # = lint + typecheck + format:check + test:unit
 npm run test:unit                # the 6 node suites: adapters / auth / version / flags / tax / demostore
-npm run lint                     # ESLint (flat config)
-npm run typecheck                # tsc --checkJs over the JSDoc-typed modules (CH33; opt-in via // @ts-check)
+npm run lint                     # ESLint (flat config; .ts skipped — typechecked instead, A79)
+npm run typecheck                # tsc (src/lib core, strict) + tsc(functions) + svelte-check (src/app) — A61
 npm run test:e2e                 # Playwright render tests — BUILDS then serves dist/, boots every surface
 npm run format                   # Prettier
 # (the node suites still run standalone too, e.g. `node scripts/test-adapters.mjs`)
 
 # Build sub-steps (idempotent; commit their output — they write COMMITTED sources, not dist/)
-node scripts/build-includes.mjs  # inject the info-page nav/footer from partials/ (app surfaces are hand-authored Svelte mounts — untouched)
-node scripts/build-manifest.mjs  # regenerate data/manifest.json content hashes (cache-busting)
-# scripts/copy-static.mjs runs as part of `npm run build` (copies verbatim files into dist/)
+node scripts/build-includes.mjs  # inject the info-page nav/footer from partials/ into src/*.html (app mounts skipped)
+node scripts/build-manifest.mjs  # regenerate static/data/manifest.json content hashes (cache-busting)
+# (copy-static.mjs retired by A30 — Vite's publicDir copies static/ into dist/)
 ```
 
 > **Deploy artifact = `dist/` (gitignored), built by Vite (ADR-001/A26).** The repo root is no
@@ -94,8 +94,8 @@ stale). So:
 - **After editing `partials/nav.html` or `partials/footer.html` →** run `build-includes.mjs` and
   commit the regenerated info pages (changelog/roadmap/legal/howto). The app surfaces are
   hand-authored Svelte mounts — they carry no include markers and are not regenerated.
-- **After editing any `data/*.json` →** run `build-manifest.mjs` and commit the
-  regenerated `data/manifest.json`.
+- **After editing any `static/data/*.json` →** run `build-manifest.mjs` and commit the
+  regenerated `static/data/manifest.json`.
 
 ## Conventions
 
@@ -125,79 +125,83 @@ stale). So:
 
 ## Repo layout
 
-> **Vite builds the repo to `dist/` (ADR-001/A26); Pages serves `dist/`.** Source files stay at
-> the repo root (they were NOT moved) but the root is no longer the served web root — `npm run build`
-> emits `dist/` and that is what deploys. **URLs are preserved 1:1** with the old layout, so a file's
-> source path still mirrors its public URL. Vite fingerprints the JS/CSS it bundles; the
-> verbatim-static set (`data/*.json`, `_headers`, `_redirects`, `robots.txt`, `sitemap.xml`,
-> `assets/og-image.png`) is copied into `dist/` by `scripts/copy-static.mjs`. `functions/`,
-> `scripts/`, `partials/`, and tooling stay at the root, unserved. Renaming/moving a browser-served
-> file still changes its URL and must be kept in lockstep across `_redirects`, `_headers`,
-> `robots.txt`, `sitemap.xml` + page canonicals, the absolute `/app//assets//data/` refs, the Vite
-> `rollupOptions.input` list, and the `build-includes`/`build-manifest`/`bump-version`/`copy-static`
-> path assumptions. See [the deploy contract](docs/architecture.md#repository-layout--the-deploy-contract)
-> (guardrail A18, now realized by A26).
+> **Vite builds `src/` → `dist/` (ADR-001/A26; source-tree reorg A30); Pages serves `dist/`.** The
+> Vite **root is `src/`** (everything bundled/served) and **`static/` is the `publicDir`** (copied
+> verbatim to the `dist/` root — this retired `scripts/copy-static.mjs`). `functions/`, `scripts/`,
+> `partials/`, and tooling stay at the **repo root**, unserved. **URLs are preserved 1:1**: each HTML
+> entry's path *relative to `src/`* maps to its URL (`src/index.html` → `/`, `src/app/app.html` →
+> `/app/app.html`), and `static/` mirrors to the root (`static/data` → `/data`, `static/_headers` →
+> `/_headers`, `static/assets/og-image.png` → `/assets/og-image.png`). Source paths are **decoupled**
+> from URLs (guardrail **A18 retired** — superseded by A26 + A30). Renaming/moving a browser-served
+> file still changes its URL and must be kept in lockstep across `static/_redirects`,
+> `static/_headers`, `static/robots.txt`, `static/sitemap.xml` + page canonicals, the absolute
+> `/app//assets//data/` refs, `vite.config` (`root`/`publicDir`/`outDir`/`rollupOptions.input`), and
+> the `build-includes`/`build-manifest`/`bump-version` path assumptions. See
+> [the deploy contract](docs/architecture.md#repository-layout--the-deploy-contract).
 
 ```
-/                       marketing + info site (bespoke CSS in index.html; site.css for the rest)
-  _headers              Cloudflare Pages security headers (CSP + hardening)
-  tokens.css            design tokens (colors + fonts) — single source for every surface
-  index.html            homepage: hero + features + use cases + platforms + pricing + FAQ
-  home.css              homepage styles (extracted from index.html's inline <style> for CSP — A55)
+/                       repo root — tooling + the deploy-pinned edge layer (UNSERVED)
+/src/                   Vite root — everything bundled/served (A30)
+  index.html            homepage: hero + features + use cases + platforms + pricing + FAQ  → /
   howto.html            "How To" wiki: getting-started + per-platform import guides
   roadmap.html          shipped vs. planned checklist
-  changelog.html        "Blotterlog" — versioned release notes (reads data/changelog.json)
+  changelog.html        "Blotterlog" — versioned release notes (reads /data/changelog.json)
   legal.html            disclaimers, terms, privacy summary
-  admin.html            internal admin controls (Cloudflare Access–gated)
-  admin.css             admin-panel styles (extracted from admin.html's inline <style> for CSP — A55)
-  site.css              shared styles for howto/roadmap/changelog/legal/admin (@imports tokens.css)
-/partials/              shared HTML fragments injected at build time (single source)
-  nav.html, footer.html the info-site nav + footer (the only partials left; app-*.html removed in A33)
-/app/                   the journal app — a Svelte 5 SPA (ADR-001; vanilla view layer removed in A33)
-  app.html              Svelte mount, data-mode="app" (served at /app/ via _redirects rewrite)
-  demo.html             Svelte mount, data-mode="demo" (in-memory DemoStore — never persists)
-  staging.html          Svelte mount, data-mode="staging" (key-gated, isolated IndexedDB)
-  staging-svelte/       the Svelte app (dir rename is A30): main.js entry, App.svelte, components/,
-                        modal.js (modal a11y action), util.js (readImage/downloadBlob)
-  core.js               metrics (compute), formatting, cost model, ref-data loading, event bus, shared
+  admin.html            internal admin controls (Cloudflare Access–gated)  → /admin.html
+  lib/                  PURE-LOGIC CORE (A29) — framework-agnostic, native TS (A61), node-tested
+    core.ts             metrics (compute), formatting, cost model, ref-data loading, event bus, shared
                         pure helpers (sessionOf/isoWeek/niceTicks/axMoney/fmtDur/ratio/num)
-  data.js               client APP_FLAGS feature-flag defaults (A14 drift-guarded; ex-view module — A33)
-  report.js             pure performance-report builder (on-screen + markdown + email — A34)
-  sampledata.js         demo CSV sample data  ·  curveseries.js  pure daily gross/net/take series
-  demostore.js          in-memory Store implementation for demo (never persists)
-  adapters.js           platform CSV adapters + format auto-detection + fills matcher
-  store.js              IndexedDB persistence (trades, journal, meta, trademeta) + Store.local seam
-  entitlements.js       storage-tier resolver (scaffold; not currently loaded)
-  types.js              shared JSDoc @typedefs (dev-only types; never loaded at runtime — CH33)
-/data/                  reference data, fetched at runtime (each carries schemaVersion)
-  brokers.json          broker commission tiers
-  exchange-fees.json    CME exchange/clearing/NFA fees + micro set
-  feeds.json            per-broker market-data feed options
-  state-tax.json        Section 1256 model + per-state top rates
-  manifest.json         content hashes for cache-busting (GENERATED)
-  versions.json         two-track prod/staging versions (GENERATED by CI — don't hand-edit)
-  backlog.json          engineering backlog (rendered read-only in admin.html)
-  changelog.json        curated, version-keyed release notes (hand-maintained)
-/functions/             Cloudflare Pages Functions — TypeScript (A78) — see functions/README.md
+    report.ts           pure performance-report builder (on-screen + markdown + email — A34)
+    sampledata.ts       demo CSV sample data  ·  curveseries.ts  pure daily gross/net/take series
+    demostore.ts        in-memory Store implementation for demo (never persists)
+    adapters.ts         platform CSV adapters + format auto-detection + fills matcher
+    store.ts            IndexedDB persistence (trades, journal, meta, trademeta) + Store.local seam
+    entitlements.ts     storage-tier resolver (scaffold; INTENTIONALLY not loaded)
+    format.ts           shared esc/platformLabel + version-badge IIFE (ex assets/util.js — A76)
+    types.ts            shared TS interfaces (Trade/Fill/CostModel/Metrics/StoreLike/… — A61)
+  app/                  the journal app — a Svelte 5 SPA (ADR-001; vanilla view layer removed in A33)
+    app.html            Svelte mount, data-mode="app" (served at /app/ via _redirects rewrite)
+    demo.html           Svelte mount, data-mode="demo" (in-memory DemoStore — never persists)
+    staging.html        Svelte mount, data-mode="staging" (key-gated, isolated IndexedDB)
+    main.ts             entry: side-effect format.ts + mount(App)  ·  App.svelte root
+    components/         the 17 app components (<script lang="ts">)
+    lib/                app-only glue (TS): modal.ts (a11y action), actions.ts (styleProps),
+                        files.ts (readImage/downloadBlob — ex util.js, A76), flags.ts (APP_FLAGS — ex data.ts)
+  site/                 MARKETING + INFO support — Svelte after A69 (today: the page JS, still .js)
+    lib/                home.js, changelog.js, admin.js (A69 converts these to Svelte components)
+  assets/               bundled chrome: favicon.svg, banner.svg, why-*.svg (Vite fingerprints these)
+  styles/               tokens.css (single source) + home.css / site.css / admin.css (A69 folds into components)
+/static/                Vite publicDir → copied verbatim to dist/ root (A30; retired copy-static.mjs)
+  _headers              Cloudflare Pages security headers (CSP + hardening)  → /_headers
+  _redirects  robots.txt  sitemap.xml
+  assets/og-image.png   referenced by an absolute https og:image URL  → /assets/og-image.png
+  data/                 reference data, fetched at runtime (each carries schemaVersion)  → /data/*
+    brokers.json        broker commission tiers
+    exchange-fees.json  CME exchange/clearing/NFA fees + micro set
+    feeds.json          per-broker market-data feed options
+    state-tax.json      Section 1256 model + per-state top rates
+    manifest.json       content hashes for cache-busting (GENERATED — build-manifest.mjs)
+    versions.json       two-track prod/staging versions (GENERATED by CI — don't hand-edit)
+    backlog.json        engineering backlog (rendered read-only in admin.html)
+    backlog_archive.json  done-item archive (doneNote record)
+    changelog.json      curated, version-keyed release notes (hand-maintained)
+/partials/              shared HTML fragments injected at build time (nav.html, footer.html — retired by A69)
+/functions/             Cloudflare Pages Functions — TypeScript (A78) — PINNED at repo root — see functions/README.md
   _middleware.ts        key-gates /app/staging.html
-  api/geo.ts            visitor region → pre-fill tax state
-  api/status.ts         homepage Live-indicator status (KV-backed)
-  api/config.ts         feature flags (KV)
-  api/admin-key.ts      returns ADMIN_KEY token to Access-authenticated admins
+  api/{geo,status,config,admin-key}.ts  geo · status · feature flags · admin token
   api/{me,checkout,webhook}.ts   Stripe/accounts scaffold
 /scripts/
-  build-includes.mjs    injects the nav/footer partials into the info pages (app surfaces are hand-authored Svelte mounts — skipped)
-  build-manifest.mjs    regenerates data/manifest.json content hashes
-  copy-static.mjs       copies verbatim-static files (data/, _headers, _redirects, robots, sitemap, og-image) into dist/ (A26)
-  bump-version.mjs      two-track version bump from a merge commit (run by CI)
-  test-*.mjs            the CI test suite (adapters / auth / version / flags / tax)
-/assets/                banner.svg, favicon.svg, page scripts (changelog.js, util.js, …)
+  build-includes.mjs    injects the nav/footer partials into the info pages under src/ (app mounts skipped)
+  build-manifest.mjs    regenerates static/data/manifest.json content hashes
+  bump-version.mjs      two-track version bump from a merge commit (run by CI; classifies src/ + static/ paths)
+  test-*.mjs            the CI test suite (adapters / auth / version / flags / tax / demostore)
 /e2e/                   Playwright render/E2E specs (dev-only — R19 Tier A)
 /dist/                  Vite build output (GITIGNORED) — the artifact Cloudflare Pages serves (A26)
-vite.config.mjs         Vite multi-page build config (9 HTML entries → dist/) — ADR-001/A26
+vite.config.mjs         Vite multi-page build config (root:src, publicDir:static, 9 HTML entries → dist/)
 .node-version           pins Node 22 for the Cloudflare Pages build
 package.json            deps manifest — Vite + dev tooling (minimal/pinned/audited per A28)
-eslint.config.mjs       ESLint flat config  ·  .prettierrc.json  Prettier  ·  tsconfig.json + tsconfig.svelte.json  tsc + svelte-check  ·  playwright.config.mjs  e2e
+eslint.config.mjs       ESLint flat config  ·  .prettierrc.json  Prettier  ·  tsconfig.json + tsconfig.svelte.json + tsconfig.functions.json  tsc + svelte-check  ·  playwright.config.mjs  e2e
+svelte.config.js        vitePreprocess — enables <script lang="ts"> in components (A61)
 LICENSE                 proprietary — all rights reserved
 ```
 

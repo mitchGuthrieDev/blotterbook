@@ -20,7 +20,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const dataDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'data');
+const dataDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'static', 'data');
 const MANIFEST = 'manifest.json';
 // Only the reference-data files the app fetches with `?v=<hash>` need a manifest entry.
 // backlog.json + backlog_archive.json (admin-only), versions.json (CH12 — bumped on

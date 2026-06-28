@@ -39,9 +39,11 @@ function fill(html, name, render) {
 }
 
 let changed = 0;
-for (const dir of ['.', 'app']) {
+// A30: the info pages live under src/ now (the Vite root); the app surfaces (src/app/*.html) are
+// hand-authored Svelte mounts with no include markers, so scanning the top of src/ is sufficient.
+for (const dir of ['src']) {
   for (const file of readdirSync(join(root, dir)).filter(f => f.endsWith('.html'))) {
-    const rel = dir === '.' ? file : `${dir}/${file}`;
+    const rel = `${dir}/${file}`;
     const src = read(rel);
     if (!src.includes('<!-- include:')) continue;
 

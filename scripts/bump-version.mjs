@@ -27,31 +27,47 @@ export function bumpLevel(message) {
   return m && m[1].toLowerCase() === 'feat' ? 'minor' : 'patch';
 }
 
-// The Svelte SPA (app/staging-svelte/) is shared by all three surfaces since the A33 cutover, so the
-// only staging-EXCLUSIVE file is the staging ENVIRONMENT page itself; everything else under app/ ships
-// to every surface (see isProdShipping).
-const STAGING_ONLY = new Set(['app/staging.html']);
+// The Svelte SPA (src/app/) is shared by all three surfaces since the A33 cutover, so the only
+// staging-EXCLUSIVE file is the staging ENVIRONMENT page itself; everything else under src/app/ ships
+// to every surface (see isProdShipping). (A30: paths are now under src/ + static/.)
+const STAGING_ONLY = new Set(['src/app/staging.html']);
 
-// Production-only surfaces: the public marketing homepage + info pages + their CSS ship to
+// Production-only surfaces: the public marketing homepage + info pages + their CSS/JS ship to
 // prod (main+demo deployment) but are NOT part of the staging sandbox, so they bump PROD only
-// (B16 — previously these were classified as nothing, so homepage changes never bumped).
-const PROD_ONLY = new Set(['index.html', 'home.css', 'site.css', 'howto.html', 'roadmap.html', 'legal.html', 'changelog.html']);
+// (B16). admin.* is internal (Cloudflare Access–gated) → neither track (A30; previously admin.js,
+// living in assets/, was incidentally classified as prod-shipping — that is corrected here).
+const PROD_ONLY = new Set([
+  'src/index.html',
+  'src/howto.html',
+  'src/roadmap.html',
+  'src/legal.html',
+  'src/changelog.html',
+  'src/styles/home.css',
+  'src/styles/site.css',
+  'src/site/lib/home.js',
+  'src/site/lib/changelog.js',
+]);
 
-/* A file shared across the app surfaces (main + demo + staging). Shared app JS/CSS, the app+demo
-   shells, partials, assets, tokens, and reference data — but NOT versions.json, the admin-only
-   backlog.json / backlog_archive.json, or the curated changelog.json. (CH31: release notes
-   DOCUMENT a prod version; they must not bump one — otherwise the changelog would perpetually
-   trail by a release and every notes edit would fire another, undocumented, release.) */
-const NON_SHIPPING_DATA = new Set(['data/versions.json', 'data/backlog.json', 'data/backlog_archive.json', 'data/changelog.json']);
+/* A file shared across the app surfaces (main + demo + staging): the pure-logic core (src/lib/),
+   the Svelte SPA + app glue (src/app/), bundled chrome (src/assets/), design tokens, the app+demo
+   shells, and reference data — but NOT versions.json, the admin-only backlog.json /
+   backlog_archive.json, or the curated changelog.json. (CH31: release notes DOCUMENT a prod
+   version; they must not bump one — otherwise the changelog would perpetually trail by a release
+   and every notes edit would fire another, undocumented, release.) */
+const NON_SHIPPING_DATA = new Set([
+  'static/data/versions.json',
+  'static/data/backlog.json',
+  'static/data/backlog_archive.json',
+  'static/data/changelog.json',
+]);
 export function isProdShipping(f) {
-  if (f === 'app/app.html' || f === 'app/demo.html' || f === 'tokens.css') return true; // app/app.css removed in A33 (CSS is component-scoped now)
-  // A59: every JS/Svelte module under app/ ships to every surface — the pure-logic core (app/*.js)
-  // AND the Svelte SPA (app/staging-svelte/**, shared by app/demo/staging since the A33 cutover).
-  // Must be nested-aware: the old /^app\/[^/]+\.js$/ missed app/staging-svelte/*, so component
-  // changes silently bumped NEITHER track.
-  if (/^app\/.*\.(?:js|svelte)$/.test(f)) return true;
-  if (/^partials\//.test(f) || /^assets\//.test(f)) return true;
-  if (/^data\//.test(f) && !NON_SHIPPING_DATA.has(f)) return true;
+  if (f === 'src/app/app.html' || f === 'src/app/demo.html' || f === 'src/styles/tokens.css') return true;
+  // A59/A30: every JS/TS/Svelte module under src/app/ (the SPA + glue, shared by all surfaces since
+  // A33) and every module of the pure-logic core under src/lib/ ships to every surface.
+  if (/^src\/app\/.*\.(?:js|ts|svelte)$/.test(f)) return true;
+  if (/^src\/lib\/.*\.ts$/.test(f)) return true;
+  if (/^src\/assets\//.test(f)) return true; // bundled chrome (favicon/banner/icons), shared
+  if (/^static\/data\//.test(f) && !NON_SHIPPING_DATA.has(f)) return true;
   return false;
 }
 
@@ -115,7 +131,7 @@ export function platformLabel(prod) {
 
 function main() {
   const root = fileURLToPath(new URL('..', import.meta.url));
-  const file = root + 'data/versions.json';
+  const file = root + 'static/data/versions.json';
   const cur = JSON.parse(readFileSync(file, 'utf8'));
 
   const message = process.env.COMMIT_MSG || execSync('git log -1 --format=%B').toString();
