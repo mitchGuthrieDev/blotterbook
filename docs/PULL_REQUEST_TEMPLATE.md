@@ -38,4 +38,4 @@ Scope it when useful, e.g. `feat(staging): …`. Untyped titles default to a pat
 
 ## Notes / follow-ups
 
-<!-- Deferred work, spun-off backlog items, demo lock-down confirmation for staging→prod promotions, anything a reviewer should know. -->
+<!-- Deferred work, spun-off backlog items, demo lock-down confirmation when adding write paths, anything a reviewer should know. -->
