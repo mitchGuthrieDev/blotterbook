@@ -1,7 +1,7 @@
 name: Version bump
 
 # CH12 — after a merge to main, derive the two-track version bump from the merge commit's
-# conventional-commit type + changed paths, write data/versions.json, sync the offline-fallback
+# conventional-commit type + changed paths, write static/data/versions.json, sync the offline-fallback
 # badge literals (B17), regenerate the app pages, and commit it all back. Runtime-fetch badges
 # pick up versions.json live.
 
@@ -60,9 +60,10 @@ jobs:
             if git diff --quiet; then
               echo "No version change to commit."; exit 0
             fi
-            # A33: versions live only in data/versions.json now (the Svelte app reads it at runtime;
+            # A33: versions live only in versions.json now (the Svelte app reads it at runtime;
             # no version badges are baked into markup), so that's the only file the bump writes.
-            git add data/versions.json
+            # A30: the source file is static/data/versions.json (served at /data/versions.json).
+            git add static/data/versions.json
             git commit -m "chore(release): bump versions [skip ci]"
             if git push; then
               echo "Pushed version bump on attempt $attempt."; exit 0
