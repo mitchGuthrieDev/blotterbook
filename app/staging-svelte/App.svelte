@@ -9,6 +9,7 @@
   import { Adapters } from '../adapters.js';
   import { demoCSV } from '../sampledata.js';
   import Overview from './components/Overview.svelte';
+  import EquityCurve from './components/EquityCurve.svelte';
 
   let metrics = $state(null);
   let tradeCount = $state(0);
@@ -61,8 +62,9 @@
     <p class="msg error" role="alert">Could not start the staging app: {error}</p>
   {:else if metrics}
     <Overview {metrics} {tradeCount} />
+    <EquityCurve {metrics} />
     <p class="note">
-      Migration in progress (A27): Overview is live in Svelte. Calendar, performance curve,
+      Migration in progress (A27): Overview + performance curve are live in Svelte. Calendar,
       advanced stats, break-even, journal and manage-data are being ported next.
     </p>
   {:else}

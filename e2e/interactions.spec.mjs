@@ -66,6 +66,10 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   const seededCount = Number((tradesText || '').trim());
   expect(seededCount).toBeGreaterThan(0);
 
+  // Performance equity curve renders an SVG path from compute()'s m.curve.
+  const curve = page.locator('#sv-app svg.equity path.line');
+  await expect(curve).toHaveAttribute('d', /^M[\d.]+,[\d.]+ L/);
+
   // Reload: the isolated staging DB already has the seed, so the count is identical (no re-seed
   // duplication) and the app still boots clean from persisted data.
   await page.reload({ waitUntil: 'networkidle' });
