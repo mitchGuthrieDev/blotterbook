@@ -61,11 +61,11 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P3",
       "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": true,
       "prompt": "From the full-project R1 audit (deferred, tree-shaken so zero runtime cost — bundle them with the A30 reorg). (1) core.js has exports orphaned by the A33 vanilla deletion: SVGNS, the DOM helpers $/on, feedName (0 refs anywhere), and the DOM-input cost helpers curBroker/numIn/feedCost/stateRate/blendedRate which are used ONLY by costModel()'s legacy no-inputs DOM-fallback branch. The Svelte app ALWAYS calls costModel(m, inputs), so simplify costModel to require `inputs` and delete the DOM-fallback branch + those helper exports (keep rateFor/tierOf/exchOf — used by curveseries; keep blendedRateFor). Verify no caller/test uses the no-inputs path first. (2) isoWeek (core.js) builds a UTC date from LOCAL getters and CalendarMonth feeds it `cur.getTime() - 4*864e5` (raw ms) — verbatim from the old vanilla render.js, but can be off by one near DST/year boundaries in non-UTC tz; make the Wednesday-of-row computation date-based (setDate) for robustness. (3) tiny dedup if they grow past 2 uses: sortedStates sort (Landing + CostPanel) and the `(t.time||'').slice(11,16)` HH:MM slice (DayTrades + ManageData) — extract to core only if a 3rd use appears. Done when: dead exports gone + costModel is inputs-only + isoWeek is DST-safe + lint/typecheck/tests green.",
-      "doneNote": null
+      "doneNote": "Removed the exports orphaned by the A33 vanilla deletion: SVGNS, the DOM helpers $/on (a dead pair), feedName, and the DOM-input cost helpers curBroker/numIn/feedCost/stateRate/blendedRate. Simplified costModel(m, inputs) to inputs-only (dropped the legacy no-inputs DOM-fallback branch — verified all 3 callers pass inputs and no test uses the bare form). Kept rateFor/tierOf/exchOf (used by curveseries) + blendedRateFor. build/typecheck/34 unit/14 e2e green (cost-panel takehome + $/RT unchanged). REMAINING (low priority, left open): the isoWeek DST/year-boundary robustness tweak (verbatim/pre-existing behavior) and the 2-use sortedStates/HH:MM-slice dedup (only worth extracting on a 3rd use) — keep for the A30 reorg."
     },
     {
       "id": "A55",

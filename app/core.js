@@ -1,10 +1,9 @@
 // @ts-check
 'use strict';
-/* Blotterbook app · core — DOM helpers, metrics, formatting, broker/cost model, reference-data
-   loading, and the app event bus. A native ES module (A20): everything it shares is `export`ed and
-   imported explicitly by the other modules — no shared global scope, no load-order dependence. */
+/* Blotterbook app · core — metrics, formatting, broker/cost model, reference-data loading, shared
+   pure helpers, and the app event bus. A native ES module: everything it shares is `export`ed and
+   imported explicitly by the Svelte app + the pure-logic modules. */
 
-export const SVGNS = 'http://www.w3.org/2000/svg';
 export const pad2 = n => String(n).padStart(2, '0');
 export const fmtDate = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 // running min/max — avoids Math.min(...arr)/Math.max(...arr), whose argument spread overflows the
@@ -19,11 +18,6 @@ export function minMax(arr) {
   }
   return { lo, hi };
 }
-export const $ = id => document.getElementById(id);
-export const on = (id, ev, fn) => {
-  const el = $(id);
-  if (el) el.addEventListener(ev, fn);
-};
 /* Page modes (document.body[data-mode]):
      ''        — the main app
      'demo'    — in-memory sample data, never persists (its own trimmed top bar)
@@ -448,10 +442,6 @@ export async function loadRefData() {
   }
 }
 
-export function curBroker() {
-  const e = /** @type {HTMLSelectElement|null} */ (document.getElementById('c_broker'));
-  return e && e.value ? e.value : 'AMP';
-}
 export function rateFor(brokerKey, root) {
   const b = BROKERS[brokerKey] || BROKERS.AMP;
   const tier = tierOf(root),
@@ -459,48 +449,23 @@ export function rateFor(brokerKey, root) {
   return { rate: +(b.comm[tier] + exch).toFixed(4), known: EXCH[root] != null };
 }
 
-// Empty/NaN → 0 (an empty field shows its "0" placeholder, so it reads as 0, not a typed value);
-// clamp negatives so a typed "-5" can't manufacture a negative cost that inflates net (B13).
-export function numIn(id) {
-  const e = /** @type {HTMLInputElement|null} */ (document.getElementById(id));
-  const v = e ? parseFloat(e.value) : NaN;
-  return isNaN(v) ? 0 : Math.max(0, v);
-}
-export function feedCost() {
-  const o = /** @type {HTMLSelectElement|null} */ (document.getElementById('c_feed'));
-  const x = o && o.selectedOptions[0] ? parseFloat(o.selectedOptions[0].dataset.cost) : NaN;
-  return isNaN(x) ? 0 : x;
-}
-export function feedName() {
-  const o = /** @type {HTMLSelectElement|null} */ (document.getElementById('c_feed'));
-  return o && o.value ? o.value.split('|')[0] : '—';
-}
-export function stateRate() {
-  const o = /** @type {HTMLSelectElement|null} */ (document.getElementById('c_state_sel'));
-  const x = o && o.selectedOptions[0] ? parseFloat(o.selectedOptions[0].dataset.rate) : NaN;
-  return isNaN(x) ? 0 : x;
-}
-// Section-1256 blended federal rate + a given state rate (%). blendedRate() reads the live DOM
-// state select; blendedRateFor() takes the rate as a param so the Svelte cost panel (A32) can pass
-// its own value instead of relying on DOM ids.
+// Section-1256 blended federal rate + a given state rate (%). Takes the rate as a param so the cost
+// panel passes its own value (A32) — no DOM coupling.
 export function blendedRateFor(stateRatePct) {
   return (TAXMODEL.ltcgWeight * TAXMODEL.ltcg) / 100 + (TAXMODEL.ordinaryWeight * TAXMODEL.fedOrdinary) / 100 + (+stateRatePct || 0) / 100;
-}
-export function blendedRate() {
-  return blendedRateFor(stateRate());
 }
 
 /**
  * @param {*} m  Active metrics (compute() result) — reads m.trades / m.net / m.months.
- * @param {*} [inputs]  Optional { broker, platform, feedCost, stateRate } (A32). When omitted the
- *   setup is read from the live DOM (#c_broker/#c_tv/#c_feed/#c_state_sel) — the vanilla path,
- *   unchanged. Negatives are clamped to 0 like numIn()/feedCost() (B13).
+ * @param {{ broker?:string, platform?:(number|string), feedCost?:(number|string), stateRate?:(number|string) }} inputs
+ *   The cost setup (A32). Negatives are clamped to 0 (B13). (A33: the old DOM-read fallback was
+ *   removed — all callers pass inputs explicitly.)
  * @returns {import('./types.js').CostModel}
  */
-export function costModel(m, inputs) {
-  const broker = inputs ? inputs.broker || 'AMP' : curBroker(),
-    platform = inputs ? Math.max(0, +inputs.platform || 0) : numIn('c_tv'),
-    data = inputs ? Math.max(0, +inputs.feedCost || 0) : feedCost(),
+export function costModel(m, inputs = {}) {
+  const broker = inputs.broker || 'AMP',
+    platform = Math.max(0, +inputs.platform || 0),
+    data = Math.max(0, +inputs.feedCost || 0),
     fixedMo = platform + data;
   const trades = m && m.trades ? m.trades : [];
   const bySym = new Map();
@@ -528,7 +493,7 @@ export function costModel(m, inputs) {
   const fixedPeriod = fixedMo * months;
   const gross = m ? m.net : 0;
   const netPreTax = gross - totalComm - fixedPeriod;
-  const tEff = inputs ? blendedRateFor(inputs.stateRate) : blendedRate();
+  const tEff = blendedRateFor(inputs.stateRate);
   const tax = netPreTax > 0 ? netPreTax * tEff : 0;
   const afterTax = netPreTax - tax;
   const pf = gl !== 0 ? gp / Math.abs(gl) : gp > 0 ? Infinity : 0;
