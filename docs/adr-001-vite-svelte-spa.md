@@ -195,10 +195,20 @@ currently reads DOM IDs), manage-data modal + per-trade editor, filters/scope, a
 Trade replay (R11, `lightweight-charts`), module menu (R12), resizable/snapping modules (R13),
 Trade Blotter (F23) — built as Svelte components behind the staging gate, promoted via CH16.
 
-### Phase 4 — Migrate prod + demo to Svelte
+### Phase 4 — Migrate prod + demo to Svelte (+ the source-tree reorg, A30)
 
 Once staging is proven, migrate `app/app.html` + `app/demo.html` to the Svelte app and retire the
 vanilla view layer. Marketing pages remain static. Re-verify the demo-never-persists invariant.
+
+This is also the right moment for the **source-tree reorg (A30)**, now *unblocked* by A26: the Vite
+build decoupled the source layout from the public URL structure, so the A18 ban on a `/src` reorg no
+longer applies — it's an optional cleanup (separate served source from tooling; split the mixed
+`assets/` into bundled vs a single static dir, letting `copy-static.mjs` be replaced by Vite's native
+`publicDir`; adopt a Svelte-shaped `components/lib/` structure). It's deferred to here rather than
+done now because it's an all-at-once lockstep migration (path prefixes + every relative import),
+doing it mid-A27 would bury the real diffs, the final shape depends on the Svelte structure, and the
+flat layout's last advantage (root tree directly servable un-built) erodes to nothing exactly as the
+Svelte migration completes — so the cost/benefit only improves up to Phase 4.
 
 ## Spawned backlog items
 
@@ -207,5 +217,7 @@ vanilla view layer. Marketing pages remain static. Re-verify the demo-never-pers
 - **A28** — *(guardrail)* dependency policy: minimal / pinned / audited; supply chain as a security
   control; local-compute pillar gates every dep.
 - **A29** — *(guardrail)* preserve the pure-logic core verbatim through the framework migration.
+- **A30** — source-tree reorg (`src/` + static split; retire `copy-static.mjs` for `publicDir`),
+  unblocked by A26, deferred to Phase 4.
 
 R11/R12/R13/F23 keep their existing IDs and become Phase 3 work (now unblocked by the framework).

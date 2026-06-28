@@ -403,6 +403,18 @@
       "effort": "ongoing",
       "status": "guardrail",
       "prompt": "Guardrail from ADR-001 (docs/adr-001-vite-svelte-spa.md). The Svelte migration (A27 + later Phase 4) must touch the VIEW LAYER ONLY. The pure-logic modules are the hard-won, test-covered value and must be imported into components VERBATIM, not rewritten: app/adapters.js (platform CSV adapters + detection + pairFills), compute() (metrics), costModel() (commissions/subscriptions/tax/take-home), the Section-1256 tax model, app/store.js (the Store seam — A4), and assets/util.js. They stay framework-agnostic so the node test suites (test-adapters/test-version/test-auth/test-flags/test-tax) keep covering them unchanged. Reject a framework PR that reimplements adapter parsing, the metrics/cost/tax math, or persistence inside a component instead of importing the existing module. The Store interface (A4) remains the only persistence seam."
+    },
+    {
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "id": "A30",
+      "title": "Source-tree reorg (src/ + static split) — gated on the Phase 4 Svelte migration",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "large",
+      "status": "open",
+      "prompt": "DEFERRED — gated on ADR-001 Phase 4 (prod + demo Svelte migration). The Vite build (A26) DECOUPLED the source layout from the public URL structure (Vite maps any source path to any output URL), so the A18 ban on a /src reorg NO LONGER APPLIES — a source-tree reorganization is now an optional cleanup, not forbidden. BENEFITS: (1) separate served SOURCE from non-served tooling (functions/scripts/partials/docs/configs at root today are mixed with site source); (2) resolve the mixed assets/ dir (bundled JS modules like home.js/util.js vs verbatim-static SVG/PNG) by splitting bundled vs a single static/public dir — which ALSO lets us adopt Vite's native publicDir and DELETE scripts/copy-static.mjs; (3) a Svelte-shaped structure (components/lib/routes). COST: it IS the A18 lockstep migration — moving source files changes the path PREFIXES that build-includes/build-manifest/bump-version/eslint/jsconfig/.prettierignore/README image refs key off, plus every relative import (./core.js, ../assets/util.js) — so it must be done ALL-AT-ONCE with all coupled paths + imports updated together (URLs stay 1:1 regardless, per A26). WHY PHASE 4, NOT NOW: doing it during the in-flight A27 buildout creates huge rename diffs that bury the real work; the final structure depends on the Svelte shape (don't reorg twice); and the flat layout's last advantage — the root tree still being directly servable un-built — is already eroding (staging.html can't be served un-built now) and disappears entirely once prod/demo are Svelte, so the cost/benefit only improves up to Phase 4. Settle the structure ONCE, with Phase 4. Done when: either the reorg lands with Phase 4 (target layout decided; all coupled paths + imports updated in lockstep; URLs still 1:1; copy-static.mjs retired in favor of publicDir; all surfaces verified) OR it is explicitly re-affirmed as deferred."
     }
   ],
   "howToDrive": [
