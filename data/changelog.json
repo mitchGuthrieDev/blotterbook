@@ -4,6 +4,17 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.25.0",
+      "date": "2026-06-28",
+      "title": "Rebuilt under the hood, with tighter security",
+      "summary": "The app is now built on a modern UI framework across every surface — the main app, the demo, and the staging sandbox all run the same code. Nothing changes in how it looks or works; this clears the way for the richer charting and layout features on the roadmap and comes with a stronger security policy.",
+      "highlights": [
+        "Same app, modern foundation: a single, shared codebase now powers the main app, the demo, and staging — fewer moving parts and a faster path to new features.",
+        "Tighter security: the page's content-security policy no longer allows inline styles anywhere, narrowing the surface for injection attacks. As always, your trade data never leaves the browser.",
+        "No action needed: your saved trades, notes, tags, screenshots, and layouts are untouched — everything works exactly as before."
+      ]
+    },
+    {
       "version": "0.20.5",
       "date": "2026-06-27",
       "title": "Faster, more accessible, more solid under the hood",
