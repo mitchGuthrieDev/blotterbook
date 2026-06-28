@@ -54,7 +54,7 @@
     >⠿</span>
     <h2>{title}</h2>
     {#if actions}<div class="pactions">{@render actions()}</div>{/if}
-    <button type="button" class="chev" aria-expanded={!collapsed} aria-label={collapsed ? 'Expand' : 'Collapse'} onclick={ontoggle}>
+    <button type="button" class="chev" aria-expanded={!collapsed} aria-label={collapsed ? 'Expand' : 'Collapse'} title={collapsed ? 'Expand' : 'Collapse'} onclick={ontoggle}>
       {collapsed ? '▸' : '▾'}
     </button>
   </div>

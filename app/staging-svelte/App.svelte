@@ -27,6 +27,7 @@
   import CostPanel from './components/CostPanel.svelte';
   import FilterBar from './components/FilterBar.svelte';
   import JournalEditor from './components/JournalEditor.svelte';
+  import DayTrades from './components/DayTrades.svelte';
   import ManageData from './components/ManageData.svelte';
   import ActivityTerminal from './components/ActivityTerminal.svelte';
   import Definitions from './components/Definitions.svelte';
@@ -42,6 +43,7 @@
   let manageOpen = $state(false);
   let landingMsg = $state('');
   let online = $state(typeof navigator === 'undefined' ? true : navigator.onLine); // A38 session pill
+  let pillOpen = $state(false); // A49 session-pill legend popup
   let cardModalKey = $state(null); // A35 stat-card detail modal
   let exportOpen = $state(false); // A34 performance-report export
 
@@ -184,6 +186,11 @@
   );
   const roots = $derived([...new Set(allTrades.map(t => t.root).filter(Boolean))].sort());
   const tags = $derived([...new Set([...tradeMeta.values()].flatMap(m => m.tags || []))].sort());
+  // A50: the active-filtered trades for the selected day → the read-only intraday trade table.
+  const dayTrades = $derived(selectedDate ? filtered.filter(t => t.date === selectedDate) : []);
+  const filtersActive = $derived(
+    !!(filters.from || filters.to || filters.root || filters.side || filters.session || filters.tag || filters.dows.length)
+  );
   // Cost/tax inputs derived from the setup (feed value is "name|cost"; rate from the STATES table).
   const costInputs = $derived({
     broker: setup.broker,
@@ -194,7 +201,8 @@
   const dateRange = $derived(allTrades.length ? `${allTrades[0].date} → ${allTrades[allTrades.length - 1].date}` : '');
   // Human-readable labels for the export report header (parity with export.js BROKERS/feedName/
   // stateLabel/scopeLabel). feed value is "name|cost"; scope mirrors render.js scopeLabel().
-  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  // Full month names to match vanilla scopeLabel() ("January 2025"), used in the export-report header.
+  const MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const reportLabels = $derived({
     broker: (BROKERS[setup.broker] && BROKERS[setup.broker].name) || setup.broker || '—',
     feed: setup.feed ? setup.feed.split('|')[0] : '—',
@@ -251,6 +259,7 @@
     allTrades = await store.getAllTrades();
     journalDates = await store.journalDates();
     tradeMeta = new Map((await store.allTradeMeta()).map(m => [m.id, m]));
+    savedFilters = (await store.getMeta('savedFilters')) || []; // A49: a backup-restore can replace these
   }
 
   // App-mode landing: parse + persist a CSV, then the dashboard takes over (allTrades non-empty).
@@ -323,6 +332,10 @@
     savedFilters = savedFilters.filter(s => s.id !== id);
     await store.setMeta('savedFilters', $state.snapshot(savedFilters));
   }
+  async function renameView(id, name) {
+    savedFilters = savedFilters.map(s => (s.id === id ? { ...s, name } : s));
+    await store.setMeta('savedFilters', $state.snapshot(savedFilters));
+  }
 
   onMount(() => {
     boot().catch(e => {
@@ -341,6 +354,8 @@
   });
 </script>
 
+<svelte:window onclick={() => (pillOpen = false)} />
+
 <main id="sv-app">
   <header class="topbar">
     <div class="brand">
@@ -350,7 +365,30 @@
       Svelte&nbsp;5 proving ground · isolated local data{#if dateRange} · {dateRange}{/if}
     </div>
     <div class="topactions">
-      <span class="pill" class:off={!online} title={online ? 'Online' : 'Offline'}>{online ? 'online' : 'offline'}</span>
+      <div class="sesswrap">
+        <button
+          type="button"
+          class="pill"
+          class:off={!online}
+          aria-haspopup="true"
+          aria-expanded={pillOpen}
+          title={online ? 'Online' : 'Offline'}
+          onclick={e => {
+            e.stopPropagation();
+            pillOpen = !pillOpen;
+          }}>{online ? 'online' : 'offline'}</button>
+        {#if pillOpen}
+          <div class="sesspop" role="dialog" aria-label="Session status legend">
+            <p class="pophd">Session status</p>
+            <ul>
+              <li><span class="sdot on"></span> <b>Online</b> — ref-data &amp; functions reachable.</li>
+              <li><span class="sdot off"></span> <b>Offline</b> — no network; the app keeps working on your local data.</li>
+              <li><span class="sdot deg"></span> <b>Degraded</b> — reserved for partial connectivity.</li>
+            </ul>
+            <p class="popnote">Compute always stays in your browser — status never gates your data.</p>
+          </div>
+        {/if}
+      </div>
       <a class="link" href="../changelog.html">Changelog</a>
       <a class="link" href="mailto:contact@blotterbook.com?subject=Blotterbook">Contact</a>
       {#if loaded && allTrades.length}<button type="button" class="exportbtn" onclick={() => (exportOpen = true)}>Export report</button>{/if}
@@ -374,6 +412,7 @@
           <CalendarMonth panel={panelBundle(key)} metrics={metricsAll} year={calYear} month={calMonth} onnav={navMonth} onjump={jumpToLatest} {selectedDate} {journalDates} onselect={d => (selectedDate = d)}>
             {#snippet extra()}
               {#if selectedDate}
+                <DayTrades date={selectedDate} trades={dayTrades} filtered={filtersActive} />
                 <JournalEditor date={selectedDate} onsaved={refreshNotes} onclose={() => (selectedDate = null)} />
               {/if}
             {/snippet}
@@ -421,11 +460,25 @@
         selectedDate = d;
         manageOpen = false;
       }}
+      {savedFilters}
+      onapplyview={sf => {
+        applyView(sf);
+        manageOpen = false;
+      }}
+      onrenameview={renameView}
+      ondeleteview={deleteView}
     />
   {/if}
 </main>
 
 <style>
+  /* A51: no horizontal page scroll on mobile (parity with vanilla app.css). Pin on BOTH html and
+     body so the viewport scroller can't scroll sideways regardless of overflow propagation. */
+  :global(html),
+  :global(body) {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
   :global(body) {
     margin: 0;
     background: var(--bg);
@@ -436,6 +489,11 @@
     max-width: 1100px;
     margin: 0 auto;
     padding: 20px 16px 48px;
+  }
+  @media (max-width: 560px) {
+    #sv-app {
+      padding: 14px 10px 40px;
+    }
   }
   .topbar {
     display: flex;
@@ -473,13 +531,18 @@
     align-items: center;
     gap: 10px;
   }
+  .sesswrap {
+    position: relative;
+  }
   .pill {
     font-size: 11px;
     font-family: var(--mono);
     color: var(--green);
+    background: transparent;
     border: 1px solid var(--line);
     border-radius: 999px;
     padding: 3px 9px;
+    cursor: pointer;
   }
   .pill::before {
     content: '';
@@ -496,6 +559,65 @@
   }
   .pill.off::before {
     background: var(--faint);
+  }
+  .sesspop {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 40;
+    width: 260px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 10px 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    text-align: left;
+  }
+  .pophd {
+    margin: 0 0 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--faint);
+    font-weight: 700;
+  }
+  .sesspop ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+  }
+  .sesspop li {
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 1.4;
+  }
+  .sesspop b {
+    color: var(--txt);
+  }
+  .sdot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  .sdot.on {
+    background: var(--green);
+  }
+  .sdot.off {
+    background: var(--faint);
+  }
+  .sdot.deg {
+    background: var(--warn);
+  }
+  .popnote {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: var(--faint);
+    line-height: 1.4;
   }
   .link {
     font-size: 13px;

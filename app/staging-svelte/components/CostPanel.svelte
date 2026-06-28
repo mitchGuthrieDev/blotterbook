@@ -70,7 +70,7 @@
 
     {#if cost.bySym.length}
       <table class="bysym">
-        <thead><tr><th>Symbol</th><th>Trades</th><th>Contracts</th><th>Rate/side</th><th>Commission</th></tr></thead>
+        <thead><tr><th>Symbol</th><th>Trades</th><th>Contracts</th><th>$/side</th><th>$/RT</th><th>Commission</th></tr></thead>
         <tbody>
           {#each cost.bySym as r (r.root)}
             <tr>
@@ -78,11 +78,15 @@
               <td>{r.count}</td>
               <td>{r.qty}</td>
               <td>{money(r.rate)}</td>
+              <td>{money(r.rate * 2)}</td>
               <td>{money(r.total)}</td>
             </tr>
           {/each}
         </tbody>
       </table>
+      {#if cost.bySym.some(r => !r.known)}
+        <p class="cnote"><span class="est">*</span> No published exchange fee on file — priced with a fallback estimate. Add the symbol to <code>data/exchange-fees.json</code> for an exact figure.</p>
+      {/if}
     {/if}
 
     <details class="caveats">
@@ -206,6 +210,16 @@
   .est {
     color: var(--warn);
     margin-left: 2px;
+  }
+  .cnote {
+    margin: 8px 0 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--dim);
+  }
+  .cnote code {
+    font-family: var(--mono);
+    color: var(--txt);
   }
   .caveats {
     margin-top: 14px;

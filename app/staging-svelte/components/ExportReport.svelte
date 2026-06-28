@@ -7,6 +7,7 @@
   import { buildReport, reportHtmlDoc } from '../../report.js';
   import { fmtDate } from '../../core.js';
   import { downloadBlob } from '../util.js';
+  import { modal } from '../modal.js';
 
   let { metrics: m, cost: c, labels, onclose } = $props();
 
@@ -98,7 +99,7 @@
 </script>
 
 <div class="overlay" role="presentation" onclick={e => e.target === e.currentTarget && onclose()}>
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Export performance report">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Export performance report" tabindex="-1" use:modal={{ onclose }}>
     <div class="bar">
       <strong>Performance report</strong>
       <div class="actions">

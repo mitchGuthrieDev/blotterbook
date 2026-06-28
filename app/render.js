@@ -21,6 +21,9 @@ import {
   BROKERS,
   sessionOf,
   isoWeek,
+  fmtDur,
+  niceTicks,
+  axMoney,
 } from './core.js';
 import { selectFromGraph, renderDayTrades, syncFilterOptions, updateJournalEditor, cancelDaySave } from './data.js';
 import { state } from './state.js';
@@ -74,26 +77,6 @@ export function dateRange(m) {
 export function dailySeries(m, c = costModel(m)) {
   const { pts } = computeDailySeries(m, { broker: curBroker(), tEff: c.tEff, fixedMo: c.fixedMo });
   return { pts, subs: c.fixedPeriod, tEff: c.tEff };
-}
-/* "nice" axis ticks spanning [min,max] with ~count steps, always including 0. */
-export function niceTicks(min, max, count) {
-  const span = max - min || 1;
-  const rawStep = span / Math.max(1, count);
-  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
-  const norm = rawStep / mag;
-  const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
-  const lo = Math.floor(min / step) * step,
-    hi = Math.ceil(max / step) * step;
-  const ticks = [];
-  for (let v = lo; v <= hi + step * 1e-6; v += step) ticks.push(+v.toFixed(6));
-  return ticks;
-}
-/* compact money for axis labels: $1.2k / $850 / -$3.4k */
-export function axMoney(v) {
-  const a = Math.abs(v),
-    s = v < 0 ? '-' : '';
-  if (a >= 1000) return s + '$' + (a / 1000).toFixed(a >= 10000 ? 0 : 1) + 'k';
-  return s + '$' + Math.round(a);
 }
 
 export function renderCurve(m, c = costModel(m)) {
@@ -473,17 +456,6 @@ export function renderCalendar() {
 /* ============================================================
    Rendering — advanced statistics
    ============================================================ */
-export function fmtDur(ms) {
-  const s = Math.round(ms / 1000);
-  if (s < 90) return s + 's';
-  const mn = Math.round(s / 60);
-  if (mn < 90) return mn + 'm';
-  const h = Math.floor(mn / 60),
-    rem = mn % 60;
-  if (h < 24) return h + 'h' + (rem ? ' ' + rem + 'm' : '');
-  const d = Math.floor(h / 24);
-  return d + 'd' + (h % 24 ? ' ' + (h % 24) + 'h' : '');
-}
 export function renderAdv(m) {
   // hold time is only available for fills-based platform exports (round-trip matched)
   const held = (m.trades || []).filter(t => t.holdMs != null && t.holdMs > 0);

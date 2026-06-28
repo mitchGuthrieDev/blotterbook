@@ -15,6 +15,7 @@
     'data:imported': d => `imported ${d && d.added != null ? d.added : '?'} new trades`,
     'note:saved': d => `note saved · ${d && d.date ? d.date : ''}`,
     'trade:edited': () => 'trade metadata updated',
+    'trade:deleted': () => 'trade deleted',
     'backup:created': () => 'backup downloaded',
     'data:erased': () => 'all staging data erased',
     'ws:saved': d => `workspace saved · ${d && d.name ? d.name : ''}`,

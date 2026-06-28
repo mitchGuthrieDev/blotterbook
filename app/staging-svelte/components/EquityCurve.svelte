@@ -1,18 +1,23 @@
 <script>
-  // Performance curve (A32). Daily cumulative series with selectable gross / net / take-home
-  // overlays, computed by the shared pure dailySeries() (A29 — same math as the vanilla curve)
-  // from the lifted cost inputs. Plus day note-dots, a hover/keyboard cursor with an aria-live
-  // tooltip (B33), and click-to-select-day cross-link (B37).
-  import { usd, money, blendedRateFor } from '../../core.js';
+  // Performance curve (A32; axis furniture added in A43). Daily cumulative series with selectable
+  // gross / net / take-home overlays, computed by the shared pure dailySeries() (A29 — same math as
+  // the vanilla curve) from the lifted cost inputs. Plus horizontal/vertical gridlines with y-$ and
+  // x-date tick labels, end-of-line value labels, day note-dots, a hover/keyboard cursor with an
+  // aria-live tooltip (B33), and click-to-select-day cross-link (B37).
+  //
+  // The viewBox WIDTH tracks the measured pixel width (like vanilla renderCurve) so the SVG text
+  // labels aren't horizontally stretched — height is fixed, so both axes render at ~1:1.
+  import { usd, money, axMoney, niceTicks, blendedRateFor } from '../../core.js';
   import { dailySeries } from '../../curveseries.js';
   import Panel from './Panel.svelte';
 
   let { metrics, costInputs, journalDates = new Set(), selectedDate = null, onselect = () => {}, panel = {} } = $props();
 
-  const W = 800;
   const H = 240;
-  const PX = 10;
-  const PY = 16;
+  const padL = 52; // y-axis $ labels
+  const padR = 58; // end-of-line value labels
+  const padT = 14;
+  const padB = 22; // x-axis date labels
   const SERIES = [
     { key: 'gross', label: 'Gross', color: 'var(--green)' },
     { key: 'net', label: 'Net', color: 'var(--accent)' },
@@ -21,9 +26,11 @@
 
   let sel = $state({ gross: true, net: false, take: false });
   let cursor = $state(null);
+  let cw = $state(0); // measured plot width (px) → viewBox width, so labels don't stretch
 
+  const W = $derived(Math.max(560, cw || 800));
   const enabled = $derived(SERIES.filter(s => sel[s.key]).length ? SERIES.filter(s => sel[s.key]) : [SERIES[0]]);
-  const view = $derived(build(metrics, costInputs, enabled));
+  const view = $derived(build(metrics, costInputs, enabled, W));
   const tip = $derived(
     view && cursor != null && view.pts[cursor].date
       ? `${view.pts[cursor].date} · ${enabled.map(s => `${s.label} ${usd(view.pts[cursor][s.key])}`).join(' · ')}`
@@ -32,7 +39,7 @@
   const selIdx = $derived(view && selectedDate ? (view.idxByDate.get(selectedDate) ?? null) : null);
   const grossOnly = $derived(enabled.length === 1 && enabled[0].key === 'gross');
 
-  function build(m, ci, ser) {
+  function build(m, ci, ser, w) {
     const { pts: raw } = dailySeries(m, {
       broker: ci.broker,
       tEff: blendedRateFor(ci.stateRate),
@@ -47,12 +54,16 @@
       if (p[s.key] < lo) lo = p[s.key];
       if (p[s.key] > hi) hi = p[s.key];
     }
+    // Frame the domain out to nice round tick bounds so the plot + gridlines sit cleanly.
+    const ticks = niceTicks(lo, hi, 4);
+    lo = Math.min(lo, ticks[0]);
+    hi = Math.max(hi, ticks[ticks.length - 1]);
     const span = hi - lo || 1;
-    const x = i => PX + (i / (pts.length - 1)) * (W - 2 * PX);
-    const y = v => PY + (1 - (v - lo) / span) * (H - 2 * PY);
+    const x = i => padL + (i / (pts.length - 1)) * (w - padL - padR);
+    const y = v => padT + (1 - (v - lo) / span) * (H - padT - padB);
     const prim = ser[0].key;
     const lines = ser.map(s => ({ ...s, d: pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[s.key]).toFixed(1)}`).join(' ') }));
-    const baseY = (H - PY).toFixed(1);
+    const baseY = (H - padB).toFixed(1);
     const area = `${pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[prim]).toFixed(1)}`).join(' ')} L${x(pts.length - 1).toFixed(1)},${baseY} L${x(0).toFixed(1)},${baseY} Z`;
     const idxByDate = new Map();
     pts.forEach((p, i) => p.date && idxByDate.set(p.date, i));
@@ -77,7 +88,25 @@
       }
     });
     const dd = maxDD > 0 ? { x0: x(ddP), x1: x(ddT) } : null;
-    return { pts, x, y, lo, hi, len: pts.length, lines, area, prim, idxByDate, notes, dd, primColor: ser[0].color, zeroY: lo <= 0 && hi >= 0 ? y(0) : null };
+    // Axis ticks: y $ gridlines (framed ticks) + x date labels (5 across the real dates).
+    const yticks = ticks.map(v => ({ v, y: y(v), label: axMoney(v) }));
+    const xticks = [];
+    const seen = new Set();
+    for (let k = 0; k <= 4; k++) {
+      const i = Math.min(pts.length - 1, 1 + Math.round(((pts.length - 2) * k) / 4));
+      const date = pts[i] && pts[i].date;
+      if (date && !seen.has(date)) {
+        seen.add(date);
+        xticks.push({ x: x(i), label: date.slice(5).replace('-', '/') });
+      }
+    }
+    const last = pts[pts.length - 1];
+    const ends = ser.map(s => ({ color: s.color, y: y(last[s.key]), label: usd(last[s.key]) }));
+    return {
+      pts, x, y, lo, hi, len: pts.length, lines, area, prim, idxByDate, notes, dd,
+      primColor: ser[0].color, zeroY: lo <= 0 && hi >= 0 ? y(0) : null,
+      w, yticks, xticks, ends,
+    };
   }
 
   function toggle(key) {
@@ -88,8 +117,8 @@
 
   function idxFromEvent(e) {
     const rect = e.currentTarget.getBoundingClientRect();
-    const vbx = ((e.clientX - rect.left) / rect.width) * W;
-    return Math.max(1, Math.min(view.len - 1, Math.round(((vbx - PX) / (W - 2 * PX)) * (view.len - 1))));
+    const vbx = ((e.clientX - rect.left) / rect.width) * view.w;
+    return Math.max(1, Math.min(view.len - 1, Math.round(((vbx - padL) / (view.w - padL - padR)) * (view.len - 1))));
   }
   const move = e => (cursor = idxFromEvent(e));
   const pick = () => {
@@ -118,43 +147,57 @@
   {/snippet}
 
   {#if view}
-    <svg
-      class="equity"
-      viewBox="0 0 {W} {H}"
-      preserveAspectRatio="none"
-      role="img"
-      aria-label="Cumulative performance curve — arrow keys inspect days, Enter selects"
-      tabindex="0"
-      onpointermove={move}
-      onpointerleave={() => (cursor = null)}
-      onclick={pick}
-      {onkeydown}
-    >
-      <defs>
-        <linearGradient id="eqfill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color={view.primColor} stop-opacity="0.22" />
-          <stop offset="100%" stop-color={view.primColor} stop-opacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={view.area} fill="url(#eqfill)" />
-      {#if grossOnly && view.dd}<rect class="ddband" x={view.dd.x0} y={PY} width={Math.max(0, view.dd.x1 - view.dd.x0)} height={H - 2 * PY} />{/if}
-      {#if view.zeroY != null}<line class="zero" x1={PX} y1={view.zeroY} x2={W - PX} y2={view.zeroY} vector-effect="non-scaling-stroke" />{/if}
-      {#if selIdx != null}<line class="sel" x1={view.x(selIdx)} y1={PY} x2={view.x(selIdx)} y2={H - PY} vector-effect="non-scaling-stroke" />{/if}
-      {#each view.lines as ln (ln.key)}
-        <path class="line" d={ln.d} fill="none" stroke={ln.color} vector-effect="non-scaling-stroke" />
-      {/each}
-      {#each view.notes as nd (nd.date)}
-        <circle class="notedot" cx={nd.x} cy={nd.y} r="3" vector-effect="non-scaling-stroke" />
-      {/each}
-      {#if cursor != null}
-        <line class="cursor" x1={view.x(cursor)} y1={PY} x2={view.x(cursor)} y2={H - PY} vector-effect="non-scaling-stroke" />
-        <circle class="dot" cx={view.x(cursor)} cy={view.y(view.pts[cursor][view.prim])} r="3.5" vector-effect="non-scaling-stroke" />
-      {/if}
-    </svg>
+    <div class="plot" bind:clientWidth={cw}>
+      <svg
+        class="equity"
+        viewBox="0 0 {view.w} {H}"
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="Cumulative performance curve — arrow keys inspect days, Enter selects"
+        tabindex="0"
+        onpointermove={move}
+        onpointerleave={() => (cursor = null)}
+        onclick={pick}
+        {onkeydown}
+      >
+        <defs>
+          <linearGradient id="eqfill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color={view.primColor} stop-opacity="0.22" />
+            <stop offset="100%" stop-color={view.primColor} stop-opacity="0" />
+          </linearGradient>
+        </defs>
+        <!-- horizontal gridlines + y-axis $ labels -->
+        {#each view.yticks as t (t.v)}
+          <line class="grid" x1={padL} y1={t.y} x2={view.w - padR} y2={t.y} />
+          <text class="ylab" x={padL - 6} y={t.y + 3.5} text-anchor="end">{t.label}</text>
+        {/each}
+        <!-- x-axis date labels -->
+        {#each view.xticks as t, i (i)}
+          <text class="xlab" x={t.x} y={H - padB + 15} text-anchor="middle">{t.label}</text>
+        {/each}
+        <path d={view.area} fill="url(#eqfill)" />
+        {#if grossOnly && view.dd}<rect class="ddband" x={view.dd.x0} y={padT} width={Math.max(0, view.dd.x1 - view.dd.x0)} height={H - padT - padB} />{/if}
+        {#if view.zeroY != null}<line class="zero" x1={padL} y1={view.zeroY} x2={view.w - padR} y2={view.zeroY} vector-effect="non-scaling-stroke" />{/if}
+        {#if selIdx != null}<line class="sel" x1={view.x(selIdx)} y1={padT} x2={view.x(selIdx)} y2={H - padB} vector-effect="non-scaling-stroke" />{/if}
+        {#each view.lines as ln (ln.key)}
+          <path class="line" d={ln.d} fill="none" stroke={ln.color} vector-effect="non-scaling-stroke" />
+        {/each}
+        <!-- end-of-line value markers + labels -->
+        {#each view.ends as e, i (i)}
+          <circle class="enddot" cx={view.w - padR} cy={e.y} r="3" fill={e.color} />
+          <text class="endlab" x={view.w - padR + 5} y={e.y + 3.5} text-anchor="start" style="fill:{e.color}">{e.label}</text>
+        {/each}
+        {#each view.notes as nd (nd.date)}
+          <circle class="notedot" cx={nd.x} cy={nd.y} r="3" vector-effect="non-scaling-stroke" />
+        {/each}
+        {#if cursor != null}
+          <line class="cursor" x1={view.x(cursor)} y1={padT} x2={view.x(cursor)} y2={H - padB} vector-effect="non-scaling-stroke" />
+          <circle class="dot" cx={view.x(cursor)} cy={view.y(view.pts[cursor][view.prim])} r="3.5" vector-effect="non-scaling-stroke" />
+        {/if}
+      </svg>
+    </div>
     <div class="axis">
-      <span>{money(view.lo)}</span>
       <span class="tip" aria-live="polite">{tip || 'cumulative P&L'}</span>
-      <span>{money(view.hi)}</span>
     </div>
   {:else}
     <p class="empty">Not enough trades to plot a curve.</p>
@@ -180,6 +223,9 @@
     border-color: var(--sw);
     box-shadow: inset 0 -2px 0 var(--sw);
   }
+  .plot {
+    width: 100%;
+  }
   .equity {
     width: 100%;
     height: 240px;
@@ -190,13 +236,24 @@
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
+  .grid {
+    stroke: var(--line);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+  .ylab,
+  .xlab {
+    fill: var(--faint);
+    font-family: var(--mono);
+    font-size: 10px;
+  }
   .line {
     stroke-width: 2;
     stroke-linejoin: round;
     stroke-linecap: round;
   }
   .zero {
-    stroke: var(--line);
+    stroke: var(--dim);
     stroke-width: 1;
     stroke-dasharray: 3 3;
   }
@@ -216,6 +273,15 @@
   .dot {
     fill: var(--txt);
   }
+  .enddot {
+    stroke: var(--bg);
+    stroke-width: 1;
+  }
+  .endlab {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+  }
   .notedot {
     fill: var(--accent);
     stroke: var(--bg);
@@ -223,11 +289,9 @@
   }
   .axis {
     display: flex;
-    justify-content: space-between;
-    gap: 12px;
+    justify-content: center;
     font-family: var(--mono);
     font-size: 11px;
-    color: var(--faint);
     margin-top: 4px;
   }
   .axis .tip {

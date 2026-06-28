@@ -4,11 +4,12 @@
   // real Store on app/staging, in-memory DemoStore on demo. Screenshots are gated by the shared
   // store.validShot allow-list (base64 images only — S15/S18). An empty save deletes the row.
   import { getContext } from 'svelte';
-  import { emit } from '../../core.js';
+  import { emit, PAGE_MODE } from '../../core.js';
   import { readImage } from '../util.js';
 
   let { date, onsaved, onclose } = $props();
   const store = getContext('bb:store');
+  const isDemo = PAGE_MODE === 'demo'; // demo never persists — controls are disabled + a note shown (A49/A33)
 
   let text = $state('');
   let tagsStr = $state('');
@@ -42,6 +43,7 @@
   }
 
   async function save() {
+    if (isDemo) return; // demo-never-persists guard
     saving = true;
     const tags = [...new Set(tagsStr.split(',').map(s => s.trim().toLowerCase()).filter(Boolean))];
     await store.saveJournal(date, { text, tags, shots });
@@ -57,8 +59,9 @@
     <h2>Day note · {date}</h2>
     <button type="button" class="x" onclick={onclose} aria-label="Close day note">×</button>
   </div>
-  <textarea bind:value={text} rows="4" disabled={!ready} placeholder={`What happened on ${date}? Setups, mistakes, market context…`}></textarea>
-  <input class="tags" type="text" bind:value={tagsStr} disabled={!ready} placeholder="tags (comma separated)" />
+  {#if isDemo}<p class="demonote">Day-notes are read-only in the demo — nothing is saved.</p>{/if}
+  <textarea bind:value={text} rows="4" disabled={!ready || isDemo} placeholder={`What happened on ${date}? Setups, mistakes, market context…`}></textarea>
+  <input class="tags" type="text" bind:value={tagsStr} disabled={!ready || isDemo} placeholder="tags (comma separated)" />
   <div class="shots">
     {#each shots as s, i (i)}
       <span class="shot">
@@ -66,11 +69,11 @@
         <button type="button" class="rm" aria-label="Remove screenshot" onclick={() => (shots = shots.filter((_, j) => j !== i))}>×</button>
       </span>
     {/each}
-    <button type="button" class="addshot" onclick={() => shotInput.click()}>+ screenshot</button>
+    <button type="button" class="addshot" onclick={() => shotInput.click()} disabled={isDemo}>+ screenshot</button>
     <input bind:this={shotInput} type="file" accept="image/*" hidden onchange={addShot} />
   </div>
   <div class="actions">
-    <button type="button" class="save" onclick={save} disabled={saving || !ready}>Save note</button>
+    <button type="button" class="save" onclick={save} disabled={saving || !ready || isDemo}>Save note</button>
     {#if savedMsg}<span class="ok">{savedMsg}</span>{/if}
   </div>
 </section>
@@ -203,5 +206,10 @@
   .ok {
     font-size: 12px;
     color: var(--green);
+  }
+  .demonote {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: var(--warn);
   }
 </style>

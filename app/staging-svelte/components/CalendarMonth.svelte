@@ -46,7 +46,7 @@
             weekPnl += rec.pnl;
             weekDays++;
           }
-          cells.push({ d: da, date, pnl: rec ? rec.pnl : null, trades: rec ? rec.trades : 0 });
+          cells.push({ d: da, date, pnl: rec ? rec.pnl : null, trades: rec ? rec.trades : 0, wins: rec ? rec.wins : 0 });
         }
         cur.setDate(cur.getDate() + 1);
       }
@@ -64,10 +64,10 @@
 <Panel {...panel} title="Trading Calendar">
   {#snippet actions()}
     <div class="nav">
-      <button type="button" aria-label="Previous month" onclick={() => onnav(-1)}>‹</button>
+      <button type="button" aria-label="Previous month" title="Previous month" onclick={() => onnav(-1)}>‹</button>
       <span class="label">{MONTHS[month]} {year}</span>
-      <button type="button" aria-label="Next month" onclick={() => onnav(1)}>›</button>
-      <button type="button" class="today" onclick={() => onjump()}>Latest</button>
+      <button type="button" aria-label="Next month" title="Next month" onclick={() => onnav(1)}>›</button>
+      <button type="button" class="today" title="Jump to the latest trade's month" onclick={() => onjump()}>Latest</button>
     </div>
     <span class="mnet" class:neg={monthNet < 0}>{usd(monthNet)}</span>
   {/snippet}
@@ -103,7 +103,10 @@
               }}
             >
               <span class="dnum">{c.d}{#if journalDates.has(c.date)}<span class="notedot" aria-label="has a note"></span>{/if}</span>
-              {#if c.pnl != null}<span class="dpnl">{compact(c.pnl)}</span>{/if}
+              {#if c.pnl != null}
+                <span class="dpnl">{compact(c.pnl)}</span>
+                <span class="dmeta">{c.trades} tr · {c.trades ? Math.round((100 * c.wins) / c.trades) : 0}%</span>
+              {/if}
             </div>
           {:else}
             <div class="cell empty"></div>
@@ -258,5 +261,20 @@
   }
   .cell.neg .dpnl {
     color: var(--red);
+  }
+  .dmeta {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--faint);
+    text-align: right;
+  }
+  /* A51: on phones the 8-col grid scrolls WITHIN the panel instead of widening the page. */
+  @media (max-width: 620px) {
+    .calendar {
+      overflow-x: auto;
+    }
+    .calgrid {
+      min-width: 520px;
+    }
   }
 </style>

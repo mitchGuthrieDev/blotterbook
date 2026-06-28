@@ -3,6 +3,7 @@
   // Clicking a headline Overview card opens this drill-down. All data comes from compute() metrics +
   // costModel (A29 — reuses dowBuckets/DOW_LABEL/minMax from core); charts are small inline SVG/bars.
   import { usd, money, cls, ratio, minMax, dowBuckets, DOW_LABEL } from '../../core.js';
+  import { modal } from '../modal.js';
 
   let { cardKey, metrics: m, cost: c, onclose } = $props();
 
@@ -32,10 +33,20 @@
     const max = Math.max(1, ...bins);
     return bins.map((n, i) => ({ pct: (n / max) * 100, lo: lo + (span * i) / 8, n }));
   }
-  function symPf(trades) {
+  // Per-symbol gross profit factor + net (parity with vanilla cmSymPf — table, not bars).
+  function symPfRows(trades) {
     const map = new Map();
-    for (const t of trades) map.set(t.root, (map.get(t.root) || 0) + t.pnl);
-    return [...map.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+    for (const t of trades) {
+      const r = t.root || '?';
+      if (!map.has(r)) map.set(r, { gp: 0, gl: 0, n: 0 });
+      const o = map.get(r);
+      o.n++;
+      if (t.pnl > 0) o.gp += t.pnl;
+      else o.gl += t.pnl;
+    }
+    return [...map.entries()]
+      .map(([root, o]) => ({ root, n: o.n, pf: o.gl !== 0 ? o.gp / Math.abs(o.gl) : Infinity, net: o.gp + o.gl }))
+      .sort((a, b) => b.net - a.net);
   }
 
   const title = $derived(
@@ -45,7 +56,7 @@
 </script>
 
 <div class="overlay" role="presentation" onclick={e => e.target === e.currentTarget && onclose()}>
-  <div class="modal" role="dialog" aria-modal="true" aria-label={title}>
+  <div class="modal" role="dialog" aria-modal="true" aria-label={title} tabindex="-1" use:modal={{ onclose }}>
     <div class="head">
       <h2>{title}</h2>
       <button type="button" class="x" onclick={onclose} aria-label="Close">×</button>
@@ -73,8 +84,13 @@
           <span><b class="neg">{m.losses}</b> Losses</span>
           <span><b>{m.scratch}</b> Break-even</span>
         </div>
+        {@render splitBar([
+          { value: m.wins, color: 'var(--green)', label: 'Wins' },
+          { value: m.losses, color: 'var(--red)', label: 'Losses' },
+          { value: m.scratch, color: 'var(--faint)', label: 'Break-even' },
+        ])}
         <h3>PnL by weekday</h3>
-        {@render barList(bars(dowBuckets(m.trades).map((d, i) => ({ label: DOW_LABEL[i], value: d.pnl })).filter((_, i) => i >= 1 && i <= 5)))}
+        {@render barList(bars(dowBuckets(m.trades).map((d, i) => ({ label: `${DOW_LABEL[i]} (${d.n})`, value: d.pnl, n: d.n })).filter(d => d.n)))}
         <h3>Long vs short (net PnL)</h3>
         {@render barList(bars([
           { label: `Long (${m.long.n})`, value: m.long.pnl },
@@ -87,8 +103,8 @@
           { label: 'Gross profit', value: c.pfGP, color: 'var(--green)' },
           { label: 'Gross loss', value: c.pfGL, color: 'var(--red)' },
         ]))}
-        <h3>By symbol (net PnL)</h3>
-        {@render barList(bars(symPf(m.trades)))}
+        <h3>By symbol</h3>
+        {@render symPfTable(symPfRows(m.trades))}
       {:else if cardKey === 'wl'}
         <div class="stats">
           <span><b class="pos">{usd(m.avgW)}</b> Avg win</span>
@@ -119,6 +135,25 @@
     </div>
   </div>
 </div>
+
+{#snippet splitBar(segs)}
+  <div class="split">
+    {#each segs.filter(s => s.value > 0) as s, i (i)}
+      <span class="seg" style="flex:{s.value};background:{s.color}" title="{s.label}: {s.value}">{s.value}</span>
+    {/each}
+  </div>
+{/snippet}
+
+{#snippet symPfTable(rows)}
+  <table class="symtab">
+    <thead><tr><th>Symbol</th><th>Trades</th><th>PF</th><th>Net</th></tr></thead>
+    <tbody>
+      {#each rows as r (r.root)}
+        <tr><td>{r.root}</td><td>{r.n}</td><td>{ratio(r.pf)}</td><td class={cls(r.net)}>{usd(r.net)}</td></tr>
+      {/each}
+    </tbody>
+  </table>
+{/snippet}
 
 {#snippet histChart(values, color)}
   {#if values.length}
@@ -158,6 +193,54 @@
     justify-content: center;
     padding: 6vh 16px;
     z-index: 60;
+  }
+  .split {
+    display: flex;
+    height: 18px;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 14px;
+    gap: 1px;
+  }
+  .seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 14px;
+    color: #0d1014;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--mono);
+  }
+  .symtab {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .symtab th {
+    text-align: right;
+    color: var(--faint);
+    font-weight: 600;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .symtab th:first-child {
+    text-align: left;
+  }
+  .symtab td {
+    text-align: right;
+    padding: 4px 6px;
+    font-family: var(--mono);
+    border-bottom: 1px solid var(--line);
+  }
+  .symtab td:first-child {
+    text-align: left;
+  }
+  .symtab td.pos {
+    color: var(--green);
+  }
+  .symtab td.neg {
+    color: var(--red);
   }
   .modal {
     background: var(--bg);
