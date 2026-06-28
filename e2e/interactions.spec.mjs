@@ -90,6 +90,14 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   await page.click('#sv-app .journal .save');
   await expect(page.locator('#sv-app .calendar .calgrid .cell .notedot').first()).toBeVisible();
 
+  // Manage data: open the modal, edit a trade's tags via the Store, and see them in the table.
+  await page.click('.managebtn');
+  await expect(page.locator('.modal table tbody tr').first()).toBeVisible();
+  await page.locator('.modal .edit').first().click();
+  await page.fill('.modal .etags', 'e2e, setup');
+  await page.click('.modal .editrow .save');
+  await expect(page.locator('.modal table tbody tr .tags').first()).toContainText('e2e');
+
   // Reload: the isolated staging DB already has the seed, so the count is identical (no re-seed
   // duplication) and the app still boots clean from persisted data.
   await page.reload({ waitUntil: 'networkidle' });

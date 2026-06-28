@@ -15,11 +15,13 @@
   import CostPanel from './components/CostPanel.svelte';
   import FilterBar from './components/FilterBar.svelte';
   import JournalEditor from './components/JournalEditor.svelte';
+  import ManageData from './components/ManageData.svelte';
 
   let allTrades = $state([]);
   let loaded = $state(false);
   let status = $state('Loading…');
   let error = $state('');
+  let manageOpen = $state(false);
 
   // Day-notes journal: the selected calendar day + the set of dates carrying a saved note.
   let selectedDate = $state(null);
@@ -86,6 +88,13 @@
     journalDates = await Store.journalDates(); // reassign → reactive
   }
 
+  // After manage-data changes the dataset (import / restore / erase / per-trade edit), reload
+  // everything the dashboard derives from.
+  async function reloadAll() {
+    allTrades = await Store.getAllTrades();
+    journalDates = await Store.journalDates();
+  }
+
   function navMonth(delta) {
     let m = calMonth + delta;
     let y = calYear;
@@ -125,6 +134,7 @@
     <div class="meta">
       Svelte&nbsp;5 proving ground · isolated local data{#if dateRange} · {dateRange}{/if}
     </div>
+    {#if loaded}<button type="button" class="managebtn" onclick={() => (manageOpen = true)}>Manage data</button>{/if}
   </header>
 
   {#if error}
@@ -149,11 +159,15 @@
     <CostPanel metrics={metricsActive} />
     <p class="note">
       Migration in progress (A27): Overview, performance curve, trading calendar (with day notes),
-      advanced statistics, break-even/cost and filters/scope are live in Svelte. Manage-data and the
-      activity terminal are next.
+      advanced statistics, break-even/cost, filters/scope and manage-data are live in Svelte. The
+      activity terminal is next.
     </p>
   {:else}
     <p class="msg">{status}</p>
+  {/if}
+
+  {#if manageOpen}
+    <ManageData onclose={() => (manageOpen = false)} onchanged={reloadAll} />
   {/if}
 </main>
 
@@ -199,6 +213,18 @@
     font-size: 12px;
     color: var(--faint);
     font-family: var(--mono);
+  }
+  .managebtn {
+    background: var(--panel2);
+    color: var(--txt);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 14px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .managebtn:hover {
+    border-color: var(--hover-line);
   }
   .msg {
     color: var(--dim);
