@@ -2040,6 +2040,30 @@
       "effort": "medium",
       "status": "done",
       "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done (A61 Phase 1). Stood up the TS toolchain on the current tree, no file moves: replaced jsconfig.json with tsconfig.json (allowJs + checkJs:false reproduce today's opt-in @ts-check behavior; strict:false as a TRANSITION — the global strict flip happens in the A30 conversion so there's no loose-TS end state) + allowImportingTsExtensions (Node's native type-stripping runtime needs real .ts specifiers). Added svelte-check (dev-only, pinned 4.3.3) + tsconfig.svelte.json; `npm run typecheck` now runs tsc + svelte-check, so the 18 Svelte components are type-checked for the first time (0 errors, 5 warnings). Proved the .ts test runner: Node 22.22 runs/imports .ts with type-stripping ON BY DEFAULT (no flag, zero dep). Verified npm test green.",
+      "id": "A77",
+      "title": "TS toolchain scaffold (tsconfig strict + svelte-check + .ts test runner) — pre-step for A30",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done (A61 Phase 3). Converted all functions/**/*.js → .ts, FULLY strict-typed. Added @cloudflare/workers-types (dev-only, pinned) + tsconfig.functions.json (Workers lib instead of DOM, strict:true) wired into npm run typecheck. New functions/_lib/types.ts exports a shared Env (bindings/secrets) + Ctx (EventContext) type; handlers typed onRequest(context: Ctx); auth/http helpers annotated (behavior unchanged). Imports use real .ts extensions. Test suites updated (test-auth imports auth.ts/admin-key.ts; test-flags reads config.ts) and run via Node type-stripping. Docs updated (CLAUDE.md, functions/README.md, architecture.md). NOTE: ESLint skips .ts for now — typescript-eslint has no ESLint 10 support yet (peer-dep conflict); tracked as A79; tsc type-checks the functions instead. Verified npm test green; vite build unaffected.",
+      "id": "A78",
+      "title": "Convert Cloudflare Functions to TypeScript",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "prompt": null
     }
   ]
 }
