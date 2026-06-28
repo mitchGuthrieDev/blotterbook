@@ -225,7 +225,14 @@ shared across surfaces:
 All three HTML files become hand-authored Svelte mounts (like `staging.html`), each with its
 `data-mode`. `build-includes` no longer assembles the app shell.
 
-#### 4b. Finish prod-parity features (absorbs the A27 "deferred polish")
+#### 4b. Finish prod-parity features (absorbs the A27 "deferred polish") — **DONE (A32)**
+
+> All items below shipped on `claude/phase4-prod-demo-svelte`: the `costModel(inputs)` refactor,
+> curve interactivity + gross/net/take-home overlays (via the extracted pure `app/curveseries.js`,
+> shared with vanilla `render.js`), session/tag/saved/day-of-week filters, journal + per-trade
+> screenshots (which also fixed a `$state`-proxy→IndexedDB clone bug and closed a `saveTradeMeta`
+> `validShot` gap), and the app-mode landing/CSV flow. Verified by the unit + e2e suites.
+
 
 Staging was allowed to skip these as a proving ground, but prod must **not regress** below today's
 vanilla app — so the deferred items become Phase-4 parity requirements, not optional polish:
