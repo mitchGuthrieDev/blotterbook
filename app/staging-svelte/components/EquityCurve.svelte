@@ -10,6 +10,7 @@
   import { usd, money, axMoney, niceTicks, blendedRateFor } from '../../core.js';
   import { dailySeries } from '../../curveseries.js';
   import Panel from './Panel.svelte';
+  import { styleProps } from '../actions.js';
 
   let { metrics, costInputs, journalDates = new Set(), selectedDate = null, onselect = () => {}, panel = {} } = $props();
 
@@ -144,7 +145,7 @@
   {#snippet actions()}
     <div class="overlays" role="group" aria-label="Curve overlays">
       {#each SERIES as s (s.key)}
-        <button type="button" class:on={sel[s.key]} aria-pressed={sel[s.key]} style="--sw:{s.color}" onclick={() => toggle(s.key)}>{s.label}</button>
+        <button type="button" class:on={sel[s.key]} aria-pressed={sel[s.key]} use:styleProps={{ '--sw': s.color }} onclick={() => toggle(s.key)}>{s.label}</button>
       {/each}
     </div>
   {/snippet}
@@ -188,7 +189,7 @@
         <!-- end-of-line value markers + labels -->
         {#each view.ends as e, i (i)}
           <circle class="enddot" cx={view.w - padR} cy={e.y} r="3" fill={e.color} />
-          <text class="endlab" x={view.w - padR + 5} y={e.y + 3.5} text-anchor="start" style="fill:{e.color}">{e.label}</text>
+          <text class="endlab" x={view.w - padR + 5} y={e.y + 3.5} text-anchor="start" use:styleProps={{ fill: e.color }}>{e.label}</text>
         {/each}
         {#each view.notes as nd (nd.date)}
           <circle class="notedot" cx={nd.x} cy={nd.y} r="3" vector-effect="non-scaling-stroke" />

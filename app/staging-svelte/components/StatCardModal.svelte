@@ -4,6 +4,7 @@
   // costModel (A29 — reuses dowBuckets/DOW_LABEL/minMax from core); charts are small inline SVG/bars.
   import { usd, money, cls, ratio, minMax, dowBuckets, DOW_LABEL } from '../../core.js';
   import { modal } from '../modal.js';
+  import { styleProps } from '../actions.js';
 
   let { cardKey, metrics: m, cost: c, onclose } = $props();
 
@@ -139,7 +140,7 @@
 {#snippet splitBar(segs)}
   <div class="split">
     {#each segs.filter(s => s.value > 0) as s, i (i)}
-      <span class="seg" style="flex:{s.value};background:{s.color}" title="{s.label}: {s.value}">{s.value}</span>
+      <span class="seg" use:styleProps={{ flex: s.value, background: s.color }} title="{s.label}: {s.value}">{s.value}</span>
     {/each}
   </div>
 {/snippet}
@@ -161,7 +162,7 @@
       {#each hist(values) as b, i (i)}
         <div class="bar">
           <span class="bl">≥ {money(b.lo)}</span>
-          <span class="bt"><span class="fill" style="width:{b.pct}%;background:{color}"></span></span>
+          <span class="bt"><span class="fill" use:styleProps={{ width: b.pct + '%', background: color }}></span></span>
           <span class="bv">{b.n}</span>
         </div>
       {/each}
@@ -176,7 +177,7 @@
     {#each rows as r, i (i)}
       <div class="bar">
         <span class="bl">{r.label}</span>
-        <span class="bt"><span class="fill" style="width:{r.pct}%;background:{r.tone}"></span></span>
+        <span class="bt"><span class="fill" use:styleProps={{ width: r.pct + '%', background: r.tone }}></span></span>
         <span class="bv">{money(r.value)}</span>
       </div>
     {/each}

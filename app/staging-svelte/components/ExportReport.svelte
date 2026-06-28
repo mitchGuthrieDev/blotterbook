@@ -21,8 +21,21 @@
 
   const gen = new Date();
   const rep = $derived(buildReport(m, c, { ...labels, generated: gen }));
-  const doc = $derived(reportHtmlDoc(rep, labels, tokenBlock()));
+  // {html, css}: the iframe gets the body via srcdoc, and the CSS is injected via the CSSOM on load
+  // (adoptedStyleSheets) so no inline <style> is needed — style-src 'self' clean (A55/S18).
+  const built = $derived(reportHtmlDoc(rep, labels, tokenBlock()));
   const fname = `blotterbook-report-${fmtDate(gen)}`;
+
+  function applyStyles() {
+    if (!iframeEl || !iframeEl.contentWindow) return;
+    try {
+      const sheet = new iframeEl.contentWindow.CSSStyleSheet();
+      sheet.replaceSync(built.css);
+      iframeEl.contentDocument.adoptedStyleSheets = [sheet];
+    } catch (_) {
+      /* older engine without constructable stylesheets — preview renders unstyled, print/raster still embed CSS */
+    }
+  }
 
   let format = $state('');
   let note = $state('');
@@ -44,7 +57,7 @@
         if (!sheet) return reject(new Error('no report to render'));
         const w = Math.ceil(sheet.scrollWidth),
           h = Math.ceil(sheet.scrollHeight);
-        const css = (idoc.querySelector('style') || {}).textContent || '';
+        const css = built.css;
         const xml = new XMLSerializer().serializeToString(sheet);
         const svg =
           `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">` +
@@ -116,7 +129,7 @@
       </div>
     </div>
     {#if note}<div class="parsestatus {noteKind}">{note}</div>{/if}
-    <iframe bind:this={iframeEl} class="preview" title="Performance report preview" srcdoc={doc}></iframe>
+    <iframe bind:this={iframeEl} class="preview" title="Performance report preview" srcdoc={built.html} onload={applyStyles}></iframe>
   </div>
 </div>
 
