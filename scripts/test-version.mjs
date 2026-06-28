@@ -27,13 +27,20 @@ ok('BREAKING CHANGE footer → major', bumpLevel('feat: x\n\nBREAKING CHANGE: re
 ok('untyped → patch', bumpLevel('just some title') === 'patch');
 
 console.log('\nProd-shipping classification:');
-ok('shared app JS is prod', isProdShipping('app/render.js') && isProdShipping('app/core.js'));
-ok('app/widgets.js IS prod (promoted from staging, CH16)', isProdShipping('app/widgets.js'));
+ok('shared app JS is prod', isProdShipping('app/adapters.js') && isProdShipping('app/core.js'));
+ok(
+  'Svelte SPA modules ARE prod (A59 — shared by all surfaces post-A33)',
+  isProdShipping('app/staging-svelte/App.svelte') && isProdShipping('app/staging-svelte/components/EquityCurve.svelte')
+);
 ok('app/staging.html is NOT prod', !isProdShipping('app/staging.html'));
-ok('app+demo shells + css + tokens are prod', ['app/app.html', 'app/demo.html', 'app/app.css', 'tokens.css'].every(isProdShipping));
+ok('app+demo shells + tokens are prod', ['app/app.html', 'app/demo.html', 'tokens.css'].every(isProdShipping));
+ok(
+  'home.css is prod-only (homepage CSS)',
+  isProdShipping('home.css') === false && classifySurfaces(['home.css']).prod && !classifySurfaces(['home.css']).staging
+);
 ok(
   'partials + assets + data are prod',
-  isProdShipping('partials/app-dash.html') && isProdShipping('assets/util.js') && isProdShipping('data/brokers.json')
+  isProdShipping('partials/nav.html') && isProdShipping('assets/util.js') && isProdShipping('data/brokers.json')
 );
 ok(
   'versions/backlog/backlog_archive json are NOT prod',
@@ -49,7 +56,7 @@ console.log('\nSurface selection:');
 ok(
   'shared code → both tracks',
   (() => {
-    const s = classifySurfaces(['app/render.js']);
+    const s = classifySurfaces(['app/staging-svelte/App.svelte']);
     return s.prod && s.staging;
   })()
 );
@@ -113,7 +120,7 @@ ok(
 console.log('\ncomputeBump application:');
 {
   const v = { prod: '0.12.0', staging: '0.22.0' };
-  const a = computeBump({ message: 'feat: x', files: ['app/render.js'], versions: v });
+  const a = computeBump({ message: 'feat: x', files: ['app/staging-svelte/App.svelte'], versions: v });
   ok('feat shared → prod 0.13.0 + staging 0.23.0', a.next.prod === '0.13.0' && a.next.staging === '0.23.0');
   const b = computeBump({ message: 'fix: x', files: ['app/staging.html'], versions: v });
   ok('fix staging-only → prod unchanged, staging 0.22.1', b.next.prod === '0.12.0' && b.next.staging === '0.22.1');

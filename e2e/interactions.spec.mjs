@@ -1,52 +1,40 @@
 import { test, expect } from '@playwright/test';
 import { watchErrors } from './helpers.mjs';
 
-// Demo exercises the interaction-only handlers that boot doesn't reach (modals, calendar,
-// export, scope) — these touch render/data/datamanager/widgets/export/ui end to end.
-test('demo: stat-card modal, calendar, data manager, export, scope', async ({ page }) => {
+// A33 cutover: demo is now the SAME Svelte app (data-mode="demo") backed by the in-memory
+// DemoStore. The interaction behaviors (modals, curve, calendar, export, scope) are covered by the
+// staging Svelte tests below — the SAME code runs on demo. Here we cover what's DIFFERENT about
+// demo: it boots + explores read-only, every write control is disabled, and the HARD invariant
+// holds — NOTHING is written to IndexedDB.
+test('demo (Svelte): boots, explores read-only, never persists, write controls disabled', async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
-  await expect(page.locator('body')).toHaveClass(/loaded/);
 
-  await page.click('.card[data-card="net"]');
-  await expect(page.locator('#cardModal.open')).toBeVisible();
-  await page.click('#cm_close');
+  // Boots into the overview with computed metrics (seeded in-memory, not from IndexedDB).
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
 
-  await page.locator('#cal .cell[data-date]').first().click();
+  // Read-only interaction still works: a stat-card modal opens and closes.
+  await page.click('#sv-app [data-card="net"]');
+  await expect(page.locator('.modal[aria-label="Net PnL"]')).toBeVisible();
+  await page.click('.modal[aria-label="Net PnL"] .x');
 
-  await page.click('#manageBtn');
-  await expect(page.locator('#dataModal.open')).toBeVisible();
-  await page.fill('#dm_search', 'MES');
-  await page.click('#dm_close');
+  // Manage-data: the write controls are DISABLED in demo.
+  await page.click('.managebtn');
+  await expect(page.locator('.modal .toolbar button', { hasText: 'Load CSV' })).toBeDisabled();
+  await expect(page.locator('.modal .toolbar button', { hasText: 'Erase all local data' })).toBeDisabled();
+  await expect(page.locator('.modal .edit').first()).toBeDisabled();
+  await page.click('.modal[aria-label="Manage data"] .x');
 
-  await page.click('#exportBtn');
-  await expect(page.locator('#exportModal.open')).toBeVisible();
-  await page.locator('#exportModal [data-expclose]').first().click();
+  // Day-note editor is read-only in demo (the save is disabled + a note shown).
+  await page.locator('#sv-app .calendar .calgrid .cell.traded').first().click();
+  await expect(page.locator('#sv-app .journal .demonote')).toBeVisible();
+  await expect(page.locator('#sv-app .journal .save')).toBeDisabled();
 
-  await page.click('#scope button[data-s="month"]');
+  // HARD invariant (demo never persists): no Blotterbook IndexedDB database was created.
+  const dbs = await page.evaluate(async () => (indexedDB.databases ? (await indexedDB.databases()).map(d => d.name || '') : []));
+  expect(dbs.filter(n => n.toLowerCase().includes('blotter'))).toHaveLength(0);
+
   expect(errors, errors.join('\n')).toHaveLength(0);
-});
-
-// B33: the equity curve's keyboard nav must announce each date's values via the aria-live tooltip.
-test('curve keyboard nav fills the aria-live tooltip (B33)', async ({ page }) => {
-  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
-  await expect(page.locator('body')).toHaveClass(/loaded/);
-  const tip = page.locator('#curvetip');
-  await expect(tip).toHaveAttribute('aria-live', 'polite');
-  await page.focus('#curve');
-  await page.keyboard.press('ArrowLeft');
-  await expect(tip).not.toBeEmpty();
-});
-
-// B36: opening/closing a modal must lock then RELEASE body scroll (ref-counted in ui.js).
-test('modal scroll-lock releases on close (B36)', async ({ page }) => {
-  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
-  await expect(page.locator('body')).toHaveClass(/loaded/);
-  await page.click('#manageBtn');
-  await expect(page.locator('#dataModal.open')).toBeVisible();
-  expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden');
-  await page.click('#dm_close');
-  expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
 });
 
 // Staging is the Svelte 5 app (ADR-001/A27). It boots into the Overview by reusing the
@@ -309,27 +297,31 @@ test('staging (Svelte): no horizontal page scroll on mobile (A51)', async ({ pag
   expect(calScrolls).toBe(true);
 });
 
-// B41: toggle/collapse controls must expose ARIA state (aria-pressed / aria-expanded).
+// B41: toggle/collapse controls must expose ARIA state (aria-pressed / aria-expanded). Now on the
+// Svelte surface (demo) after the A33 cutover.
 test('toggle + collapse controls expose ARIA state (B41)', async ({ page }) => {
   await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
-  await expect(page.locator('body')).toHaveClass(/loaded/);
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
 
   // scope toggle: aria-pressed follows selection
-  await expect(page.locator('#scope button[data-s="all"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#scope button[data-s="month"]')).toHaveAttribute('aria-pressed', 'false');
-  await page.click('#scope button[data-s="month"]');
-  await expect(page.locator('#scope button[data-s="month"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#scope button[data-s="all"]')).toHaveAttribute('aria-pressed', 'false');
+  const all = page.locator('#sv-app .filterbar .scope button').first();
+  const month = page.locator('#sv-app .filterbar .scope button').last();
+  await expect(all).toHaveAttribute('aria-pressed', 'true');
+  await expect(month).toHaveAttribute('aria-pressed', 'false');
+  await month.click();
+  await expect(month).toHaveAttribute('aria-pressed', 'true');
+  await expect(all).toHaveAttribute('aria-pressed', 'false');
 
   // overlay toggle: enabling Net flips its aria-pressed
-  await expect(page.locator('.curvebtn[data-k="net"]')).toHaveAttribute('aria-pressed', 'false');
-  await page.click('.curvebtn[data-k="net"]');
-  await expect(page.locator('.curvebtn[data-k="net"]')).toHaveAttribute('aria-pressed', 'true');
+  const netBtn = page.locator('#sv-app .overlays button', { hasText: 'Net' });
+  await expect(netBtn).toHaveAttribute('aria-pressed', 'false');
+  await netBtn.click();
+  await expect(netBtn).toHaveAttribute('aria-pressed', 'true');
 
   // panel collapse chevron: aria-expanded + label flip
-  const perfChev = page.locator('.panel[data-key="perf"] .chev');
+  const perfChev = page.locator('#sv-app .panel[data-key="perf"] .chev');
   await expect(perfChev).toHaveAttribute('aria-expanded', 'true');
-  await page.click('.panel[data-key="perf"] .phead');
+  await page.locator('#sv-app .panel[data-key="perf"] .phead').click();
   await expect(perfChev).toHaveAttribute('aria-expanded', 'false');
   await expect(perfChev).toHaveAttribute('aria-label', 'Expand');
 });

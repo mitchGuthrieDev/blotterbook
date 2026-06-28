@@ -756,3 +756,8 @@ footer.site .disclaimer {
   color: var(--txt);
   font-weight: 600;
 }
+
+/* A55/S18: extracted from a former inline style="" attribute (howto mock field). */
+.mfield.narrow {
+  max-width: 150px;
+}

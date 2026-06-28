@@ -201,9 +201,8 @@ export function reportHtmlDoc(rep, labels, tokenBlock) {
     </div>
   </div>`;
 
-  return (
-    `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">` +
-    `<title>Blotterbook — Performance Report</title>` +
-    `<style>${reportCss}</style></head><body>${sheetHtml}</body></html>`
-  );
+  // Return the doc body (NO inline <style>) + the CSS separately. The caller injects the CSS into
+  // the iframe via the CSSOM (adoptedStyleSheets), which `style-src 'self'` permits — A55/S18.
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Blotterbook — Performance Report</title></head><body>${sheetHtml}</body></html>`;
+  return { html, css: reportCss };
 }

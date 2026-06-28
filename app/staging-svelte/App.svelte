@@ -8,7 +8,7 @@
   //   app      → real IndexedDB Store (blotterbook DB), no seed (real user data; landing flow is A32)
   //   demo     → in-memory DemoStore (never persists), seeded
   //   staging  → real IndexedDB Store (isolated blotterbookStaging DB), seeded
-  // This app currently mounts only on staging.html; the app/demo mounts come with the A33 cutover.
+  // A33 cutover: this app now mounts on ALL three surfaces (app/demo/staging.html).
   import { onMount, setContext } from 'svelte';
   import { loadRefData, compute, costModel, emit, sessionOf, PAGE_MODE, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../core.js';
   import { Store } from '../store.js';
@@ -73,14 +73,14 @@
     return [...known, ...DEFAULT_ORDER.filter(k => !known.includes(k))];
   };
   // Initialize synchronously from localStorage so the restored layout paints without a flash.
-  let panelOrder = $state(sanitizeOrder(Store.local.get(LS_ORDER, null)));
-  let collapsedPanels = $state(Store.local.get(LS_COLLAPSE, {}) || {});
+  let panelOrder = $state(sanitizeOrder(store.local.get(LS_ORDER, null)));
+  let collapsedPanels = $state(store.local.get(LS_COLLAPSE, {}) || {});
   let draggingKey = $state(null);
-  let wsNames = $state(Object.keys(Store.local.get(WS_KEY, {}) || {}));
+  let wsNames = $state(Object.keys(store.local.get(WS_KEY, {}) || {}));
   let wsSelected = $state('');
 
-  const persistOrder = () => Store.local.set(LS_ORDER, $state.snapshot(panelOrder));
-  const persistCollapsed = () => Store.local.set(LS_COLLAPSE, $state.snapshot(collapsedPanels));
+  const persistOrder = () => store.local.set(LS_ORDER, $state.snapshot(panelOrder));
+  const persistCollapsed = () => store.local.set(LS_COLLAPSE, $state.snapshot(collapsedPanels));
 
   function togglePanel(key) {
     const next = { ...collapsedPanels };
@@ -114,14 +114,14 @@
   });
 
   // Workspace templates (Store.local seam).
-  const readWs = () => Store.local.get(WS_KEY, {}) || {};
+  const readWs = () => store.local.get(WS_KEY, {}) || {};
   function saveWorkspace() {
     if (PAGE_MODE === 'demo') return; // demo never persists new layouts (B23)
     const name = (window.prompt('Name this workspace layout:') || '').trim();
     if (!name) return;
     const t = readWs();
     t[name] = { order: $state.snapshot(panelOrder), collapsed: $state.snapshot(collapsedPanels) };
-    Store.local.set(WS_KEY, t);
+    store.local.set(WS_KEY, t);
     wsNames = Object.keys(t);
     wsSelected = name;
     emit('ws:saved', { name });
@@ -130,8 +130,8 @@
     wsSelected = name;
     if (!name) {
       // "— Default —" → drop the saved layout and restore the default arrangement.
-      Store.local.remove(LS_ORDER);
-      Store.local.remove(LS_COLLAPSE);
+      store.local.remove(LS_ORDER);
+      store.local.remove(LS_COLLAPSE);
       panelOrder = [...DEFAULT_ORDER];
       collapsedPanels = {};
       emit('ws:reverted', {});

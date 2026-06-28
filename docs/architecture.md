@@ -21,7 +21,7 @@ CH16, F13, F14, S19, R1, …) are backlog item ids from
 - [Reference data (JSON) + cache-busting](#reference-data-json--cache-busting)
 - [Local persistence](#local-persistence)
 - [Staging sandbox](#staging-sandbox)
-- [Promoting a feature (staging → prod)](#promoting-a-feature-staging--prod)
+- [Building a feature (all surfaces share one SPA)](#building-a-feature-all-surfaces-share-one-spa)
 - [Versioning & releases (CH12)](#versioning--releases-ch12)
 - [Changelog release notes](#changelog-release-notes)
 - [Admin page & the Live indicator](#admin-page--the-live-indicator)
@@ -50,8 +50,8 @@ CH16, F13, F14, S19, R1, …) are backlog item ids from
    Prettier, Playwright — was already adopted in R19 Tier A.)
 3. **Deployable to Cloudflare Pages** *(build step now adopted)* — ships to Pages, with
    `/functions/*` as the thin edge layer for the few things that can't be client-side. A
-   shipped-output build (Vite: bundler/minify/hashed names/nonce-CSP) is being adopted via the
-   `public/` output-dir split (**A26**), reversing the old "committed files are the artifacts"
+   shipped-output build (Vite: bundler/minify/hashed names/strict CSP) was adopted via a build
+   *output* dir, `dist/` (**A26**), reversing the old "committed files are the artifacts"
    contract (**A18**) — done all-at-once while there are no users. The pure-logic core is
    migrated **verbatim** (guardrail **A29**).
 
@@ -101,14 +101,13 @@ anything under `app/`, `assets/`, or `data/` (or renaming a root page), update
 | `scripts/build-manifest.mjs` | hashes `data/*.json`, with an explicit filename exclude-set |
 | `scripts/bump-version.mjs` | classifies prod-shipping surfaces by the `app/`, `partials/`, `assets/`, `data/` prefixes + specific filenames |
 
-**Do not** reorganize into `src/`+`public/` with a bundler — that requires a
-build step, which violates design pillar #2. If a reorg is ever genuinely
-warranted, the only Pages-compatible move is a **`public/` output-directory
-split** (browser-served files under `public/`, Pages "build output directory" set
-to `public`, with `functions/` + `scripts/` + `partials/` + tooling staying at
-the repo root). URLs stay identical, but `_headers`/`_redirects` relocate into
-`public/` and every path prefix in the table above changes — so it's an
-all-at-once migration, not a piecemeal one. (Tracked as guardrail **A18**.)
+**A build step now exists** (Vite → `dist/`, adopted in ADR-001/A26 — the old "no build
+step" pillar was relaxed), but the **source layout stays flat**: do not reorganize into
+`src/`+`public/`. A26 reversed the deploy contract via a build *output* dir (`dist/`), not by
+moving sources — the repo root remains the source root and the canonical URL map, so the
+coupled-path table above still governs any future move. `dist/` is gitignored; CI's drift gate
+proves the build-time tooling didn't leave committed sources stale. (Tracked as guardrail
+**A18**, realized by A26.)
 
 ## Architecture & data flow
 
@@ -124,71 +123,61 @@ CSV text
   → applyFilters()  active filter set → working trade list
   → compute()       trades → metrics (PnL, win rate, drawdown, curve, days, expectancy, …)
   → costModel()     metrics + Setup inputs → commissions, subscriptions, tax, take-home
-  → render*()       → cards / curve / calendar / advanced / break-even
+  → Svelte app      → reactive components render cards / curve / calendar / advanced / break-even
 ```
 
-`app/app.css` and the app scripts are shared by `app.html`, `demo.html`, and
-`staging.html`, all adapting via `document.body.dataset.mode` (`PAGE_MODE`).
-**Demo** (`data-mode="demo"`) is in-memory and never persists; **Staging**
-(`data-mode="staging"`, `STAGING_PAGE`) uses an isolated IndexedDB and seeds the
-sample dataset.
+**The app surface (A33 cutover).** All three surfaces — `app.html`, `demo.html`,
+`staging.html` — are hand-authored Svelte 5 mount points that load the same SPA from
+`app/staging-svelte/main.js`, adapting via `document.body.dataset.mode` (`PAGE_MODE`).
+**App** (`data-mode="app"`) uses the real IndexedDB `Store`; **Demo** (`data-mode="demo"`)
+uses the in-memory `DemoStore` and never persists; **Staging** (`data-mode="staging"`)
+uses an isolated IndexedDB and seeds the sample dataset. The store is chosen by `PAGE_MODE`
+and handed to the app via a `context('bb:store')` seam (A4/A31), so the UI is
+source-agnostic and the demo's no-persist invariant holds by construction.
 
-Key globals: `TRADES`, `METRICS_ALL`, `FILTERS`, `SCOPE`, `calYear`/`calMonth`,
-`selectedDate`, `JOURNAL_DATES`, `TRADE_META`, `SAVED_FILTERS`, `DEMO_MODE`,
-`PAGE_MODE`/`STAGING_PAGE`. Boot: `loadRefData()` → `Store.init()` →
-`restoreSession()` (demo runs `runDemo()`; staging seeds its DB first).
+The **pure-logic core is reused verbatim** (A29) — `core.js` (compute + costModel + the
+event bus), `adapters.js`, `store.js` / `demostore.js`, `curveseries.js`, `report.js`,
+`sampledata.js`, and `assets/util.js` are plain ES modules imported unchanged by the Svelte
+components. Reactive state lives in Svelte runes (`$state`/`$derived`) inside the components,
+not in a shared globals object. Boot runs `loadRefData()` → `Store.init()` → `restoreSession()`
+(demo seeds in-memory; staging seeds its DB first), then `mount()`s the app.
 
-The former monolithic `app.js` was first split (A2) into concern-scoped scripts —
-**core / render / data / ui / export / datamanager / widgets / main** (plus the
-`store` / `adapters` foundations) — and then (A20) migrated to **native ES modules**.
-`partials/app-scripts.html` is now a single module entry,
-`<script type="module" src="main.js">`; `main.js` `import`s the rest, and each
-module `export`s what others use and `import`s what it needs — no shared global
-scope and no fixed load order. Reassignable cross-module state (the old "Key
-globals") lives on a shared object exported by `app/state.js` (`state.X`), because
-an ESM `import` binding is read-only; the const objects `FILTERS`/`curveSel` (only
-their properties mutate) stay plain exports, and `assets/util.js` is a module
-imported by both the app and the info pages. Module scripts are deferred, so
-`boot()` still runs after the DOM is parsed; `widgets.js` is a side-effect import
-in `main.js` so its event-bus subscriptions register before `boot()` emits
-`app:ready`. Still **no bundler and no build step** — this is browser-native ESM,
-shipped as static files with zero runtime deps.
+> *History:* the original app was a monolithic `app.js`, split (A2) into concern-scoped scripts
+> and then (A20) migrated to native ES modules with reassignable state on `app/state.js`. The
+> **A33 cutover deleted that vanilla view layer** (`render`/`ui`/`export`/`datamanager`/`widgets`/
+> `main`/`state` and the `partials/app-*.html` fragments) in favor of the Svelte SPA — see
+> [ADR-001](adr-001-vite-svelte-spa.md). Only the pure-logic core survived, unchanged.
 
-The activity terminal, session pill, and workspace templates live in
-`app/widgets.js` (loaded on every app page since CH16). Shared code never names a
-widget symbol — instead `core.js` exposes a tiny event bus (`emit`/`onEvent` over
-an `EventTarget`), and shared actions fire events (`app:ready`, `data:loaded`,
-`data:imported`, `note:saved`, `trade:deleted`, `backup:created`, `data:erased`)
-that `widgets.js` subscribes to. The bus stays a no-op when a page has no subscriber,
-so the decoupling holds even as surfaces diverge.
+The activity terminal, session pill, and workspace templates are now Svelte components under
+`app/staging-svelte/components/`. The `core.js` event bus remains: shared actions fire events
+(`app:ready`, `data:loaded`, `data:imported`, `note:saved`, `trade:deleted`, `backup:created`,
+`data:erased`) over an `EventTarget` for any listener; it stays a no-op when nothing subscribes.
 
-## Shared chrome: tokens + partials (no bundler)
+## Shared chrome: tokens + partials
 
-To keep the static, build-stepless deploy while killing copy-paste drift, two
-things are single-sourced:
+To kill copy-paste drift across the info site, two things are single-sourced:
 
-- **Design tokens** live only in [`tokens.css`](../tokens.css). `site.css` and
-  `app/app.css` `@import` it; the bespoke homepage links it directly. Change a
-  color or font in one place.
+- **Design tokens** live only in [`tokens.css`](../tokens.css). `site.css`
+  `@import`s it, the app surfaces and the bespoke homepage link it directly, and the
+  Svelte components read its CSS custom properties. Change a color or font in one place.
 - **Shared HTML lives in `partials/`** and
-  [`scripts/build-includes.mjs`](../scripts/build-includes.mjs) assembles two
-  things from it:
-  1. The **info-site nav + footer**
-     ([`partials/nav.html`](../partials/nav.html) /
-     [`partials/footer.html`](../partials/footer.html)) injected into each info
-     page via `<!-- include:nav active=… -->` / `<!-- include:footer -->` markers
-     (`active=KEY` highlights the matching `data-nav` link).
-  2. The **three app surfaces** — `app/{app,demo,staging}.html` are generated
-     from the `partials/app-*.html` fragments, with
-     `<!--IF mode=app|demo|staging-->` / `<!--IF mode!=demo-->` conditionals
-     selecting the per-surface markup from one source (this is how a control gets
-     `disabled` on demo or a panel ships staging-only).
+  [`scripts/build-includes.mjs`](../scripts/build-includes.mjs) injects the
+  **info-site nav + footer**
+  ([`partials/nav.html`](../partials/nav.html) /
+  [`partials/footer.html`](../partials/footer.html)) into each info page via
+  `<!-- include:nav active=… -->` / `<!-- include:footer -->` markers
+  (`active=KEY` highlights the matching `data-nav` link). This is the **only**
+  partial family left — the per-surface `partials/app-*.html` fragments were
+  deleted in the A33 cutover. The three app surfaces (`app/{app,demo,staging}.html`)
+  are now hand-authored Svelte mount points with no include markers; they differ
+  only by `<body data-mode="…">`, and all mode-gating (a control `disabled` on
+  demo, a staging-only affordance) lives in the Svelte app.
 
-It's **idempotent** — re-run it after editing any partial:
-`node scripts/build-includes.mjs`. The committed HTML already contains the
-rendered output, so the deploy works with or without running it. The **homepage
-and admin keep their own bespoke nav/footer** by design — they only share the
-tokens.
+It's **idempotent** — re-run it after editing `nav.html`/`footer.html`:
+`node scripts/build-includes.mjs`. The committed info-page HTML already contains the
+rendered output, so the deploy works with or without running it. The **homepage,
+admin, and the app surfaces keep their own HTML** by design — the info pages share
+nav/footer; every surface shares the tokens.
 
 ## Input: the CSV
 
@@ -366,59 +355,43 @@ never travels in the URL (S19).
 After CH16, `STAGING_PAGE` no longer gates dashboard *features* — those were all
 promoted to every surface. It marks only the staging **environment**: the isolated
 `blotterbookStaging` DB, the one-time sample seed, the "open on the initial state"
-landing, and the **Exit staging** affordance. The promoted widgets live in
-`app/widgets.js` (renamed from the old `app/staging.js`), now loaded on every app
-page.
+landing, and the **Exit staging** affordance. The widgets it once gated (activity
+terminal, session pill, workspace templates) are now ordinary Svelte components under
+`app/staging-svelte/components/`, rendered on every surface.
 
-## Promoting a feature (staging → prod)
+## Building a feature (all surfaces share one SPA)
 
-Staging runs ahead of the main app + demo; **promotion** is the deliberate step of
-moving a proven feature onto the prod surfaces. The surface a feature ships to is
-decided by **where its code lives and how it's gated** — not by one flag you flip.
+Since the A33 cutover, all three surfaces (app + demo + staging) **mount the same Svelte SPA**
+from `app/staging-svelte/main.js` — there is no longer a separate staging codebase to "promote"
+from. A feature you add to the Svelte app appears on every surface at once; the surface a behavior
+shows on is decided **in the component** by `PAGE_MODE` / `isDemo` / `STAGING_PAGE`, not by where
+the code lives.
 
-**The model in one breath.** The **demo mirrors prod 1:1**: every feature the main
-app has, the demo has too — just with data-mutating controls **disabled** and
-persistence blocked (`DEMO_MODE`). **Staging is a superset** that stays permanently
-ahead. The two version tracks in `data/versions.json` are **independent counters**;
-a promotion does **not** sync the numbers — it bumps `prod` by the commit-type
-level and lets the changelog record "shipped to prod in v`X`".
+**The model in one breath.** The **demo mirrors prod 1:1**: every feature the main app has, the
+demo has too — just with data-mutating controls **disabled** and persistence blocked (the
+in-memory `DemoStore` + `isDemo` guards). Staging is the same app on an isolated DB; the only
+staging-exclusive surface is `app/staging.html` itself (env chrome, key gate). The two version
+tracks in `data/versions.json` are **independent counters** — any change to a shared core module
+or a Svelte component bumps **both** (it ships to all surfaces).
 
-**Gate layers a feature can hide behind** — promote each that applies:
+**Checklist for a new feature:**
 
-- **JS in a staging-only file** → move the logic into the relevant shared
-  `app/*.js` module and `import` it where used. Since A20 the app loads via a
-  single ESM entry (`partials/app-scripts.html` is just
-  `<script type="module" src="main.js">`), so a module that must run on every
-  surface is `import`ed from `main.js` (a side-effect import, as `widgets.js`
-  is) rather than added as another `<script>` tag.
-- **JS in a shared module behind `if(!STAGING_PAGE) return` / `if(STAGING_PAGE)`**
-  → remove the runtime guard so the code runs on every surface.
-- **HTML inline in `app/staging.html`** → move the markup into the right
-  `partials/app-*.html` so all three pages get it.
-- **HTML in a partial behind `<!--IF mode=staging-->`** → widen the conditional.
-
-**Promotion checklist** (one feature at a time):
-
-1. **Find every gate.** Grep the feature for `STAGING_PAGE` and `mode=staging` (and
-   any inline markup that only `app/staging.html` carries). List each gate layer.
-2. **Un-gate the JS** — delete the `STAGING_PAGE` runtime guard (or move a
-   staging-only script's logic into a shared `app/*.js` module).
-3. **Un-gate the HTML** — move inline staging markup into a partial, or widen the
-   partial's `<!--IF mode=staging-->` to the modes it should reach (normally all
-   three).
-4. **Preserve demo restrictions (never skip).** The feature **must** appear on demo
-   — but every data-mutating control needs `disabled` in the `<!--IF mode=demo-->`
-   variant **and** a `DEMO_MODE` guard on any write path. Confirm no new write can
-   run under `DEMO_MODE`.
-5. **Rebuild** — `node scripts/build-includes.mjs` regenerates `app/app.html`,
-   `demo.html`, and `staging.html` from the partials; the diff shows exactly what
-   each surface gained.
-6. **Verify all three surfaces.** App: feature works and persists. Demo: feature
-   visible, mutating controls greyed out, nothing saved. Staging: unchanged.
-7. **Title the PR `feat:` (or `fix:`)** so CH12 bumps **prod** by the right level.
-   Both tracks move and staging keeps its lead — no manual version edit, and never
-   hand-set `prod` to the staging number.
-8. **Add a changelog entry** for the new prod version in `data/changelog.json`.
+1. **Build it in `app/staging-svelte/`** — a component (or extend one), reusing the pure-logic
+   core (`core.js`/`adapters.js`/`store.js`/…) verbatim. Read/write data only through the `Store`
+   handed in via `context('bb:store')`, never `indexedDB` directly.
+2. **Gate per surface in the component** — e.g. `{#if STAGING_PAGE}` for staging-env-only chrome.
+   Most features need no gate; they ship everywhere.
+3. **Preserve demo restrictions (never skip).** Every data-mutating control needs `disabled` when
+   `isDemo` **and** must not reach a write path under demo — the `DemoStore` is in-memory, but keep
+   the guard explicit. Confirm no new write persists under demo.
+4. **Stage-gate ahead of prod, if needed,** with a runtime feature flag (`/api/config`), not a
+   code branch — the codebase no longer forks by surface.
+5. **Verify all three surfaces** with `npm run build` + `npm run test:e2e`. App: feature works and
+   persists. Demo: visible, mutating controls greyed out, nothing saved. Staging: works on its
+   isolated DB.
+6. **Title the PR `feat:` (or `fix:`)** so CH12 bumps the right level — never hand-edit
+   `data/versions.json`.
+7. **Add a changelog entry** for the new prod version in `data/changelog.json`.
 
 ## Versioning & releases (CH12)
 
@@ -439,11 +412,12 @@ commit:
    → minor, `fix:`/`chore:`/`refactor:`/etc → patch, `feat!:` or a `BREAKING
    CHANGE:` footer → major, untyped → patch. (See the `commitConvention` field in
    `data/backlog.json`.)
-2. **Which track** from the changed paths — any **prod-shipping** file (shared
-   `app/*.js`, `app/app.html`/`demo.html`/`app.css`, `partials/*`, `assets/*`,
-   `tokens.css`, `data/*` except versions/backlog json) bumps **both** prod and
-   staging; **only** `app/staging.html` bumps staging alone; non-app changes (info
-   pages, README, `.github`) bump nothing.
+2. **Which track** from the changed paths — any **prod-shipping** file (the pure-logic
+   core `app/*.js`, the Svelte SPA `app/staging-svelte/**` `.js`/`.svelte`,
+   `app/app.html`/`demo.html`, `partials/*`, `assets/*`, `tokens.css`, `data/*`
+   except versions/backlog json) bumps **both** prod and staging; **only** `app/staging.html`
+   bumps staging alone; info pages + `site.css` bump prod alone; everything else (admin,
+   README, `.github`, scripts, functions) bumps nothing.
 
 It writes `data/versions.json` and commits it back to `main` as
 `chore(release): … [skip ci]` (so it doesn't re-trigger itself). **Requires** the
@@ -451,8 +425,8 @@ GitHub Actions bot to be allowed to push to `main`; if the branch is protected t
 job logs a warning instead of failing.
 
 **Display is runtime-fetched.** Each page's `.ver` badge is populated at load from
-`/data/versions.json` (`assets/util.js`), with the baked literal in
-`partials/app-topbar.html` as the offline fallback. The admin panel surfaces the
+`/data/versions.json` (`assets/util.js` on the info pages; the Svelte app fetches it on
+boot), so there's no baked literal to keep in sync anymore. The admin panel surfaces the
 same values **read-only**.
 
 ## Changelog release notes

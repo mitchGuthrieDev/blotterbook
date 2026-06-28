@@ -8,6 +8,7 @@
 
   let { panel = {} } = $props();
   let lines = $state([]);
+  let nextId = 0; // stable per-line key so the ring buffer doesn't reindex on wrap
   let box;
 
   const FMT = {
@@ -26,7 +27,7 @@
   function add(msg) {
     const t = new Date();
     const ts = `${pad2(t.getHours())}:${pad2(t.getMinutes())}:${pad2(t.getSeconds())}`;
-    lines = [...lines.slice(-49), { ts, msg }]; // keep the last 50
+    lines = [...lines.slice(-49), { id: nextId++, ts, msg }]; // keep the last 50
   }
 
   onMount(() => {
@@ -47,7 +48,7 @@
 <Panel {...panel} title="Activity">
   <div class="terminal">
     <div class="log" bind:this={box} role="log" aria-live="polite">
-      {#each lines as l, i (i)}
+      {#each lines as l (l.id)}
         <div class="row"><span class="ts">{l.ts}</span><span class="msg">{l.msg}</span></div>
       {/each}
     </div>

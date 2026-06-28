@@ -260,14 +260,18 @@ vanilla app — so the deferred items become Phase-4 parity requirements, not op
 | `costModel(inputs)` refactor | **Do here** — replace the A27 DOM-input reuse with a clean param signature in `core.js` (behavior-preserving; defaults retained), then drop the DOM controls the cost panel renders only to feed it. |
 | `style-src 'unsafe-inline'` drop (S18) | **Finish here** — Svelte scoped CSS removes the app inline styles; also move the marketing pages' inline `<style>` into linked CSS, then flip `_headers` to `style-src 'self'`. |
 
-#### 4c. Cut over + delete the vanilla view layer
+#### 4c. Cut over + delete the vanilla view layer — **COMPLETE (A33; S18 via A55)**
 
-Switch the Pages-served app to Svelte, then **delete** the vanilla view modules
-(`render.js`, `ui.js`, `datamanager.js`, `widgets.js`, `export.js`, `main.js`, the view-only parts of
-`data.js`) and the `partials/app-*.html`. **Keep** the pure-logic core (`adapters.js`,
-`compute`/`costModel` in `core.js`, `store.js`, `sampledata.js`, `util.js`, `types.js`) and the
-node test suites that cover it. Update `build-includes.mjs` (drop the app-shell assembly; keep
-nav/footer for info pages) and `bump-version.mjs` (the app surfaces are now Svelte mounts).
+Done: `app/app.html` + `app/demo.html` + `app/staging.html` are now hand-authored Svelte mounts of
+the one mode-aware SPA, and the vanilla view modules (`render.js`, `ui.js`, `datamanager.js`,
+`widgets.js`, `export.js`, `main.js`, `state.js`, the view-only parts of `data.js` — now just
+`APP_FLAGS`) and the `partials/app-*.html` fragments were **deleted**. The pure-logic core
+(`adapters.js`, `compute`/`costModel` in `core.js`, `store.js`/`demostore.js`, `sampledata.js`,
+`curveseries.js`, `report.js`, `util.js`, `types.js`) and its node test suites were kept verbatim
+(A29). `build-includes.mjs` now only injects nav/footer into the info pages; `bump-version.mjs`
+classifies the Svelte SPA (`app/staging-svelte/**`) as prod-shipping (A59). **S18 finished in A55**:
+no inline styles remain anywhere — `style-src 'self'` (dynamic styles via CSSOM; marketing/admin
+inline `<style>` extracted to linked CSS). Only the source-tree reorg (4d / A30) remains deferred.
 
 #### 4d. Then the source-tree reorg (A30)
 
@@ -305,8 +309,8 @@ large → do it only after the Svelte app is proven on prod. SEO is unaffected (
   journal tags+screenshots; per-trade screenshots; session/tag/saved filters; landing/CSV flow; the
   `costModel(inputs)` refactor). Absorbs the A27 deferred items.
 - **A33** — Phase 4c: cut prod + demo over to Svelte and delete the vanilla view layer; update
-  `build-includes`/`bump-version`; finish S18 (`style-src 'self'`). Unblocked — the A34–A38 parity
-  gaps are closed; held only for the user's live review of staging.
+  `build-includes`/`bump-version`. **Done.** (S18/`style-src 'self'` finished separately in **A55**;
+  the version-classifier fix for the Svelte SPA path is **A59**.)
 - **A34–A38** — Phase 4b parity gaps (export report; stat-card modals; panel/workspace system;
   Definitions & Caveats; Tier-2 bundle). **All done** — staging is at prod parity.
 

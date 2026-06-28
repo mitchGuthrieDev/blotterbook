@@ -30,7 +30,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # Apply the bump (re-derived from the latest main on each retry) and push it back. If the
       # push is rejected because another bump landed first, reset, pull, and recompute against the
@@ -60,8 +60,9 @@ jobs:
             if git diff --quiet; then
               echo "No version change to commit."; exit 0
             fi
-            node scripts/build-includes.mjs        # propagate the synced badge literals into the app pages
-            git add data/versions.json partials/app-topbar.html app/app.html app/demo.html app/staging.html
+            # A33: versions live only in data/versions.json now (the Svelte app reads it at runtime;
+            # no version badges are baked into markup), so that's the only file the bump writes.
+            git add data/versions.json
             git commit -m "chore(release): bump versions [skip ci]"
             if git push; then
               echo "Pushed version bump on attempt $attempt."; exit 0

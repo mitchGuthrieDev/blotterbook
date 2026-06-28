@@ -5,18 +5,16 @@
 #   (S9: homepage -> /assets/home.js, admin -> /assets/admin.js, changelog ->
 #   /assets/changelog.js; the app pages already load external scripts). So an injected
 #   inline <script> or onX= handler will not execute, even if markup escaping ever slips.
-# - style-src keeps 'unsafe-inline' because inline <style> blocks and dynamic style="" attributes
-#   (e.g. data-driven widths/colors in the charts and bars) are still used throughout. Per-response
-#   nonces/hashes don't fit a static host, and the values are computed at runtime, so hashing won't
-#   cover them. Path to drop it (tracked in S18): move static inline <style> into linked CSS, and
-#   convert the dynamic style="" usages to CSS custom properties set via element.style.setProperty()
-#   (which 'unsafe-inline' is NOT required for) or utility classes; once no inline style remains,
-#   tighten this to style-src 'self'. Note script-src already omits 'unsafe-inline', so an injected
-#   style cannot execute script — this is defense-in-depth (CSS-exfiltration hardening), not a hole.
-#   ADR-001/A26: the Vite build is now in place, but the vanilla /app/ surface still has inline
-#   styles; dropping 'unsafe-inline' rides with the Svelte migration (A27), where scoped component
-#   CSS + CSSOM remove the inline usages naturally instead of as throwaway refactoring on code about
-#   to be rewritten. So style-src 'unsafe-inline' STAYS until A27. (S18 remains the tracking item.)
+# - style-src is 'self' (NO 'unsafe-inline') — S18/A55 is DONE. There is no inline <style> block
+#   and no style="" attribute on any served page: the marketing/admin pages' static inline CSS was
+#   extracted to linked stylesheets (home.css, admin.css, site.css), and every dynamic style on the
+#   Svelte surfaces is now applied via the CSSOM (NOT gated by style-src): the chart swatch/bar
+#   colors+widths go through a use:styleProps action that calls element.style.setProperty(), and the
+#   export-report iframe injects its CSS via a constructable stylesheet (adoptedStyleSheets) instead
+#   of an inline <style>. Vite extracts every Svelte component <style> to a linked .css at build, so
+#   the bundled output carries no inline style either. Result: an injected inline <style> or style=""
+#   will not apply, hardening against CSS-based exfiltration/UI-redress. (script-src already omits
+#   'unsafe-inline', so this is defense-in-depth, not the only line.)
 # - No external origins are needed: every fetch is same-origin (/api/*, /data/*, /app/),
 #   and per-trade screenshots are data: URLs (hence img-src 'self' data:). No 'unsafe-eval'.
 # - When Stripe checkout lands it redirects (full navigation), so no CSP change is needed;
@@ -27,4 +25,4 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
