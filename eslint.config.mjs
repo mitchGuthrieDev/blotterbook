@@ -20,9 +20,10 @@ export default [
     },
   },
 
-  // Browser-served scripts (native ES modules). After the A30 reorg the only remaining .js under
-  // src/ is the marketing/info JS (src/site/**) — the typed core/app are .ts/.svelte (skipped by
-  // ESLint; type-checked by tsc/svelte-check, tracked as A79). ESLint lints .js by default.
+  // Browser-served scripts (native ES modules). After A69 the marketing/info site is Svelte +
+  // TypeScript (src/site/**: .svelte components + .ts client entries) and the core/app are
+  // .ts/.svelte too — all skipped by ESLint and type-checked by tsc/svelte-check instead (A79). No
+  // hand-written .js remains under src/; this block stays as a guard for any future browser .js.
   {
     files: ['src/**/*.js'],
     languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.browser } },

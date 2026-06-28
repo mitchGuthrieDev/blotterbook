@@ -1,10 +1,11 @@
 name: CI
 
-# Guards the project: the committed HTML must match the partials, the data manifest must match
-# the data files, the unit/logic tests pass, ESLint is clean, the Vite build (ADR-001/A26) emits
-# a complete dist/, and the Playwright render tests boot every surface (served from dist/) with no
-# console errors. The drift gate (build-includes/build-manifest committed) still proves the
-# build-time tooling didn't leave the committed sources stale; dist/ itself is gitignored.
+# Guards the project: the data manifest must match the data files, the unit/logic tests pass,
+# ESLint is clean, the Vite build (ADR-001/A26) emits a complete dist/, and the Playwright render
+# tests boot every surface (served from dist/) with no console errors. The drift gate
+# (build-manifest committed) still proves the build-time tooling didn't leave the committed sources
+# stale; dist/ itself is gitignored. (A69 retired the build-includes half — the nav/footer partials
+# became Nav.svelte/Footer.svelte, so there is no longer any committed HTML generated from partials.)
 on:
   push:
     branches: [main]
@@ -45,10 +46,8 @@ jobs:
       - name: Render / e2e tests (boot every surface, zero console errors)
         run: npm run test:e2e
 
-      - name: Regenerate partials + data manifest
-        run: |
-          node scripts/build-includes.mjs
-          node scripts/build-manifest.mjs
+      - name: Regenerate data manifest
+        run: node scripts/build-manifest.mjs
 
       - name: Fail if generated outputs are not committed
         run: |
@@ -56,7 +55,7 @@ jobs:
           # artifacts (node_modules, playwright-report, test-results) are gitignored, so a clean
           # tree here also proves the tooling never wrote into the shipped/committed files.
           if ! git diff --quiet || [ -n "$(git status --porcelain)" ]; then
-            echo "::error::Generated files are stale or untracked. Run 'node scripts/build-includes.mjs && node scripts/build-manifest.mjs' and commit the result."
+            echo "::error::Generated files are stale or untracked. Run 'node scripts/build-manifest.mjs' and commit the result."
             git --no-pager status --short
             exit 1
           fi

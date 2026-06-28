@@ -12,8 +12,8 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.functions.json && svelte-check --tsconfig ./tsconfig.svelte.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "includes": "node scripts/build-includes.mjs && node scripts/build-manifest.mjs",
-    "build": "node scripts/build-includes.mjs && node scripts/build-manifest.mjs && vite build",
+    "manifest": "node scripts/build-manifest.mjs",
+    "build": "node scripts/build-manifest.mjs && vite build",
     "dev": "vite",
     "preview": "vite preview"
   },

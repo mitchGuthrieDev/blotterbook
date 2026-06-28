@@ -32,21 +32,19 @@ export function bumpLevel(message) {
 // to every surface (see isProdShipping). (A30: paths are now under src/ + static/.)
 const STAGING_ONLY = new Set(['src/app/staging.html']);
 
-// Production-only surfaces: the public marketing homepage + info pages + their CSS/JS ship to
-// prod (main+demo deployment) but are NOT part of the staging sandbox, so they bump PROD only
-// (B16). admin.* is internal (Cloudflare Access–gated) → neither track (A30; previously admin.js,
-// living in assets/, was incidentally classified as prod-shipping — that is corrected here).
-const PROD_ONLY = new Set([
-  'src/index.html',
-  'src/howto.html',
-  'src/roadmap.html',
-  'src/legal.html',
-  'src/changelog.html',
-  'src/styles/home.css',
-  'src/styles/site.css',
-  'src/site/lib/home.js',
-  'src/site/lib/changelog.js',
-]);
+// Production-only surfaces: the public marketing homepage + info pages ship to prod (main+demo
+// deployment) but are NOT part of the staging sandbox, so they bump PROD only (B16). admin.* is
+// internal (Cloudflare Access–gated) → neither track. (A69: the marketing/info site is now Svelte
+// under src/site/ — page components + shared chrome + client entries — and the page CSS lives in
+// those scoped <style> blocks, so the old home.css/site.css/*.js entries are gone.)
+const PROD_ONLY_HTML = new Set(['src/index.html', 'src/howto.html', 'src/roadmap.html', 'src/legal.html', 'src/changelog.html']);
+export function isProdOnly(f) {
+  if (PROD_ONLY_HTML.has(f)) return true;
+  // src/site/** Svelte components + shared chrome + client entries (A69) ship to prod — EXCEPT the
+  // internal admin page (Admin.svelte / admin.ts), which is Access-gated and bumps neither track.
+  if (/^src\/site\/.*\.(?:js|ts|svelte)$/.test(f)) return !/admin\.(?:ts|svelte)$/i.test(f);
+  return false;
+}
 
 /* A file shared across the app surfaces (main + demo + staging): the pure-logic core (src/lib/),
    the Svelte SPA + app glue (src/app/), bundled chrome (src/assets/), design tokens, the app+demo
@@ -83,10 +81,10 @@ export function classifySurfaces(files) {
     else if (STAGING_ONLY.has(f)) {
       staging = true;
     } // staging-only → staging
-    else if (PROD_ONLY.has(f)) {
+    else if (isProdOnly(f)) {
       prod = true;
-    } // homepage/info pages → prod only
-    // anything else (admin.html, README, .github, scripts, functions, versions/backlog/backlog_archive/changelog json) → no bump
+    } // homepage/info pages + site Svelte (non-admin) → prod only
+    // anything else (admin.html/Admin.svelte/admin.ts, README, .github, scripts, functions, versions/backlog/backlog_archive/changelog json) → no bump
   }
   return { prod, staging };
 }

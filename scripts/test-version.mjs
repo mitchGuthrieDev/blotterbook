@@ -35,10 +35,20 @@ ok(
 ok('app/staging.html is NOT prod', !isProdShipping('src/app/staging.html'));
 ok('app+demo shells + tokens are prod', ['src/app/app.html', 'src/app/demo.html', 'src/styles/tokens.css'].every(isProdShipping));
 ok(
-  'home.css is prod-only (homepage CSS)',
-  isProdShipping('src/styles/home.css') === false &&
-    classifySurfaces(['src/styles/home.css']).prod &&
-    !classifySurfaces(['src/styles/home.css']).staging
+  'site Svelte page is prod-only (A69 — marketing/info ships to prod, not staging)',
+  isProdShipping('src/site/components/Home.svelte') === false &&
+    classifySurfaces(['src/site/components/Home.svelte']).prod &&
+    !classifySurfaces(['src/site/components/Home.svelte']).staging
+);
+ok(
+  'shared site chrome (Nav.svelte) is prod-only',
+  classifySurfaces(['src/site/lib/Nav.svelte']).prod && !classifySurfaces(['src/site/lib/Nav.svelte']).staging
+);
+ok(
+  'Admin.svelte / admin entry are NEITHER track (A69 — internal, Access-gated)',
+  !classifySurfaces(['src/site/components/Admin.svelte']).prod &&
+    !classifySurfaces(['src/site/components/Admin.svelte']).staging &&
+    !classifySurfaces(['src/site/entries/admin.ts']).prod
 );
 ok(
   'bundled chrome + core + data are prod',
@@ -79,9 +89,9 @@ ok(
   })()
 );
 ok(
-  'site.css + an info page → prod only',
+  'a site component + an info page → prod only',
   (() => {
-    const s = classifySurfaces(['src/styles/site.css', 'src/howto.html']);
+    const s = classifySurfaces(['src/site/lib/SiteShell.svelte', 'src/howto.html']);
     return s.prod && !s.staging;
   })()
 );
