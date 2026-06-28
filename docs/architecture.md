@@ -345,7 +345,7 @@ reach the main app. It uses an **isolated IndexedDB** (`blotterbookStaging`, set
 once** so it opens in the loaded state. It has the full top bar including **Manage
 data** and the **Load CSV** landing; notes/tags/filters persist to its own DB.
 
-**Staging is key-gated.** `functions/_middleware.js` gates `/app/staging.html`: it
+**Staging is key-gated.** `functions/_middleware.ts` gates `/app/staging.html`: it
 requires the `ADMIN_KEY` via an `x-admin-key` header or a `bb_staging` cookie (if
 `ADMIN_KEY` isn't configured, staging stays open). Browsers can't set request
 headers on a navigation, so the admin panel's **Launch staging env** button sets
@@ -462,7 +462,7 @@ set an **`ADMIN_KEY`** secret. Detailed click-paths and the admin-auth model
 
 ### Location-based tax state
 
-`functions/api/geo.js` returns the visitor's coarse region from Cloudflare's edge
+`functions/api/geo.ts` returns the visitor's coarse region from Cloudflare's edge
 metadata (`request.cf`), and the app calls `/api/geo` on the landing screen to
 **pre-select the US state** for the tax estimate. No IP or third-party service,
 nothing stored; it never overrides a chosen/saved state and silently does nothing

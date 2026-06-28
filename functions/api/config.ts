@@ -10,15 +10,16 @@
    (R9: the reference-data "cache version" field was removed — nothing consumed it; reference
    data is cache-busted by per-file hashes in data/manifest.json, not a KV timestamp.) */
 
-import { isAdminAuthorized } from '../_lib/auth.js';
-import { json, rateLimited } from '../_lib/http.js';
+import { isAdminAuthorized } from '../_lib/auth.ts';
+import { json, rateLimited } from '../_lib/http.ts';
+import type { Ctx } from '../_lib/types.ts';
 
 const KEY = 'config';
 const DEFAULTS = {
   flags: { showBetaAdapters: true, maintenanceBanner: false, betaRibbon: false },
 };
 
-async function read(kv) {
+async function read(kv: KVNamespace | undefined): Promise<any> {
   if (!kv) return { ...DEFAULTS };
   try {
     const raw = await kv.get(KEY);
@@ -35,7 +36,7 @@ async function read(kv) {
 // is behind Cloudflare Access — got redirected to the Access login and hung GET /api/config,
 // freezing the admin panel's version + cache rows on "loading…".)
 
-export async function onRequest(context) {
+export async function onRequest(context: Ctx) {
   const { request, env } = context;
   const kv = env.STATUS_KV;
 
@@ -45,7 +46,7 @@ export async function onRequest(context) {
     if (await rateLimited(env, 'config', request)) return json({ error: 'rate limited' }, 429);
     if (!(await isAdminAuthorized(request, env))) return json({ error: 'unauthorized' }, 401);
     if (!kv) return json({ error: 'STATUS_KV namespace is not bound' }, 500);
-    let body;
+    let body: any;
     try {
       body = await request.json();
     } catch (_) {

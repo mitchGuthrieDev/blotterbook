@@ -2004,6 +2004,66 @@
       "effort": "medium",
       "status": "done",
       "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done — analyzed and decided NOT to adopt SvelteKit; staying on the Vite multi-page + Svelte 5 SPA (ADR-001). Of SvelteKit's headline features, SSR + form actions are non-features for a local-only app, SSG + endpoints are already covered (Vite MPA static marketing pages; the functions/* edge layer), routing is a future micro-dep if ever needed, and adapter-cloudflare only exists to serve the rest. Its load/server idiom is a standing hazard to the HARD no-trade-data-leaves-the-browser pillar (the server must never see trades), and adopting it would re-open the just-stabilized A18/A26 deploy contract and churn the security-reviewed functions/* layer for zero capability gain. Owner reviewed and confirmed: not converting, not revisiting — so the written analysis doc was reverted rather than kept. Sequencing left intact: A69 (Svelte-ify marketing) proceeds with plain Svelte under the Vite MPA build, A30 (reorg) on the Vite/Svelte structure, A61 (TS) orthogonal.",
+      "id": "A62",
+      "title": "Discuss: adopt SvelteKit (pros/cons + analysis)",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done — read-only structure audit + decided target layout delivered in docs/structure-reorg-plan.md. Findings: the flat root-as-web-root layout no longer earns its keep (A26 decoupled source from URL; no surface is servable un-built), so the A30 reorg is justified as a P3 maintainability cleanup. Catalogued the pure-logic core, the mixed assets/ dir (bundled JS+SVG vs the one verbatim-static og-image.png), the misplaced/colliding util.js files (assets/util.js shared-core vs app/staging-svelte/util.js app-only), the app/staging-svelte misnomer, app/entitlements.js as intentional-but-currently-dead scaffold, and the full coupled-path set (vite/build-manifest/bump-version/build-includes/copy-static/jsconfig/eslint/prettier + imports). Per the owner's call, designed ONE target layout (src/{lib,app,site} + static/ publicDir; functions/ pinned at root) that ABSORBS A69 so A30 lands once and is final: src/site/ has prepared homes for the Svelte marketing components + shared chrome, retiring partials/ + build-includes; static/ replaces copy-static.mjs. Recommendation: A61(TS) decision first, then A69+A30 as one coordinated reorg-and-convert pass. Follow-ups: A30 + A69 prompts repointed at the plan; filed A76 (util.js collision + entitlements.js scaffold cleanup, rides with A30).",
+      "id": "A70",
+      "title": "Audit project structure to optimize for Vite + Svelte",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done — discussion + decision delivered in docs/typescript-decision.md. Owner decided: ADOPT full native TypeScript everywhere (incl. the pure-logic core), strict from the start, with the .js→.ts / lang=ts renames FOLDED INTO the A30 reorg (touch files once). Analysis covered what TS buys beyond today's JSDoc @ts-check (biggest win = real types on the 18 untyped Svelte components; ergonomics + one language elsewhere; marginal added safety on the already-@ts-check'd core), and the mechanics/risks: Vite/esbuild compiles .ts free at build; the node test suites can't run .ts raw → use Node 22 native --experimental-strip-types (zero dep, preferred) or tsx fallback; svelte-check (dev-only) added for component typing; jsconfig→tsconfig strict; functions/ convertible separately. A29 reconciled: JS→TS is a behavior-preserving syntax-host change (no logic rewrite), gated by the node suites passing identically. Follow-ups: A30 prompt updated to fold in the full-TS conversion; A29 guardrail amended with the TS clarification; filed A77 (Phase-1 toolchain scaffold pre-step, P2) and A78 (Phase-3 functions→TS, P3).",
+      "id": "A61",
+      "title": "Discuss: migrate from JS to TypeScript",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done (A61 Phase 1). Stood up the TS toolchain on the current tree, no file moves: replaced jsconfig.json with tsconfig.json (allowJs + checkJs:false reproduce today's opt-in @ts-check behavior; strict:false as a TRANSITION — the global strict flip happens in the A30 conversion so there's no loose-TS end state) + allowImportingTsExtensions (Node's native type-stripping runtime needs real .ts specifiers). Added svelte-check (dev-only, pinned 4.3.3) + tsconfig.svelte.json; `npm run typecheck` now runs tsc + svelte-check, so the 18 Svelte components are type-checked for the first time (0 errors, 5 warnings). Proved the .ts test runner: Node 22.22 runs/imports .ts with type-stripping ON BY DEFAULT (no flag, zero dep). Verified npm test green.",
+      "id": "A77",
+      "title": "TS toolchain scaffold (tsconfig strict + svelte-check + .ts test runner) — pre-step for A30",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done (A61 Phase 3). Converted all functions/**/*.js → .ts, FULLY strict-typed. Added @cloudflare/workers-types (dev-only, pinned) + tsconfig.functions.json (Workers lib instead of DOM, strict:true) wired into npm run typecheck. New functions/_lib/types.ts exports a shared Env (bindings/secrets) + Ctx (EventContext) type; handlers typed onRequest(context: Ctx); auth/http helpers annotated (behavior unchanged). Imports use real .ts extensions. Test suites updated (test-auth imports auth.ts/admin-key.ts; test-flags reads config.ts) and run via Node type-stripping. Docs updated (CLAUDE.md, functions/README.md, architecture.md). NOTE: ESLint skips .ts for now — typescript-eslint has no ESLint 10 support yet (peer-dep conflict); tracked as A79; tsc type-checks the functions instead. Verified npm test green; vite build unaffected.",
+      "id": "A78",
+      "title": "Convert Cloudflare Functions to TypeScript",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "prompt": null
     }
   ]
 }

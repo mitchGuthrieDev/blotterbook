@@ -5,10 +5,11 @@
    Cloudflare already resolved at the edge. Privacy-preserving and convenience
    only; the user can always change the selection. */
 
-import { json } from '../_lib/http.js';
+import { json } from '../_lib/http.ts';
+import type { Ctx } from '../_lib/types.ts';
 
-export async function onRequest(context) {
-  const cf = (context.request && context.request.cf) || {};
+export async function onRequest(context: Ctx) {
+  const cf: any = (context.request && context.request.cf) || {};
   return json({
     country: cf.country || null, // "US"
     region: cf.region || null, // "Texas"

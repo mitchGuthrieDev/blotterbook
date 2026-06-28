@@ -9,7 +9,7 @@
  * SECURITY (S13) when implementing: resolve and AUTHORIZE the session before returning
  * any non-local tier — never infer "cloud" from a client-supplied id/cookie value alone.
  */
-import { json } from '../_lib/http.js';
+import { json } from '../_lib/http.ts';
 
 export function onRequestGet() {
   return json({ tier: 'local', cloudSync: false });

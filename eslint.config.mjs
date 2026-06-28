@@ -27,7 +27,11 @@ export default [
   },
 
   // Cloudflare Pages Functions — Workers runtime (Response/Request/crypto/fetch/URL/…)
-  // plus a few Node-ish globals.
+  // plus a few Node-ish globals. NOTE (A78): the functions are now TypeScript (.ts). ESLint
+  // can't parse .ts without typescript-eslint, which doesn't yet support ESLint 10 (peer-dep
+  // conflict) — so .ts files are skipped by ESLint for now and type-checked by
+  // `tsc -p tsconfig.functions.json` instead (tracked as A79). This block stays a .js glob so
+  // espree never tries to parse the .ts (it would error); it re-activates once .ts linting lands.
   {
     files: ['functions/**/*.js'],
     languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.browser, ...globals.node } },

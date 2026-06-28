@@ -1,0 +1,12 @@
+{
+  "//": "Typecheck config for the Cloudflare Pages Functions (A78). Workers runtime types (@cloudflare/workers-types) instead of DOM. strict:true — the functions are fully typed (Env interface in _lib/types.ts). Imports use real .ts extensions.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"],
+    "checkJs": false,
+    "strict": true
+  },
+  "include": ["functions/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

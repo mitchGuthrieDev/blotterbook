@@ -1,0 +1,18 @@
+{
+  "//": "TS config (A61/A77). TRANSITION state: allowJs + checkJs:false reproduce today's opt-in (// @ts-check) typecheck behavior while the tree is still .js. strict is NOT yet on — it flips to true during the A30 full-TS conversion (A61 'strict from the start' applies to the .ts files, with no loose-TS phase). svelte-check type-checks the .svelte components separately (tsc can't resolve .svelte imports).",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["app/**/*.js", "assets/**/*.js"],
+  "exclude": ["node_modules", "dist", "app/staging-svelte/**"]
+}

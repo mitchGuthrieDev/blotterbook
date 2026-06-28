@@ -9,10 +9,11 @@
  *
  * Needs env: STRIPE_WEBHOOK_SECRET (+ a D1 or KV binding for accounts).
  */
-import { json } from '../_lib/http.js';
-import { verifyStripeSignature } from '../_lib/auth.js';
+import { json } from '../_lib/http.ts';
+import { verifyStripeSignature } from '../_lib/auth.ts';
+import type { Ctx } from '../_lib/types.ts';
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env }: Ctx) {
   // Read the RAW body first — the signature is computed over the exact bytes, not re-parsed JSON.
   const raw = await request.text();
   // Fail closed (S13): without the signing secret we cannot prove the event came from
