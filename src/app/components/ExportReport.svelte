@@ -5,7 +5,7 @@
   // it tracks tokens.css — A8). Download is disabled until a real format is chosen; PDF prints the
   // iframe, PNG/JPEG rasterize it, Markdown/Email reuse the builder's strings.
   import { buildReport, reportHtmlDoc } from '../../lib/report.ts';
-  import { fmtDate } from '../../lib/core.ts';
+  import { fmtDate, STAGING_PAGE } from '../../lib/core.ts';
   import type { Metrics } from '../../lib/core.ts';
   import type { CostModel, ReportLabels } from '../../lib/types.ts';
   import { downloadBlob } from '../lib/files.ts';
@@ -121,7 +121,7 @@
   }
 </script>
 
-<div class="overlay" role="presentation" onclick={(e: MouseEvent) => e.target === e.currentTarget && onclose()}>
+<div class="overlay" class:staging={STAGING_PAGE} role="presentation" onclick={(e: MouseEvent) => e.target === e.currentTarget && onclose()}>
   <div class="modal" role="dialog" aria-modal="true" aria-label="Export performance report" tabindex="-1" use:modal={{ onclose }}>
     <div class="bar">
       <strong>Performance report</strong>
@@ -181,6 +181,23 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  /* A74 (staging-only): on narrow screens the controls bar doesn't fit on one row, so the
+     Download/Email/Close buttons clip off the right edge. Let the bar + actions wrap so every
+     control stays reachable; the modal itself is already width-capped and clips page scroll. */
+  @media (max-width: 560px) {
+    .overlay.staging .bar {
+      flex-wrap: wrap;
+    }
+    .overlay.staging .actions {
+      flex-wrap: wrap;
+      width: 100%;
+      justify-content: flex-start;
+    }
+    .overlay.staging .actions select {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
   }
   select {
     background: var(--panel2);

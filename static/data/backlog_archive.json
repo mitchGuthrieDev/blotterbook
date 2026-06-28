@@ -2119,6 +2119,72 @@
       "completedDate": "2026-06-28",
       "partial": false,
       "doneNote": "**Fixed:** the seven README images (banner.svg + the six why-*.svg feature graphics) pointed at root-relative `assets/*.svg`, but the A30 source reorg moved them to `src/assets/`, so they rendered as broken images on GitHub. Repointed every `<img src>` in README.md to `src/assets/…`; the absolute shields.io badge URLs were already correct and untouched. Verified all seven targets exist under src/assets/."
+    },
+    {
+      "id": "F21",
+      "title": "(staging) Remove the Changelog button from the dashboard top bar",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "trivial",
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "**Shipped (staging-only):** removed the Changelog link from the app dashboard top bar on the staging surface (it links out to the marketing changelog — noise inside the journal app). Gated with `{#if !STAGING_PAGE}` in src/app/App.svelte so prod + demo keep the link until/unless promoted (CH16). The pre-A33 mechanism named in the original prompt (partials/app-topbar.html + build-includes.mjs) no longer exists — the top bar is now in the Svelte App component."
+    },
+    {
+      "id": "A74",
+      "title": "(staging) Export-report modal broken on mobile",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "**Fixed (staging-only):** the Export-report modal's controls bar didn't wrap, so at ~360px the Download/Email/Close buttons clipped off the right edge (measured 153px bar overflow). Added a staging-gated `@media (max-width:560px)` rule (scoped to `.overlay.staging`) that wraps `.bar`/`.actions` and lets the format select flex, so every control stays reachable. Verified via Playwright at 360px: bar overflow 153px→0, no page horizontal scroll, no console errors; report content unchanged. prod/demo untouched (gated by STAGING_PAGE)."
+    },
+    {
+      "id": "F20",
+      "title": "(staging) Make the 'Erase all local data' button red (danger styling)",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "**Already satisfied (no change):** the 'Erase all local data' button in Manage data already carries `class=\"danger\"` — red text/border/hover via the --red tokens — on all surfaces after the A33 cutover, so the requested danger styling is in place. Deliberately NOT re-gated to staging-only, since that would have *removed* the red treatment from prod/demo. OPEN QUESTION recorded for the owner: the original prompt trailed off mid-sentence ('…and when'), so a likely second requirement (hold-to-confirm / typed confirmation?) was never specified — refile if still wanted."
+    },
+    {
+      "id": "CH26",
+      "title": "Clear stale \"(staging)\" labels after the F14 promotion + dead degraded-state branch",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "trivial",
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "**Resolved by A33/A69 (moot):** the stale '(staging)' labels this item targeted lived in files since deleted — app/widgets.js, app/app.css, app/export.js and scripts/build-includes.mjs (removed in the A33 vanilla-view-layer cutover and the A69 site→Svelte SSG move). A scan of the current src/ finds no remaining F14/F3 '(staging)' labels and no dead setSession('degraded') branch. (Minor residual: a few user-facing 'staging sandbox'/'staging data' strings remain in shared components; left as-is to honor 'no prod/demo change' — refile if surface-neutral wording is wanted.)"
+    },
+    {
+      "id": "B30",
+      "title": "(staging) Performance graph: stack the gross/net/take-home gradient fills",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "**Moot — resolved by the Svelte rewrite:** the bug described stacked per-series gradient area fills with green painting opaquely over the others. The current Svelte EquityCurve renders a SINGLE primary-series gradient fill (`view.area` → `url(#eqfill)`) plus line-only overlays for the other series (`fill=\"none\"`). Verified live on staging (3 lines, 1 area fill, 1 gradient def with all series enabled) — there is no multi-fill compositing problem to fix. If per-series gradient fills are wanted as a feature, refile."
+    },
+    {
+      "id": "A72",
+      "title": "(staging) Graph gets an unwanted highlight on calendar click",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "**Moot — not reproducible:** verified on staging via Playwright that clicking a calendar day does NOT highlight the performance graph. After a day-select the activeElement is the calendar cell (not the curve); `svg.equity` reports `:focus-visible` false and `outline: none`; only the intended `.sel` cross-link line (B37) draws. The old vanilla focus/outline bug is gone in the Svelte rewrite, and genuine keyboard focus styling on the graph remains intact."
     }
   ]
 }

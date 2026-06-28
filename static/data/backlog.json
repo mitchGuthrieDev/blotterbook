@@ -153,18 +153,6 @@
       "doneNote": null
     },
     {
-      "id": "CH26",
-      "title": "Clear stale \"(staging)\" labels after the F14 promotion + dead degraded-state branch",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "trivial",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the R1 audit (cosmetic drift from the CH16 F14 promotion). F14's stat-card detail modal now ships on all surfaces, but three comment/labels still call it staging-only: app/widgets.js ~116 ('F14 (staging) — stat-card metric-detail modals'), app/app.css ~174 ('clickable headline cards (staging)'), and app/app.css ~388 ('stat-card detail modal (staging)'). Update them to 'all surfaces · CH16' to match render.js/widgets.js/partials, so a future reader doesn't think the feature is still gated. Also: setSession('degraded') (app/widgets.js ~29-33) handles a state no caller emits (self-labeled 'reserved/forward-looking') — either wire it or drop the dead branch. Done when: no stale '(staging)' label remains for F14 and the degraded branch is wired or removed. R1 FOLLOW-UP (additional stale post-CH16 '(staging)' labels found in this audit, clear these too): app/export.js ~186 still heads the export-report modal feature 'F3 (staging)' though export.js ~177 says it was promoted to all surfaces in CH16; and scripts/build-includes.mjs ~24-26 header comment still claims the activity terminal is staging-ALONE and NOT duplicated, but CH16 promoted it to all three shells (now identical in app/demo/staging.html).",
-      "doneNote": null
-    },
-    {
       "id": "F19",
       "title": "(homepage) Add topic graphics to the feature-detail panels",
       "category": "FEATURES",
@@ -189,30 +177,6 @@
       "doneNote": null
     },
     {
-      "id": "F20",
-      "title": "(staging) Make the 'Erase all local data' button red (danger styling)",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Staging-only — gate to the staging surface; do NOT change prod/demo. In the Manage data modal's Danger zone, restyle the 'Erase all local data' button with a red/danger treatment so the destructive action is visually distinct from the neutral controls. Keep the existing confirm step. NOTE: the source request trailed off mid-sentence ('…and when') — a second requirement was likely intended (possibly a hold-to-confirm, a typed confirmation, or a disabled state). Ship the red-styling part now and flag the missing clause for the owner to clarify before building more. Done when: on staging the Erase button reads as a danger action (red), prod/demo are unchanged, and the open question about the second clause is recorded.",
-      "doneNote": null
-    },
-    {
-      "id": "F21",
-      "title": "(staging) Remove the Changelog button from the dashboard top bar",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "trivial",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Staging-only — gate to the staging surface; do NOT change prod/demo. Remove the 'Changelog' button from the app dashboard top bar on staging (it links out to the marketing changelog and is noise inside the journal app). Edit the shared top-bar source (partials/app-topbar.html) behind a `<!--IF mode!=staging-->` / mode conditional so prod + demo keep the button until/unless this is promoted via CH16, then rebuild with `node scripts/build-includes.mjs`. Done when: the staging dashboard top bar no longer shows the Changelog button, prod/demo are unchanged, and the build is idempotent.",
-      "doneNote": null
-    },
-    {
       "id": "F22",
       "title": "(staging) Break-even & Cost Budget always computes from All Time (ignore filters/scope)",
       "category": "FEATURES",
@@ -234,18 +198,6 @@
       "completedDate": null,
       "partial": false,
       "prompt": "Staging-only — gate to the staging surface; do NOT change prod/demo. Add a new dashboard module, 'Trade Blotter': a full-horizontal-width panel containing a scrollable list of ALL trades — essentially the Manage data → Trades table surfaced on the dashboard. Default dashboard position: directly BELOW the Trading Calendar module (and it must respect drag-reorder/collapse + workspace layout templates). Columns per row: Date/time, Symbol, Instrument name, Contract quantity, Price, Commission, Note, PnL. Rows are READ-ONLY except the Note field, which is inline-editable and persists via the shared annotation/Store path (annTextField / trademeta) — all other editing stays in the Manage data menu. Reuse the existing trade-row rendering + the shared commission helper (commSymRows/costModel) rather than recomputing. Add the markup to partials/app-dash.html behind a `<!--IF mode=staging-->` conditional, render gated by STAGING_PAGE, register its data-key in DEFAULT_DASH_ORDER (in app-dash order), then rebuild with build-includes. Confirm whether the blotter should respect the active filter set/scope like other panels (default: yes). Done when: staging shows a full-width Trade Blotter below the calendar with the eight columns, scrollable, the Note field editable inline and everything else read-only; prod/demo are unchanged; build idempotent and tests green.",
-      "doneNote": null
-    },
-    {
-      "id": "B30",
-      "title": "(staging) Performance graph: stack the gross/net/take-home gradient fills",
-      "category": "FIXES",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Staging-only — gate to the staging surface; do NOT change prod/demo. On the Performance graph each plot (Gross/Net/Take-home) has a gradient area fill under its line (green/blue/pink), but with multiple plots enabled only the GREEN fill is visible — the topmost fill paints opaquely over the others. On staging, fix the gradient compositing so the enabled fills STACK/blend and each remains legible (e.g. render the fills back-to-front by magnitude, and/or lower the fill opacity so overlaps show through) instead of green sitting solid on top. Keep the line overlays and the hover/click-to-select-date behavior intact. (The source note trailed off at 'when…'.) Done when: on staging, enabling two or three plots shows all their gradients legibly layered, not just green; prod/demo are unchanged; no console errors.",
       "doneNote": null
     },
     {
@@ -453,18 +405,6 @@
       "doneNote": null
     },
     {
-      "id": "A72",
-      "title": "(staging) Graph gets an unwanted highlight on calendar click",
-      "category": "FIXES",
-      "priority": "P2",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "(staging) BUG: clicking a calendar day draws an unwanted blue focus/selection highlight around the performance graph. The graph should not be highlighted when the interaction target is the calendar. Trace where the curve container gains focus / aria-selected / outline on day-select (EquityCurve.svelte + the calendar->select wiring in App.svelte) and scope it so calendar clicks update the selected day WITHOUT visually highlighting the graph, while keeping real keyboard-focus styling on the graph intact (a11y). Done when: clicking calendar days never draws the graph highlight, genuine keyboard focus still shows, and an e2e/visual check confirms.",
-      "doneNote": null
-    },
-    {
       "id": "A73",
       "title": "(staging) Paginate the Manage-data trades table",
       "category": "FEATURES",
@@ -474,18 +414,6 @@
       "completedDate": null,
       "partial": false,
       "prompt": "(staging) Optimize the Manage data panel: the loaded-trades table renders the entire dataset at once. Add paging (page through chunks, or windowed/virtualized rendering) so large imports don't render thousands of rows at once, while keeping search + filter working across the FULL dataset, not just the visible page. Pure presentation over the already-loaded data (ManageData.svelte); keep demo non-mutating. Consider sharing the windowing approach with the F23 Trade Blotter. Done when: the table loads in pages/windows, search+filter still span all trades, large imports stay responsive, and an e2e covers paging + filtered search.",
-      "doneNote": null
-    },
-    {
-      "id": "A74",
-      "title": "(staging) Export-report modal broken on mobile",
-      "category": "LAYOUT (web vs mobile)",
-      "priority": "P2",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "(staging) Debug the Export report modal/preview on mobile (~360-414px): the report iframe/preview and the format / Download / Email controls likely overflow or render poorly on narrow screens. Make the modal, the controls bar, and the report preview usable on mobile (responsive layout, no horizontal PAGE scroll - consistent with A51) without changing the report content. Verify the PDF / PNG / JPEG / Markdown / email paths still work. Done when: the export-report modal is usable at 360px and 414px with no page-level horizontal scroll, controls wrap cleanly, and all export formats still function.",
       "doneNote": null
     },
     {

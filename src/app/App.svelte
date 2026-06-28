@@ -10,7 +10,7 @@
   //   staging  → real IndexedDB Store (isolated blotterbookStaging DB), seeded
   // A33 cutover: this app now mounts on ALL three surfaces (app/demo/staging.html).
   import { onMount, setContext } from 'svelte';
-  import { loadRefData, compute, costModel, emit, sessionOf, PAGE_MODE, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../lib/core.ts';
+  import { loadRefData, compute, costModel, emit, sessionOf, PAGE_MODE, STAGING_PAGE, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../lib/core.ts';
   import { Store } from '../lib/store.ts';
   import { createDemoStore } from '../lib/demostore.ts';
   import { Adapters } from '../lib/adapters.ts';
@@ -391,7 +391,9 @@
           </div>
         {/if}
       </div>
-      <a class="link" href="../changelog.html">Changelog</a>
+      <!-- F21: the Changelog link is staging-noise inside the journal app; hidden on staging only,
+           kept on prod/demo until/unless promoted (CH16). -->
+      {#if !STAGING_PAGE}<a class="link" href="../changelog.html">Changelog</a>{/if}
       <a class="link" href="mailto:contact@blotterbook.com?subject=Blotterbook">Contact</a>
       {#if loaded && allTrades.length}<button type="button" class="exportbtn" onclick={() => (exportOpen = true)}>Export report</button>{/if}
       {#if loaded}<button type="button" class="managebtn" onclick={() => (manageOpen = true)}>Manage data</button>{/if}
