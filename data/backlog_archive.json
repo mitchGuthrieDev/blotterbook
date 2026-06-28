@@ -1547,8 +1547,8 @@
     {
       "completedDate": "2026-06-27",
       "partial": false,
-      "doneNote": "**Shipped:** collapsed `cleanSym` in store.js importAll to `Adapters.rootSym(String(s||''))` — removed the always-truthy `Adapters && Adapters.rootSym` guard and the dead duplicated `[^A-Z0-9._-]` charset fallback (the A23 follow-up covering the `X && X.member` guard flavor). Restore still sanitizes restored symbols identically (rootSym is the stricter sanitizer). lint/typecheck/e2e green.",
-      "id": "A26",
+      "doneNote": "**Shipped:** collapsed `cleanSym` in store.js importAll to `Adapters.rootSym(String(s||''))` — removed the always-truthy `Adapters && Adapters.rootSym` guard and the dead duplicated `[^A-Z0-9._-]` charset fallback (the A23 follow-up covering the `X && X.member` guard flavor). Restore still sanitizes restored symbols identically (rootSym is the stricter sanitizer). lint/typecheck/e2e green. [Renumbered A26→A60 to resolve an id collision: the ADR-001 \"Vite build infrastructure\" item is canonically A26 across the ADR/docs/commits.]",
+      "id": "A60",
       "title": "Remove the dead `Adapters && Adapters.rootSym` guard + duplicated sanitizer (A23 follow-up)",
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P2",
@@ -1908,6 +1908,102 @@
       "partial": false,
       "prompt": null,
       "doneNote": "Found during the A56 docs sweep: scripts/bump-version.mjs isProdShipping() matched only /^app\\/[^/]+\\.js$/ — files directly under app/ — so the A33 cutover (the actual app moved into app/staging-svelte/) left a release-pipeline regression: a `feat:` to any .svelte component or app/staging-svelte/*.js bumped NEITHER track. Fixed the regex to /^app\\/.*\\.(?:js|svelte)$/ (nested-aware; covers the pure-logic core AND the Svelte SPA). Also: removed the dead `app/app.css` special-case (app.css was deleted in A33 — CSS is component-scoped/Vite-extracted now) and added the new homepage CSS `home.css` to PROD_ONLY (it's homepage-only, like site.css — was bumping nothing). Refreshed the stale STAGING_ONLY comment (cited the deleted app/staging.js->app/widgets.js rename). test-version.mjs fixtures updated to real current files + new assertions: Svelte SPA modules are prod (both tracks), home.css is prod-only. lint/typecheck/unit/e2e green."
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Resolved by ADR-001 — the deferred Tier B shipped-output build trigger fired and was superseded by the ADR's Vite adoption (A26). Closed with the ADR decision.",
+      "id": "A24",
+      "title": "Adopt Tier B: shipped-output build — TRIGGER FIRED, superseded by ADR-001 (A26)",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done — ADR-001 Phase 1, IMPLEMENTED: Vite multi-page build to dist/ + the deploy-contract reversal (Cloudflare Pages builds and serves dist/). Shipped in PR #36.",
+      "id": "A26",
+      "title": "Vite build infrastructure + deploy-contract reversal (ADR-001 Phase 1)",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done — ADR-001 Phase 2: Svelte 5 adopted on the staging surface, pure-logic core imported verbatim (A29). Shipped in PR #36/#37; extended by the A33 cutover (Svelte on all surfaces).",
+      "id": "A27",
+      "title": "Adopt Svelte on the staging app surface (ADR-001 Phase 2)",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done — ADR-001 Phase 4a: unified the staging Svelte app into one mode-aware app (app/demo/staging) with the in-memory DemoStore so demo never persists. Shipped in PR #37.",
+      "id": "A31",
+      "title": "Phase 4a: unify into one mode-aware Svelte app + in-memory DemoStore",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done — ADR-001 Phase 4b: prod-parity on the Svelte app (curve overlays/hover/a11y/note-dots; journal tags+screenshots; session/tag/saved filters; landing/CSV flow; costModel(inputs) refactor). Core in PR #37; remaining gaps A34–A38 closed in PR #38/#39.",
+      "id": "A32",
+      "title": "Phase 4b: finish prod-parity features on the Svelte app (absorbs A27 deferred items)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done — ADR-001 Phase 4b parity gap: clickable stat-card detail modals (F14) in the Svelte app (StatCardModal.svelte). Shipped in PR #38.",
+      "id": "A35",
+      "title": "Phase 4 parity gap: clickable stat-card detail modals (F14)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done — ADR-001 Phase 4b parity gap: Definitions & Caveats panel in the Svelte app. Shipped in PR #38.",
+      "id": "A37",
+      "title": "Phase 4 parity gap: Definitions & Caveats panel",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "prompt": null
+    },
+    {
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "Done — ADR-001 Phase 4b parity gap: Tier-2 parity bundle (session pill; calendar week-column + jump-to-today; cost assumptions; manage-data day-notes; landing platform-override; filter trade-count; changelog/contact links; curve drawdown band). Shipped in PR #38.",
+      "id": "A38",
+      "title": "Phase 4 parity gap: Tier-2 bundle (session pill, calendar/cost/manage-data/landing/filter polish)",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "prompt": null
     }
   ]
 }
