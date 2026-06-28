@@ -3,7 +3,12 @@
   // set and recomputes metrics. `filters` is a shared reactive object (mutated in place — Svelte 5
   // deep reactivity propagates to App's deriveds). Scope = all-time vs the calendar's current month.
   // Session + tag filters and saved-filter views from the vanilla bar are deferred to a later slice.
-  let { filters, roots, tags = [], onclear } = $props();
+  let { filters, roots, tags = [], savedFilters = [], onclear, onsave = () => {}, onapply = () => {}, ondelete = () => {} } = $props();
+  let viewName = $state('');
+  const save = () => {
+    onsave(viewName);
+    viewName = '';
+  };
   const SIDES = [
     ['', 'Both sides'],
     ['long', 'Long'],
@@ -55,6 +60,17 @@
     {/each}
   </div>
   <button type="button" class="clear" onclick={onclear}>Clear</button>
+</section>
+
+<section class="saved">
+  <input class="vname" type="text" placeholder="Name this view…" bind:value={viewName} onkeydown={e => e.key === 'Enter' && save()} />
+  <button type="button" class="savebtn" onclick={save}>Save view</button>
+  {#each savedFilters as sf (sf.id)}
+    <span class="chip">
+      <button type="button" class="apply" onclick={() => onapply(sf)}>{sf.name}</button>
+      <button type="button" class="del" aria-label="Delete view {sf.name}" onclick={() => ondelete(sf.id)}>×</button>
+    </span>
+  {/each}
 </section>
 
 <style>
@@ -150,5 +166,55 @@
   .clear:hover {
     border-color: var(--hover-line);
     color: var(--txt);
+  }
+  .saved {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: -8px 0 16px;
+  }
+  .vname {
+    background: var(--panel2);
+    color: var(--txt);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .savebtn {
+    background: var(--panel2);
+    color: var(--txt);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .chip .apply {
+    background: var(--panel);
+    color: var(--accent);
+    border: 0;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .chip .del {
+    background: var(--panel);
+    color: var(--faint);
+    border: 0;
+    border-left: 1px solid var(--line);
+    padding: 6px 8px;
+    cursor: pointer;
+  }
+  .chip .del:hover {
+    color: var(--red);
   }
 </style>

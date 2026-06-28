@@ -127,6 +127,11 @@ test('staging (Svelte): session filter narrows the dataset', async ({ page }) =>
   await page.getByLabel('Session').selectOption('rth');
   await expect(trades).not.toHaveText(String(all)); // RTH-only is a strict subset
   expect(Number(((await trades.textContent()) || '').trim())).toBeLessThan(all);
+
+  // Saved-filter views: save the current filter set → a chip appears (persists to the Store).
+  await page.fill('#sv-app .saved .vname', 'rth view');
+  await page.click('#sv-app .saved .savebtn');
+  await expect(page.locator('#sv-app .saved .chip .apply')).toContainText('rth view');
 });
 
 // B41: toggle/collapse controls must expose ARIA state (aria-pressed / aria-expanded).

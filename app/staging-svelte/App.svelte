@@ -41,6 +41,8 @@
   let journalDates = $state(new Set());
   // Per-trade metadata (id -> {tags,note,...}) for the tag filter + manage-data table.
   let tradeMeta = $state(new Map());
+  // Saved filter views ([{id,name,f}]), persisted to Store meta in the vanilla-compatible shape.
+  let savedFilters = $state([]);
 
   // Filters drive the whole dashboard (a shared reactive object). scope = all-time vs the
   // calendar's current month. The cursor (calYear/calMonth) lives here so scope can read it.
@@ -105,6 +107,7 @@
     allTrades = trades;
     journalDates = await store.journalDates();
     tradeMeta = new Map((await store.allTradeMeta()).map(m => [m.id, m]));
+    savedFilters = (await store.getMeta('savedFilters')) || [];
     const last = trades.length ? trades[trades.length - 1].date : null;
     calYear = last ? +last.slice(0, 4) : new Date().getFullYear();
     calMonth = last ? +last.slice(5, 7) - 1 : new Date().getMonth();
@@ -150,6 +153,29 @@
     filters.dows = [];
   }
 
+  // Saved filter views — persisted in the vanilla-compatible {id,name,f} shape (f.symbol holds the
+  // root value, matching render.js + the Store.importAll sanitizer's FILTER_FIELDS).
+  async function saveView(name) {
+    const f = { from: filters.from, to: filters.to, symbol: filters.root, side: filters.side, session: filters.session, tag: filters.tag, dows: [...filters.dows] };
+    const id = Date.now().toString(36) + savedFilters.length;
+    savedFilters = [...savedFilters, { id, name: (name || '').trim() || `View ${savedFilters.length + 1}`, f }];
+    await store.setMeta('savedFilters', savedFilters);
+  }
+  function applyView(sf) {
+    const f = sf.f || {};
+    filters.from = f.from || '';
+    filters.to = f.to || '';
+    filters.root = f.symbol || '';
+    filters.side = f.side || '';
+    filters.session = f.session || '';
+    filters.tag = f.tag || '';
+    filters.dows = Array.isArray(f.dows) ? [...f.dows] : [];
+  }
+  async function deleteView(id) {
+    savedFilters = savedFilters.filter(s => s.id !== id);
+    await store.setMeta('savedFilters', savedFilters);
+  }
+
   onMount(() => {
     boot().catch(e => {
       console.error('staging boot failed', e);
@@ -173,7 +199,7 @@
   {#if error}
     <p class="msg error" role="alert">Could not start the staging app: {error}</p>
   {:else if loaded}
-    <FilterBar {filters} {roots} {tags} onclear={clearFilters} />
+    <FilterBar {filters} {roots} {tags} {savedFilters} onclear={clearFilters} onsave={saveView} onapply={applyView} ondelete={deleteView} />
     <Overview metrics={metricsActive} tradeCount={metricsActive.n} />
     <EquityCurve metrics={metricsAll} {journalDates} {selectedDate} onselect={d => (selectedDate = d)} />
     <CalendarMonth
