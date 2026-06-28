@@ -5,9 +5,11 @@
   // are deferred. Operations that change the dataset call onchanged() so App recomputes the dashboard.
   import { onMount, getContext } from 'svelte';
   import { Adapters } from '../../adapters.js';
-  import { usd, money, emit } from '../../core.js';
+  import { usd, money, emit, PAGE_MODE } from '../../core.js';
   import { readImage, downloadBlob } from '../util.js';
   import { modal } from '../modal.js';
+
+  const isDemo = PAGE_MODE === 'demo'; // demo is a read-only preview — write controls disabled + guarded (B23)
 
   let {
     onclose,
@@ -59,6 +61,7 @@
   }
 
   async function deleteDay(date) {
+    if (isDemo) return;
     if (!confirm(`Delete the note for ${date}?`)) return;
     await store.deleteJournal(date);
     await reload();
@@ -91,6 +94,7 @@
   }
 
   async function deleteTrade(t) {
+    if (isDemo) return;
     const id = store.tradeId(t);
     if (!confirm(`Delete this ${t.symbol} trade on ${t.date}? This also removes its tags, note and screenshots.`)) return;
     await store.deleteTrade(id);
@@ -102,6 +106,7 @@
   }
 
   async function saveEdit() {
+    if (isDemo) return;
     const tags = [...new Set(editTags.split(',').map(s => s.trim().toLowerCase()).filter(Boolean))];
     await store.saveTradeMeta(editing, { tags, note: editNote, shots: editShots });
     editing = null;
@@ -111,6 +116,7 @@
   }
 
   async function importCSV(e) {
+    if (isDemo) return;
     const f = e.currentTarget.files[0];
     e.currentTarget.value = '';
     if (!f) return;
@@ -134,6 +140,7 @@
   }
 
   async function importBackup(e) {
+    if (isDemo) return;
     const f = e.currentTarget.files[0];
     e.currentTarget.value = '';
     if (!f) return;
@@ -149,6 +156,7 @@
   }
 
   async function eraseAll() {
+    if (isDemo) return;
     if (!confirm('Erase ALL trades, day-notes and per-trade tags/notes in this staging sandbox? This cannot be undone.')) return;
     await store.purge();
     msg = 'All staging data erased.';
@@ -174,11 +182,13 @@
       <div class="dmstat"><div class="dk">Local size</div><div class="dv mono">{localKb}</div></div>
     </div>
 
+    {#if isDemo}<p class="demonote">This is a read-only demo — loading, editing, importing and erasing are disabled, and nothing is saved.</p>{/if}
+
     <div class="toolbar">
-      <button type="button" onclick={() => csvInput.click()}>Load CSV</button>
-      <button type="button" onclick={exportBackup}>Export backup</button>
-      <button type="button" onclick={() => backupInput.click()}>Import backup</button>
-      <button type="button" class="danger" onclick={eraseAll}>Erase all local data</button>
+      <button type="button" disabled={isDemo} onclick={() => csvInput.click()}>Load CSV</button>
+      <button type="button" disabled={isDemo} onclick={exportBackup}>Export backup</button>
+      <button type="button" disabled={isDemo} onclick={() => backupInput.click()}>Import backup</button>
+      <button type="button" class="danger" disabled={isDemo} onclick={eraseAll}>Erase all local data</button>
       <input type="text" class="search" placeholder="Search symbol / date" bind:value={search} />
       <input bind:this={csvInput} type="file" accept=".csv,text/csv" hidden onchange={importCSV} />
       <input bind:this={backupInput} type="file" accept="application/json,.json" hidden onchange={importBackup} />
@@ -194,7 +204,7 @@
               <button type="button" class="opends" onclick={() => onopenday(n.date)}>{n.date}</button>
               <span class="dntext">{n.text || '(tags/screenshots only)'}</span>
               {#if (n.tags || []).length}<span class="dntags">{n.tags.join(', ')}</span>{/if}
-              <button type="button" class="dndel" aria-label="Delete day note" onclick={() => deleteDay(n.date)}>×</button>
+              <button type="button" class="dndel" disabled={isDemo} aria-label="Delete day note" onclick={() => deleteDay(n.date)}>×</button>
             </li>
           {/each}
         </ul>
@@ -209,8 +219,8 @@
             <li>
               <button type="button" class="opends" onclick={() => onapplyview(sf)}>{sf.name}</button>
               <span class="dntext"></span>
-              <button type="button" class="sfbtn" onclick={() => renameView(sf)}>Rename</button>
-              <button type="button" class="dndel" aria-label="Delete saved filter" onclick={() => ondeleteview(sf.id)}>×</button>
+              <button type="button" class="sfbtn" disabled={isDemo} onclick={() => renameView(sf)}>Rename</button>
+              <button type="button" class="dndel" disabled={isDemo} aria-label="Delete saved filter" onclick={() => ondeleteview(sf.id)}>×</button>
             </li>
           {/each}
         </ul>
@@ -235,8 +245,8 @@
               <td class="tags">{(m.tags || []).join(', ')}</td>
               <td class="note dim">{m.note || ''}</td>
               <td class="r actions">
-                <button type="button" class="edit" onclick={() => openEdit(t)}>Edit</button>
-                <button type="button" class="del" aria-label="Delete trade" onclick={() => deleteTrade(t)}>Delete</button>
+                <button type="button" class="edit" disabled={isDemo} onclick={() => openEdit(t)}>Edit</button>
+                <button type="button" class="del" disabled={isDemo} aria-label="Delete trade" onclick={() => deleteTrade(t)}>Delete</button>
               </td>
             </tr>
             {#if editing === id}
@@ -400,8 +410,19 @@
     margin-left: auto;
     min-width: 180px;
   }
-  .toolbar button:hover {
+  .toolbar button:hover:not(:disabled) {
     border-color: var(--hover-line);
+  }
+  .demonote {
+    margin: 0;
+    padding: 8px 16px;
+    font-size: 12px;
+    color: var(--warn);
+    border-bottom: 1px solid var(--line);
+  }
+  button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
   .danger {
     color: var(--red);

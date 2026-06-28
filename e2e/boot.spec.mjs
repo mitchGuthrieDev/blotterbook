@@ -5,22 +5,24 @@ import { watchErrors } from './helpers.mjs';
 // migration is verified against (a missing import / dead reference surfaces here).
 const surfaces = [
   {
+    // A33 cutover: app is the Svelte app (data-mode="app"). Empty real Store → the landing/CSV flow.
     name: 'app',
     path: '/app/app.html',
     check: async page => {
-      await expect(page.locator('#landing')).toBeVisible();
+      await expect(page.locator('#sv-app .landing')).toBeVisible();
     },
   },
   {
+    // A33 cutover: demo is the Svelte app (data-mode="demo", in-memory DemoStore) — boots straight
+    // into the seeded Overview.
     name: 'demo',
     path: '/app/demo.html',
     check: async page => {
-      await expect(page.locator('body')).toHaveClass(/loaded/);
+      await expect(page.locator('#sv-app [data-card="net"] .value')).not.toBeEmpty();
     },
   },
   {
-    // Staging is the Svelte 5 app now (ADR-001/A27) — it boots straight into the Overview
-    // (no landing/Start button). Assert the Svelte overview rendered with computed metrics.
+    // Staging is the same Svelte 5 app on its isolated DB — boots straight into the Overview.
     name: 'staging',
     path: '/app/staging.html',
     check: async page => {
