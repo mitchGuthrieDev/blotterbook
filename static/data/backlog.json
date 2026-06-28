@@ -487,6 +487,54 @@
       "partial": false,
       "prompt": "(staging) Debug the Export report modal/preview on mobile (~360-414px): the report iframe/preview and the format / Download / Email controls likely overflow or render poorly on narrow screens. Make the modal, the controls bar, and the report preview usable on mobile (responsive layout, no horizontal PAGE scroll - consistent with A51) without changing the report content. Verify the PDF / PNG / JPEG / Markdown / email paths still work. Done when: the export-report modal is usable at 360px and 414px with no page-level horizontal scroll, controls wrap cleanly, and all export formats still function.",
       "doneNote": null
+    },
+    {
+      "id": "A80",
+      "title": "Discuss/explore: deeper Svelte 5 runes + reactivity adoption",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "DISCUSSION/ANALYSIS. The app is already runes-only (no `export let` / `$:` / createEventDispatcher; state is `$state` / `$derived` / `$effect`, with cross-component state via `context('bb:store')` + component runes). Survey where it could lean further into Svelte 5's reactivity model for clarity and perf: extracting shared reactive state into `.svelte.ts` rune modules (none exist today) vs the current context approach; `$derived.by` for the heavier App.svelte computed chains; `$effect` cleanup/teardown correctness; `$bindable()` props where parent/child two-way binding is currently faked with callbacks; `$state.snapshot` at the persistence boundaries; and fine-grained vs coarse reactivity in the dashboard. Use the Svelte MCP docs (list-sections / get-documentation) as the reference. For each: benefit vs churn and fit with A28 (deps) / A29 (verbatim core). Recommendation plus any spun-off items. Adjacent: A65 (which Svelte features to utilize). Done when: a written shortlist with recommendations is delivered.",
+      "doneNote": null
+    },
+    {
+      "id": "A81",
+      "title": "Debug why the version-bump CI job fails",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "The automated two-track versioning (CH12) runs in `.github/workflows/version-bump.yml` on push to main: it derives the bump from the merge commit's conventional-commit type + changed paths via `scripts/bump-version.mjs`, writes `data/versions.json`, and pushes the result back to main. The job is failing - diagnose and fix. Reproduce locally with `node scripts/test-version.mjs` and by running bump-version.mjs against a recent merge commit, then read the failing workflow run to localize the step (path classification, the versions.json write, or the push-back-to-main). The push step already flags a likely cause - the github-actions bot blocked by branch protection on main (see the `::warning::` near version-bump.yml line 74) - and retries. Do not hand-edit data/versions.json. Done when: the root cause is identified, a merge to main bumps the version successfully (or a documented permissions/config change makes it succeed), and a regression test is added if the bug was in bump-version.mjs.",
+      "doneNote": null
+    },
+    {
+      "id": "A82",
+      "title": "Discuss: do all the root-directory files need to live at the root?",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "DISCUSSION/ANALYSIS. The repo root holds a lot of files - build/tooling configs (vite.config.mjs, vite-ssg.mjs, eslint.config.mjs, svelte.config.js, playwright.config.mjs, .prettierrc.json, .prettierignore, three tsconfig*.json, .node-version, package.json + lockfile) alongside docs and the source/edge dirs. Survey what could be consolidated or relocated to reduce root clutter vs what MUST stay at root because a tool or the host requires it there (Vite, Cloudflare Pages, ESLint/Prettier/TS/Playwright config discovery, and the deploy-contract rule that functions/ and scripts/ stay at the repo root - see CLAUDE.md / docs/architecture.md). For each movable candidate: where it could go (e.g. a config/ dir, package.json fields, or a merged tsconfig) and the cost/risk (config-discovery breakage, the A26/A30 deploy contract, the build-manifest / bump-version path assumptions). Recommendation plus any spun-off items. Done when: a written inventory of root files with keep-vs-move recommendations is delivered.",
+      "doneNote": null
+    },
+    {
+      "id": "A83",
+      "title": "Resolve the svelte-check a11y warnings",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "`npm run typecheck` (svelte-check) currently reports 12 warnings across 6 files - mostly accessibility: `a11y_label_has_associated_control` on the decorative mock setup fields in src/site/components/Howto.svelte (x6), plus interactive-element issues in EquityCurve.svelte (svg drag handlers / noninteractive tabindex), Panel.svelte and StatCard.svelte (tabindex / role / focus), and Home.svelte (tablist tabindex). Resolve them: associate or stop using `<label>` for the Howto mock fields, give the drag/click-handler elements proper roles + keyboard handlers + focus, and fix the tablist/tabindex roles - without regressing layout or the CSP `style-src 'self'` rule (A55). Also clear the one non-a11y warning in the same output (`editShotInput` should be declared with `$state(...)` in ManageData.svelte) so the check goes fully clean. Done when: `npm run typecheck` reports 0 warnings and the e2e interaction/a11y specs still pass.",
+      "doneNote": null
     }
   ],
   "howToDrive": [
