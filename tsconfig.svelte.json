@@ -1,6 +1,6 @@
 {
-  "//": "svelte-check config (A77/A30). Extends the strict base and points svelte-check at the Svelte SPA (src/app/**: the .svelte components AND the .ts glue/entry that imports them). svelte-check understands .svelte and resolves the verbatim core imports from src/lib/.",
+  "//": "svelte-check config (A77/A30; A69 adds the site). Extends the strict base and points svelte-check at the Svelte SPA (src/app/**) AND the marketing/info site (src/site/**: page components + shared chrome + client entries — A69). svelte-check understands .svelte and resolves the verbatim core imports from src/lib/.",
   "extends": "./tsconfig.json",
-  "include": ["src/app/**/*.svelte", "src/app/**/*.ts"],
+  "include": ["src/app/**/*.svelte", "src/app/**/*.ts", "src/site/**/*.svelte", "src/site/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
