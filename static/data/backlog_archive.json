@@ -2185,6 +2185,17 @@
       "completedDate": "2026-06-28",
       "partial": false,
       "doneNote": "**Moot — not reproducible:** verified on staging via Playwright that clicking a calendar day does NOT highlight the performance graph. After a day-select the activeElement is the calendar cell (not the curve); `svg.equity` reports `:focus-visible` false and `outline: none`; only the intended `.sel` cross-link line (B37) draws. The old vanilla focus/outline bug is gone in the Svelte rewrite, and genuine keyboard focus styling on the graph remains intact."
+    },
+    {
+      "id": "A63",
+      "title": "Review PR history + backfill the changelog",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-28",
+      "partial": false,
+      "doneNote": "**Closed — audit shows no backfill warranted.** Reviewed the prod release history against static/data/changelog.json (PR #50). The changelog is current: the latest user-facing milestone, 0.26.0 (the A69 site→Svelte rebuild), is documented, and #50 reconciles versions.json up to it (prod 0.25.1→0.26.2). The recovered intermediate versions (0.25.1 reorg/TS, 0.26.1 any-free typing, 0.26.2 staging-gated tweaks) carry no prod-user-facing change, so per the curation policy they get no entry. The known 0.20.5→0.25.0 gap (versions 0.21–0.24) was the Vite-build + Svelte-staging DEVELOPMENT cycle (PRs #36–#39) — staging/infra work with no prod-user-facing features, comprehensively covered by the existing 0.25.0 'Rebuilt under the hood' entry; backfilling it would misrepresent internal work as user-facing. Going forward the bump job is fixed (#48), so new user-facing prod bumps get a curated entry at merge time as usual."
     }
   ]
 }

@@ -321,18 +321,6 @@
       "doneNote": null
     },
     {
-      "id": "A63",
-      "title": "Review PR history + backfill the changelog",
-      "category": "CHORE / REFACTOR",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Review the merged PR history on main against data/changelog.json (curated, prod-version-keyed user notes — F13) and backfill missing entries. Known gap: the changelog jumps 0.20.5 -> 0.25.0, so the 0.21-0.24 prod bumps (PRs #37-#39: Svelte staging parity A31/A32, A34-A41, A42-A54) have no notes. For each prod bump with user-visible change, add a concise user-facing entry keyed by its prod version, matching the existing voice (this is for users, not a git log). Bumps with no user-facing effect may be skipped but should be noted. Do not hand-edit data/versions.json. Done when: every prod version with user-facing change has a changelog entry and the gap is closed or explained.",
-      "doneNote": null
-    },
-    {
       "id": "A64",
       "title": "Discuss: which Vite features to utilize",
       "category": "REVIEW / AUDIT",
