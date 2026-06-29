@@ -11,6 +11,11 @@ on:
     branches: [main]
   pull_request:
 
+# CI only reads the checkout — keep the token least-privilege (version-bump.yml is the
+# only workflow that needs contents: write, to push the bump commit).
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -19,7 +24,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version-file: .node-version   # single source of truth (also read by Cloudflare Pages)
           cache: npm
 
       - name: Install dev dependencies
@@ -28,13 +33,13 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Typecheck (JSDoc via tsc --checkJs)
+      - name: Typecheck (tsc core + functions, svelte-check app + site)
         run: npm run typecheck
 
       - name: Format check (Prettier)
         run: npm run format:check
 
-      - name: Unit + logic tests (adapters / auth / version / flags / tax)
+      - name: Unit + logic tests (adapters / auth / version / flags / tax / demostore)
         run: npm run test:unit
 
       - name: Build (Vite → dist/)

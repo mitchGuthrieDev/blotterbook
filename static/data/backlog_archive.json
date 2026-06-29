@@ -2427,6 +2427,50 @@
       "completedDate": "2026-06-29",
       "partial": false,
       "doneNote": "**Resolved by investigation (R1 follow-up, #64) — not pursued.** A single shared .pos/.neg tone rule is unsafe here: a blanket :global(.pos){color:var(--green)} loses to each component's scoped .x.pos rule (Svelte's scope-hash raises specificity above a bare global), so it does nothing without !important. And 'pos'/'neg' is overloaded — most components use it for TEXT color, but CalendarMonth uses .cell.pos/.neg for a BACKGROUND tint, which a global text-color rule would bleed onto. A safe consolidation would require renaming the calendar's background classes AND raising the global's specificity — more churn than the P3 dedup is worth. Closed as won't-do; revisit only alongside a deliberate tone-class redesign."
+    },
+    {
+      "id": "R18",
+      "title": "(staging) Design review: distribute Definitions & Caveats into the relevant panels",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Staging-scoped design review of removing the standalone Definitions & Caveats panel (src/app/components/Definitions.svelte) and distributing its contents into the owning panels, mirroring CostPanel's F6/F10 'Assumptions & caveats' <details>. Delivered a per-item relocation mapping (all 11 glossary + 5 warning items) and a recommendation in docs/backlog-reviews-2026-06-29.md. RECOMMENDATION: HYBRID, staging-first — distribute per-metric definitions to their owning home (AdvancedStats gets a mirror 'Assumptions' <details> for the Payoff/Sortino/Concentration/Streak/Weekday rows; the four F14 stat-card modals net/win/wl/dd absorb their headline definitions incl. 'Max Drawdown is REALIZED only' into the dd modal; CostPanel absorbs the cost/commission/tax notes; EquityCurve/CalendarMonth/scope-toggle get their one-liners), BUT keep the cross-cutting PARSING caveats in one discoverable place (Trade=one closed position; US-dates/Eastern-time assumed) — trim the standalone panel to those or move them to a Help affordance. Axis: context wins for per-number caveats, discoverability wins for the foundational parsing caveats that gate every grouping. Implementation spun off as A97 (staging-first until promoted)."
+    },
+    {
+      "id": "A64",
+      "title": "Discuss: which Vite features to utilize",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Surveyed unused Vite capabilities now that the build exists (ADR-001/A26); written shortlist with benefit/cost/fit per capability in docs/backlog-reviews-2026-06-29.md. RECOMMENDATIONS: (now, small) set an explicit build.target (es2022, matching tsconfig) + add a dev-only bundle size-budget check — A28-clean → spun off as A96; (when the heavy roadmap modules R11/R12/R13/F23 land) introduce dynamic import() code-splitting, not before; (fold into existing work) SRI under the existing S18 CSP item, import.meta.env adopted opportunistically. DO NOT adopt @vitejs/plugin-legacy (pulls polyfills/deps against A28 for a modern-browser audience). Asset handling + dep pre-bundling already work with no action. Discussion item — no code change beyond the spun-off A96."
+    },
+    {
+      "id": "A67",
+      "title": "Review the CI configuration",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Reviewed .github/workflows/{ci.yml,version-bump.yml} against the current Vite+Svelte+native-TS build (written review in docs/backlog-reviews-2026-06-29.md). Pipeline is correct and fails closed. APPLIED low-risk fixes: (1) relabeled the typecheck step (was 'JSDoc via tsc --checkJs' — now tsc core+functions + svelte-check app+site, post-A61/A79); (2) added the missing 'demostore' suite to the unit-test step label (test:unit runs 6 suites); (3) single-sourced the Node pin via node-version-file:.node-version in BOTH workflows (was hardcoded 22); (4) aligned version-bump.yml actions to @v5 (matched ci.yml); (5) added permissions:contents:read to ci.yml (least-privilege; version-bump keeps contents:write to push). VERIFIED correct: full gate ordering; version-bump self-retrigger double-guard ([skip ci] + chore(release) if-guard) + serialize concurrency + push-retry loop; version-bump needs no npm ci (bump-version.mjs uses only node builtins); no secrets consumed (Cloudflare Pages deploys via its own integration). Deferred recommendations (spun off as A96): the CI double-build (build step + e2e webServer both run `npm run build`), Playwright browser caching, and a CI concurrency group. NB the 'use preinstalled Chromium' note in the prompt was about the agent env, not GitHub runners (which DO need the install)."
+    },
+    {
+      "id": "A82",
+      "title": "Discuss: do all the root-directory files need to live at the root?",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Surveyed every repo-root file for keep-vs-move (written inventory in docs/backlog-reviews-2026-06-29.md). VERDICT: keep the root as-is. Almost everything is pinned to the root by a tool's config-discovery (vite/eslint/prettier/svelte/playwright/tsconfig), by npm (package.json+lockfile), by git (.gitignore), or by the host (.node-version is read by both Cloudflare Pages and actions/setup-node) — none can move without an everywhere `--config` rewrite. The ONLY genuinely movable file is vite-ssg.mjs (a plain relative import from vite.config.mjs, nothing discovers it) → could go to scripts/; the three tsconfig*.json are three real TS projects (strict core via tsc, Workers functions via tsc, Svelte+site via svelte-check) and the split is load-bearing, not clutter. Incidental: tsconfig.json's allowJs/checkJs + its comment are now dead post-A69 (no hand-written .js under src/). Optional tidy spun off as A95. No code change — discussion item."
     }
   ]
 }

@@ -24,13 +24,13 @@ jobs:
     # Don't bump our own release commit (belt-and-suspenders with the [skip ci] marker).
     if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0          # full history so `before..after` diffs resolve for any merge style
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version-file: .node-version   # single source of truth (matches CI + Cloudflare Pages)
 
       # Apply the bump (re-derived from the latest main on each retry) and push it back. If the
       # push is rejected because another bump landed first, reset, pull, and recompute against the

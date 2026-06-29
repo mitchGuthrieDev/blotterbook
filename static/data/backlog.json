@@ -165,18 +165,6 @@
       "doneNote": null
     },
     {
-      "id": "R18",
-      "title": "(staging) Design review: distribute Definitions & Caveats into the relevant panels",
-      "category": "REVIEW / AUDIT",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Staging-scoped design review. Evaluate REMOVING the standalone 'Definitions & Caveats' dashboard module and DISTRIBUTING its contents into the relevant panels/menus — mirroring how Break-even & Cost Budget now carries its own 'Assumptions & Caveats' subsection (F6/F10). Go through EACH item currently in Definitions & Caveats and recommend which module/menu it should relocate to (e.g. metric definitions → Advanced Statistics or the F14 stat-card detail modals; scope/filter wording → the scope toggle / filter bar; cost/tax model notes → Break-even; date/session/timezone assumptions → wherever they surface). Produce a per-item mapping table and a clear keep-vs-distribute recommendation; weigh discoverability (one place to read everything) vs context (caveats next to the number they qualify). Any implementation is staging-first (proving-ground) until promoted. Done when: a written per-item relocation mapping + recommendation exists, with spun-off implementation items if approved.",
-      "doneNote": null
-    },
-    {
       "id": "A15",
       "title": "(infra guardrail) Rate-data scraper must stay within the 50-subrequest free-tier cap",
       "category": "ARCHITECTURE / DUPLICATION",
@@ -261,18 +249,6 @@
       "prompt": "Guardrail from ADR-001 (docs/adr-001-vite-svelte-spa.md). The Svelte migration (A27 + later Phase 4) must touch the VIEW LAYER ONLY. The pure-logic modules are the hard-won, test-covered value and must be imported into components VERBATIM, not rewritten: app/adapters.js (platform CSV adapters + detection + pairFills), compute() (metrics), costModel() (commissions/subscriptions/tax/take-home), the Section-1256 tax model, app/store.js (the Store seam — A4), and assets/util.js. They stay framework-agnostic so the node test suites (test-adapters/test-version/test-auth/test-flags/test-tax) keep covering them unchanged. Reject a framework PR that reimplements adapter parsing, the metrics/cost/tax math, or persistence inside a component instead of importing the existing module. The Store interface (A4) remains the only persistence seam. TYPESCRIPT CLARIFICATION (A61, docs/typescript-decision.md): converting the core from JSDoc-typed .js to native .ts (folded into the A30 reorg) is PERMITTED — it changes the syntax host (.js→.ts, JSDoc→inline types), NOT the algorithms. 'Verbatim' here means NO logic rewrite, not 'never touch the file'. The gate is that the node suites pass IDENTICALLY before/after the conversion (they are the behavior-preserving safety net). Still reject any change that reimplements the parsing/metrics/cost/tax/persistence logic under cover of the TS migration."
     },
     {
-      "id": "A64",
-      "title": "Discuss: which Vite features to utilize",
-      "category": "REVIEW / AUDIT",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "DISCUSSION/ANALYSIS. Survey Vite capabilities we don't yet use that would pay off now that the build exists (ADR-001/A26): code-splitting / dynamic import for the heavier roadmap modules (R11/R12/R13/F23), asset & image handling, env/define, dependency pre-bundling, bundle-analysis + size budgets, legacy/target tuning, and CSP/SRI-friendly output (ties to S18/A55). For each: benefit vs. cost and fit with the constraints (A28 deps, local-compute). Recommendation + any follow-up items. Done when: a written shortlist with recommendations is delivered.",
-      "doneNote": null
-    },
-    {
       "id": "A65",
       "title": "Discuss: which Svelte features to utilize",
       "category": "REVIEW / AUDIT",
@@ -297,18 +273,6 @@
       "doneNote": null
     },
     {
-      "id": "A67",
-      "title": "Review the CI configuration",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Review .github/workflows/ (ci.yml, version-bump.yml) for correctness, coverage, and hygiene now that the build is Vite + Svelte (ADR-001). Check: node version matches .node-version (22); npm ci + caching; the full gate runs and fails closed (lint, typecheck, format, unit, build, e2e, and the include/manifest drift gate); version-bump triggers/permissions are correct (CH12) and don't self-retrigger ([skip ci]); Playwright uses the preinstalled Chromium rather than re-downloading; secrets handling; and any redundant or missing steps. Done when: a written review with concrete fixes (and any low-risk fixes applied) is delivered.",
-      "doneNote": null
-    },
-    {
       "id": "A80",
       "title": "Discuss/explore: deeper Svelte 5 runes + reactivity adoption",
       "category": "REVIEW / AUDIT",
@@ -321,15 +285,39 @@
       "doneNote": null
     },
     {
-      "id": "A82",
-      "title": "Discuss: do all the root-directory files need to live at the root?",
-      "category": "REVIEW / AUDIT",
+      "id": "A95",
+      "title": "(optional) Root tidy: relocate vite-ssg.mjs + drop dead tsconfig allowJs",
+      "category": "CHORE / REFACTOR",
       "priority": "P3",
       "effort": "small",
       "status": "open",
       "completedDate": null,
       "partial": false,
-      "prompt": "DISCUSSION/ANALYSIS. The repo root holds a lot of files - build/tooling configs (vite.config.mjs, vite-ssg.mjs, eslint.config.mjs, svelte.config.js, playwright.config.mjs, .prettierrc.json, .prettierignore, three tsconfig*.json, .node-version, package.json + lockfile) alongside docs and the source/edge dirs. Survey what could be consolidated or relocated to reduce root clutter vs what MUST stay at root because a tool or the host requires it there (Vite, Cloudflare Pages, ESLint/Prettier/TS/Playwright config discovery, and the deploy-contract rule that functions/ and scripts/ stay at the repo root - see CLAUDE.md / docs/architecture.md). For each movable candidate: where it could go (e.g. a config/ dir, package.json fields, or a merged tsconfig) and the cost/risk (config-discovery breakage, the A26/A30 deploy contract, the build-manifest / bump-version path assumptions). Recommendation plus any spun-off items. Done when: a written inventory of root files with keep-vs-move recommendations is delivered.",
+      "prompt": "OPTIONAL low-priority tidy spun off from A82. Two independent micro-cleanups: (1) vite-ssg.mjs is the only repo-root file nothing discovers (it's a plain relative import from vite.config.mjs) — it could move into scripts/ (the deploy contract already pins scripts/ at the root) with a one-line import change; weigh the one-fewer-root-file benefit against updating the deploy-contract notes in CLAUDE.md/docs/architecture.md. (2) tsconfig.json still sets allowJs:true / checkJs:false and carries a comment about the A69 'transition' — A69 is complete and there is no hand-written .js under src/ anymore, so both options are now dead and the comment is stale; verify `npm run typecheck` (tsc + svelte-check) still passes after removing them. Neither is required; ship only if touching this area anyway. Done when: applied (or explicitly declined with a note).",
+      "doneNote": null
+    },
+    {
+      "id": "A96",
+      "title": "Vite/CI build hygiene: explicit build.target, size budget, de-dup CI build",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Spun off from A64 + A67. Low-risk build/CI hygiene, all A28-clean (dev-only): (1) set an explicit Vite build.target (e.g. es2022, matching tsconfig) for deterministic output — do NOT add @vitejs/plugin-legacy (polyfills/deps against A28 for a modern-browser audience). (2) Add a dev-only bundle size-budget check (a small script asserting the /app/ entry JS stays under a byte ceiling, or rollup-plugin-visualizer as a dev devDep) so bundle regressions fail loudly. (3) De-duplicate the CI double-build: ci.yml runs `npm run build` AND test:e2e's Playwright webServer also runs `npm run build` — either drop the standalone build step (e2e proves the build) or point the e2e webServer at the already-built dist/ (serve, don't rebuild). (4) Optional: cache the Playwright browser (actions/cache keyed on the pinned @playwright/test version) and add a CI concurrency group (cancel-in-progress superseded PR runs). Done when: build.target + size budget shipped and the CI build de-dup decided/applied.",
+      "doneNote": null
+    },
+    {
+      "id": "A97",
+      "title": "(staging) Implement R18: distribute Definitions & Caveats into the owning panels",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Implementation spun off from the R18 design review (see docs/backlog-reviews-2026-06-29.md for the full per-item mapping). STAGING-FIRST (proving-ground) until promoted. Apply the HYBRID recommendation: (1) Add an 'Assumptions & caveats' collapsible <details> to AdvancedStats.svelte, mirroring CostPanel's F6/F10 pattern verbatim, holding the Payoff-ratio/Avg-winner-loser, Profit-concentration, Sortino-vs-Sharpe, Win/Loss-streak and Best/Worst-weekday definitions + the thin-sample and Sharpe-daily warnings. (2) Extend the four F14 stat-card modals (StatCardModal.svelte: net/win/wl/dd) with their headline definitions — incl. moving 'Max Drawdown is REALIZED only' into the dd drill-down. (3) Route the cost/commission/tax notes into CostPanel's existing Assumptions (reconcile with what's already there). (4) Put the one-liners on their controls: performance-graph note on EquityCurve, calendar-day grouping on CalendarMonth, scope note on the scope toggle. (5) Trim Definitions.svelte down to the cross-cutting PARSING caveats only (Trade = one closed position; US-dates/Eastern-time assumed) — or relocate them behind a Help/About affordance — since those gate every grouping and need one discoverable home. Keep all three surfaces in sync (A33: one SPA) and demo non-mutating. Done when: the distribution ships on staging with no content lost and the standalone panel trimmed; promote per CH16.",
       "doneNote": null
     }
   ],
