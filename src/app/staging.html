@@ -3,10 +3,10 @@
   Blotterbook — STAGING surface (ADR-001 / A27 → A33 cutover).
 
   Hand-authored Svelte 5 mount point, like app/app.html and app/demo.html (all three surfaces are
-  now Svelte — the A33 cutover deleted the vanilla view layer). NOT assembled from partials/ (no
-  include markers → build-includes skips it). The Svelte app lives in app/staging-svelte/ and reuses
+  now Svelte — the A33 cutover deleted the vanilla view layer). Marker-free shell (partials/ +
+  build-includes were retired). The Svelte app lives in src/app/ and reuses
   the pure-logic core (compute/costModel/Store/adapters) verbatim (A29). Staging stays key-gated by
-  functions/_middleware.js and uses an isolated IndexedDB (store.js keys the DB off data-mode).
+  functions/_middleware.ts and uses an isolated IndexedDB (store.ts keys the DB off data-mode).
 -->
 <html lang="en">
   <head>

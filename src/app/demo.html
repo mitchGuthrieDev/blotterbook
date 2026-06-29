@@ -2,10 +2,10 @@
 <!--
   Blotterbook — DEMO surface (ADR-001 / A33 cutover).
 
-  Hand-authored Svelte 5 mount point. NOT assembled from partials/ (no include markers → build-includes
-  skips it). data-mode="demo" → the in-memory DemoStore (app/demostore.js), so the HARD "demo never
+  Hand-authored Svelte 5 mount point — a marker-free shell (partials/ + build-includes were retired).
+  data-mode="demo" → the in-memory DemoStore (src/lib/demostore.ts), so the HARD "demo never
   persists" invariant holds by construction: nothing is written to IndexedDB or localStorage, and the
-  data-writing controls are disabled. The Svelte app lives in app/staging-svelte/ (dir rename is A30).
+  data-writing controls are disabled. The Svelte app lives in src/app/.
 -->
 <html lang="en">
   <head>

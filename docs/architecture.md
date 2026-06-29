@@ -132,16 +132,16 @@ CSV text
 
 **The app surface (A33 cutover).** All three surfaces — `app.html`, `demo.html`,
 `staging.html` — are hand-authored Svelte 5 mount points that load the same SPA from
-`app/staging-svelte/main.js`, adapting via `document.body.dataset.mode` (`PAGE_MODE`).
+`src/app/main.ts`, adapting via `document.body.dataset.mode` (`PAGE_MODE`).
 **App** (`data-mode="app"`) uses the real IndexedDB `Store`; **Demo** (`data-mode="demo"`)
 uses the in-memory `DemoStore` and never persists; **Staging** (`data-mode="staging"`)
 uses an isolated IndexedDB and seeds the sample dataset. The store is chosen by `PAGE_MODE`
 and handed to the app via a `context('bb:store')` seam (A4/A31), so the UI is
 source-agnostic and the demo's no-persist invariant holds by construction.
 
-The **pure-logic core is reused verbatim** (A29) — `core.js` (compute + costModel + the
-event bus), `adapters.js`, `store.js` / `demostore.js`, `curveseries.js`, `report.js`,
-`sampledata.js`, and `assets/util.js` are plain ES modules imported unchanged by the Svelte
+The **pure-logic core is reused verbatim** (A29, JS→TS per A61) — `core.ts` (compute + costModel + the
+event bus), `adapters.ts`, `store.ts` / `demostore.ts`, `curveseries.ts`, `report.ts`,
+`sampledata.ts`, and the shared `format.ts` (all `src/lib/*.ts`) are TS modules imported unchanged by the Svelte
 components. Reactive state lives in Svelte runes (`$state`/`$derived`) inside the components,
 not in a shared globals object. Boot runs `loadRefData()` → `Store.init()` → `restoreSession()`
 (demo seeds in-memory; staging seeds its DB first), then `mount()`s the app.
@@ -153,7 +153,7 @@ not in a shared globals object. Boot runs `loadRefData()` → `Store.init()` →
 > [ADR-001](adr-001-vite-svelte-spa.md). Only the pure-logic core survived, unchanged.
 
 The activity terminal, session pill, and workspace templates are now Svelte components under
-`app/staging-svelte/components/`. The `core.js` event bus remains: shared actions fire events
+`src/app/components/`. The `core.ts` event bus remains: shared actions fire events
 (`app:ready`, `data:loaded`, `data:imported`, `note:saved`, `trade:deleted`, `backup:created`,
 `data:erased`) over an `EventTarget` for any listener; it stays a no-op when nothing subscribes.
 
@@ -161,7 +161,7 @@ The activity terminal, session pill, and workspace templates are now Svelte comp
 
 To kill copy-paste drift across the info site, two things are single-sourced:
 
-- **Design tokens** live only in [`tokens.css`](../tokens.css). Every page links it directly (the app
+- **Design tokens** live only in [`tokens.css`](../src/styles/tokens.css). Every page links it directly (the app
   surfaces, the bespoke homepage, and the info/admin pages), and the Svelte components read its CSS
   custom properties. Change a color or font in one place.
 - **Shared chrome is Svelte components (A69).** The info-site nav + footer are
@@ -218,7 +218,7 @@ Parsing is keyed to the trading **platform** the CSV came from (TradingView,
 Tradovate, …) — **not** the broker. The two are independent: you might clear
 through **AMP** but export from **TradingView**. The Broker dropdown only drives
 the cost model; the Platform dropdown (and the detector) drives parsing.
-`app/adapters.js` is a small registry — `window.Adapters` — with:
+`src/lib/adapters.ts` is a small registry (the exported `Adapters`, imported by the Svelte app) with:
 
 - **`detect(text)`** — sniffs the header row against each adapter's signature
   columns and returns the best match (e.g. Tradovate has `B/S` + `Contract`;
@@ -245,7 +245,7 @@ R\|Trader, Sierra Chart, TradeStation, MotiveWave, Webull, Interactive Brokers,
 Schwab/thinkorswim** — these are `beta`, built from documented formats and
 exercised by `scripts/test-adapters.mjs` with synthetic samples. They're flagged
 *(beta — verify the numbers)* in the UI until validated against a real export.
-**Adding a platform** = one object in `adapters.js` (`sniff` + `toTrades`) and a
+**Adding a platform** = one object in `adapters.ts` (`sniff` + `toTrades`) and a
 fixture in the test.
 
 ## Cost model
@@ -315,7 +315,7 @@ short SHA-256 **content hash**. At boot the app fetches `manifest.json` with
 
 ## Local persistence
 
-Trade data and day-notes are stored in **IndexedDB** via `app/store.js`. Nothing
+Trade data and day-notes are stored in **IndexedDB** via `src/lib/store.ts`. Nothing
 is uploaded.
 
 - **Stores:** `trades` (keyed by the dedupe id), `journal` (per-day notes keyed by
@@ -336,7 +336,7 @@ sync won't touch the rest of the app. The manager added `deleteTrade`,
 `importAll` to that interface.
 
 Separate, unrelated version numbers are intentionally **not** touched by the
-release automation: `store.js` `DB_VERSION` (IndexedDB schema), the backup-file
+release automation: `store.ts` `DB_VERSION` (IndexedDB schema), the backup-file
 `version`, and `manifest.json` content hashes.
 
 ## Staging sandbox
@@ -344,7 +344,7 @@ release automation: `store.js` `DB_VERSION` (IndexedDB schema), the backup-file
 `app/staging.html` (`body[data-mode="staging"]`) is a **clone of the main app**,
 launched from the admin page (**Launch staging env**) to trial changes before they
 reach the main app. It uses an **isolated IndexedDB** (`blotterbookStaging`, set in
-`store.js`) so testing never touches real data, and **seeds the sample dataset
+`store.ts`) so testing never touches real data, and **seeds the sample dataset
 once** so it opens in the loaded state. It has the full top bar including **Manage
 data** and the **Load CSV** landing; notes/tags/filters persist to its own DB.
 
@@ -360,12 +360,12 @@ promoted to every surface. It marks only the staging **environment**: the isolat
 `blotterbookStaging` DB, the one-time sample seed, the "open on the initial state"
 landing, and the **Exit staging** affordance. The widgets it once gated (activity
 terminal, session pill, workspace templates) are now ordinary Svelte components under
-`app/staging-svelte/components/`, rendered on every surface.
+`src/app/components/`, rendered on every surface.
 
 ## Building a feature (all surfaces share one SPA)
 
 Since the A33 cutover, all three surfaces (app + demo + staging) **mount the same Svelte SPA**
-from `app/staging-svelte/main.js` — there is no longer a separate staging codebase to "promote"
+from `src/app/main.ts` — there is no longer a separate staging codebase to "promote"
 from. A feature you add to the Svelte app appears on every surface at once; the surface a behavior
 shows on is decided **in the component** by `PAGE_MODE` / `isDemo` / `STAGING_PAGE`, not by where
 the code lives.
@@ -379,8 +379,8 @@ or a Svelte component bumps **both** (it ships to all surfaces).
 
 **Checklist for a new feature:**
 
-1. **Build it in `app/staging-svelte/`** — a component (or extend one), reusing the pure-logic
-   core (`core.js`/`adapters.js`/`store.js`/…) verbatim. Read/write data only through the `Store`
+1. **Build it in `src/app/`** — a component (or extend one), reusing the pure-logic
+   core (`core.ts`/`adapters.ts`/`store.ts`/…) verbatim. Read/write data only through the `Store`
    handed in via `context('bb:store')`, never `indexedDB` directly.
 2. **Gate per surface in the component** — e.g. `{#if STAGING_PAGE}` for staging-env-only chrome.
    Most features need no gate; they ship everywhere.
@@ -430,13 +430,14 @@ GitHub Actions bot to be allowed to push to `main`; if the branch is protected t
 job logs a warning instead of failing.
 
 **Display is runtime-fetched.** Each page's `.ver` badge is populated at load from
-`/data/versions.json` (`assets/util.js` on the info pages; the Svelte app fetches it on
-boot), so there's no baked literal to keep in sync anymore. The admin panel surfaces the
+`/data/versions.json` (the version-badge helper lives in `src/lib/format.ts`, used by the SSG
+info pages; the Svelte app fetches it on boot), so there's no baked literal to keep in sync
+anymore. The admin panel surfaces the
 same values **read-only**.
 
 ## Changelog release notes
 
-`changelog.html` → `assets/changelog.js` renders **`data/changelog.json`** (F13): a
+`changelog.html` → its Svelte SSG component `src/site/components/Changelog.svelte` renders **`/data/changelog.json`** (F13): a
 curated, version-keyed release-notes file for the **prod** (main + demo) track,
 newest first. Each entry has a prod `version`, a `date`, a friendly
 `title`/`summary`, and optional `highlights`. Everything before automated
@@ -445,7 +446,7 @@ versioning is rolled up into a single `beta: true` "Beta released" entry.
 It is **manually curated** — add a new entry at the top of `releases` each time the
 prod version bumps. This deliberately replaces the old raw-commit feed so the page
 reads as release notes, not a git log. The file is hash-cache-busted by
-`build-manifest` like other `data/*.json`; `assets/changelog.js` keeps a tiny
+`build-manifest` like other `data/*.json`; `Changelog.svelte` keeps a tiny
 inline fallback for local dev / a failed fetch.
 
 ## Admin page & the Live indicator
@@ -481,7 +482,7 @@ anchor links plus links to the standalone info pages. On narrow screens the nav
 links collapse behind a **hamburger menu** (a CSS-only checkbox toggle on every
 page).
 
-**Standalone info pages** (share `site.css`): `howto.html` (a How-To wiki with a
+**Standalone info pages** (Svelte SSG sharing `Nav`/`Footer`/`SiteShell` chrome; page CSS is scoped per component, A69): `howto.html` (a How-To wiki with a
 sticky sidebar — getting-started walkthrough + per-platform import guides),
 `roadmap.html` (shipped-vs-planned checklist), `changelog.html` ("Blotterlog"
 release notes), and `legal.html` (disclaimers, terms, privacy summary).

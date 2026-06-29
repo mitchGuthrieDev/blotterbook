@@ -38,11 +38,11 @@ Cloudflare Pages (build → `dist/`) plus `/functions/*` edge functions.
   files from disk breaks it. Use a static server.
 - **The `/app/` surface is a Svelte 5 SPA** (ADR-001; A26 Vite, A27 staging, A33 cutover). All three
   surfaces — `app/app.html`, `app/demo.html`, `app/staging.html` — are hand-authored, marker-free
-  mount points (`<div id="app">` + `<script type="module" src="./staging-svelte/main.js">`, body
-  `data-mode="app|demo|staging"`). The Svelte app lives in `app/staging-svelte/` (App.svelte +
-  components/ + modal.js/util.js; dir rename is A30) and reuses the **pure-logic core verbatim**
-  (A29): `adapters` / `compute`+`costModel` in `core.js` / `store` / `sampledata` / `demostore` /
-  `curveseries` / `report`, with [`assets/util.js`](assets/util.js) shared by the app *and* the info
+  mount points (`<div id="app">` + `<script type="module" src="./main.ts">`, body
+  `data-mode="app|demo|staging"`). The Svelte app lives in `src/app/` (App.svelte +
+  components/ + lib/{modal,actions,files,flags}.ts; dir rename is A30) and reuses the **pure-logic core verbatim**
+  (A29, JS→TS per A61): `adapters` / `compute`+`costModel` in `core.ts` / `store` / `sampledata` / `demostore` /
+  `curveseries` / `report` (all `src/lib/*.ts`), with [`format.ts`](src/lib/format.ts) shared by the app *and* the info
   pages. Component CSS is scoped (Vite extracts it to a linked stylesheet); cross-component state is
   Svelte runes (`$state`/`$derived`), not a shared globals object. The mode-aware store seam (context
   `'bb:store'`) picks the real IndexedDB `Store` (app/staging) or the in-memory `DemoStore` (demo, so
@@ -108,8 +108,8 @@ So:
   major.
 - **App surfaces & their sources (A33).** All three — `app/app.html`, `app/demo.html`,
   `app/staging.html` — are hand-authored, marker-free **Svelte mount points** that load
-  `app/staging-svelte/main.js` and differ only by `<body data-mode="app|demo|staging">`. Edit the
-  Svelte components in `app/staging-svelte/`, not the HTML shells. (The old `partials/app-*.html`
+  `src/app/main.ts` and differ only by `<body data-mode="app|demo|staging">`. Edit the
+  Svelte components in `src/app/`, not the HTML shells. (The old `partials/app-*.html`
   single-source shells were deleted in A33.)
 - **Demo must never mutate or persist.** Demo mounts the Svelte app with `data-mode="demo"` → the
   in-memory `DemoStore`, so **nothing reaches IndexedDB or localStorage by construction**. On top of
@@ -127,7 +127,7 @@ So:
   `src/site/lib/{Nav,Footer,SiteShell}.svelte`), not the HTML shells. NOT behind the app SPA shell
   (ADR-001); no SvelteKit (A62). Keep CSP `style-src 'self'` — no inline `style=""`; use a CSSOM
   action for dynamic styles (A55). admin stays Cloudflare Access–gated + noindex.
-- **Edit data through the `Store` interface only** (`app/store.js`) — never touch
+- **Edit data through the `Store` interface only** (`src/lib/store.ts`) — never touch
   `indexedDB` directly. A future `CloudStore` implements the same interface.
 - **The user-facing changelog is hand-curated** in `data/changelog.json` (not raw
   commits). Add an entry when `prod` bumps.
@@ -280,19 +280,19 @@ for app/staging, in-memory `DemoStore` for demo), and `PAGE_MODE`/`STAGING_PAGE`
 surface. Boot: `loadRefData()` → `Store.init()` → `restoreSession()` (demo seeds in-memory;
 staging seeds its DB first) → `mount()`.
 
-The `core.js` event bus survives the cutover: shared actions fire events (`app:ready`,
+The `core.ts` event bus survives the cutover: shared actions fire events (`app:ready`,
 `data:loaded`, `data:imported`, `note:saved`, `trade:deleted`, `backup:created`, `data:erased`)
 over an `EventTarget` for any listener. The bus is a no-op with no subscriber.
 
 ## Adding things
 
-- **A platform adapter:** one object in `app/adapters.js` (`sniff` + `toTrades`)
+- **A platform adapter:** one object in `src/lib/adapters.ts` (`sniff` + `toTrades`)
   plus a fixture in `scripts/test-adapters.mjs`. Every adapter normalizes to the
   same trade shape `{ time, date, pnl, symbol, root, side[, qty, entryTime,
   exitTime, holdMs] }` so `compute()`/`costModel()` never change.
 - **A rate change:** edit the relevant `data/*.json`, then run
   `build-manifest.mjs`. No app code changes.
-- **A new feature:** add/extend a Svelte component in `app/staging-svelte/`; it ships to all three
+- **A new feature:** add/extend a Svelte component in `src/app/`; it ships to all three
   surfaces at once (no promotion step since the A33 cutover). Gate per surface in the component
   (`PAGE_MODE`/`isDemo`/`STAGING_PAGE`) and keep demo non-mutating. See the checklist in
   [docs/architecture.md](docs/architecture.md#building-a-feature-all-surfaces-share-one-spa).

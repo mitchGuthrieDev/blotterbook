@@ -2,10 +2,9 @@
 <!--
   Blotterbook — APP surface (ADR-001 / A33 cutover).
 
-  Hand-authored Svelte 5 mount point (like app/demo.html and app/staging.html). NOT assembled from
-  partials/ — it carries no include markers, so build-includes leaves it untouched. The Svelte app
-  lives in app/staging-svelte/ (dir rename is A30) and reuses the pure-logic core verbatim (A29):
-  data-mode="app" → real IndexedDB Store + the landing/CSV flow.
+  Hand-authored Svelte 5 mount point (like app/demo.html and app/staging.html) — a marker-free shell
+  (partials/ + build-includes were retired). The Svelte app lives in src/app/ and reuses the
+  pure-logic core verbatim (A29): data-mode="app" → real IndexedDB Store + the landing/CSV flow.
 -->
 <html lang="en">
   <head>

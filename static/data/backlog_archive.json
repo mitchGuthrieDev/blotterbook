@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "title": "Blotterbook — completed backlog archive (Done items)",
   "intro": "Archived Done items moved out of backlog.json to keep the active backlog lean. Each retains its doneNote — the shipped record of what was actually done (prompts were already stripped per donePolicy). Newest work tends toward the end, mirroring the order items were completed in the live file.",
-  "updated": "2026-06-28",
+  "updated": "2026-06-29",
   "note": "Append-only archive of completed backlog items. When an item in backlog.json is set to `done`, move its object here. Admin-only and fetched no-store; like backlog.json it is EXCLUDED from the cache-busting manifest (build-manifest.mjs) and from version-bump path classification (bump-version.mjs), so editing it never churns the manifest or bumps the version. The admin Backlog panel fetches this file alongside backlog.json and merges the item lists.",
   "categories": [
     "SECURITY",
@@ -2218,6 +2218,17 @@
       "completedDate": "2026-06-28",
       "partial": false,
       "doneNote": "**Done — the A78 blocker resolved.** typescript-eslint 8.62 now supports ESLint 10 (peer `eslint: ^8.57 || ^9 || ^10`, typescript `<6.1` — repo is on eslint 10.6 / typescript 6.0), so .ts is now linted instead of tsc-only. Added typescript-eslint (dev-only, A28) and two minimal `**/*.ts` flat-config blocks (src/ browser, functions/ Workers runtime) using its parser + the `@typescript-eslint/no-unused-vars` house-style variant (args none, caughtErrors none, `^_` ignore); core `no-undef`/`no-unused-vars` are off for .ts since tsc/svelte-check own those. Retired the two dead `.js` globs (no hand-written .js remains under src/ or functions/). The new linting immediately caught and fixed a real unused `TradeMeta` type import in store.ts. `eslint .` lints the whole .ts tree cleanly; npm test green. (oxlint 1.71 / Biome 2.5 were evaluated as no-peer-dep alternatives but are unnecessary now and would overlap Prettier.)"
+    },
+    {
+      "id": "A68",
+      "title": "Audit the documentation for currency + accuracy",
+      "category": "COMMENTS / READABILITY",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Done — audited all project docs against the shipped code (post ADR-001 / A30 / A33 / A61 / A69).** Fixed the pervasive stale references across CLAUDE.md, docs/architecture.md, functions/README.md and the three app HTML-shell header comments: `app/staging-svelte/` → `src/app/`; the `.js` core names → `.ts` (`core.ts`/`store.ts`/`adapters.ts`/… under `src/lib/`); deleted `assets/util.js` → `src/lib/format.ts`; deleted `assets/changelog.js` → the SSG `Changelog.svelte`; the gone `window.Adapters` global → the exported `Adapters`; `site.css` → scoped component styles (A69); `app/store.js`/`app/entitlements.js` → `src/lib/*.ts`; `functions/_middleware.js` → `.ts`; and the broken `[tokens.css](../tokens.css)` link → `../src/styles/tokens.css`. Verified every internal anchor/link resolves and each new path exists. The dated decision records (adr-001, build-step-decision, typescript-decision) were left as historically-fenced records (their pre-reorg facts are correctly framed as superseded); README was already accurate. Scope note: a deeper sweep of scattered build-includes/partials mentions in non-shell component comments was left as a follow-up. npm test green."
     }
   ]
 }

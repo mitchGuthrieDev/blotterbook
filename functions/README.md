@@ -17,8 +17,8 @@ subscription tier) cloud-hosted storage.
 | `cloud` | recurring subscription   | IndexedDB **+** server storage | planned  |
 
 The client never branches on the tier when reading/writing data — it goes
-through `Store` (`app/store.js`). A future `CloudStore` implementing the same
-interface gets selected by `Entitlements.storeFor()` (`app/entitlements.js`),
+through `Store` (`src/lib/store.ts`). A future `CloudStore` implementing the same
+interface gets selected by `Entitlements.storeFor()` (`src/lib/entitlements.ts`),
 so adding the cloud tier does not touch the rest of the app.
 
 ## Account provisioning flow (planned, à la gwtrade.app)
