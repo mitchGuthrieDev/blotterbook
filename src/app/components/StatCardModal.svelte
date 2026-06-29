@@ -2,7 +2,7 @@
   // Stat-card detail modal (A35 — parity with vanilla widgets.js CARD_VIEWS / openCardModal, F14).
   // Clicking a headline Overview card opens this drill-down. All data comes from compute() metrics +
   // costModel (A29 — reuses dowBuckets/DOW_LABEL/minMax from core); charts are small inline SVG/bars.
-  import { usd, money, cls, ratio, minMax, dowBuckets, DOW_LABEL } from '../../lib/core.ts';
+  import { usd, money, cls, ratio, minMax, linePath, dowBuckets, DOW_LABEL } from '../../lib/core.ts';
   import type { Metrics } from '../../lib/core.ts';
   import type { CostModel, Trade } from '../../lib/types.ts';
   import { modal } from '../lib/modal.ts';
@@ -36,7 +36,7 @@
       H = 90;
     const x = (i: number) => (i / (curve.length - 1)) * W;
     const y = (v: number) => H - ((v - lo) / span) * H;
-    return { d: curve.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' '), x, y, W, H };
+    return { d: linePath(curve, x, y), x, y, W, H };
   }
   // Simple histogram (8 bins) of a value set.
   function hist(values: number[]) {

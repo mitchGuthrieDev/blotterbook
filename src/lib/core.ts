@@ -297,6 +297,9 @@ export const usd = (v: number, s = true) => {
   return sign + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 export const money = (v: number) => usd(v, false);
+// signed whole-dollar with thousands grouping: +$1,234 / -$56 / +$0. Compact money for tight UI slots
+// (calendar cells) where the full precision lives in a tooltip (A92 — shared so it can't drift).
+export const usdWhole = (v: number) => (v < 0 ? '-' : '+') + '$' + Math.abs(Math.round(v)).toLocaleString('en-US');
 export const cls = (v: number) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
 // Ratio/number formatters shared by the Svelte overview / advanced-stats / stat-card modal so the
 // "∞ / —" handling can't drift between them.
@@ -336,6 +339,10 @@ export function axMoney(v: number) {
   if (a >= 1000) return s + '$' + (a / 1000).toFixed(a >= 10000 ? 0 : 1) + 'k';
   return s + '$' + Math.round(a);
 }
+/* SVG polyline path ("M…L…L…") from a series of y-values, given index→x and value→y scales. Shared by
+   the equity curve and the stat-card mini-charts (A92) so their geometry can't drift. */
+export const linePath = (vals: number[], x: (i: number) => number, y: (v: number) => number) =>
+  vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
 
 /* ============================================================
    Trade/date classifiers shared across surfaces (kept here so the vanilla view and the Svelte

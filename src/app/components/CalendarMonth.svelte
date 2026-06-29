@@ -2,7 +2,7 @@
   // Sunday-first month calendar of daily P&L, derived from compute()'s m.days (A29 — no
   // recomputation). The cursor starts on the latest trade's month. Includes day-note dots, day
   // selection → dashboard scoping + curve cross-link, and the left ISO-Week column (A40).
-  import { pad2, usd, money, isoWeek } from '../../lib/core.ts';
+  import { pad2, usd, money, usdWhole, isoWeek } from '../../lib/core.ts';
   import type { Metrics } from '../../lib/core.ts';
   import type { PanelBundle } from '../../lib/types.ts';
   import type { Snippet } from 'svelte';
@@ -72,8 +72,8 @@
     return rows;
   }
 
-  // Compact whole-dollar label for a cell (the full value is in the title tooltip).
-  const compact = (v: number) => (v < 0 ? '-' : '+') + '$' + Math.abs(Math.round(v)).toLocaleString('en-US');
+  // Compact whole-dollar label for a cell (the full value is in the title tooltip) — usdWhole (A92).
+  const compact = usdWhole;
 </script>
 
 <Panel {...panel} title="Trading Calendar">

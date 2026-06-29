@@ -7,7 +7,7 @@
   //
   // The viewBox WIDTH tracks the measured pixel width (like vanilla renderCurve) so the SVG text
   // labels aren't horizontally stretched — height is fixed, so both axes render at ~1:1.
-  import { usd, money, axMoney, niceTicks, blendedRateFor } from '../../lib/core.ts';
+  import { usd, money, axMoney, niceTicks, linePath, blendedRateFor } from '../../lib/core.ts';
   import type { Metrics } from '../../lib/core.ts';
   import { dailySeries } from '../../lib/curveseries.ts';
   import type { DailyPoint } from '../../lib/curveseries.ts';
@@ -113,9 +113,9 @@
     const x = (i: number) => padL + (i / (pts.length - 1)) * (w - padL - padR);
     const y = (v: number) => padT + (1 - (v - lo) / span) * (H - padT - padB);
     const prim = ser[0].key;
-    const lines = ser.map(s => ({ ...s, d: pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[s.key]).toFixed(1)}`).join(' ') }));
+    const lines = ser.map(s => ({ ...s, d: linePath(pts.map(p => p[s.key]), x, y) }));
     const baseY = (H - padB).toFixed(1);
-    const area = `${pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[prim]).toFixed(1)}`).join(' ')} L${x(pts.length - 1).toFixed(1)},${baseY} L${x(0).toFixed(1)},${baseY} Z`;
+    const area = `${linePath(pts.map(p => p[prim]), x, y)} L${x(pts.length - 1).toFixed(1)},${baseY} L${x(0).toFixed(1)},${baseY} Z`;
     const idxByDate = new Map<string, number>();
     pts.forEach((p, i) => p.date && idxByDate.set(p.date, i));
     const notes: Array<{ x: number; y: number; date: string }> = [];

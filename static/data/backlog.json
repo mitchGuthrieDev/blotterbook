@@ -425,7 +425,7 @@
       "status": "open",
       "completedDate": null,
       "partial": false,
-      "prompt": "From the R1 audit (2026-06-29, second full pass, post Svelte/TS reorg). The overlay backdrop + modal card + `.head` bar + `.x` close button CSS and markup are copy-pasted across StatCardModal.svelte (~202,260,269,276,280), ManageData.svelte (~296,306,317,324,328) and ExportReport.svelte (~147,157), differing only in max-width/padding/z-index; JournalEditor/EquityCurve carry near-identical `.x` variants (22px vs 20px drift). These already share the behavioral modal.ts action — only the chrome is un-shared. Extract a `Modal.svelte` (overlay + card + head + close, props: title/maxWidth/onclose + a children snippet, wrapping use:modal); each modal then supplies only its body. Removes the largest block of repeated CSS+markup and unifies the close button.",
+      "prompt": "Extract a shared Modal.svelte (overlay/card/head/close). — R1-FOLLOWUP FINDING (2026-06-29): on inspection this does NOT cleanly apply to the scoped-CSS Svelte architecture and is NOT recommended as specified. The three modals' CARDS genuinely differ: StatCardModal is overflow:auto (whole card scrolls, max-width 460px), while ManageData/ExportReport are display:flex/flex-direction:column/overflow:hidden with an internally-scrolling body (960px/880px); overlay padding (6vh/4vh/5vh) and z-index (60/50/60) also differ, and ManageData's use:modal has a custom close (cancel edit, else close). The only genuinely-shared surface is the backdrop + the dialog a11y wiring (role/aria/use:modal/click-outside) + the × glyph (~18 lines). Parameterising the real differences (scroll model, sizing, z-index, custom close) into one component yields more indirection than dedup and risks layout regressions e2e won't catch. RECOMMENDATION: drop, or re-scope to extract ONLY a tiny backdrop+close helper if desired.",
       "doneNote": null
     },
     {
@@ -437,7 +437,7 @@
       "status": "open",
       "completedDate": null,
       "partial": false,
-      "prompt": "From the R1 audit (2026-06-29, second full pass, post Svelte/TS reorg). `.pos{color:var(--green)} .neg{color:var(--red)}` (and raw `color:var(--green/red)`) are re-declared in 7 scoped <style> blocks — StatCard, StatCardModal, AdvancedStats, CalendarMonth, CostPanel, DayTrades, ManageData — all pairing with the shared `cls()` helper in core.ts that already emits 'pos'/'neg'. Promote the two utility classes to a single `:global` rule in the app shell so cls() output is styled once. Tokens stay in tokens.css; this is a shared class, not a new token (keeps style-src 'self').",
+      "prompt": "Single shared .pos/.neg tone rule. — R1-FOLLOWUP FINDING (2026-06-29): on inspection this does NOT cleanly apply to the scoped-CSS Svelte architecture and is NOT recommended as specified. A blanket global :global(.pos){color:var(--green)} loses to each component's scoped .x.pos rule (Svelte adds a scope-hash → higher specificity than a bare global), so it either does nothing or needs !important. Worse, 'pos'/'neg' is OVERLOADED: most components use it for TEXT color, but CalendarMonth uses .cell.pos/.neg for a BACKGROUND tint — a global text-color rule would bleed onto cells. A safe consolidation would require renaming the calendar's background classes AND raising the global's specificity, which is more churn than the P3 dedup is worth. RECOMMENDATION: drop, or only pursue alongside a deliberate tone-class redesign.",
       "doneNote": null
     },
     {
