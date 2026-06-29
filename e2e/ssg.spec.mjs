@@ -14,7 +14,7 @@ const PAGES = [
       'Free for everyone. Support if it helps.',
     ],
   },
-  { path: '/howto.html', must: ['How to use Blotterbook', 'Importing by platform', 'Tradovate'] },
+  { path: '/howto.html', must: ['How to use Blotterbook', 'What is futures trading?', 'Importing by platform', 'Tradovate'] },
   { path: '/roadmap.html', must: ['Available now', 'In progress', 'Numbers you can trust to the cent'] },
   // Changelog server-renders the inline fallback (the live notes load via fetch on hydration).
   { path: '/changelog.html', must: ['Changelog', 'Beta released', 'class="entry'] },

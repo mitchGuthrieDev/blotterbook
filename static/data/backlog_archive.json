@@ -2834,6 +2834,61 @@
       "completedDate": "2026-06-29",
       "partial": false,
       "doneNote": "(1) Extracted a shared Caveats.svelte component — the 'Assumptions & caveats' <details> block (summary + ul + the li/b/em/i styling) lives once now; AdvancedStats.svelte + CostPanel.svelte render <Caveats>{li bullets}</Caveats> and dropped their duplicate ~25-line .caveats CSS. The bullets pass as the children snippet (the caller's scope), so their li/b/em/i styling uses :global scoped under the Caveats-owned .caveats/ul — CSP-clean (no inline styles), verified identical rendering (li=--dim 12px, b=--txt, em/i italic). (2) Button-idiom DECISION: KEEP the scoped repetition — do NOT introduce a Button.svelte primitive now. Rationale: the ~6-8 'secondary control' buttons vary (size/padding; donate/accent vs panel2-secondary tones), so a shared component needs a variant API that outweighs the small per-site duplication; refactoring 8 call sites across 5 components is disproportionate churn/risk for a P3 cleanup; and A104 favors colocated scoped CSS over utility/global classes (a global .btn utility would contradict it). A Button primitive earns its weight better as the UI grows (e.g. alongside the F29 resizable-grid work) — left for then. (3) Fixed the stale tokens.css header comment (referenced site.css / app.css / the 'bespoke homepage index.html', all retired by A69/A30) to describe the current reality. npm test + 45 e2e green; bundle 175.8/200 KiB."
+    },
+    {
+      "id": "F31",
+      "title": "(staging) Add a Broker column to the Trade Blotter",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Added a staging-only 'Broker' column to the Trade Blotter (TradeBlotter.svelte), between Qty and Commission, showing the broker attributed to each trade's commission — today the single account-level setup broker via BROKERS[broker].name (brokerLabel derived). Gated on STAGING_PAGE: 9 columns on staging, 8 on prod/demo. e2e updated (staging th=9 + Broker header; demo th=8, no Broker). Staging-gated pending CH16."
+    },
+    {
+      "id": "F32",
+      "title": "(staging) Paginate the Trade Blotter (selectable page size)",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Paginated the Trade Blotter (TradeBlotter.svelte): default 50 rows/page with a user-selectable size of 25/50/100/150/All, a 'Rows' <select>, prev/next controls, and a '1–50 of N' info line — mirroring the Manage-data pager (A73). Page index CLAMPS (doesn't reset) as the filtered set changes so an inline-note edit doesn't yank the user back to page 1; 'All' (pageSize=Infinity) shows every row and hides the nav. Gated on STAGING_PAGE — prod/demo render every row as before. CSP-clean. e2e covers 50-default / 25 / All and the demo-has-no-pager case. Staging-gated pending CH16."
+    },
+    {
+      "id": "A127",
+      "title": "(staging) Session-status popup clipped on mobile",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Fixed the session-status popup (.sesspop) clipping on mobile. Root cause: it's position:absolute; right:0 anchored to the status pill, which sits at the LEFT once the top bar wraps on a phone — so the 260px popup spilled ~216px off the LEFT edge (clipped by body overflow-x:hidden). Fix: a <=560px media query anchors it left:0 (right:auto) and caps max-width:calc(100vw - 24px), keeping the readable ~260px width fully on screen. Verified on-screen at 360/390/480px (left=10, right=296). Pure CSS; applied on all surfaces (the pill ships everywhere)."
+    },
+    {
+      "id": "F33",
+      "title": "(staging) Blotterbook logo links to the homepage",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Made the 'Blotterbook' wordmark in the app top bar a homepage link on staging — wrapped in <a class=brandlink href='/'> (plain text on prod/demo, gated on isStaging), styled to match the wordmark (inherit color, no underline, accent hover, focus-visible ring); a real focusable link (a11y). e2e: staging brand link href='/'; demo has no brand link. Staging-gated pending CH16."
+    },
+    {
+      "id": "F34",
+      "title": "How-to: \"What is futures trading?\" intro page",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Added a 'What is futures trading?' intro section to the How-To wiki (src/site/components/Howto.svelte, the SSG marketing site) with a new 'Background' nav group linking to it. Plain-language explainer (futures contracts, leverage, standardization) -> a numbered setup how-to distinguishing broker vs platform vs data feed -> a 'Where Blotterbook fits' wrap-up. Reuses the page's existing prose/.steps styling (no new CSS), prerendered (SSG) + CSP-clean. e2e (ssg.spec) asserts the heading is in the RAW server-rendered HTML. Ships on all surfaces (marketing page)."
     }
   ]
 }

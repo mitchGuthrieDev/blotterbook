@@ -358,9 +358,18 @@ test('staging (Svelte): Trade Blotter lists trades + inline note persists (F23)'
   const gridKeys = await page.locator('#sv-app .modgrid section.panel').evaluateAll(els => els.map(e => e.getAttribute('data-key')));
   expect(gridKeys).toEqual(['cal', 'cost', 'adv']);
   expect(await page.locator('#sv-app .modgrid section.panel[data-key="blotter"]').count()).toBe(0);
-  // Read-only table with rows + the eight columns.
+  // Read-only table with rows + the nine columns (F31 adds a staging-only Broker column).
   await expect(blotter.locator('.bltab tbody tr').first()).toBeVisible();
-  await expect(blotter.locator('.bltab thead th')).toHaveCount(8);
+  await expect(blotter.locator('.bltab thead th')).toHaveCount(9);
+  await expect(blotter.locator('.bltab thead th', { hasText: 'Broker' })).toHaveCount(1);
+  // F32 (staging): the blotter paginates at 50/page by default.
+  await expect(blotter.locator('.bltab tbody tr')).toHaveCount(50);
+  await expect(blotter.locator('.blpager .pginfo')).toContainText('1–50 of');
+  await blotter.locator('.blpsize select').selectOption('25');
+  await expect(blotter.locator('.bltab tbody tr')).toHaveCount(25);
+  await blotter.locator('.blpsize select').selectOption('all'); // "All" shows every row + hides the pager nav
+  await expect(blotter.locator('.blnav')).toHaveCount(0);
+  await blotter.locator('.blpsize select').selectOption('50'); // back to a paged view for the note test below
   // Inline note: editable, persists across a reload via Store.saveTradeMeta (trademeta).
   const note = blotter.locator('.bltab tbody tr .note').first();
   await note.fill('e2e blotter note');
@@ -563,8 +572,24 @@ test('demo (Svelte): Trade Blotter module present + non-mutating (F23, promoted)
   const keys = await page.locator('#sv-app .dash section.panel').evaluateAll(els => els.map(e => e.getAttribute('data-key')));
   expect(keys.indexOf('blotter')).toBe(keys.indexOf('cal') + 1);
   await expect(blotter.locator('.bltab tbody tr').first()).toBeVisible();
+  // F31/F32 staging-gated: demo keeps the 8-column blotter (no Broker column) and no pager.
+  await expect(blotter.locator('.bltab thead th')).toHaveCount(8);
+  await expect(blotter.locator('.bltab thead th', { hasText: 'Broker' })).toHaveCount(0);
+  await expect(blotter.locator('.blpager')).toHaveCount(0);
   // Demo must not mutate: the inline Note input is disabled.
   await expect(blotter.locator('.bltab tbody tr .note').first()).toBeDisabled();
+});
+
+// F33 (staging): the Blotterbook wordmark links to the homepage; prod/demo keep it as plain text.
+test('staging (Svelte): the Blotterbook logo links home (F33)', async ({ page }) => {
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  await expect(page.locator('#sv-app .brand a.brandlink')).toHaveAttribute('href', '/');
+});
+test('demo (Svelte): the Blotterbook logo is not a link (F33 staging-gated)', async ({ page }) => {
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  await expect(page.locator('#sv-app .brand a')).toHaveCount(0);
 });
 
 // A97 (R18) promoted to all surfaces (CH16): the Definitions panel is trimmed to the parsing caveats

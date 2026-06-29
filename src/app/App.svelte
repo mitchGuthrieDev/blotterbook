@@ -654,7 +654,9 @@
   {/if}
   <header class="topbar">
     <div class="brand">
-      Blotterbook {#if isStaging}<span class="badge">Staging</span>{/if}{#if flags.betaRibbon}<span class="badge beta">Beta</span>{/if}
+      <!-- F33 (staging): the wordmark links back to the homepage. Plain text on prod/demo until CH16. -->
+      {#if isStaging}<a class="brandlink" href="/">Blotterbook</a>{:else}Blotterbook{/if}
+      {#if isStaging}<span class="badge">Staging</span>{/if}{#if flags.betaRibbon}<span class="badge beta">Beta</span>{/if}
     </div>
     <div class="meta">
       {metaLead}{#if dateRange}{metaLead ? ' · ' : ''}{dateRange}{/if}
@@ -854,6 +856,19 @@
     font-weight: 700;
     letter-spacing: 0.2px;
   }
+  /* F33 (staging): the wordmark home-link inherits the brand styling (no underline). */
+  .brandlink {
+    color: inherit;
+    text-decoration: none;
+  }
+  .brandlink:hover {
+    color: var(--accent);
+  }
+  .brandlink:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
   .badge {
     font-size: 11px;
     font-weight: 700;
@@ -960,6 +975,16 @@
     padding: 10px 12px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     text-align: left;
+  }
+  /* A127: on mobile the top bar wraps and the status pill sits at the LEFT, so a right:0-anchored
+     260px popup spilled off the left edge (clipped by body overflow-x:hidden). Anchor it to the pill's
+     left and clamp its width to the viewport so it stays fully on screen. */
+  @media (max-width: 560px) {
+    .sesspop {
+      right: auto;
+      left: 0;
+      max-width: calc(100vw - 24px);
+    }
   }
   .pophd {
     margin: 0 0 6px;

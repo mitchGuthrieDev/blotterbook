@@ -15,6 +15,8 @@
 
   <div class="wikilayout">
     <nav class="wikinav" aria-label="How-to contents">
+      <div class="grp">Background</div>
+      <a href="#intro-futures">What is futures trading?</a>
       <div class="grp">Getting started</div>
       <a href="#gs-firstrun">First run</a>
       <a href="#gs-setup">Broker &amp; costs</a>
@@ -34,6 +36,48 @@
     </nav>
 
     <main class="wikimain">
+      <!-- ============ BACKGROUND ============ -->
+      <section id="intro-futures">
+        <h2>What is futures trading?</h2>
+        <p>
+          A <b>futures contract</b> is a standardized agreement to buy or sell something — a stock index, crude oil, gold, the euro — at a
+          set price on a future date. Traders rarely hold to delivery; they buy and sell the contracts themselves to profit from price
+          moves, then close out before expiry. Index futures like the <b>E-mini S&amp;P 500 (ES)</b> and its smaller <b>Micro (MES)</b>
+          sibling are among the most actively traded.
+        </p>
+        <p>
+          Two things set futures apart from buying shares: <b>leverage</b> — a single contract controls a large notional value for a small
+          margin deposit, so gains <i>and</i> losses are amplified — and <b>standardization</b> — every contract's size, tick value, and
+          trading hours are fixed by the exchange. That leverage is exactly why tracking your real, after-cost performance matters: small
+          per-trade costs compound fast.
+        </p>
+        <p><b>Getting set up — broker, platform, and data feed.</b> Three separate pieces that are easy to confuse:</p>
+        <ol class="steps">
+          <li>
+            <b>Broker</b> — the firm that holds your account and routes orders to the exchange. It sets your <b>commission</b> per contract.
+            Choose on commissions, funding terms, supported markets, and reputation.
+          </li>
+          <li>
+            <b>Platform</b> — the software you actually chart and trade in (TradingView, Tradovate, Sierra Chart, …). Some brokers bundle
+            one; many platforms connect to several brokers, sometimes for a monthly <b>platform fee</b>. This is the piece you export your
+            CSV from for Blotterbook.
+          </li>
+          <li>
+            <b>Data feed</b> — the real-time market data your platform displays, billed monthly by the exchange (e.g. CME) and/or the
+            platform. Non-professional feeds are inexpensive; pick the markets you actually trade.
+          </li>
+        </ol>
+        <p>
+          Together these are your true cost of trading — commissions per round-turn plus monthly subscriptions — on top of any taxes owed.
+        </p>
+        <p>
+          <b>Where Blotterbook fits.</b> Blotterbook is the journal that ties it together. Export a CSV from your <b>platform</b>, set your
+          <b>broker</b>, <b>data feed</b>, and <b>state</b> once, and it shows your performance <b>after</b> commissions, subscriptions, and
+          an estimated Section&nbsp;1256 tax — not just gross P&amp;L — entirely in your browser, with nothing uploaded. Ready to start? The
+          setup walkthrough is just below.
+        </p>
+      </section>
+
       <!-- ============ GETTING STARTED ============ -->
       <section id="gs-firstrun">
         <h2>First run</h2>
