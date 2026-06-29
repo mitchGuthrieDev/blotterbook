@@ -2262,6 +2262,17 @@
       "completedDate": "2026-06-29",
       "partial": false,
       "doneNote": "**Shipped (homepage).** Each feature in the homepage feature-explorer detail panel (F7) now carries a topic graphic — an inline SVG that visually represents the feature, replacing the small repeated icon: a browser+padlock (private by design), a cost waterfall (true after-cost), a net bar with a tax slice + location pin (tax model), grouped comparison bars (broker/feed), a rising equity curve beside a month-grid calendar (curve & calendar), and a filter funnel feeding stat chips (filters/journal/stats). Dependency-free inline SVG, responsive (width 100%, max-width 320px), colored from tokens.css via classes styled in the component's scoped <style> with `:global()` so the {@html}-injected shapes match — CSP `style-src 'self'` clean (no inline style=\"\"). Verified in-browser: graphics render with token colors (e.g. accent rgb(106,160,255)), swap correctly across all 6 features, no console errors. typecheck 0/0; e2e 25/25."
+    },
+    {
+      "id": "CH27",
+      "title": "(infra) Cache the per-visitor /api/* calls to extend the Workers free-tier headroom",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Shipped (infra).** Edge-cached the rarely-changing public GETs to cut the per-visitor Function invocations + KV reads that count against the Workers free-tier cap (and the A17 KV budget). Added `cachedJson()` / `purgeCached()` helpers (functions/_lib/http.ts) over the colo Cache API (`caches.default`) + browser `Cache-Control`: GET /api/status edge-cached 30s, GET /api/config 60s (both visitor-independent; a brief stale read is harmless and an admin POST purges the entry so changes apply immediately); GET /api/geo gets `Cache-Control: private, max-age=1800` (the response is the visitor's OWN coarse region, so browser-only caching — no shared cache can hand one visitor's region to another). Admin POST writes stay `no-store` (json() default), rate-limited and auth-gated — never cached. All cache ops are best-effort/fail-safe (try/catch → fall through to a fresh build), and each endpoint already degrades gracefully when KV/cf is unbound (status→auto, config→APP_FLAGS defaults, geo→null prefill). Before: every visit fired ~1–3 uncached Function calls (homepage status pill, app-boot config, landing geo), each doing a KV read; after: status/config serve from the colo cache (skipping the KV read) and all three are browser-cacheable, so a session's repeat reads don't re-invoke. typecheck (incl tsc functions) + eslint (.ts linted since A79) + the 16 auth tests green. (Edge behavior verifies on the Cloudflare deploy — no local Workers runtime.)"
     }
   ]
 }

@@ -11,10 +11,11 @@
    data is cache-busted by per-file hashes in data/manifest.json, not a KV timestamp.) */
 
 import { isAdminAuthorized } from '../_lib/auth.ts';
-import { json, rateLimited } from '../_lib/http.ts';
+import { json, rateLimited, cachedJson, purgeCached } from '../_lib/http.ts';
 import type { Ctx } from '../_lib/types.ts';
 
 const KEY = 'config';
+const cacheUrl = (request: Request) => new URL(request.url).origin + '/api/config';
 const DEFAULTS = {
   flags: { showBetaAdapters: true, maintenanceBanner: false, betaRibbon: false },
 };
@@ -40,7 +41,9 @@ export async function onRequest(context: Ctx) {
   const { request, env } = context;
   const kv = env.STATUS_KV;
 
-  if (request.method === 'GET') return json(await read(kv));
+  // CH27: read by the app at every boot; edge-cache for a short TTL (a briefly-stale read is harmless
+  // — config mirrors the client-side APP_FLAGS defaults). An admin write purges the entry below.
+  if (request.method === 'GET') return cachedJson(context, cacheUrl(request), 60, () => read(kv));
 
   if (request.method === 'POST') {
     if (await rateLimited(env, 'config', request)) return json({ error: 'rate limited' }, 429);
@@ -63,6 +66,7 @@ export async function onRequest(context: Ctx) {
     // versions are no longer writable (automated); any versions field in the body is ignored.
     cur.updatedAt = new Date().toISOString();
     await kv.put(KEY, JSON.stringify(cur));
+    purgeCached(context, cacheUrl(request)); // CH27: flag change takes effect immediately
     return json(cur);
   }
 

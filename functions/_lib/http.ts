@@ -11,6 +11,45 @@ export function json(obj: unknown, status = 200, headers: Record<string, string>
   });
 }
 
+/* CH27 — edge-cache a rarely-changing PUBLIC GET response (the homepage Live pill /api/status and the
+   feature flags /api/config) in the colo cache (caches.default) and mark it browser-cacheable, to cut
+   the per-visitor Function invocations + KV reads that otherwise count against the Workers free-tier
+   cap (and the A17 KV budget). Visitor-independent data only — `cacheKey` MUST be a stable URL string
+   shared across visitors. Fail-safe: any cache error (or no Cache API) falls through to a fresh build,
+   and only GET responses are ever cached, so admin POST writes (json()'s no-store default) are never
+   served stale. The matching purgeCached() drops the entry on an admin write so changes apply at once. */
+export async function cachedJson(
+  ctx: { waitUntil(p: Promise<unknown>): void },
+  cacheKey: string,
+  ttlSec: number,
+  build: () => Promise<unknown> | unknown
+): Promise<Response> {
+  const key = new Request(cacheKey, { method: 'GET' });
+  try {
+    const hit = await caches.default.match(key);
+    if (hit) return hit;
+  } catch (_) {
+    /* no Cache API / miss — fall through and build fresh */
+  }
+  const resp = json(await build(), 200, { 'Cache-Control': `public, max-age=${ttlSec}, s-maxage=${ttlSec}` });
+  try {
+    ctx.waitUntil(caches.default.put(key, resp.clone()));
+  } catch (_) {
+    /* best-effort cache fill */
+  }
+  return resp;
+}
+
+/* Drop a cachedJson() entry (after an admin write) so the next GET rebuilds instead of serving the
+   short-TTL stale copy. Best-effort — a failure just means the entry expires on its own TTL. */
+export function purgeCached(ctx: { waitUntil(p: Promise<unknown>): void }, cacheKey: string) {
+  try {
+    ctx.waitUntil(caches.default.delete(new Request(cacheKey, { method: 'GET' })));
+  } catch (_) {
+    /* best-effort */
+  }
+}
+
 /* Lightweight fixed-window rate limiter backed by STATUS_KV (defense-in-depth on the
    admin endpoints — they're already behind Access + a token). Keyed by Access email or
    client IP. Best-effort: KV isn't atomic and is eventually consistent, so this throttles

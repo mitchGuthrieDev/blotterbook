@@ -10,9 +10,17 @@ import type { Ctx } from '../_lib/types.ts';
 
 export async function onRequest(context: Ctx) {
   const cf: any = (context.request && context.request.cf) || {};
-  return json({
-    country: cf.country || null, // "US"
-    region: cf.region || null, // "Texas"
-    regionCode: cf.regionCode || null, // "TX"
-  });
+  // CH27: the response is the visitor's OWN coarse region (varies per visitor), so cache it PRIVATE —
+  // the browser reuses it on reloads/navigations (cutting repeat Function invocations) but no shared
+  // cache may hand one visitor's region to another. The state prefill is convenience-only, so a
+  // 30-minute stale read is fine.
+  return json(
+    {
+      country: cf.country || null, // "US"
+      region: cf.region || null, // "Texas"
+      regionCode: cf.regionCode || null, // "TX"
+    },
+    200,
+    { 'Cache-Control': 'private, max-age=1800' }
+  );
 }

@@ -189,18 +189,6 @@
       "doneNote": null
     },
     {
-      "id": "CH27",
-      "title": "(infra) Cache the per-visitor /api/* calls to extend the Workers free-tier headroom",
-      "category": "CHORE / REFACTOR",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Cloudflare Pages Functions count against the Workers FREE plan's 100,000 requests/day (combined Workers + Functions). Today every visitor triggers ~1-3 Function calls — `/api/geo` (tax-state prefill on the app landing), `/api/config` (feature flags at app boot), and the homepage `/api/status` Live-pill ping — so the daily cap is the app's real traffic ceiling and a spike could exhaust it (static assets keep serving; the `/api/*` calls start erroring). Reduce these per-visitor invocations: edge-cache `/api/status` and `/api/config` with a short TTL (Cache API / `Cache-Control`) since both change rarely and `/api/config` already mirrors the client-side APP_FLAGS defaults so a briefly-stale read is harmless; cache `/api/geo` by coarse region. Keep admin POST writes uncached. Confirm each call already fails safe when it errors / goes over-limit (geo silently no-ops, config falls back to APP_FLAGS, the pill shows a neutral state). Done when: a typical app session makes materially fewer (ideally cache-served) `/api/*` invocations, all three still work, and each degrades gracefully under the 100k/day cap — with a before/after note on invocations per session.",
-      "doneNote": null
-    },
-    {
       "id": "A15",
       "title": "(infra guardrail) Rate-data scraper must stay within the 50-subrequest free-tier cap",
       "category": "ARCHITECTURE / DUPLICATION",

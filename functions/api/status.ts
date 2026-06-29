@@ -12,25 +12,30 @@
    back to auto and POST returns an error explaining the missing binding. */
 
 import { isAdminAuthorized } from '../_lib/auth.ts';
-import { json, rateLimited } from '../_lib/http.ts';
+import { json, rateLimited, cachedJson, purgeCached } from '../_lib/http.ts';
 import type { Ctx } from '../_lib/types.ts';
 
 const KEY = 'live';
 const MODES = ['auto', 'live', 'offline', 'maintenance'];
+const cacheUrl = (request: Request) => new URL(request.url).origin + '/api/status';
 
 export async function onRequest(context: Ctx) {
   const { request, env } = context;
   const kv = env.STATUS_KV;
 
   if (request.method === 'GET') {
-    let v = { mode: 'auto' };
-    if (kv) {
-      try {
-        const raw = await kv.get(KEY);
-        if (raw) v = JSON.parse(raw);
-      } catch (_) {}
-    }
-    return json(v);
+    // CH27: the homepage Live pill pings this on every visit; edge-cache it for a short TTL so the
+    // per-visitor Function invocation + KV read drops. Stale by ≤30s is harmless (and a POST purges).
+    return cachedJson(context, cacheUrl(request), 30, async () => {
+      let v = { mode: 'auto' };
+      if (kv) {
+        try {
+          const raw = await kv.get(KEY);
+          if (raw) v = JSON.parse(raw);
+        } catch (_) {}
+      }
+      return v;
+    });
   }
 
   if (request.method === 'POST') {
@@ -52,6 +57,7 @@ export async function onRequest(context: Ctx) {
       updatedAt: new Date().toISOString(),
     };
     await kv.put(KEY, JSON.stringify(rec));
+    purgeCached(context, cacheUrl(request)); // CH27: admin change takes effect immediately
     return json(rec);
   }
 
