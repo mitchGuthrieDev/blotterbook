@@ -469,6 +469,16 @@ export function blendedRateFor(stateRatePct?: number | string) {
  * Active metrics + the cost setup → commissions, subscriptions, tax, take-home (A32). Negatives are
  * clamped to 0 (B13). (A33: the old DOM-read fallback was removed — all callers pass inputs explicitly.)
  */
+// Whole calendar months spanned by [first, last] inclusive (each a `YYYY-MM-DD` or '—'), for the
+// elapsed-span subscription accrual (A117). 0 when there are no trades. Shared shape with
+// curveseries' month walk so the cost panel and the curve charge the identical number of months.
+export function spanMonths(first?: string, last?: string): number {
+  if (!first || first === '—' || !last || last === '—') return 0;
+  const [fy, fm] = first.slice(0, 7).split('-').map(Number);
+  const [ly, lm] = last.slice(0, 7).split('-').map(Number);
+  return (ly - fy) * 12 + (lm - fm) + 1;
+}
+
 export function costModel(m: Metrics, inputs: CostInputs = {}): CostModel {
   const broker = inputs.broker || 'AMP',
     platform = Math.max(0, Number(inputs.platform) || 0),
@@ -496,7 +506,11 @@ export function costModel(m: Metrics, inputs: CostInputs = {}): CostModel {
     if (x > 0) gp += x;
     else if (x < 0) gl += x;
   }
-  const months = m ? m.months : 0;
+  // A117: fixed subscriptions (platform + data feed) are billed EVERY calendar month you hold them,
+  // not only the months you happened to trade — so accrue them over the full span from the first to
+  // the last trade (inclusive, gap months counted). Active-months-only under-counts a sporadic
+  // trader's real cost. Mirrored in curveseries.dailySeries() so the curve endpoint still reconciles.
+  const months = m ? spanMonths(m.firstDate, m.lastDate) : 0;
   const fixedPeriod = fixedMo * months;
   const gross = m ? m.net : 0;
   const netPreTax = gross - totalComm - fixedPeriod;

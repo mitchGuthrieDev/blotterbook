@@ -98,7 +98,9 @@
     const { pts: raw } = dailySeries(m, {
       broker: String(ci.broker ?? ''),
       tEff: blendedRateFor(ci.stateRate),
-      fixedMo: (Number(ci.platform) || 0) + (Number(ci.feedCost) || 0),
+      // Clamp each term to ≥0 to mirror costModel's B13 guard (A116) so the curve's net/take endpoint
+      // can't diverge from the cost panel on a negative input.
+      fixedMo: Math.max(0, Number(ci.platform) || 0) + Math.max(0, Number(ci.feedCost) || 0),
     });
     if (raw.length < 1) return null;
     const pts: CurvePoint[] = [{ date: null, gross: 0, net: 0, take: 0 }, ...raw];

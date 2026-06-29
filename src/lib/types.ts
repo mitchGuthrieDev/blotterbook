@@ -32,6 +32,12 @@ export interface Trade {
   exitTime?: string;
   /** Hold time in ms (fills exports). */
   holdMs?: number;
+  /** Within-file ordinal (2nd+ occurrence of an identical time|symbol|side|pnl) so genuinely
+   *  distinct same-second trades aren't collapsed by the dedupe key (A114). Unset ⇒ 0 (first/unique). */
+  dup?: number;
+  /** PnL was derived from price × a FALLBACK point value ($1/point) because the root has no known
+   *  contract size — the figure is a guess and is surfaced to the user (A113). */
+  pvEstimated?: boolean;
   /** Stable dedupe id once persisted (Store.tradeId). */
   id?: string;
 }
@@ -60,6 +66,8 @@ export interface ParseResult {
   kind?: string;
   detected?: string | null;
   error?: string;
+  /** Roots whose PnL was estimated at $1/point (no known contract size) — surfaced as a warning (A113). */
+  estimatedRoots?: string[];
 }
 
 /** A platform CSV adapter (one per supported export format). */

@@ -38,7 +38,7 @@
       <dt>Win / Loss / Scratch</dt>
       <dd>Win = realized PnL &gt; 0, Loss = &lt; 0, Scratch = exactly 0. Win Rate = wins ÷ total trades (scratches stay in the denominator).</dd>
       <dt>Net PnL &amp; take-home</dt>
-      <dd>Net PnL = gross − per-symbol commissions − full-month subscriptions. Take-home is Net PnL after the estimated Section 1256 tax, shown on the Net PnL card and in the Break-even panel.</dd>
+      <dd>Net PnL = gross − per-symbol commissions − subscriptions (a full month of platform + data fee for every calendar month from your first to your last trade). Take-home is Net PnL after the estimated Section 1256 tax, shown on the Net PnL card and in the Break-even panel.</dd>
       <dt>Performance graph</dt>
       <dd>X axis is the calendar date (the selected month's first to last day, or the full sample in All-time scope); Y axis is cumulative PnL. The Gross, Net, and Take-home overlays can be toggled. Clicking a calendar day marks it on the graph.</dd>
       <dt>Broker &amp; costs</dt>

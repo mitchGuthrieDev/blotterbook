@@ -114,7 +114,8 @@
       <ul>
         <li><b>Round-turn commission, per contract.</b> Each trade is a closed position; the round-turn commission — 2 × the symbol's per-side rate — is charged once per contract (× the trade's quantity).</li>
         <li><b>Per-symbol commissions.</b> The symbol root is priced as the selected broker's commission plus the contract's CME exchange/clearing/NFA fee. Symbols without a known exchange fee use a fallback and are flagged with *. All rates are editable estimates — verify against your account.</li>
-        <li><b>Subscriptions are not prorated.</b> A full month of platform + data fee is charged for every distinct calendar month in the {allTime ? 'full dataset (all-time)' : 'active scope'}.</li>
+        <li><b>Subscriptions are not prorated.</b> A full month of platform + data fee is charged for every calendar month from your first to your last trade (gap months included), since those fees bill whether or not you trade, across the {allTime ? 'full dataset (all-time)' : 'active scope'}.</li>
+        <li><b>Costs assume gross P&amp;L.</b> The model treats the export's P&amp;L as <i>before</i> commissions and overlays the broker rates — if your platform already reports P&amp;L net of fees, commissions are double-counted. And a close-event export with no per-trade quantity (e.g. TradingView) is billed as a <i>single contract</i>, so a multi-contract position's commission is under-stated.</li>
         <li><b>Tax = blended 1256 rate:</b> 60% × 15% long-term + 40% × 24% ordinary (assumed bracket) + your state's top rate, applied only when net profit is positive.</li>
         <li><b>Break-even / trade</b> = total period costs ÷ trade count: the average gross each trade needed to clear costs.</li>
         {#if isStaging}
