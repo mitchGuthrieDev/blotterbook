@@ -30,6 +30,7 @@
   let box: HTMLDivElement | undefined;
 
   const FMT: Record<string, (d?: EventDetail) => string> = {
+    'refdata:loaded': () => 'reference data loaded',
     'data:loaded': d => `loaded ${d && d.count != null ? d.count : '?'} trades`,
     'data:imported': d => `imported ${d && d.added != null ? d.added : '?'} new trades`,
     'note:saved': d => `note saved · ${d && d.date ? d.date : ''}`,

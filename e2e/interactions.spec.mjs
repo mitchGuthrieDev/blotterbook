@@ -143,10 +143,11 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   // Activity terminal logs bus events — the note save above should appear.
   await expect(page.locator('#sv-app .terminal .log')).toContainText('note saved');
 
-  // A97 (R18): on staging the Definitions panel is trimmed to the cross-cutting PARSING caveats; the
-  // per-metric definitions moved into the panels/modals that own each number.
-  await expect(page.locator('#sv-app .defs')).toContainText('Trade = one closed position');
-  await expect(page.locator('#sv-app .defs')).not.toContainText('Win / Loss / Scratch');
+  // F27 (staging): the Definitions & Caveats module is relegated to a page FOOTER (not a dashboard
+  // panel). It keeps the trimmed parsing caveats (A97); the per-metric definitions live in the panels.
+  await expect(page.locator('#sv-app .dash .panel[data-key="defs"]')).toHaveCount(0);
+  await expect(page.locator('#sv-app footer.deffoot')).toContainText('Trade = one closed position');
+  await expect(page.locator('#sv-app footer.deffoot')).not.toContainText('Win / Loss / Scratch');
   // The Advanced Statistics panel now carries its own "Assumptions & caveats" (mirror of CostPanel).
   await expect(page.locator('#sv-app .panel[data-key="adv"] .caveats')).toContainText('Payoff Ratio');
 
@@ -370,9 +371,9 @@ test('staging (Svelte): Trade Blotter lists trades + inline note persists (F23)'
 });
 
 // F24 (staging): the header Donate button opens the Stripe page in a separate popup window (window.open
-// with a named target) so the dashboard isn't navigated away. window.open is stubbed so no real
-// external request is made.
-test('staging (Svelte): header Donate button opens a popup (F24)', async ({ page }) => {
+// in a new tab (A125: target _blank) so the dashboard isn't navigated away. window.open is stubbed so
+// no real external request is made.
+test('staging (Svelte): header Donate button opens a new tab (F24/A125)', async ({ page }) => {
   await page.addInitScript(() => {
     window.__donate = [];
     window.open = (url, target, features) => {
@@ -384,10 +385,12 @@ test('staging (Svelte): header Donate button opens a popup (F24)', async ({ page
   await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
   const donate = page.locator('#sv-app .donatebtn');
   await expect(donate).toBeVisible();
+  await expect(donate).toHaveText('Donate'); // A125: no heart emoji
   await donate.click();
   const calls = await page.evaluate(() => window.__donate);
   expect(calls).toHaveLength(1);
-  expect(calls[0].target).toBe('bb-donate'); // named target → reused popup window, not the dashboard
+  expect(calls[0].target).toBe('_blank'); // A125: new tab, not a popup window
+  expect(calls[0].features).toContain('noopener');
   expect(calls[0].url).toContain('stripe');
 });
 
@@ -458,6 +461,96 @@ test('demo (Svelte): no module grid — modules stay full-width (F26 staging-gat
   await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
   await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
   await expect(page.locator('#sv-app .modgrid')).toHaveCount(0);
+});
+
+// F27 (staging): the Definitions & Caveats module is a page footer, not a dashboard panel, and is not
+// offered in the "Add module" menu. Demo keeps it as a dashboard panel (staging-gated until CH16).
+test('staging (Svelte): Definitions is a footer, not a dashboard module (F27)', async ({ page }) => {
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  await expect(page.locator('#sv-app .dash .panel[data-key="defs"]')).toHaveCount(0);
+  await expect(page.locator('#sv-app footer.deffoot')).toContainText('US dates & Eastern time assumed');
+});
+test('demo (Svelte): Definitions stays a dashboard panel (F27 staging-gated)', async ({ page }) => {
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  await expect(page.locator('#sv-app .dash .panel[data-key="defs"]')).toBeVisible();
+  await expect(page.locator('#sv-app footer.deffoot')).toHaveCount(0);
+});
+
+// A124: the Activity Terminal logs the boot/status events (it subscribes after boot, so App re-emits
+// them post-mount) — not just the single "staging app ready" line.
+test('staging (Svelte): Activity Terminal shows boot status events (A124)', async ({ page }) => {
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  const log = page.locator('#sv-app .terminal .log');
+  await expect(log).toContainText('staging app ready');
+  await expect(log).toContainText('reference data loaded');
+  await expect(log).toContainText(/loaded \d+ trades/);
+});
+
+// A126 + F28: the performance graph shows NO red drawdown band by default; enabling Net + Take-home
+// adds a gradient area fill per series (gross/net/take), each layered with its line.
+test('staging (Svelte): graph has no stray red band; net/take get gradient fills (A126/F28)', async ({ page }) => {
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  const perf = page.locator('#sv-app .panel[data-key="perf"]');
+  // A126: no drawdown band element at all (removed).
+  await expect(perf.locator('svg.equity rect.ddband')).toHaveCount(0);
+  // Default = gross only → one fill + one line.
+  await expect(perf.locator('svg.equity path.areafill')).toHaveCount(1);
+  await expect(perf.locator('svg.equity path.line')).toHaveCount(1);
+  // F28: enabling all three overlays → three gradient fills + three lines.
+  await perf.locator('.overlays button', { hasText: 'Net' }).click();
+  await perf.locator('.overlays button', { hasText: 'Take-home' }).click();
+  await expect(perf.locator('svg.equity path.areafill')).toHaveCount(3);
+  await expect(perf.locator('svg.equity path.line')).toHaveCount(3);
+});
+
+// A121 (staging): a calendar day deselects when its cell is re-clicked, or when the user clicks off
+// the calendar module; navigating months does NOT collapse the panel.
+test('staging (Svelte): calendar day deselects on reclick / click-off; month nav keeps panel open (A121)', async ({ page }) => {
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  const cal = page.locator('#sv-app .panel[data-key="cal"]');
+  const day = cal.locator('.calgrid .cell.traded').first();
+  await day.click();
+  await expect(cal.locator('.cell.selected')).toHaveCount(1);
+  await day.click(); // reclick → deselect
+  await expect(cal.locator('.cell.selected')).toHaveCount(0);
+  // reselect, then click off the calendar (the filter bar) → deselect
+  await day.click();
+  await expect(page.locator('#sv-app .cell.selected')).toHaveCount(1);
+  await page.locator('#sv-app .filterbar .count').click();
+  await expect(page.locator('#sv-app .cell.selected')).toHaveCount(0);
+  // month nav must not collapse the calendar panel (its chevron stays expanded + reachable)
+  await cal.locator('.nav button[aria-label="Previous month"]').click();
+  await expect(cal.locator('.chev')).toHaveAttribute('aria-expanded', 'true');
+});
+
+// L9 (staging): the five interactive cards span the full row (no large right-margin gap) on a wide
+// viewport.
+test('staging (Svelte): the five headline cards span the full width (L9)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  const gap = await page.evaluate(() => {
+    const cards = document.querySelector('#sv-app .cards');
+    const last = cards.querySelector('[data-card="dd"]');
+    return Math.round(cards.getBoundingClientRect().right - last.getBoundingClientRect().right);
+  });
+  expect(gap).toBeLessThanOrEqual(2); // last card reaches the row's right edge
+});
+
+// L10 (staging): the three grid modules stretch to a common height (bottoms aligned).
+test('staging (Svelte): grid modules share an equal height (L10)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  const heights = await page
+    .locator('#sv-app .modgrid > .panel')
+    .evaluateAll(els => els.map(e => Math.round(e.getBoundingClientRect().height)));
+  expect(heights).toHaveLength(3);
+  expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1); // equal height
 });
 
 // F23 promoted to all surfaces (CH16): the Trade Blotter now appears on demo too, directly below the

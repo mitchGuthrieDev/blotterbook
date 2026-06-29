@@ -149,6 +149,8 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    /* A123: in the narrow F26 grid column the nav must wrap rather than overflow the panel header. */
+    flex-wrap: wrap;
   }
   .nav button {
     background: var(--panel2);
@@ -294,11 +296,17 @@
     color: var(--faint);
     text-align: right;
   }
-  /* A51: on phones the 8-col grid scrolls WITHIN the panel instead of widening the page. */
+  /* A51/A123: the 8-col grid scrolls WITHIN the panel rather than clipping its cells or widening the
+     page — needed both on phones AND in the narrow F26 grid column (A123), where the panel can be
+     narrower than the grid's comfortable width. A min floor keeps day values from clipping; the panel
+     absorbs any overflow as an internal scroll. */
+  .calendar {
+    overflow-x: auto;
+  }
+  .calgrid {
+    min-width: 480px;
+  }
   @media (max-width: 620px) {
-    .calendar {
-      overflow-x: auto;
-    }
     .calgrid {
       min-width: 520px;
     }

@@ -74,7 +74,11 @@
   // snapshot {order, collapsed} under WS_KEY. DEFAULT_ORDER mirrors vanilla DEFAULT_DASH_ORDER.
   // F23 (promoted to all surfaces, CH16): the Trade Blotter sits directly below the Trading Calendar
   // by default on every surface (it stays non-mutating on demo — the inline Note input is disabled).
-  const DEFAULT_ORDER = ['perf', 'cal', 'blotter', 'cost', 'adv', 'defs', 'term'];
+  // F27 (staging): the Definitions & Caveats module is relegated to a page footer, so 'defs' is NOT a
+  // dashboard module on staging; it stays a dashboard panel on prod/demo until promoted (CH16).
+  const DEFAULT_ORDER = isStaging
+    ? ['perf', 'cal', 'blotter', 'cost', 'adv', 'term']
+    : ['perf', 'cal', 'blotter', 'cost', 'adv', 'defs', 'term'];
   // R12/A71: human labels for the module menus (the names otherwise live only inside each <Panel title>).
   const MODULE_LABELS: Record<string, string> = {
     perf: 'Performance',
@@ -406,6 +410,18 @@
       .catch((e: unknown) => console.warn('setup persist failed', e)); // A93: surface, don't throw into the effect
   });
 
+  // A124: announce the boot/status events ONCE the dashboard (and the Activity Terminal) is mounted.
+  // This effect runs after the first render that sets loaded=true — i.e. after the terminal has
+  // subscribed to the bus — so the status lines actually land in the log (boot() can't emit them
+  // because it resolves before the terminal exists). Restores the live status log the terminal lost.
+  let bootAnnounced = false;
+  $effect(() => {
+    if (!loaded || bootAnnounced) return;
+    bootAnnounced = true;
+    emit('refdata:loaded', {});
+    emit('data:loaded', { count: allTrades.length });
+  });
+
   // Seed the dataset once if the backend is empty (seeded surfaces only: staging + demo).
   async function seedIfEmpty() {
     if ((await store.tradeCount()) > 0) return;
@@ -433,7 +449,9 @@
     calMonth = last ? +last.slice(5, 7) - 1 : new Date().getMonth();
     loaded = true;
     status = '';
-    emit('data:loaded', { count: trades.length });
+    // A124: data:loaded / refdata:loaded are emitted from a post-load $effect below, NOT here — the
+    // Activity Terminal only subscribes once it mounts (which happens AFTER this boot resolves), so
+    // emitting here would fire before any subscriber exists and the terminal would miss the events.
   }
 
   async function refreshNotes() {
@@ -473,11 +491,11 @@
     }
   }
 
-  // F24 (staging): open the donation page in a popup window (named target + popup feature) so the
-  // dashboard stays put — the user isn't redirected away. noopener/noreferrer keep the opened page
-  // from reaching back into this window. Triggered only on a direct click, so popup-blockers allow it.
+  // F24 (staging): open the donation page so the dashboard stays put — the user isn't redirected away.
+  // A125: open in a new TAB (target _blank) rather than a popup window; noopener/noreferrer keep the
+  // opened page from reaching back into this window. Triggered on a direct click (popup-blocker-safe).
   function openDonate() {
-    window.open(DONATE_URL, 'bb-donate', 'popup=yes,noopener,noreferrer,width=480,height=720');
+    window.open(DONATE_URL, '_blank', 'noopener,noreferrer');
   }
 
   function navMonth(delta: number) {
@@ -564,14 +582,22 @@
 </script>
 
 <svelte:window
-  onclick={() => {
+  onclick={e => {
     pillOpen = false;
     addMenuOpen = false;
+    // A121 (staging): clicking off the calendar deselects the selected day. The calendar AND the
+    // performance graph both drive day selection (cross-link), so a click inside either panel keeps
+    // it; a click anywhere else clears it. (A same-day reclick already toggles off via onselect.)
+    if (isStaging && selectedDate) {
+      const t = e.target as HTMLElement;
+      if (!t.closest('.panel[data-key="cal"]') && !t.closest('.panel[data-key="perf"]')) selectedDate = null;
+    }
   }}
   onkeydown={e => {
     if (e.key === 'Escape') {
       pillOpen = false;
       addMenuOpen = false;
+      if (isStaging) selectedDate = null; // A121: Escape clears the selected day too
     }
   }}
 />
@@ -623,9 +649,9 @@
       <!-- F21 (promoted to all surfaces, CH16): the Changelog link was journal-app noise; removed from
            the dashboard top bar on every surface. (The marketing changelog still lives at /changelog.html.) -->
       <a class="link" href="mailto:contact@blotterbook.com?subject=Blotterbook">Contact</a>
-      <!-- F24 (staging): support the project. Opens the Stripe donation page in a separate popup window
-           (openDonate) so the dashboard is never navigated away. -->
-      {#if isStaging}<button type="button" class="donatebtn" onclick={openDonate} title="Support Blotterbook — opens Stripe in a new window">♥ Donate</button>{/if}
+      <!-- F24 (staging): support the project. Opens the Stripe donation page in a new tab (A125) so the
+           dashboard is never navigated away. -->
+      {#if isStaging}<button type="button" class="donatebtn" onclick={openDonate} title="Support Blotterbook — opens Stripe in a new tab">Donate</button>{/if}
       {#if loaded && allTrades.length}<button type="button" class="exportbtn" onclick={() => (exportOpen = true)}>Export report</button>{/if}
       {#if loaded}<button type="button" class="managebtn" onclick={() => (manageOpen = true)}>Manage data</button>{/if}
     </div>
@@ -666,9 +692,9 @@
          per-key switch lives in a snippet (the `panel` bundle differs between the two contexts). -->
     {#snippet moduleBlock(key: string, panel: PanelBundle)}
       {#if key === 'perf'}
-        <EquityCurve {panel} metrics={metricsAll} {costInputs} {journalDates} {selectedDate} onselect={d => (selectedDate = d)} />
+        <EquityCurve {panel} metrics={metricsAll} {costInputs} {journalDates} {selectedDate} onselect={d => (selectedDate = selectedDate === d ? null : d)} />
       {:else if key === 'cal'}
-        <CalendarMonth {panel} metrics={metricsAll} year={calYear} month={calMonth} onnav={navMonth} onjump={jumpToLatest} {selectedDate} {journalDates} onselect={d => (selectedDate = d)}>
+        <CalendarMonth {panel} metrics={metricsAll} year={calYear} month={calMonth} onnav={navMonth} onjump={jumpToLatest} {selectedDate} {journalDates} onselect={d => (selectedDate = selectedDate === d ? null : d)}>
           {#snippet extra()}
             {#if selectedDate}
               <DayTrades date={selectedDate} trades={dayTrades} filtered={filtersActive} />
@@ -703,6 +729,10 @@
         {/if}
       {/each}
     </div>
+    {#if isStaging}
+      <!-- F27 (staging): the Definitions & Caveats module is relegated to a page footer. -->
+      <Definitions footer />
+    {/if}
   {:else}
     <p class="msg">{status}</p>
   {/if}
@@ -991,12 +1021,15 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
     gap: 0 16px;
-    align-items: start;
+    /* L10 (staging): stretch all three columns to a common (tallest) height so the bottoms align and
+       the negative space below the shorter modules is reclaimed into the module itself. */
+    align-items: stretch;
   }
-  /* The panels already carry their own top margin for vertical rhythm; the grid only adds the
-     horizontal gap, so columns align with the full-width modules above/below. */
+  /* min-width:0 lets a column shrink below its content's intrinsic width (no grid blowout); the
+     panels fill their stretched cell height (content stays top-aligned via normal block flow). */
   .modgrid > :global(.panel) {
     min-width: 0;
+    height: 100%;
   }
   /* R12 (staging): the "Add module" control sits beside the workspace bar. */
   .wsrow {

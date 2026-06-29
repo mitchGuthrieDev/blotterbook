@@ -152,6 +152,11 @@
     align-items: center;
     gap: 10px;
     margin-bottom: 12px;
+    /* A121/A123: in a narrow grid column (F26) a heavy header (e.g. the calendar's month nav) would
+       overflow and push the collapse chevron off the panel — leaving it stuck collapsed. Allow the
+       header to wrap so the controls stay reachable and nothing clips past the panel edge. */
+    flex-wrap: wrap;
+    row-gap: 8px;
   }
   .grip {
     cursor: grab;
@@ -171,12 +176,16 @@
     letter-spacing: 0.5px;
     color: var(--faint);
     font-weight: 700;
+    min-width: 0;
   }
   .pactions {
     margin-left: auto;
     display: flex;
     align-items: center;
     gap: 10px;
+    /* A123: let a heavy actions cluster (e.g. the calendar nav) wrap instead of overflowing the panel. */
+    flex-wrap: wrap;
+    min-width: 0;
   }
   .chev {
     margin-left: auto;

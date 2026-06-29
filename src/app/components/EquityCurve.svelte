@@ -50,13 +50,12 @@
     lo: number;
     hi: number;
     len: number;
-    lines: Array<Series & { d: string }>;
-    area: string;
+    // F28: each series carries its own area-fill path (gradient) alongside its line, so net + take-home
+    // get the same filled treatment as gross and the three can be stacked back-to-front.
+    lines: Array<Series & { d: string; area: string }>;
     prim: SeriesKey;
     idxByDate: Map<string, number>;
     notes: Array<{ x: number; y: number; date: string }>;
-    dd: { x0: number; x1: number } | null;
-    primColor: string;
     zeroY: number | null;
     w: number;
     yticks: Array<{ v: number; y: number; label: string }>;
@@ -91,7 +90,6 @@
       : ''
   );
   const selIdx = $derived(view && selectedDate ? (view.idxByDate.get(selectedDate) ?? null) : null);
-  const grossOnly = $derived(enabled.length === 1 && enabled[0].key === 'gross');
 
   function build(m: Metrics, ci: CostInputs, ser: Series[], w: number): View | null {
     const { pts: raw } = dailySeries(m, {
@@ -118,32 +116,19 @@
     const x = (i: number) => padL + (i / (pts.length - 1)) * (w - padL - padR);
     const y = (v: number) => padT + (1 - (v - lo) / span) * (H - padT - padB);
     const prim = ser[0].key;
-    const lines = ser.map(s => ({ ...s, d: linePath(pts.map(p => p[s.key]), x, y) }));
+    // F28: each series gets a line PLUS a closed area path (line → down to baseline → back) for its
+    // gradient fill. Rendered in SERIES order (gross, net, take), so they stack back-to-front.
     const baseY = (H - padB).toFixed(1);
-    const area = `${linePath(pts.map(p => p[prim]), x, y)} L${x(pts.length - 1).toFixed(1)},${baseY} L${x(0).toFixed(1)},${baseY} Z`;
+    const xN = x(pts.length - 1).toFixed(1);
+    const x0 = x(0).toFixed(1);
+    const lines = ser.map(s => {
+      const d = linePath(pts.map(p => p[s.key]), x, y);
+      return { ...s, d, area: `${d} L${xN},${baseY} L${x0},${baseY} Z` };
+    });
     const idxByDate = new Map<string, number>();
     pts.forEach((p, i) => p.date && idxByDate.set(p.date, i));
     const notes: Array<{ x: number; y: number; date: string }> = [];
     for (const [date, i] of idxByDate) if (journalDates.has(date)) notes.push({ x: x(i), y: y(pts[i][prim]), date });
-    // Realized drawdown peak→trough on the gross series (shaded only when gross is the sole overlay).
-    let gpeak = -Infinity,
-      gpeakI = 0,
-      maxDD = 0,
-      ddP = 0,
-      ddT = 0;
-    pts.forEach((p, i) => {
-      if (p.gross > gpeak) {
-        gpeak = p.gross;
-        gpeakI = i;
-      }
-      const d = gpeak - p.gross;
-      if (d > maxDD) {
-        maxDD = d;
-        ddP = gpeakI;
-        ddT = i;
-      }
-    });
-    const dd = maxDD > 0 ? { x0: x(ddP), x1: x(ddT) } : null;
     // Axis ticks: y $ gridlines (framed ticks) + x date labels (5 across the real dates).
     const yticks = ticks.map(v => ({ v, y: y(v), label: axMoney(v) }));
     const xticks: Array<{ x: number; label: string }> = [];
@@ -159,8 +144,8 @@
     const last = pts[pts.length - 1];
     const ends = ser.map(s => ({ color: s.color, y: y(last[s.key]), label: usd(last[s.key]) }));
     return {
-      pts, x, y, lo, hi, len: pts.length, lines, area, prim, idxByDate, notes, dd,
-      primColor: ser[0].color, zeroY: lo <= 0 && hi >= 0 ? y(0) : null,
+      pts, x, y, lo, hi, len: pts.length, lines, prim, idxByDate, notes,
+      zeroY: lo <= 0 && hi >= 0 ? y(0) : null,
       w, yticks, xticks, ends,
     };
   }
@@ -223,9 +208,18 @@
         {onkeydown}
       >
         <defs>
-          <linearGradient id="eqfill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color={view.primColor} stop-opacity="0.22" />
-            <stop offset="100%" stop-color={view.primColor} stop-opacity="0" />
+          <!-- F28: one gradient per series, in its own color — gross/green, net/accent, take-home/take. -->
+          <linearGradient id="eqfill-gross" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--green)" stop-opacity="0.24" />
+            <stop offset="100%" stop-color="var(--green)" stop-opacity="0" />
+          </linearGradient>
+          <linearGradient id="eqfill-net" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.24" />
+            <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
+          </linearGradient>
+          <linearGradient id="eqfill-take" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--take)" stop-opacity="0.24" />
+            <stop offset="100%" stop-color="var(--take)" stop-opacity="0" />
           </linearGradient>
         </defs>
         <!-- horizontal gridlines + y-axis $ labels -->
@@ -237,13 +231,14 @@
         {#each view.xticks as t, i (i)}
           <text class="xlab" x={t.x} y={H - padB + 15} text-anchor="middle">{t.label}</text>
         {/each}
-        <path d={view.area} fill="url(#eqfill)" />
-        {#if grossOnly && view.dd}<rect class="ddband" x={view.dd.x0} y={padT} width={Math.max(0, view.dd.x1 - view.dd.x0)} height={H - padT - padB} />{/if}
-        {#if view.zeroY != null}<line class="zero" x1={padL} y1={view.zeroY} x2={view.w - padR} y2={view.zeroY} vector-effect="non-scaling-stroke" />{/if}
-        {#if selIdx != null}<line class="sel" x1={view.x(selIdx)} y1={padT} x2={view.x(selIdx)} y2={H - padB} vector-effect="non-scaling-stroke" />{/if}
+        <!-- F28: render each enabled series back-to-front (gross → net → take) as a gradient fill then
+             its line, so the layers overlay: gross furthest back, net middle, take-home in front. -->
         {#each view.lines as ln (ln.key)}
+          <path class="areafill" d={ln.area} fill="url(#eqfill-{ln.key})" />
           <path class="line" d={ln.d} fill="none" stroke={ln.color} vector-effect="non-scaling-stroke" />
         {/each}
+        {#if view.zeroY != null}<line class="zero" x1={padL} y1={view.zeroY} x2={view.w - padR} y2={view.zeroY} vector-effect="non-scaling-stroke" />{/if}
+        {#if selIdx != null}<line class="sel" x1={view.x(selIdx)} y1={padT} x2={view.x(selIdx)} y2={H - padB} vector-effect="non-scaling-stroke" />{/if}
         <!-- end-of-line value markers + labels -->
         {#each view.ends as e, i (i)}
           <circle class="enddot" cx={view.w - padR} cy={e.y} r="3" fill={e.color} />
@@ -301,10 +296,23 @@
     height: 240px;
     display: block;
     cursor: crosshair;
+    /* A122: a click focuses the chart (it's keyboard-navigable) — suppress the text-selection
+       highlight that a click/drag would otherwise paint over the SVG's text labels. */
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* A122: show the focus ring ONLY for keyboard focus (:focus-visible), never the blue outline on a
+     mouse click — keyboard a11y is preserved, the click outline is gone. */
+  .equity:focus {
+    outline: none;
   }
   .equity:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+  }
+  /* F28: the per-series gradient area fills sit behind the lines; they never intercept the pointer. */
+  .areafill {
+    pointer-events: none;
   }
   .grid {
     stroke: var(--line);
@@ -326,10 +334,6 @@
     stroke: var(--dim);
     stroke-width: 1;
     stroke-dasharray: 3 3;
-  }
-  .ddband {
-    fill: var(--red);
-    opacity: 0.08;
   }
   .sel {
     stroke: var(--accent);
