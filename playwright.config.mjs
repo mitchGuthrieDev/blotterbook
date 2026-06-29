@@ -17,12 +17,16 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
-  // Build the site, then serve the Vite output dir (dist/) so URLs + bundled assets match
-  // production exactly (Cloudflare Pages serves dist/). _redirects/_headers aren't applied by
-  // python's server, but the specs hit page paths directly (e.g. /app/app.html), not the
-  // /app/ rewrite, so that doesn't matter here.
+  // Serve the Vite output dir (dist/) so URLs + bundled assets match production exactly
+  // (Cloudflare Pages serves dist/). _redirects/_headers aren't applied by python's server, but the
+  // specs hit page paths directly (e.g. /app/app.html), not the /app/ rewrite, so that doesn't
+  // matter here. CI builds once in its own `npm run build` step (which also feeds the size budget),
+  // so here we only serve the already-built dist/ — no double build (A96). Locally there's no prior
+  // build step, so we build first for a single-command `npm run test:e2e`.
   webServer: {
-    command: 'npm run build && python3 -m http.server 8000 --directory dist',
+    command: process.env.CI
+      ? 'python3 -m http.server 8000 --directory dist'
+      : 'npm run build && python3 -m http.server 8000 --directory dist',
     url: 'http://localhost:8000/app/app.html',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

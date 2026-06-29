@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { resolve } from 'node:path';
-import { ssg } from './vite-ssg.mjs';
+import { ssg } from './scripts/vite-ssg.mjs';
 
 // Blotterbook build (ADR-001 / A26; source tree reorg A30; site→Svelte A69). Multi-page build — the
 // marketing/info site is prerendered to static HTML at build time (A69, see vite-ssg.mjs); the /app/
@@ -37,6 +37,10 @@ export default defineConfig({
   publicDir: r('static'),
   plugins: [svelte(), ssg(SSG_PAGES)],
   build: {
+    // Pin the output baseline to match tsconfig's `target: ES2022` (A96) for deterministic,
+    // reproducible bundles. Modern-browser audience (local-compute desktop tool) — deliberately
+    // NO @vitejs/plugin-legacy (its polyfills/transitive deps would violate A28).
+    target: 'es2022',
     outDir: r('dist'),
     emptyOutDir: true, // outDir is outside root (repo-root dist/), so opt in explicitly
     rollupOptions: {

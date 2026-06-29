@@ -290,11 +290,11 @@
       "category": "CHORE / REFACTOR",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-29",
       "partial": false,
       "prompt": "OPTIONAL low-priority tidy spun off from A82. Two independent micro-cleanups: (1) vite-ssg.mjs is the only repo-root file nothing discovers (it's a plain relative import from vite.config.mjs) — it could move into scripts/ (the deploy contract already pins scripts/ at the root) with a one-line import change; weigh the one-fewer-root-file benefit against updating the deploy-contract notes in CLAUDE.md/docs/architecture.md. (2) tsconfig.json still sets allowJs:true / checkJs:false and carries a comment about the A69 'transition' — A69 is complete and there is no hand-written .js under src/ anymore, so both options are now dead and the comment is stale; verify `npm run typecheck` (tsc + svelte-check) still passes after removing them. Neither is required; ship only if touching this area anyway. Done when: applied (or explicitly declined with a note).",
-      "doneNote": null
+      "doneNote": "Both applied. (1) Moved vite-ssg.mjs → scripts/vite-ssg.mjs (git mv); the move needed 3 code edits, not the optimistically-assumed one — vite.config.mjs import path, the plugin's projectRoot (now resolve(import.meta.dirname,'..') to stay repo-root), and its svelte.config import (../). Updated every deploy-contract/doc reference: CLAUDE.md (repo-layout tree + 2 md links + 2 inline mentions) and docs/architecture.md (lockstep table + SSG md link). Build + all 28 e2e (incl. ssg.spec) green, confirming SSR still resolves. (2) Removed the dead allowJs:true/checkJs:false from tsconfig.json and rewrote the stale A69-'transition' comment; npm run typecheck (tsc core + functions + svelte-check) passes with 0 errors."
     },
     {
       "id": "A96",
@@ -302,11 +302,11 @@
       "category": "CHORE / REFACTOR",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "completedDate": null,
+      "status": "done",
+      "completedDate": "2026-06-29",
       "partial": false,
       "prompt": "Spun off from A64 + A67. Low-risk build/CI hygiene, all A28-clean (dev-only): (1) set an explicit Vite build.target (e.g. es2022, matching tsconfig) for deterministic output — do NOT add @vitejs/plugin-legacy (polyfills/deps against A28 for a modern-browser audience). (2) Add a dev-only bundle size-budget check (a small script asserting the /app/ entry JS stays under a byte ceiling, or rollup-plugin-visualizer as a dev devDep) so bundle regressions fail loudly. (3) De-duplicate the CI double-build: ci.yml runs `npm run build` AND test:e2e's Playwright webServer also runs `npm run build` — either drop the standalone build step (e2e proves the build) or point the e2e webServer at the already-built dist/ (serve, don't rebuild). (4) Optional: cache the Playwright browser (actions/cache keyed on the pinned @playwright/test version) and add a CI concurrency group (cancel-in-progress superseded PR runs). Done when: build.target + size budget shipped and the CI build de-dup decided/applied.",
-      "doneNote": null
+      "doneNote": "All four shipped, zero new deps (A28). (1) vite.config build.target:'es2022' matching tsconfig — no plugin-legacy. (2) scripts/check-bundle-size.mjs (npm run size-budget): zero-dep script sums the JS the built /app/ shell loads and fails over a 200 KiB ceiling (baseline ~166.6 KiB → ~33 KiB headroom); wired into CI right after the build. (3) De-dup'd via option (b): the Playwright webServer now serves the already-built dist/ in CI (process.env.CI ? serve-only : build+serve) so CI builds once (its own step, which also feeds the size budget) while local `npm run test:e2e` stays one command. (4) Added a concurrency group (cancel-in-progress on non-main refs) and an actions/cache for ~/.cache/ms-playwright keyed on the resolved @playwright/test version (install-deps-only on cache hit). Verified: build, size-budget, full npm test, and all 28 e2e (via the CI serve-only path) green."
     },
     {
       "id": "A97",

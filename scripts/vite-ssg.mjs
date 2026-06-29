@@ -26,7 +26,7 @@
 import { createServer } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { resolve } from 'node:path';
-import svelteConfig from './svelte.config.js';
+import svelteConfig from '../svelte.config.js';
 
 const OUTLET = '<!--ssg-outlet-->';
 const HEAD = '<!--ssg-head-->';
@@ -36,7 +36,7 @@ const HEAD = '<!--ssg-head-->';
  *   (e.g. 'legal.html'); component = repo-root-relative path to its .svelte page component.
  */
 export function ssg(pages) {
-  const projectRoot = import.meta.dirname;
+  const projectRoot = resolve(import.meta.dirname, '..'); // scripts/ → repo root (Vite root + bare-import base)
   const rendered = new Map(); // url -> { head, body }
 
   return {

@@ -74,7 +74,7 @@ npm run format                   # Prettier
 # Build sub-step (idempotent; commit its output — it writes a COMMITTED source, not dist/)
 node scripts/build-manifest.mjs  # regenerate static/data/manifest.json content hashes (cache-busting)
 # (build-includes.mjs retired by A69 — the nav/footer partials became Nav/Footer.svelte; the site
-#  pages are prerendered to static HTML at build time by vite-ssg.mjs. copy-static.mjs retired by A30.)
+#  pages are prerendered to static HTML at build time by scripts/vite-ssg.mjs. copy-static.mjs retired by A30.)
 ```
 
 > **Deploy artifact = `dist/` (gitignored), built by Vite (ADR-001/A26).** The repo root is no
@@ -121,7 +121,7 @@ So:
   folded the old `home.css`/`site.css`/`admin.css` into scoped component `<style>` blocks.)
 - **Marketing/info site = Svelte SSG (A69).** `index/howto/roadmap/changelog/legal/admin.html` are
   hand-authored, marker-free **templates** (head meta + tokens link + `<div id="app"><!--ssg-outlet--></div>`
-  + a client-entry `<script>`). At build time [`vite-ssg.mjs`](vite-ssg.mjs) server-renders each page
+  + a client-entry `<script>`). At build time [`vite-ssg.mjs`](scripts/vite-ssg.mjs) server-renders each page
   component (`src/site/components/*.svelte`) into the outlet (static HTML for SEO + first paint), and
   the client entry hydrates it. Edit the **components** (`src/site/components/` + shared
   `src/site/lib/{Nav,Footer,SiteShell}.svelte`), not the HTML shells. NOT behind the app SPA shell
@@ -169,7 +169,7 @@ conforms to the rules below; keep it that way.
 
 > **Caveat vs. the generic "Svelte 5 SPA" template:** this repo is a **multi-page** Vite build, so a
 > few one-size-fits-all conventions don't apply literally. The Vite config is the multi-page
-> [`vite.config.mjs`](vite.config.mjs) (9 HTML entries + the [`vite-ssg.mjs`](vite-ssg.mjs) plugin),
+> [`vite.config.mjs`](vite.config.mjs) (9 HTML entries + the [`vite-ssg.mjs`](scripts/vite-ssg.mjs) plugin),
 > **not** a 4-line `vite.config.ts`. SPA routing lives in [`static/_redirects`](static/_redirects)
 > (Vite's `publicDir` is `static/`, **there is no `public/`**) and rewrites `/app/` → `/app/app.html`
 > — a `/* /index.html 200` catch-all would break the marketing pages and the demo/staging surfaces.
@@ -220,7 +220,7 @@ conforms to the rules below; keep it that way.
     components/         the 17 app components (<script lang="ts">)
     lib/                app-only glue (TS): modal.ts (a11y action), actions.ts (styleProps),
                         files.ts (readImage/downloadBlob — ex util.js, A76), flags.ts (APP_FLAGS — ex data.ts)
-  site/                 MARKETING + INFO — Svelte SSG (A69; prerendered at build by vite-ssg.mjs, hydrated in place)
+  site/                 MARKETING + INFO — Svelte SSG (A69; prerendered at build by scripts/vite-ssg.mjs, hydrated in place)
     components/         Home / Howto / Roadmap / Changelog / Legal / Admin .svelte (the page components)
     lib/                shared chrome: Nav.svelte, Footer.svelte, SiteShell.svelte (base/typography styles + globals)
     entries/            per-page client entries (hydrate the prerendered component) — *.ts
@@ -244,10 +244,11 @@ conforms to the rules below; keep it that way.
   _middleware.ts        key-gates /app/staging.html
   api/{geo,status,config,admin-key}.ts  geo · status · feature flags · admin token
   api/{me,checkout,webhook}.ts   Stripe/accounts scaffold
-/vite-ssg.mjs           A69 SSG plugin — server-renders the site components into their templates at build time
 /scripts/
   build-manifest.mjs    regenerates static/data/manifest.json content hashes
   bump-version.mjs      two-track version bump from a merge commit (run by CI; classifies src/ + static/ paths)
+  vite-ssg.mjs          A69 SSG plugin — server-renders the site components into their templates at build time (A95: moved here from the repo root)
+  check-bundle-size.mjs dev-only /app/-surface JS size budget — fails the build if the app bundle crosses its ceiling (A96)
   test-*.mjs            the CI test suite (adapters / auth / version / flags / tax / demostore)
 /e2e/                   Playwright render/E2E specs (dev-only — R19 Tier A)
 /dist/                  Vite build output (GITIGNORED) — the artifact Cloudflare Pages serves (A26)

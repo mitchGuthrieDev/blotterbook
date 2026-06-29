@@ -1,8 +1,6 @@
 {
-  "//": "TS config (A61/A30). Base config: `tsc -p tsconfig.json` type-checks the pure-logic core (src/lib/**, native .ts, STRICT). The Svelte SPA (src/app/**: App.svelte + components + main.ts + lib/*.ts) is checked by svelte-check (tsconfig.svelte.json) instead, because plain tsc can't resolve .svelte imports (main.ts imports App.svelte). The marketing JS (src/site/**/*.js) stays untyped this pass (A69 converts it to Svelte). allowJs/checkJs are retained for the transition.",
+  "//": "TS config (A61/A30). Base config: `tsc -p tsconfig.json` type-checks the pure-logic core (src/lib/**, native .ts, STRICT). The Svelte SPA (src/app/**: App.svelte + components + main.ts + lib/*.ts) and the marketing/info site (src/site/**) are checked by svelte-check (tsconfig.svelte.json) instead, because plain tsc can't resolve .svelte imports (main.ts imports App.svelte). allowJs/checkJs are gone — A69 finished the site→Svelte conversion, so there is no hand-written .js under src/ left to allow.",
   "compilerOptions": {
-    "allowJs": true,
-    "checkJs": false,
     "noEmit": true,
     "target": "ES2022",
     "module": "ESNext",
