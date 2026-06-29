@@ -321,18 +321,6 @@
       "doneNote": null
     },
     {
-      "id": "A81",
-      "title": "Debug why the version-bump CI job fails",
-      "category": "FIXES",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "The automated two-track versioning (CH12) runs in `.github/workflows/version-bump.yml` on push to main: it derives the bump from the merge commit's conventional-commit type + changed paths via `scripts/bump-version.mjs`, writes `data/versions.json`, and pushes the result back to main. The job is failing - diagnose and fix. Reproduce locally with `node scripts/test-version.mjs` and by running bump-version.mjs against a recent merge commit, then read the failing workflow run to localize the step (path classification, the versions.json write, or the push-back-to-main). The push step already flags a likely cause - the github-actions bot blocked by branch protection on main (see the `::warning::` near version-bump.yml line 74) - and retries. Do not hand-edit data/versions.json. Done when: the root cause is identified, a merge to main bumps the version successfully (or a documented permissions/config change makes it succeed), and a regression test is added if the bug was in bump-version.mjs.",
-      "doneNote": null
-    },
-    {
       "id": "A82",
       "title": "Discuss: do all the root-directory files need to live at the root?",
       "category": "REVIEW / AUDIT",
@@ -342,78 +330,6 @@
       "completedDate": null,
       "partial": false,
       "prompt": "DISCUSSION/ANALYSIS. The repo root holds a lot of files - build/tooling configs (vite.config.mjs, vite-ssg.mjs, eslint.config.mjs, svelte.config.js, playwright.config.mjs, .prettierrc.json, .prettierignore, three tsconfig*.json, .node-version, package.json + lockfile) alongside docs and the source/edge dirs. Survey what could be consolidated or relocated to reduce root clutter vs what MUST stay at root because a tool or the host requires it there (Vite, Cloudflare Pages, ESLint/Prettier/TS/Playwright config discovery, and the deploy-contract rule that functions/ and scripts/ stay at the repo root - see CLAUDE.md / docs/architecture.md). For each movable candidate: where it could go (e.g. a config/ dir, package.json fields, or a merged tsconfig) and the cost/risk (config-discovery breakage, the A26/A30 deploy contract, the build-manifest / bump-version path assumptions). Recommendation plus any spun-off items. Done when: a written inventory of root files with keep-vs-move recommendations is delivered.",
-      "doneNote": null
-    },
-    {
-      "id": "A85",
-      "title": "Stale 'Staging' branding still shipped to prod + demo surfaces",
-      "category": "FIXES",
-      "priority": "P2",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the R1 audit (2026-06-29, second full pass, post Svelte/TS reorg). After the A33 cutover one App.svelte mounts on all three surfaces, but the header still hard-codes staging-internal copy that real app/demo users see: `<span class=\"badge\">Staging</span>` (src/app/App.svelte:433), the meta line 'Svelte 5 proving ground · isolated local data' (~436), the boot-error 'Could not start the staging app' (~472), and a trailing `.note` paragraph ending 'Pending the prod/demo cutover (A33) after live review.' (~525-531) — a claim that now contradicts CLAUDE.md and docs/architecture.md (the cutover already shipped). Fix: gate the badge/meta/note/error wording on PAGE_MODE/STAGING_PAGE so only the staging surface shows 'Staging' branding; prod/demo get neutral copy (or drop the now-stale 'pending cutover' note entirely). Keep demo 1:1 with app.",
-      "doneNote": null
-    },
-    {
-      "id": "A86",
-      "title": "Backup filename + erase copy hard-code 'staging' on every surface",
-      "category": "FIXES",
-      "priority": "P2",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the R1 audit (2026-06-29, second full pass, post Svelte/TS reorg). src/app/components/ManageData.svelte downloads `blotterbook-staging-backup.json` (line ~166) and the erase confirm/result strings say 'staging sandbox' / 'All staging data erased.' (~190,192) on ALL surfaces post-cutover, so prod/demo users get a `-staging-` file and staging wording. Fix: derive the filename and copy from PAGE_MODE (e.g. `blotterbook-backup.json` on app/demo, keep the staging variant only when STAGING_PAGE). Verify demo stays non-mutating.",
-      "doneNote": null
-    },
-    {
-      "id": "A87",
-      "title": "Demo write paths lack the explicit `if (demo) return` guard the convention mandates",
-      "category": "ARCHITECTURE / DUPLICATION",
-      "priority": "P2",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the R1 audit (2026-06-29, second full pass, post Svelte/TS reorg). CLAUDE.md requires every write path to carry BOTH a `disabled` control AND a guarded write (`if (isDemo) return;`). saveWorkspace (src/app/App.svelte:171) guards correctly, but saveView (~375), deleteView (~391), renameView (~395) and the setup-persisting `$effect` that calls store.setMeta('setup',…) (~279) call through to store.setMeta with no demo guard. They're masked today only because demo uses the in-memory DemoStore — the belt-and-suspenders guard is missing. Fix: add `if (PAGE_MODE === 'demo') return;` to the three savedFilters mutators and guard the setup `$effect`; also set `disabled={isDemo}` on the CostPanel cost-setup inputs (broker/feed/state/platform) for parity.",
-      "doneNote": null
-    },
-    {
-      "id": "A88",
-      "title": "Type the untyped JSON boundaries (src/site fetches + functions/ `any`)",
-      "category": "ARCHITECTURE / DUPLICATION",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the R1 audit (2026-06-29, second full pass, post Svelte/TS reorg). Two TS-hygiene gaps. (1) src/site components read fetched JSON untyped: `r.json()` -> `any` flows into .then(d => d.token/d.flags/d.releases) in src/site/components/Admin.svelte (~141,176,192,224) and Changelog.svelte (~58), despite well-defined local interfaces already in those files — violates 'type fetched JSON at the boundary.' Annotate each `r.json() as Promise<{…}>`. (2) tsconfig.functions.json claims the functions are 'fully typed' but ~10 `any` sites remain: functions/_lib/auth.ts (JWKS/JWT decode, KV reads ~111-203), api/config.ts (~22,49), api/status.ts (~42), api/geo.ts (~12). Type the JWKS/JWT shapes and `request.json()` bodies as `unknown` + narrowing, or soften the 'fully typed' claim. (src/ itself is already any-free.)",
-      "doneNote": null
-    },
-    {
-      "id": "S24",
-      "title": "Sandbox the export-report iframe (defense-in-depth)",
-      "category": "SECURITY",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the R1 audit (2026-06-29, second full pass, post Svelte/TS reorg). src/app/components/ExportReport.svelte:142 renders the performance report in a same-origin `srcdoc` iframe with no `sandbox` attribute. All values are `esc()`-escaped today so nothing executes, but a same-origin iframe could script the parent if an escaping bug ever slipped. Add `sandbox=\"allow-same-origin allow-modals\"` (print needs same-origin; scripts aren't needed). Verify PDF print + PNG/JPEG raster still work. No P1/egress issues were found this pass — this is purely hardening.",
-      "doneNote": null
-    },
-    {
-      "id": "A89",
-      "title": "Remove or rewire the dead client feature-flag module (flags.ts)",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the R1 audit (2026-06-29, second full pass, post Svelte/TS reorg). src/app/lib/flags.ts exports `APP_FLAGS`/`flag()` described as the boot-time fallback when /api/config can't be fetched, but grep finds NO importer of `flag()`/`APP_FLAGS` anywhere in src/ — the old `data.js loadFlags()` consumer was deleted in the A33 cutover. So it's either dead code or a dropped feature (beta-adapter gating no longer applied). scripts/test-flags.mjs still guards the APP_FLAGS<->config.ts mirror, so the contract is alive even though the consumer isn't. Decide: re-wire flag-gating into the Svelte boot path, or delete flags.ts + its test and drop the mirror. Don't leave it dangling.",
       "doneNote": null
     },
     {
@@ -438,42 +354,6 @@
       "completedDate": null,
       "partial": false,
       "prompt": "Single shared .pos/.neg tone rule. — R1-FOLLOWUP FINDING (2026-06-29): on inspection this does NOT cleanly apply to the scoped-CSS Svelte architecture and is NOT recommended as specified. A blanket global :global(.pos){color:var(--green)} loses to each component's scoped .x.pos rule (Svelte adds a scope-hash → higher specificity than a bare global), so it either does nothing or needs !important. Worse, 'pos'/'neg' is OVERLOADED: most components use it for TEXT color, but CalendarMonth uses .cell.pos/.neg for a BACKGROUND tint — a global text-color rule would bleed onto cells. A safe consolidation would require renaming the calendar's background classes AND raising the global's specificity, which is more churn than the P3 dedup is worth. RECOMMENDATION: drop, or only pursue alongside a deliberate tone-class redesign.",
-      "doneNote": null
-    },
-    {
-      "id": "A92",
-      "title": "Consolidate money/chart helpers into core.ts",
-      "category": "ARCHITECTURE / DUPLICATION",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the R1 audit (2026-06-29, second full pass, post Svelte/TS reorg). A few small helpers are re-rolled instead of living next to their siblings in core.ts: a signed whole-dollar `compact` formatter in CalendarMonth.svelte (~76) duplicates the money-formatter family (usd/money/axMoney in core.ts:302-341); the SVG polyline `M/L` path builder is repeated in EquityCurve.svelte (~116,118) and StatCardModal.svelte (~39); and `pad2` exists in both core.ts:7 and a private copy in adapters.ts:71. Hoist a `usdCompact`/`signedWhole` formatter and a `linePath(points,x,y)` helper into core.ts (next to niceTicks/minMax/axMoney) and dedupe pad2 where it doesn't cost adapters.ts its import-light footprint.",
-      "doneNote": null
-    },
-    {
-      "id": "A93",
-      "title": "Add error handling to unguarded write/read promises",
-      "category": "FIXES",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the R1 audit (2026-06-29, second full pass, post Svelte/TS reorg). Several persistence calls have no rejection handling, so failures are silent or mis-reported: src/app/App.svelte loadCSV (~269-279, no try/catch around addTrades/reloadAll) and the setup `$effect` setMeta (~279, no .catch); src/app/components/JournalEditor.svelte getJournal(...).then() (~34-39, a read failure silently locks the form) and saveJournal (~55, reports 'Saved' even if the persist rejects). Wrap these writes/reads in try/catch and surface failure to the user (the same pattern importBackup already uses).",
-      "doneNote": null
-    },
-    {
-      "id": "A94",
-      "title": "Refresh stale post-A30/A33 comments (paths + deleted-module era)",
-      "category": "COMMENTS / READABILITY",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the R1 audit (2026-06-29, second full pass, post Svelte/TS reorg). Several comments still describe the deleted vanilla view layer / pre-reorg paths and mislead readers: the core.ts 'Orientation' block (~29-63) narrates the deleted render/ui/data/widgets/main/state modules and partials/app-scripts.html; src/app/lib/flags.ts (~5) and the app.html/demo.html/staging.html header comments reference `app/staging-svelte/` (renamed by A30), `build-includes`, and `functions/_middleware.js` (now .ts). Harmless at runtime but drifting from reality — the core.ts orientation block is the most misleading. Refresh them to the src/{lib,app,site} layout.",
       "doneNote": null
     }
   ],

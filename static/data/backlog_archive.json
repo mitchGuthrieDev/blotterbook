@@ -2295,6 +2295,116 @@
       "completedDate": "2026-06-29",
       "partial": false,
       "doneNote": "**Shipped (staging-only).** Each dashboard module header now has a \"⋯\" menu opening an accessible `role=\"menu\"` popup with Collapse/Expand, Move up, Move down (disabled at the ends) and Hide module — wired to App via the panel bundle; closes on Escape / outside click / action. Hidden modules are re-spawned from a new \"+ Add module\" menu beside the workspace bar (R12). A new `hiddenPanels` map persists through Store.local under the staging-namespaced `tj_hidden_staging` key and is included in workspace snapshots (and cleared on revert-to-default). All staging-gated (`menu = STAGING_PAGE`); prod/demo render the plain header (drag + chevron) unchanged. CSP-clean (scoped CSS, no inline styles — A55). Verified in-browser: 6 header menus on staging with the 4 actions; Hide drops a module and reveals Add-module; re-add restores it; demo has 0 menus; no console errors. Reconciled with R12 (design in docs/r12-module-menu-design.md). typecheck 0/0; e2e 27/27 (+2 A71/R12 specs)."
+    },
+    {
+      "id": "A81",
+      "title": "Debug why the version-bump CI job fails",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Shipped (#48):** the version-bump workflow now stages versions.json at its post-A30 path (static/data/versions.json, was the old root data/versions.json), so the bump commit no longer no-ops. Confirmed live — prod/staging bumps land on every merge to main (currently prod 0.32.x / staging 0.40.x)."
+    },
+    {
+      "id": "A85",
+      "title": "Stale 'Staging' branding still shipped to prod + demo surfaces",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Shipped (#62):** the 'Staging' badge, the 'Svelte 5 proving ground' meta, the 'Could not start the staging app' boot-error, and the stale 'pending the prod/demo cutover (A33)' note are now gated on the staging surface (isStaging). Prod app shows just the date range; demo shows 'Interactive demo · sample data'."
+    },
+    {
+      "id": "A86",
+      "title": "Backup filename + erase copy hard-code 'staging' on every surface",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Shipped (#62):** ManageData derives the backup filename (blotterbook-backup.json on prod/demo, the -staging- variant only on staging) and the erase confirm/result copy from PAGE_MODE, so prod/demo no longer brand them 'staging'."
+    },
+    {
+      "id": "A87",
+      "title": "Demo write paths lack the explicit `if (demo) return` guard the convention mandates",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Shipped (#62):** saveView/deleteView/renameView and the setup-persisting $effect now carry explicit `if (isDemo) return` guards, and the CostPanel cost-setup inputs are `disabled` on demo — belt-and-suspenders convention parity on top of the in-memory DemoStore."
+    },
+    {
+      "id": "A88",
+      "title": "Type the untyped JSON boundaries (src/site fetches + functions/ `any`)",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Shipped (#62):** typed the remaining JSON boundaries instead of `any` — the src/site Admin/Changelog r.json() callbacks and the functions/ JWKS/JWT, config, status, and geo shapes. Also fixed a latent bug where the /api/config POST handler mutated the shared module-level DEFAULTS.flags object across requests (now deep-cloned)."
+    },
+    {
+      "id": "S24",
+      "title": "Sandbox the export-report iframe (defense-in-depth)",
+      "category": "SECURITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Shipped (#62):** the export-report iframe now carries sandbox=\"allow-same-origin allow-modals\" (no allow-scripts) — defense-in-depth should an escaping bug ever slip past report.ts's esc(). PDF print + PNG/JPEG raster still work (verified by e2e)."
+    },
+    {
+      "id": "A89",
+      "title": "Remove or rewire the dead client feature-flag module (flags.ts)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Shipped (#63) — decision: rewire (not delete).** flags.ts gained loadFlags(), which fetches /api/config at boot and applies known keys over the APP_FLAGS defaults (falls back to defaults on 404/offline/unbound Worker). App.svelte applies them: showBetaAdapters filters the Landing import picker's beta adapters, betaRibbon shows a header badge, maintenanceBanner shows a banner. An e2e test mocks /api/config to assert the chrome renders. APP_FLAGS + its drift test stay intact."
+    },
+    {
+      "id": "A92",
+      "title": "Consolidate money/chart helpers into core.ts",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Shipped (#64):** hoisted usdWhole (signed whole-dollar with grouping) and linePath (the SVG M…L… polyline builder) into core.ts, deduping CalendarMonth's local `compact` formatter and the three hand-rolled path builders in EquityCurve (lines + area) and StatCardModal. pad2 left duplicated in adapters.ts on purpose (keeps the parser import-light, per the audit)."
+    },
+    {
+      "id": "A93",
+      "title": "Add error handling to unguarded write/read promises",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Shipped (#62):** added rejection handling to the previously-unguarded write/read paths — App.loadCSV, the setup $effect, and JournalEditor's getJournal/saveJournal now surface failure (and stop reporting a false 'Saved' or hanging the form) instead of swallowing it."
+    },
+    {
+      "id": "A94",
+      "title": "Refresh stale post-A30/A33 comments (paths + deleted-module era)",
+      "category": "COMMENTS / READABILITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Shipped (#62):** refreshed stale post-reorg comments — the core.ts 'Orientation' block (which still described the deleted vanilla render/data/ui/widgets/main/state layer), flags.ts, entitlements.ts, and test-flags.mjs now reference the src/{lib,app,site} layout."
     }
   ]
 }
