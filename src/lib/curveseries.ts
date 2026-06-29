@@ -20,6 +20,13 @@ export interface DailyPoint {
   take: number;
 }
 
+// Whole-month difference b − a for two `YYYY-MM` strings (A117 elapsed-span accrual).
+function monthsBetween(a: string, b: string): number {
+  const [ay, am] = a.split('-').map(Number);
+  const [by, bm] = b.split('-').map(Number);
+  return (by - ay) * 12 + (bm - am);
+}
+
 /** Per-day cumulative gross/net/take-home series. `m` is a compute() result (reads m.trades). */
 export function dailySeries(m: Metrics, opts: { broker: string; tEff?: number; fixedMo?: number }): { pts: DailyPoint[] } {
   const broker = opts.broker,
@@ -33,16 +40,14 @@ export function dailySeries(m: Metrics, opts: { broker: string; tEff?: number; f
     e.comm += rateFor(broker, t.root).rate * 2 * (t.qty || 1); // per-contract (B4)
   }
   let cg = 0,
-    cn = 0,
-    subAcc = 0;
+    cn = 0;
   const pts: DailyPoint[] = [];
-  const seenMonths = new Set<string>();
-  for (const d of [...map.keys()].sort()) {
-    const mo = d.slice(0, 7);
-    if (!seenMonths.has(mo)) {
-      seenMonths.add(mo);
-      subAcc += fixedMo;
-    }
+  const days = [...map.keys()].sort();
+  const firstMo = days.length ? days[0].slice(0, 7) : '';
+  for (const d of days) {
+    // A117 (elapsed span): accrue fixedMo for EVERY calendar month from the first trade month to this
+    // day's month inclusive (gap months counted), so the endpoint = fixedMo × span = costModel.fixedPeriod.
+    const subAcc = fixedMo * (monthsBetween(firstMo, d.slice(0, 7)) + 1);
     const e = map.get(d)!;
     cg += e.gross;
     cn += e.gross - e.comm;

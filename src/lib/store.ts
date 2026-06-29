@@ -86,7 +86,10 @@ function reqP<T = unknown>(r: IDBRequest<T>): Promise<T> {
    that overlap will produce identical ids for the shared rows, so a
    re-upload only inserts the genuinely new trades. */
 export function tradeId(t: Trade): string {
-  const raw = `${t.time}|${t.symbol}|${t.side}|${t.pnl}`;
+  // Append the within-file ordinal ONLY for 2nd+ identical occurrences (A114), so unique trades keep
+  // the exact pre-A114 key (no re-dedupe churn for existing local data) while genuinely-distinct
+  // same-second/symbol/side/pnl trades — which used to collide and silently drop — stay apart.
+  const raw = `${t.time}|${t.symbol}|${t.side}|${t.pnl}` + (t.dup ? `|${t.dup}` : '');
   // FNV-1a 32-bit — small, dependency-free, good enough for dedupe.
   let h = 0x811c9dc5;
   for (let i = 0; i < raw.length; i++) {

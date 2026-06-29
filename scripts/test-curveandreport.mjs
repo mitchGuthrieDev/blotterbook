@@ -103,6 +103,20 @@ ok('isoWeek: 2019-12-30 (Mon) is week 1 of 2020', isoWeek(new Date(2019, 11, 30)
   ok('dailySeries: take = net − tax(net) on positive net', approx(last.take, last.net - last.net * tEff), `${last.take}`);
 }
 
+// ── A117: subscriptions accrue over the ELAPSED SPAN (gap months billed), not just active months ──
+{
+  // Trades in Jan and Mar only — Feb has none. Span = 3 months (Jan,Feb,Mar); active months = 2.
+  const trades = [t('2026-01-10 10:00:00', 100, 'MES', 'long', 1), t('2026-03-10 10:00:00', 100, 'MES', 'long', 1)];
+  const m = compute(trades);
+  const c = costModel(m, { broker: 'AMP', platform: 30, feedCost: 0, stateRate: 0 });
+  ok('A117: compute active months = 2', m.months === 2, String(m.months));
+  ok('A117: costModel bills the full 3-month span', c.months === 3 && approx(c.fixedPeriod, 30 * 3), `${c.months} / ${c.fixedPeriod}`);
+  // The curve must still reconcile with costModel under the span accrual.
+  const ser = dailySeries(m, { broker: 'AMP', tEff: 0, fixedMo: 30 });
+  const last = ser.pts[ser.pts.length - 1];
+  ok('A117: curve endpoint reconciles with costModel.netPreTax (span)', approx(last.net, c.netPreTax), `${last.net} vs ${c.netPreTax}`);
+}
+
 // ── dailySeries(): single month accrues the subscription exactly once ──
 {
   const trades = [t('2026-04-02 10:00:00', 300, 'MES', 'long', 1), t('2026-04-15 11:00:00', -100, 'MES', 'short', 1)];

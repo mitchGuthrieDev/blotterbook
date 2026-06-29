@@ -49,6 +49,7 @@
   let error = $state('');
   let manageOpen = $state(false);
   let landingMsg = $state('');
+  let importWarning = $state(''); // A113: dismissible banner when an import estimated PnL at $1/point
   let online = $state(typeof navigator === 'undefined' ? true : navigator.onLine); // A38 session pill
   let pillOpen = $state(false); // A49 session-pill legend popup
   let cardModalKey = $state<string | null>(null); // A35 stat-card detail modal
@@ -361,6 +362,10 @@
       await store.addTrades(r.trades);
       emit('data:imported', { added: r.trades.length });
       await reloadAll();
+      // A113: warn (don't block) when PnL was estimated at $1/point for an unknown contract.
+      importWarning = r.estimatedRoots?.length
+        ? `Heads-up: Blotterbook has no contract size on file for ${r.estimatedRoots.join(', ')}, so their P&L was estimated at $1/point and may be inaccurate — double-check those symbols.`
+        : '';
     } catch (e: unknown) {
       // A93: a persist/reload failure must not leave the landing flow hung with no feedback.
       console.error('CSV import failed', e);
@@ -468,6 +473,13 @@
   {#if flags.maintenanceBanner}
     <!-- A89: admin-toggled maintenance notice. Compute stays local, so this is informational only. -->
     <div class="maintbanner" role="status">Scheduled maintenance is in progress — your local data is unaffected.</div>
+  {/if}
+  {#if importWarning}
+    <!-- A113: PnL estimated at $1/point for an unknown contract — warn the user, don't drop their data. -->
+    <div class="warnbanner" role="alert">
+      <span>{importWarning}</span>
+      <button type="button" class="warndismiss" aria-label="Dismiss warning" onclick={() => (importWarning = '')}>×</button>
+    </div>
   {/if}
   <header class="topbar">
     <div class="brand">
@@ -668,6 +680,33 @@
     padding: 9px 14px;
     margin-bottom: 16px;
     font-size: 13px;
+  }
+  .warnbanner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--panel2);
+    border: 1px solid var(--warn);
+    border-left: 3px solid var(--warn);
+    color: var(--txt);
+    border-radius: 8px;
+    padding: 9px 14px;
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+  .warndismiss {
+    margin-left: auto;
+    flex: none;
+    background: none;
+    border: none;
+    color: var(--dim);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+  }
+  .warndismiss:hover {
+    color: var(--txt);
   }
   .meta {
     font-size: 12px;

@@ -2548,6 +2548,94 @@
       "completedDate": "2026-06-29",
       "partial": false,
       "doneNote": "Readability sweep. StatCardModal.svelte: extracted the inline anonymous snippet/return object types to named aliases (SplitSeg / SymPfRow / RenderedBar). core.ts: documented isoWeek()'s ISO-8601 Thursday-shift and why Math.round (not floor) is correct at the 52/53 boundary. The remaining audit sub-points were already conformant and left as-is: a scan found NO type-restating JSDoc on component Props (the convention is already followed — existing comments are behavioral prose), and entitlements.ts (INTENTIONALLY UNLOADED + A4/A16/CH35 timeline) and DemoStore.importAll() (no-op rationale) already carry their intent comments."
+    },
+    {
+      "id": "A113",
+      "title": "Flag unknown futures point-values instead of silently pricing them at $1/point",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Unknown futures point-values no longer silently price at $1/point. pairFills() flags any price-derived trade whose root is absent from the POINT table (pvEstimated on the Trade; estimatedRoots on the ParseResult). Both import paths WARN without dropping data: the landing flow shows a dismissible warn-banner in App.svelte; ManageData appends a ⚠ note to its import message. Fixture in test-adapters.mjs (SR3 fills → estimatedRoots=[SR3], pnl = price diff × $1; a known root stays unflagged)."
+    },
+    {
+      "id": "A114",
+      "title": "Widen the trade dedupe key so distinct same-second trades aren't collapsed",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Widened the dedupe key (store.ts tradeId) with a within-file ordinal: parse() tags the 2nd+ occurrence of an identical time|symbol|side|pnl with t.dup, and tradeId appends |<dup> ONLY when dup>0 — so unique trades keep byte-identical ids (no re-dedupe churn for existing local data) while genuinely-distinct same-second/symbol/side/pnl trades (e.g. two identical TradingView scalps) no longer collapse. A re-upload of the same file reproduces the ordinals and still dedupes. Fixtures: twins both survive + get distinct ids; unique-id backward-compat asserted."
+    },
+    {
+      "id": "A115",
+      "title": "Multi-lot realized PnL is apportioned by qty, not per-lot price spread",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "pairFills() now apportions a broker-provided realized across the closed FIFO lots by each lot's PRICE-SPREAD share (parts sum exactly to realized, preserving per-lot sign/magnitude) instead of a flat qty proration; falls back to qty proration when the signed spreads ≈ 0. Matcher restructured into a plan-then-apportion pass. Existing flip/IBKR realized tests unchanged; new fixture: a SELL 2 closing longs@100/110 with realized 30 splits 20/10 (not 15/15) and sums to 30."
+    },
+    {
+      "id": "A116",
+      "title": "Mirror the costModel B13 negative-clamp in the equity-curve fixedMo",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "EquityCurve.build() now clamps platform/feedCost to ≥0 (Math.max(0,…)) to mirror costModel's B13 guard, so a negative cost input can't make the curve's net/take endpoint diverge from the cost panel."
+    },
+    {
+      "id": "A117",
+      "title": "Decide: subscription cost over active months vs elapsed span",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "DECISION + CHANGE: switched fixed subscriptions to ELAPSED-SPAN accrual — fixedMo × every calendar month from the first to the last trade inclusive (gap months billed), since platform/data fees bill whether or not you trade (active-months-only under-counted a sporadic trader). Implemented in lockstep: core.ts spanMonths() drives costModel.fixedPeriod (and the returned months); curveseries.dailySeries() accrues per elapsed month so the curve endpoint still reconciles with costModel. Copy updated (CostPanel caveat, Definitions, report footer). New gap-month test locks it in (Jan+Mar → 3 months billed; curve reconciles). NOTE: the clarifying question to the user failed to send, so this took the audit-recommended option; reversible by restoring m.months in costModel + the seenMonths accrual in dailySeries."
+    },
+    {
+      "id": "A118",
+      "title": "Add node fixtures for the A66 calc edge cases",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Added node fixtures for the calc-audit paths: unknown point-value (A113), same-second dedupe collision + backward-compat id (A114), multi-lot realized apportionment (A115), and a DST-boundary holdMs (A120) in test-adapters.mjs; plus an elapsed-span gap-month reconciliation test (A117) in test-curveandreport.mjs. costModel qty>1 was already covered (A98). All suites green (test-adapters 83, test-curveandreport 31)."
+    },
+    {
+      "id": "A119",
+      "title": "Surface the cost-model assumptions (gross PnL, no-qty close events) to users",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Surfaced the cost-model assumptions to users: a new always-visible CostPanel caveat states costs assume gross P&L (double-count risk if the platform already nets fees) and that a close-event export with no per-trade quantity is billed as a single contract; the report footer (report.ts) carries the same note. Subscription/Definitions copy updated alongside A117."
+    },
+    {
+      "id": "A120",
+      "title": "Minor numeric edge cases: DST holdMs, normTime tz fallback, cent rounding",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "tms() now parses timestamps as UTC (trailing Z) so a holdMs DELTA is timezone-independent and stable across a DST boundary (a fixture asserts a 2h wall-clock hold on US spring-forward day). The other two sub-items were DECLINED with rationale: (b) normTime()'s exotic-format new Date() fallback stays as-is — recognized ISO/slash formats are already tz-safe, the fallback is rare and can't be made deterministic without knowing the source format; (c) compute().net cent-rounding left to display formatting to avoid breaking the gross===net curve-reconciliation invariant (drift is sub-cent)."
     }
   ]
 }

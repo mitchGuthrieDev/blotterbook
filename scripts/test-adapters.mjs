@@ -5,9 +5,11 @@
    ESM (A20): app/adapters.js is now a native ES module, so this imports its
    default export instead of require()-ing it. */
 import A from '../src/lib/adapters.ts';
+import { tradeId } from '../src/lib/store.ts';
 
 let pass = 0,
   fail = 0;
+const approx = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
 function ok(name, cond, extra) {
   if (cond) {
     pass++;
@@ -194,6 +196,62 @@ ok(
   'same-second newest-first pairs as long +$5',
   rss.ok && mes && mes.side === 'long' && Math.abs(mes.pnl - 5) < 1e-6,
   JSON.stringify(rss.trades)
+);
+
+console.log('\nA113 unknown point-value flagged (not silently $1/point):');
+// A Sierra-style fills export for SR3 (3-month SOFR) — absent from the POINT table → fallback $1/point.
+const unknownPV = `Symbol\tQuantity\tBuySell\tFillPrice\tDateTime
+SR3M2025\t1\tBuy\t96.00\t2026-06-02 09:31:00
+SR3M2025\t1\tSell\t96.50\t2026-06-02 10:00:00`;
+r = A.parse(unknownPV);
+ok('unknown root → estimatedRoots lists SR3', r.ok && (r.estimatedRoots || []).includes('SR3'), JSON.stringify(r.estimatedRoots));
+ok('unknown root → trade carries pvEstimated', r.ok && r.trades[0] && r.trades[0].pvEstimated === true, JSON.stringify(r.trades));
+ok('unknown root PnL = price diff × $1/point (0.5)', r.ok && approx(r.trades[0].pnl, 0.5), JSON.stringify(r.trades));
+// A known root must NOT be flagged.
+ok('known root (MES) has no estimatedRoots', !A.parse(C.tradovate).estimatedRoots, JSON.stringify(A.parse(C.tradovate).estimatedRoots));
+
+console.log('\nA114 distinct same-second trades are not collapsed:');
+// Two identical TradingView close-events (same time/symbol/side/pnl, no qty/price to separate them).
+const dupTwins = `Time,Action,Realized PnL (value)
+2026-06-02 10:00:00,"Close long position for symbol MESM2025 at price 5310.00",12.50
+2026-06-02 10:00:00,"Close long position for symbol MESM2025 at price 5310.00",12.50`;
+rd = A.parse(dupTwins);
+ok('two identical same-second trades both survive parse', rd.ok && rd.trades.length === 2, JSON.stringify(rd.trades));
+ok('the 2nd identical trade carries a dup ordinal', rd.ok && rd.trades[1].dup === 1, JSON.stringify(rd.trades.map(t => t.dup)));
+ok('identical trades get DISTINCT dedupe ids', rd.ok && tradeId(rd.trades[0]) !== tradeId(rd.trades[1]), tradeId(rd.trades[0]));
+// Backward-compat: a unique trade's id is unchanged by the ordinal (dup unset → byte-identical key).
+ok(
+  'unique trade id stays backward-compatible (no dup suffix)',
+  tradeId({ time: '2026-06-02 10:00:00', symbol: 'MESM2025', side: 'long', pnl: 12.5 }) === tradeId(rd.trades[0])
+);
+
+console.log('\nA115 multi-lot realized apportioned by price spread:');
+// One SELL of qty 2 closes two longs opened at 100 and 110; broker realized = 30 over the fill.
+// Must split 20 / 10 by price spread, NOT a flat 15 / 15 qty proration.
+const multiLot = `Symbol,DateTime,Buy/Sell,Quantity,TradePrice,Realized P/L
+TSLA,2026-06-02 09:31:00,BUY,1,100.00,0
+TSLA,2026-06-02 09:32:00,BUY,1,110.00,0
+TSLA,2026-06-02 14:00:00,SELL,2,120.00,30.00`;
+const rm = A.parse(multiLot);
+const mlPnls = (rm.trades || []).map(t => t.pnl).sort((a, b) => a - b);
+ok(
+  'multi-lot realized splits 10 / 20 by price spread',
+  rm.ok && mlPnls.length === 2 && approx(mlPnls[0], 10) && approx(mlPnls[1], 20),
+  JSON.stringify(mlPnls)
+);
+ok('apportioned parts sum to the broker realized (30)', rm.ok && approx(mlPnls[0] + mlPnls[1], 30), JSON.stringify(mlPnls));
+
+console.log('\nA120 holdMs is timezone-stable across a DST boundary:');
+// Entry 01:30 → exit 03:30 on US spring-forward day. tms() parses as UTC, so the hold is the
+// wall-clock 2h regardless of the runner's timezone (local parsing would read 1h in US zones).
+const dstHold = `Symbol,DateTime,Buy/Sell,Quantity,TradePrice,Realized P/L
+6E,2026-03-08 01:30:00,BUY,1,1.0800,0
+6E,2026-03-08 03:30:00,SELL,1,1.0810,0`;
+const rdst = A.parse(dstHold);
+ok(
+  'holdMs = wall-clock 2h (tz-stable)',
+  rdst.ok && rdst.trades[0] && rdst.trades[0].holdMs === 2 * 3600 * 1000,
+  rdst.trades && rdst.trades[0] && String(rdst.trades[0].holdMs)
 );
 
 console.log('\nError handling:');

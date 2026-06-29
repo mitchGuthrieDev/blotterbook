@@ -159,6 +159,9 @@
     }
     const res = await store.addTrades(r.trades || []);
     msg = `Imported ${res.added} new trade${res.added === 1 ? '' : 's'} (${res.duplicate} duplicate).`;
+    // A113: flag any symbols whose PnL was estimated at $1/point (unknown contract size).
+    if (r.estimatedRoots?.length)
+      msg += ` ⚠ P&L for ${r.estimatedRoots.join(', ')} was estimated at $1/point (no contract size on file) — verify those symbols.`;
     emit('data:imported', { added: res.added });
     await reload();
     onchanged();

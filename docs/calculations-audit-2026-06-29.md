@@ -7,6 +7,11 @@ imported data — the platform's core value. Covers the pure-logic core (A29): `
 series), and `report.ts` (report assembly). Each discrepancy is filed as a backlog fix item
 (**A113–A120**); per A66 nothing is fixed inline.
 
+> **Update (same day):** all eight follow-ups (**A113–A120**) have since been implemented and shipped —
+> see their `doneNote`s in `data/backlog_archive.json`. The behavior change worth flagging is **A117**:
+> fixed subscriptions now accrue over the **elapsed month span** (gap months billed), not only active
+> months. The cost panel and the equity curve were updated in lockstep so they still reconcile.
+
 ## Headline
 
 **The core math is fundamentally sound.** I traced every metric and cost line against

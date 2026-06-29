@@ -167,7 +167,9 @@ function normTime(s: unknown): string {
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
   return str;
 }
-const tms = (iso: string) => new Date(String(iso).replace(' ', 'T')).getTime();
+// Parse as UTC (trailing Z) so a hold-time DELTA is independent of the runner's timezone and stable
+// across a DST boundary (A120) — entry/exit are wall-clock strings, and we want the wall-clock span.
+const tms = (iso: string) => new Date(String(iso).replace(' ', 'T') + 'Z').getTime();
 const round2 = (v: number) => Math.round(v * 100) / 100;
 const sideWord = (s: string): 'buy' | 'sell' | '' => {
   s = String(s).toLowerCase();
@@ -269,40 +271,54 @@ function pairFills(fills: Fill[]): Trade[] {
   for (const [sym, arr] of bySym) {
     arr.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : (a._seq ?? 0) - (b._seq ?? 0)));
     const root = rootSym(sym),
-      pv = pointValue(root);
-    const open: Array<{ dir: number; qty: number; price: number; time: string }> = []; // FIFO lots
+      pv = pointValue(root),
+      pvKnown = POINT[root] != null; // A113: an unknown root falls back to $1/point → flag those PnLs
+    type Lot = { dir: number; qty: number; price: number; time: string };
+    const open: Lot[] = []; // FIFO lots (single-direction by construction: a flip closes all opposing lots first)
     for (const f of arr) {
       const dir = f.side === 'buy' ? 1 : -1;
-      let remaining = f.qty;
-      // Portion of this fill that closes opposing lots (the rest opens a new lot on a flip).
-      // Realized PnL is apportioned over this closed qty, NOT f.qty, so a flip fill's full
-      // realized PnL is attributed to the closed contracts instead of diluted by the new lot.
+      // Plan the FIFO close against the opposing lots (the rest of f opens a new lot on a flip), and
+      // compute each closed lot's own price-based PnL up front. closeQty is the portion of this fill
+      // that closes lots (NOT f.qty), so a flip fill's full realized PnL lands on the closed contracts.
+      const plan: Array<{ lot: Lot; m: number; long: boolean; priced: number }> = [];
       let closeQty = 0;
-      for (const lot of open) if (lot.dir !== dir) closeQty += lot.qty;
-      closeQty = Math.min(f.qty, closeQty);
-      while (remaining > 0 && open.length && open[0].dir !== dir) {
-        const lot = open[0];
-        const m = Math.min(lot.qty, remaining);
+      for (const lot of open) {
+        if (lot.dir === dir || closeQty >= f.qty - 1e-9) break;
+        const m = Math.min(lot.qty, f.qty - closeQty);
         const long = lot.dir === 1;
+        plan.push({ lot, m, long, priced: (f.price - lot.price) * m * pv * (long ? 1 : -1) });
+        closeQty += m;
+      }
+      // Apportion a broker-provided `realized` across the closed lots by each lot's PRICE-SPREAD share
+      // (A115) — the parts sum EXACTLY to f.realized while preserving per-lot magnitude/sign — instead
+      // of a flat qty proration that mis-splits lots opened at different prices. Fall back to qty
+      // proration only when the signed spreads can't separate them (≈0). Without realized, each lot
+      // books its own price-based PnL.
+      const useRealized = f.realized != null && closeQty > 0;
+      const sumPriced = plan.reduce((a, p) => a + p.priced, 0);
+      for (const p of plan) {
         let pnl;
-        if (f.realized != null && closeQty > 0) pnl = f.realized * (m / closeQty);
-        else pnl = (f.price - lot.price) * m * pv * (long ? 1 : -1);
-        trades.push({
+        if (useRealized)
+          pnl = Math.abs(sumPriced) > 1e-9 ? (f.realized as number) * (p.priced / sumPriced) : (f.realized as number) * (p.m / closeQty);
+        else pnl = p.priced;
+        const t: Trade = {
           time: f.time,
           date: f.time.slice(0, 10),
           symbol: sym,
           root,
-          side: long ? 'long' : 'short',
-          qty: m,
+          side: p.long ? 'long' : 'short',
+          qty: p.m,
           pnl: round2(pnl),
-          entryTime: lot.time,
+          entryTime: p.lot.time,
           exitTime: f.time,
-          holdMs: Math.max(0, tms(f.time) - tms(lot.time)),
-        });
-        lot.qty -= m;
-        remaining -= m;
-        if (lot.qty <= 1e-9) open.shift();
+          holdMs: Math.max(0, tms(f.time) - tms(p.lot.time)),
+        };
+        if (!useRealized && !pvKnown) t.pvEstimated = true; // price × $1/point guess — surfaced to the user (A113)
+        trades.push(t);
+        p.lot.qty -= p.m;
+        if (p.lot.qty <= 1e-9) open.shift();
       }
+      const remaining = f.qty - closeQty;
       if (remaining > 1e-9) open.push({ dir, qty: remaining, price: f.price, time: f.time });
     }
   }
@@ -752,6 +768,21 @@ function parse(text: string, platformId?: string): ParseResult {
     return { ok: false, error: `No completed trades found in this file for the ${adapter.label} format.`, platform: adapter.id };
   trades.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
 
+  // A114: disambiguate genuinely-distinct trades that share time|symbol|side|pnl (e.g. two identical
+  // scalps in a close-event export, which carry no qty/price to separate them). Tag the 2nd+ occurrence
+  // with a within-file ordinal so the dedupe key (Store.tradeId) keeps them apart, while a re-upload of
+  // the SAME file reproduces the same ordinals and still dedupes. The 1st/unique occurrence keeps `dup`
+  // unset, so its id stays byte-identical to the pre-A114 key (no migration churn for existing data).
+  const seen = new Map<string, number>();
+  for (const t of trades) {
+    const k = `${t.time}|${t.symbol}|${t.side}|${t.pnl}`;
+    const c = seen.get(k) || 0;
+    if (c) t.dup = c;
+    seen.set(k, c + 1);
+  }
+  // A113: roots whose PnL was a $1/point fallback guess — surfaced as an import warning.
+  const estimatedRoots = [...new Set(trades.filter(t => t.pvEstimated).map(t => t.root))];
+
   return {
     ok: true,
     trades,
@@ -760,6 +791,7 @@ function parse(text: string, platformId?: string): ParseResult {
     beta: !!adapter.beta,
     kind: adapter.kind,
     detected: detected ? detected.id : null,
+    ...(estimatedRoots.length ? { estimatedRoots } : {}),
   };
 }
 
