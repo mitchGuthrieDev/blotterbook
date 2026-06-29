@@ -153,18 +153,6 @@
       "doneNote": null
     },
     {
-      "id": "F19",
-      "title": "(homepage) Add topic graphics to the feature-detail panels",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From F7's feature explorer. The homepage Features section (index.html + assets/home.js) shows a clickable feature LIST that swaps a detail panel on selection; those detail panels are currently text-only. Add a topic graphic to each feature's detail panel that visually represents the feature — reuse/adapt the app's OWN module visuals where possible (e.g. a mini equity curve for the performance feature, a month grid for the calendar/journal, a cost waterfall for the cost/tax feature, a stat-card cluster for statistics). Keep it dependency-free (inline SVG, colours from tokens.css), responsive (the explorer stacks to one column at md/760), and CSP-clean (no inline scripts/handlers — wire via assets/home.js). Done when: each feature-detail panel includes a relevant graphic, the panels still swap on selection, and the section renders responsively with zero console/CSP errors.",
-      "doneNote": null
-    },
-    {
       "id": "R17",
       "title": "(staging) Review: purpose of the 'Tagged trades' Overview stat + what tagging means",
       "category": "REVIEW / AUDIT",

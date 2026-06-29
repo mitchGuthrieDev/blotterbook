@@ -2251,6 +2251,17 @@
       "completedDate": "2026-06-29",
       "partial": false,
       "doneNote": "**Shipped (staging-only).** The Manage-data trades table now pages (50 rows/page) on staging so a large import doesn't render thousands of rows at once. Search runs over the FULL dataset; only the rendered window is sliced (`visible = filtered.slice(page*50, …)` behind `STAGING_PAGE`), with a Prev/Next pager showing \"a–b of N\". A new search jumps to page 1; a delete that shrinks the set keeps `page` in range. Prod/demo render the whole table unchanged (no pager). Verified in-browser (1539-trade seed): staging shows 50 rows \"1–50 of 1539\", Next → \"51–100 of 1539\", search \"2024\" → \"1–50 of 388\"; demo renders all 1539 with no pager, no console errors. Updated the A45 delete e2e to assert via the true total (paging refills the visible page) and added two A73 e2e (staging paginates / demo not). typecheck 0/0; e2e 25/25."
+    },
+    {
+      "id": "F19",
+      "title": "(homepage) Add topic graphics to the feature-detail panels",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Shipped (homepage).** Each feature in the homepage feature-explorer detail panel (F7) now carries a topic graphic — an inline SVG that visually represents the feature, replacing the small repeated icon: a browser+padlock (private by design), a cost waterfall (true after-cost), a net bar with a tax slice + location pin (tax model), grouped comparison bars (broker/feed), a rising equity curve beside a month-grid calendar (curve & calendar), and a filter funnel feeding stat chips (filters/journal/stats). Dependency-free inline SVG, responsive (width 100%, max-width 320px), colored from tokens.css via classes styled in the component's scoped <style> with `:global()` so the {@html}-injected shapes match — CSP `style-src 'self'` clean (no inline style=\"\"). Verified in-browser: graphics render with token colors (e.g. accent rgb(106,160,255)), swap correctly across all 6 features, no console errors. typecheck 0/0; e2e 25/25."
     }
   ]
 }

@@ -40,31 +40,43 @@
     {
       title: 'Private by design',
       icon: '<path d="M12 3l7 4v5c0 4-3 7-7 9-4-2-7-5-7-9V7z"/>',
+      graphic:
+        '<rect class="gx-panel" x="34" y="22" width="192" height="96" rx="9"/><line class="gx-grid" x1="34" y1="44" x2="226" y2="44"/><circle class="gx-faint" cx="48" cy="33" r="3.2"/><circle class="gx-faint" cx="60" cy="33" r="3.2"/><circle class="gx-faint" cx="72" cy="33" r="3.2"/><path class="gx-stroke-accent" d="M118 82 v-10 a12 12 0 0 1 24 0 v10"/><rect class="gx-accent" x="112" y="80" width="36" height="28" rx="4"/><circle class="gx-panel" cx="130" cy="92" r="3"/>',
       body: "Your CSV is parsed and stored entirely in your browser via IndexedDB. Trade data never leaves the page — the only network calls are the app's own reference data.",
     },
     {
       title: 'True after-cost performance',
       icon: '<path d="M3 17l5-5 4 3 7-8"/><path d="M16 6h4v4"/>',
+      graphic:
+        '<line class="gx-grid" x1="22" y1="116" x2="238" y2="116"/><rect class="gx-green" x="30" y="40" width="34" height="76" rx="2"/><rect class="gx-red" x="82" y="56" width="34" height="22" rx="2"/><rect class="gx-red" x="134" y="74" width="34" height="16" rx="2"/><rect class="gx-red" x="186" y="86" width="18" height="12" rx="2"/><rect class="gx-take" x="206" y="86" width="34" height="30" rx="2"/>',
       body: 'Per-symbol, broker-aware commissions plus CME exchange, clearing, and NFA fees are modeled on every round turn — so Net and Take-home reflect what you actually keep, not gross PnL.',
     },
     {
       title: 'Location-based tax model',
       icon: '<path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6"/>',
+      graphic:
+        '<line class="gx-grid" x1="22" y1="116" x2="238" y2="116"/><rect class="gx-green" x="80" y="58" width="62" height="58" rx="2"/><rect class="gx-red" x="80" y="40" width="62" height="18" rx="2"/><circle class="gx-accent" cx="192" cy="52" r="15"/><path class="gx-accent" d="M179 60 L192 90 L205 60 Z"/><circle class="gx-panel" cx="192" cy="52" r="5.5"/>',
       body: "A Section 1256 estimate blends 60/40 long/short-term federal rates with your state's top marginal rate, applied only to positive net profit. Pick your state and see take-home update instantly.",
     },
     {
       title: 'Broker & data-feed comparison',
       icon: '<path d="M4 7h16M4 12h16M4 17h10"/>',
+      graphic:
+        '<line class="gx-grid" x1="22" y1="116" x2="238" y2="116"/><rect class="gx-accent" x="40" y="58" width="22" height="58" rx="2"/><rect class="gx-accent" x="68" y="74" width="22" height="42" rx="2"/><rect class="gx-take" x="120" y="44" width="22" height="72" rx="2"/><rect class="gx-take" x="148" y="66" width="22" height="50" rx="2"/><rect class="gx-green" x="200" y="84" width="22" height="32" rx="2"/>',
       body: 'Model AMP, EdgeClear, Tradovate / NinjaTrader, Optimus, thinkorswim, Interactive Brokers, and TradeStation. Switch broker or data feed and watch the cost — and your net — change.',
     },
     {
       title: 'Equity curve & calendar',
       icon: '<path d="M3 12l4-4 4 4 4-6 4 8"/><path d="M3 20h18"/>',
+      graphic:
+        '<line class="gx-grid" x1="20" y1="116" x2="128" y2="116"/><path class="gx-area" d="M22 110 L48 92 L74 86 L100 60 L124 38 L124 116 L22 116 Z"/><path class="gx-line" d="M22 110 L48 92 L74 86 L100 60 L124 38"/><rect class="gx-panel" x="150" y="26" width="92" height="92" rx="7"/><rect class="gx-green" x="156" y="32" width="18" height="18" rx="3"/><rect class="gx-faint" x="176" y="32" width="18" height="18" rx="3"/><rect class="gx-green" x="196" y="32" width="18" height="18" rx="3"/><rect class="gx-red" x="216" y="32" width="18" height="18" rx="3"/><rect class="gx-red" x="156" y="52" width="18" height="18" rx="3"/><rect class="gx-green" x="176" y="52" width="18" height="18" rx="3"/><rect class="gx-green" x="196" y="52" width="18" height="18" rx="3"/><rect class="gx-faint" x="216" y="52" width="18" height="18" rx="3"/><rect class="gx-faint" x="156" y="72" width="18" height="18" rx="3"/><rect class="gx-green" x="176" y="72" width="18" height="18" rx="3"/><rect class="gx-red" x="196" y="72" width="18" height="18" rx="3"/><rect class="gx-green" x="216" y="72" width="18" height="18" rx="3"/><rect class="gx-green" x="156" y="92" width="18" height="18" rx="3"/><rect class="gx-faint" x="176" y="92" width="18" height="18" rx="3"/><rect class="gx-green" x="196" y="92" width="18" height="18" rx="3"/><rect class="gx-green" x="216" y="92" width="18" height="18" rx="3"/>',
       body: 'A cumulative performance graph with Gross / Net / Take-home overlays and hover detail, plus a Sunday-first monthly calendar of daily PnL with weekly summaries and day-notes.',
     },
     {
       title: 'Filters, journal & statistics',
       icon: '<path d="M3 5h18l-7 8v5l-4 2v-7z"/>',
+      graphic:
+        '<path class="gx-stroke-accent" d="M28 32 H118 L84 70 V108 L62 118 V70 Z"/><rect class="gx-panel" x="150" y="34" width="90" height="22" rx="5"/><rect class="gx-green" x="158" y="42" width="26" height="6" rx="3"/><rect class="gx-panel" x="150" y="62" width="90" height="22" rx="5"/><rect class="gx-accent" x="158" y="70" width="44" height="6" rx="3"/><rect class="gx-panel" x="150" y="90" width="90" height="22" rx="5"/><rect class="gx-take" x="158" y="98" width="18" height="6" rx="3"/>',
       body: 'Filter by date, symbol, side, session (RTH/ETH), and weekday. Keep day-notes per session. Read expectancy, profit factor, drawdown, streaks, and an illustrative Sharpe — all after costs.',
     },
   ];
@@ -204,7 +216,7 @@
         {/each}
       </div>
       <div class="feat-detail" id="featDetail" role="tabpanel" tabindex="0" aria-live="polite" aria-labelledby="feattab-{activeFeat}">
-        <div class="ficon" aria-hidden="true"><svg viewBox="0 0 24 24">{@html FEATURES[activeFeat].icon}</svg></div>
+        <svg class="feat-graphic" viewBox="0 0 260 140" role="img" aria-label="{FEATURES[activeFeat].title} — illustration">{@html FEATURES[activeFeat].graphic}</svg>
         <h3>{FEATURES[activeFeat].title}</h3>
         <p>{FEATURES[activeFeat].body}</p>
       </div>
@@ -917,15 +929,63 @@
     flex-direction: column;
     justify-content: center;
   }
-  .feat-detail .ficon {
-    width: 44px;
-    height: 44px;
-    border-radius: 11px;
-    margin-bottom: 16px;
+  /* F19: per-feature topic illustration. Themed via classes (CSP-clean — no inline style="") that
+     pull from tokens.css, so the graphics track the palette like the rest of the site. */
+  .feat-graphic {
+    width: 100%;
+    max-width: 320px;
+    height: auto;
+    margin: 0 0 20px;
+    border-radius: 12px;
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    padding: 6px;
   }
-  .feat-detail .ficon svg {
-    width: 23px;
-    height: 23px;
+  /* The shapes are injected via {@html}, so they don't receive Svelte's scope hash — the inner
+     class selectors must be :global() to match (and to not be stripped as "unused"). */
+  .feat-graphic :global(.gx-grid) {
+    stroke: var(--line);
+    stroke-width: 1.5;
+    fill: none;
+  }
+  .feat-graphic :global(.gx-panel) {
+    fill: var(--panel2);
+    stroke: var(--line);
+    stroke-width: 1.5;
+  }
+  .feat-graphic :global(.gx-line) {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .feat-graphic :global(.gx-area) {
+    fill: var(--green);
+    opacity: 0.16;
+  }
+  .feat-graphic :global(.gx-stroke-accent) {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .feat-graphic :global(.gx-green) {
+    fill: var(--green);
+  }
+  .feat-graphic :global(.gx-accent) {
+    fill: var(--accent);
+  }
+  .feat-graphic :global(.gx-take) {
+    fill: var(--take);
+  }
+  .feat-graphic :global(.gx-red) {
+    fill: var(--red);
+  }
+  .feat-graphic :global(.gx-faint) {
+    fill: var(--faint);
+    opacity: 0.5;
   }
   .feat-detail h3 {
     font-size: 21px;
