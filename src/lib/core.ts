@@ -23,7 +23,9 @@ export function minMax(arr: number[]) {
      'demo'    — in-memory sample data, never persists
      'staging' — a clone of the main app on an ISOLATED IndexedDB, used to trial changes
                  before they reach the main app (features now ship to all surfaces — CH16) */
-export const PAGE_MODE = (document.body && document.body.dataset.mode) || '';
+// The `typeof document` guard keeps the pure-logic core importable under Node (A29 — the core is
+// framework-agnostic + node-tested; see scripts/test-curveandreport.mjs): off-DOM, PAGE_MODE is ''.
+export const PAGE_MODE = (typeof document !== 'undefined' && document.body && document.body.dataset.mode) || '';
 export const STAGING_PAGE = PAGE_MODE === 'staging';
 
 /* ------------------------------------------------------------------
@@ -353,6 +355,10 @@ export const sessionOf = (t: Trade) => {
   const hm = (t.time || '').slice(11, 16);
   return hm && hm >= '09:30' && hm < '16:00' ? 'rth' : 'eth';
 };
+// ISO-8601 week number (A58). Shift the date to the Thursday of its week (ISO weeks belong to the
+// year containing their Thursday), then count whole weeks from Jan 4 (always in week 1). Math.round
+// — not floor — is correct here: the inner term lands on a near-integer multiple of 7, and rounding
+// absorbs the sub-day drift so the 52/53 year boundary maps to the right week (see test-curveandreport).
 export function isoWeek(d: Date) {
   const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   const dn = (t.getUTCDay() + 6) % 7;

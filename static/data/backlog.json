@@ -297,66 +297,6 @@
       "doneNote": "All four shipped, zero new deps (A28). (1) vite.config build.target:'es2022' matching tsconfig — no plugin-legacy. (2) scripts/check-bundle-size.mjs (npm run size-budget): zero-dep script sums the JS the built /app/ shell loads and fails over a 200 KiB ceiling (baseline ~166.6 KiB → ~33 KiB headroom); wired into CI right after the build. (3) De-dup'd via option (b): the Playwright webServer now serves the already-built dist/ in CI (process.env.CI ? serve-only : build+serve) so CI builds once (its own step, which also feeds the size budget) while local `npm run test:e2e` stays one command. (4) Added a concurrency group (cancel-in-progress on non-main refs) and an actions/cache for ~/.cache/ms-playwright keyed on the resolved @playwright/test version (install-deps-only on cache hit). Verified: build, size-budget, full npm test, and all 28 e2e (via the CI serve-only path) green."
     },
     {
-      "id": "A98",
-      "title": "Unit-test the untested core deliverables (curveseries + report + costModel qty)",
-      "category": "CHORE / REFACTOR",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Spun off from the R1 audit (2026-06-29). The two primary end-user deliverables — the performance curve (src/lib/curveseries.ts dailySeries()) and the export report (src/lib/report.ts buildReport()) — have ZERO node unit-test coverage; they're only exercised by e2e render tests, which prove they render, not that the math is right. Add a node suite (e.g. scripts/test-curveandreport.mjs, wired into test:unit) that spot-checks: (1) dailySeries() subscription accrual = fixedMo once per DISTINCT calendar month across a multi-month dataset, the cumulative gross/net/take series, and the take = net − (net>0 ? net*tEff : 0) edge cases (zero/negative net); (2) buildReport() internal consistency — headline tiles, per-symbol commission rows, and the cost breakdown all reconcile with the same compute()/costModel() inputs. While here, extend coverage for costModel() with qty>1 trades (round-turn = rate×2×qty; contracts = Σqty, not trade count) and add an isoWeek() week-52/53 boundary case. Pure-logic only (A29) — no app changes. Done when: the new suite runs in `npm run test:unit` and covers the cases above.",
-      "doneNote": null
-    },
-    {
-      "id": "A99",
-      "title": "Deploy-contract + version-classification guard (CI)",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Spun off from the R1 audit (2026-06-29). The deploy contract (CLAUDE.md / docs/architecture.md) relies on several files staying in lockstep by hand, with nothing failing CI if they drift. Add a dev-only guard (a small node script wired into CI after the build) that asserts: (1) every static/_redirects target and every sitemap.xml / page-canonical URL resolves to a real file in dist/ (catch a renamed/moved served file); (2) every git-tracked file under src/ and static/ is classified by scripts/bump-version.mjs's prod-shipping vs non-shipping rules — fail on any unclassified path so a new directory can't silently misclassify a version bump (CH12). Minor tidy while here: scripts/bump-version.mjs builds the versions.json path by string concat (line ~132) — switch to path.join for robustness (currently correct via the URL trailing slash, just fragile-looking). A28-clean: no new deps. Done when: the guard runs in CI and fails on a broken redirect target or an unclassified src/static path.",
-      "doneNote": null
-    },
-    {
-      "id": "A100",
-      "title": "Harden dashboard layout-state reads against corrupt localStorage",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Spun off from the R1 audit (2026-06-29). App.svelte initializes panelOrder through a sanitizeOrder() validator, but collapsedPanels, hiddenPanels, and the workspace-template reads are taken straight from Store.local with unchecked `as` casts. Corrupt/old localStorage (a non-object, or stale keys) could poison panel state with no guard. Add small sanitizers mirroring sanitizeOrder (validate shape is a plain object; coerce/drop bad entries) for those reads in App.svelte. Keep it to the layout seam — Store already sanitizes trade/journal/meta data on import. Done when: malformed layout localStorage can't break the dashboard boot.",
-      "doneNote": null
-    },
-    {
-      "id": "A101",
-      "title": "JournalEditor: guard against stale-async overwrite on date change",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Spun off from the R1 audit (2026-06-29). JournalEditor.svelte's load $effect calls store.getJournal(date).then(...) and writes text/tags/shots when it resolves. If the selected day changes while a load is in flight, a slow earlier resolve can clobber the newly-selected day's fields (a classic async race). Add a per-run generation token (or AbortController) so only the latest load may write. Low likelihood (IndexedDB reads are fast) but a real correctness pattern. Done when: rapidly switching days can't show or persist stale day content.",
-      "doneNote": null
-    },
-    {
-      "id": "A102",
-      "title": "Code-clarity sweep: drop type-restating JSDoc, name inline types, annotate non-obvious bits",
-      "category": "COMMENTS / READABILITY",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Spun off from the R1 audit (2026-06-29). Small readability pass, no behavior change: (1) remove JSDoc on component `interface Props` fields that merely restate the TS type (convention: JSDoc is for prose, not types) — e.g. TradeBlotter/CostPanel/EquityCurve/Landing. (2) Extract inline anonymous types to named aliases: the snippet param shapes in StatCardModal.svelte (segment/symPf/bar rows) and the chart geometry types in EquityCurve.svelte (SeriesKey/Series/CurvePoint/View). (3) Add a one-line rationale comment where intent is non-obvious: isoWeek()'s Math.round choice (core.ts), DemoStore.importAll()'s deliberate no-op (demostore.ts), and entitlements.ts's intended-but-unloaded status/timeline. Keep src/ any-free. Done when: applied and `npm test` stays green.",
-      "doneNote": null
-    },
-    {
       "id": "A103",
       "title": "Verify the 9 beta CSV adapters against real exports",
       "category": "REVIEW / AUDIT",

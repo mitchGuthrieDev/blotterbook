@@ -2493,6 +2493,61 @@
       "completedDate": "2026-06-29",
       "partial": false,
       "doneNote": "Shipped the R18 HYBRID on staging (gated on PAGE_MODE==='staging'; prod/demo keep the standalone Definitions panel until promoted per CH16). (1) AdvancedStats.svelte gains an 'Assumptions & caveats' <details> — a verbatim mirror of CostPanel's F6/F10 pattern + CSS — holding the Payoff-ratio/Avg-winner-loser, Profit-concentration, Sortino-vs-Sharpe (incl. the Sharpe daily-basis clause of the calendar-grouping warning), Win/Loss-streak, and Best/Worst-weekday definitions plus the thin-sample warning. (2) The four F14 stat-card modals (StatCardModal.svelte) gain their headline definitions — net (Net PnL & take-home), win (Win/Loss/Scratch), wl (Avg winner/loser & payoff ratio); the 'Max Drawdown is REALIZED only' warning moved into the dd drill-down. (3) CostPanel.svelte absorbs the two cost notes not already present — the take-home/Net-PnL definition and 'commissions modeled, not exported' — into its existing Assumptions (reconciled: the round-turn/per-symbol/subscriptions/tax/break-even lines already there were NOT duplicated). (4) The one-liners ride their controls: performance-graph note on EquityCurve, calendar-day grouping note on CalendarMonth, the scope definition as a tooltip on the FilterBar scope toggle. (5) Definitions.svelte trimmed on staging to just the cross-cutting PARSING caveats (Trade = one closed position; US-dates/Eastern-time assumed) that gate every grouping and need one discoverable home — no content lost overall. e2e: the staging boot spec now asserts the trim + the distributed AdvancedStats caveats. The prompt was already Svelte-accurate (named the real components), so no rewrite was needed. Promote per CH16."
+    },
+    {
+      "id": "A98",
+      "title": "Unit-test the untested core deliverables (curveseries + report + costModel qty)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Added scripts/test-curveandreport.mjs (wired into npm run test:unit) — 28 assertions over the two end-user deliverables that previously had only e2e RENDER coverage, not calc coverage. dailySeries(): one subscription accrual per DISTINCT calendar month, cumulative gross/net/take, take = net − tax(net) only on positive net, single-month + negative-net edge cases, and reconciliation of the final point with costModel.netPreTax/afterTax and compute().net. buildReport(): headline tiles, cost-breakdown rows, and per-symbol commission rows all reconcile with the same compute()/costModel() inputs. Also covers costModel() qty>1 (round-turn = rate×2×qty, contracts = Σqty, linear scaling, Σ bySym = totalComm) and the isoWeek() 52/53 boundary. ENABLER: guarded core.ts's top-level PAGE_MODE document access with `typeof document` so the pure-logic core is importable under Node (it was throwing 'document is not defined' — ironic for the A29 'node-tested' core); the test stubs global.fetch to serve static/data/*.json from disk so loadRefData() populates the real rate tables off-DOM."
+    },
+    {
+      "id": "A99",
+      "title": "Deploy-contract + version-classification guard (CI)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Added scripts/check-deploy-contract.mjs (npm run check-deploy; wired into CI right after the build). Two guards: (1) DEPLOY CONTRACT — every static/_redirects target, sitemap.xml <loc>, page <link rel=canonical>, and the robots.txt Sitemap: line must resolve to a real file in dist/, catching a renamed/moved served file that left a dangling reference; (2) VERSION CLASSIFICATION — every git-tracked file under src/ and static/data/ must be recognized by bump-version.mjs's prod/staging/non-shipping rules, failing on any unclassified path so a new directory can't silently bump nothing (CH12). Exported STAGING_ONLY + NON_SHIPPING_DATA from bump-version.mjs for reuse, and switched its versions.json path build to path.join (the audit's 'P1' was actually already correct via the URL trailing slash — applied as a tidy). 14 checks pass on the current tree."
+    },
+    {
+      "id": "A100",
+      "title": "Harden dashboard layout-state reads against corrupt localStorage",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Hardened App.svelte's dashboard layout-state reads from Store.local against corrupt/stale localStorage. Added sanitizeFlags() (keeps only known module keys; normalizes each truthy flag to 1) for collapsedPanels/hiddenPanels both at init and on workspace-template load, plus asObject() to guard the workspace-template map read (a non-object payload yields no templates) — mirroring the existing sanitizeOrder() for panelOrder and removing the unchecked `as` casts the audit flagged."
+    },
+    {
+      "id": "A101",
+      "title": "JournalEditor: guard against stale-async overwrite on date change",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "JournalEditor.svelte: added a per-load generation token (loadId, bumped each time the date-change $effect runs) so a slow getJournal() that settles AFTER the user has switched days can no longer clobber the newer day's fields (stale-async race). Both the resolve and reject paths bail when superseded."
+    },
+    {
+      "id": "A102",
+      "title": "Code-clarity sweep: drop type-restating JSDoc, name inline types, annotate non-obvious bits",
+      "category": "COMMENTS / READABILITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Readability sweep. StatCardModal.svelte: extracted the inline anonymous snippet/return object types to named aliases (SplitSeg / SymPfRow / RenderedBar). core.ts: documented isoWeek()'s ISO-8601 Thursday-shift and why Math.round (not floor) is correct at the 52/53 boundary. The remaining audit sub-points were already conformant and left as-is: a scan found NO type-restating JSDoc on component Props (the convention is already followed — existing comments are behavioral prose), and entitlements.ts (INTENTIONALLY UNLOADED + A4/A16/CH35 timeline) and DemoStore.importAll() (no-op rationale) already carry their intent comments."
     }
   ]
 }

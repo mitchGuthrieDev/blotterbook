@@ -55,6 +55,9 @@ jobs:
       - name: Bundle size budget (/app/ surface)
         run: npm run size-budget
 
+      - name: Deploy-contract + version-classification guard
+        run: npm run check-deploy
+
       - name: Resolve Playwright version
         id: pw
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"

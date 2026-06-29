@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 /* Bump level from the (full) commit message. First line drives the type; the whole
    message is scanned for a BREAKING CHANGE footer. */
@@ -30,7 +31,7 @@ export function bumpLevel(message) {
 // The Svelte SPA (src/app/) is shared by all three surfaces since the A33 cutover, so the only
 // staging-EXCLUSIVE file is the staging ENVIRONMENT page itself; everything else under src/app/ ships
 // to every surface (see isProdShipping). (A30: paths are now under src/ + static/.)
-const STAGING_ONLY = new Set(['src/app/staging.html']);
+export const STAGING_ONLY = new Set(['src/app/staging.html']);
 
 // Production-only surfaces: the public marketing homepage + info pages ship to prod (main+demo
 // deployment) but are NOT part of the staging sandbox, so they bump PROD only (B16). admin.* is
@@ -52,7 +53,7 @@ export function isProdOnly(f) {
    backlog_archive.json, or the curated changelog.json. (CH31: release notes DOCUMENT a prod
    version; they must not bump one — otherwise the changelog would perpetually trail by a release
    and every notes edit would fire another, undocumented, release.) */
-const NON_SHIPPING_DATA = new Set([
+export const NON_SHIPPING_DATA = new Set([
   'static/data/versions.json',
   'static/data/backlog.json',
   'static/data/backlog_archive.json',
@@ -129,7 +130,7 @@ export function platformLabel(prod) {
 
 function main() {
   const root = fileURLToPath(new URL('..', import.meta.url));
-  const file = root + 'static/data/versions.json';
+  const file = join(root, 'static/data/versions.json');
   const cur = JSON.parse(readFileSync(file, 'utf8'));
 
   const message = process.env.COMMIT_MSG || execSync('git log -1 --format=%B').toString();

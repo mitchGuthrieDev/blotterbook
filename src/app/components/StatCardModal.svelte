@@ -22,6 +22,10 @@
     color?: string;
     n?: number;
   }
+  // A102: named aliases for the snippet/return shapes below (was inline anonymous object types).
+  type SplitSeg = { value: number; color: string; label: string };
+  type SymPfRow = { root: string; n: number; pf: number; net: number };
+  type RenderedBar = { label: string; value: number; pct: number; tone: string };
   // Signed horizontal bars scaled to the max abs value.
   function bars(rows: BarRow[]) {
     const max = Math.max(1, ...rows.map(r => Math.abs(r.value)));
@@ -49,7 +53,7 @@
     return bins.map((n, i) => ({ pct: (n / max) * 100, lo: lo + (span * i) / 8, n }));
   }
   // Per-symbol gross profit factor + net (parity with vanilla cmSymPf — table, not bars).
-  function symPfRows(trades: Trade[]) {
+  function symPfRows(trades: Trade[]): SymPfRow[] {
     const map = new Map<string, { gp: number; gl: number; n: number }>();
     for (const t of trades) {
       const r = t.root || '?';
@@ -159,7 +163,7 @@
   </div>
 </div>
 
-{#snippet splitBar(segs: Array<{ value: number; color: string; label: string }>)}
+{#snippet splitBar(segs: SplitSeg[])}
   <div class="split">
     {#each segs.filter(s => s.value > 0) as s, i (i)}
       <span class="seg" use:styleProps={{ flex: s.value, background: s.color }} title="{s.label}: {s.value}">{s.value}</span>
@@ -167,7 +171,7 @@
   </div>
 {/snippet}
 
-{#snippet symPfTable(rows: Array<{ root: string; n: number; pf: number; net: number }>)}
+{#snippet symPfTable(rows: SymPfRow[])}
   <table class="symtab">
     <thead><tr><th>Symbol</th><th>Trades</th><th>PF</th><th>Net</th></tr></thead>
     <tbody>
@@ -194,7 +198,7 @@
   {/if}
 {/snippet}
 
-{#snippet barList(rows: Array<{ label: string; value: number; pct: number; tone: string }>)}
+{#snippet barList(rows: RenderedBar[])}
   <div class="bars">
     {#each rows as r, i (i)}
       <div class="bar">

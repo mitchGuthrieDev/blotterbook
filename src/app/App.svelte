@@ -97,16 +97,27 @@
     const known = ord.filter(k => DEFAULT_ORDER.includes(k));
     return [...known, ...DEFAULT_ORDER.filter(k => !known.includes(k))];
   };
+  // A100: guard the collapse/hidden flag-map reads from Store.local the same way sanitizeOrder guards
+  // the order — corrupt or stale localStorage (a non-object, or keys for removed modules) must not
+  // poison panel state. Keeps only known module keys, normalizing each truthy flag to 1.
+  const sanitizeFlags = (v: unknown): Record<string, number> => {
+    const out: Record<string, number> = {};
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) if (DEFAULT_ORDER.includes(k) && val) out[k] = 1;
+    return out;
+  };
+  // A100: the workspace-template map read, guarded — a non-object payload yields no templates.
+  const asObject = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
   // Initialize synchronously from localStorage so the restored layout paints without a flash.
   let panelOrder = $state<string[]>(sanitizeOrder(store.local.get(LS_ORDER, null)));
-  let collapsedPanels = $state<Record<string, number>>((store.local.get(LS_COLLAPSE, {}) as Record<string, number>) || {});
+  let collapsedPanels = $state<Record<string, number>>(sanitizeFlags(store.local.get(LS_COLLAPSE, {})));
   // R12 (staging): modules removed from the dashboard; re-spawned from the "Add module" menu.
-  let hiddenPanels = $state<Record<string, number>>((store.local.get(LS_HIDDEN, {}) as Record<string, number>) || {});
+  let hiddenPanels = $state<Record<string, number>>(sanitizeFlags(store.local.get(LS_HIDDEN, {})));
   let addMenuOpen = $state(false);
   let draggingKey = $state<string | null>(null);
   const visiblePanels = $derived(panelOrder.filter(k => !hiddenPanels[k]));
   const hiddenList = $derived(panelOrder.filter(k => hiddenPanels[k]));
-  let wsNames = $state<string[]>(Object.keys((store.local.get(WS_KEY, {}) as Record<string, unknown>) || {}));
+  let wsNames = $state<string[]>(Object.keys(asObject(store.local.get(WS_KEY, {}))));
   let wsSelected = $state('');
 
   const persistOrder = () => store.local.set(LS_ORDER, $state.snapshot(panelOrder));
@@ -179,8 +190,7 @@
   // Workspace templates (Store.local seam).
   // R12: workspace templates also snapshot which modules are hidden (older snapshots → nothing hidden).
   const readWs = (): Record<string, { order: string[]; collapsed: Record<string, number>; hidden?: Record<string, number> }> =>
-    (store.local.get(WS_KEY, {}) as Record<string, { order: string[]; collapsed: Record<string, number>; hidden?: Record<string, number> }>) ||
-    {};
+    asObject(store.local.get(WS_KEY, {})) as Record<string, { order: string[]; collapsed: Record<string, number>; hidden?: Record<string, number> }>;
   function saveWorkspace() {
     if (isDemo) return; // demo never persists new layouts (B23)
     const name = (window.prompt('Name this workspace layout:') || '').trim();
@@ -208,8 +218,8 @@
     const t = readWs()[name];
     if (t) {
       panelOrder = sanitizeOrder(t.order);
-      collapsedPanels = { ...(t.collapsed || {}) };
-      hiddenPanels = { ...(t.hidden || {}) };
+      collapsedPanels = sanitizeFlags(t.collapsed);
+      hiddenPanels = sanitizeFlags(t.hidden);
       persistOrder();
       persistCollapsed();
       persistHidden();

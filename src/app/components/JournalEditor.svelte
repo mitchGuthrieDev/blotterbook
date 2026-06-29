@@ -27,18 +27,24 @@
 
   // Reload whenever the selected date changes. The load is async (IndexedDB), so we gate the form on
   // `ready` until it resolves — otherwise a fast edit could be overwritten by the in-flight load.
+  // A101: a per-load generation token guards against a stale resolve — if the date changes again
+  // before a slow getJournal() settles, the older promise must not clobber the newer day's fields.
+  let loadId = 0;
   $effect(() => {
     const d = date;
+    const myId = ++loadId;
     savedMsg = '';
     ready = false;
     store.getJournal(d).then(
       rec => {
+        if (myId !== loadId) return; // superseded by a newer date load
         text = rec.text || '';
         tagsStr = (rec.tags || []).join(', ');
         shots = rec.shots || [];
         ready = true;
       },
       (err: unknown) => {
+        if (myId !== loadId) return; // superseded — let the newer load drive the form
         // A93: a read failure used to silently leave the form disabled forever. Re-enable on a blank
         // record and tell the user, rather than hanging.
         console.error('day-note load failed', err);
