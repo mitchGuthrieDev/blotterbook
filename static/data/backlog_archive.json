@@ -2405,6 +2405,28 @@
       "completedDate": "2026-06-29",
       "partial": false,
       "doneNote": "**Shipped (#62):** refreshed stale post-reorg comments — the core.ts 'Orientation' block (which still described the deleted vanilla render/data/ui/widgets/main/state layer), flags.ts, entitlements.ts, and test-flags.mjs now reference the src/{lib,app,site} layout."
+    },
+    {
+      "id": "A90",
+      "title": "Extract a shared Modal.svelte wrapper (overlay/card/head/close duplicated)",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Resolved by investigation (R1 follow-up, #64) — not pursued.** Extracting a shared Modal.svelte does NOT cleanly apply to this scoped-CSS Svelte codebase: the three modal cards genuinely differ — StatCardModal is overflow:auto (whole card scrolls, max-width 460px) while ManageData/ExportReport are display:flex/column/overflow:hidden with an internally-scrolling body (960px/880px); overlay padding (6vh/4vh/5vh) and z-index (60/50/60) differ, and ManageData's use:modal has a custom close (cancel edit, else close). The only genuinely-shared surface is the backdrop + dialog a11y wiring (role/aria/use:modal/click-outside) + the × glyph (~18 lines); parameterising the real differences yields more indirection than dedup and risks layout regressions e2e won't catch. Closed as won't-do; revisit only as part of a deliberate modal redesign."
+    },
+    {
+      "id": "A91",
+      "title": "Single shared `.pos`/`.neg` tone rule (redefined in 7 components)",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "**Resolved by investigation (R1 follow-up, #64) — not pursued.** A single shared .pos/.neg tone rule is unsafe here: a blanket :global(.pos){color:var(--green)} loses to each component's scoped .x.pos rule (Svelte's scope-hash raises specificity above a bare global), so it does nothing without !important. And 'pos'/'neg' is overloaded — most components use it for TEXT color, but CalendarMonth uses .cell.pos/.neg for a BACKGROUND tint, which a global text-color rule would bleed onto. A safe consolidation would require renaming the calendar's background classes AND raising the global's specificity — more churn than the P3 dedup is worth. Closed as won't-do; revisit only alongside a deliberate tone-class redesign."
     }
   ]
 }

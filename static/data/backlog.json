@@ -331,30 +331,6 @@
       "partial": false,
       "prompt": "DISCUSSION/ANALYSIS. The repo root holds a lot of files - build/tooling configs (vite.config.mjs, vite-ssg.mjs, eslint.config.mjs, svelte.config.js, playwright.config.mjs, .prettierrc.json, .prettierignore, three tsconfig*.json, .node-version, package.json + lockfile) alongside docs and the source/edge dirs. Survey what could be consolidated or relocated to reduce root clutter vs what MUST stay at root because a tool or the host requires it there (Vite, Cloudflare Pages, ESLint/Prettier/TS/Playwright config discovery, and the deploy-contract rule that functions/ and scripts/ stay at the repo root - see CLAUDE.md / docs/architecture.md). For each movable candidate: where it could go (e.g. a config/ dir, package.json fields, or a merged tsconfig) and the cost/risk (config-discovery breakage, the A26/A30 deploy contract, the build-manifest / bump-version path assumptions). Recommendation plus any spun-off items. Done when: a written inventory of root files with keep-vs-move recommendations is delivered.",
       "doneNote": null
-    },
-    {
-      "id": "A90",
-      "title": "Extract a shared Modal.svelte wrapper (overlay/card/head/close duplicated)",
-      "category": "ARCHITECTURE / DUPLICATION",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Extract a shared Modal.svelte (overlay/card/head/close). — R1-FOLLOWUP FINDING (2026-06-29): on inspection this does NOT cleanly apply to the scoped-CSS Svelte architecture and is NOT recommended as specified. The three modals' CARDS genuinely differ: StatCardModal is overflow:auto (whole card scrolls, max-width 460px), while ManageData/ExportReport are display:flex/flex-direction:column/overflow:hidden with an internally-scrolling body (960px/880px); overlay padding (6vh/4vh/5vh) and z-index (60/50/60) also differ, and ManageData's use:modal has a custom close (cancel edit, else close). The only genuinely-shared surface is the backdrop + the dialog a11y wiring (role/aria/use:modal/click-outside) + the × glyph (~18 lines). Parameterising the real differences (scroll model, sizing, z-index, custom close) into one component yields more indirection than dedup and risks layout regressions e2e won't catch. RECOMMENDATION: drop, or re-scope to extract ONLY a tiny backdrop+close helper if desired.",
-      "doneNote": null
-    },
-    {
-      "id": "A91",
-      "title": "Single shared `.pos`/`.neg` tone rule (redefined in 7 components)",
-      "category": "ARCHITECTURE / DUPLICATION",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Single shared .pos/.neg tone rule. — R1-FOLLOWUP FINDING (2026-06-29): on inspection this does NOT cleanly apply to the scoped-CSS Svelte architecture and is NOT recommended as specified. A blanket global :global(.pos){color:var(--green)} loses to each component's scoped .x.pos rule (Svelte adds a scope-hash → higher specificity than a bare global), so it either does nothing or needs !important. Worse, 'pos'/'neg' is OVERLOADED: most components use it for TEXT color, but CalendarMonth uses .cell.pos/.neg for a BACKGROUND tint — a global text-color rule would bleed onto cells. A safe consolidation would require renaming the calendar's background classes AND raising the global's specificity, which is more churn than the P3 dedup is worth. RECOMMENDATION: drop, or only pursue alongside a deliberate tone-class redesign.",
-      "doneNote": null
     }
   ],
   "howToDrive": [
