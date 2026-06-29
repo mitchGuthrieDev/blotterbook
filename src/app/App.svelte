@@ -14,6 +14,7 @@
   import { createDemoStore } from '../lib/demostore.ts';
   import { Adapters } from '../lib/adapters.ts';
   import { demoCSV } from '../lib/sampledata.ts';
+  import { APP_FLAGS, loadFlags, type AppFlags } from './lib/flags.ts';
   import type { Trade, FilterState, SavedFilter, SavedFilterDef, AppSetup, PanelBundle, Setup, StoredTradeMeta } from '../lib/types.ts';
 
   // Pick the backend by mode and share it with every child (they read getContext('bb:store')).
@@ -51,6 +52,8 @@
   let pillOpen = $state(false); // A49 session-pill legend popup
   let cardModalKey = $state<string | null>(null); // A35 stat-card detail modal
   let exportOpen = $state(false); // A34 performance-report export
+  // A89: admin-managed feature flags, fetched at boot (falls back to APP_FLAGS defaults offline).
+  let flags = $state<AppFlags>({ ...APP_FLAGS });
 
   // Day-notes journal: the selected calendar day + the set of dates carrying a saved note.
   let selectedDate = $state<string | null>(null);
@@ -418,6 +421,8 @@
       error = e instanceof Error ? e.message : String(e);
       status = '';
     });
+    // A89: apply admin flags once they resolve (non-blocking — the dashboard renders on defaults first).
+    loadFlags().then(f => (flags = f));
     const on = () => (online = true);
     const off = () => (online = false);
     window.addEventListener('online', on);
@@ -443,9 +448,13 @@
 />
 
 <main id="sv-app">
+  {#if flags.maintenanceBanner}
+    <!-- A89: admin-toggled maintenance notice. Compute stays local, so this is informational only. -->
+    <div class="maintbanner" role="status">Scheduled maintenance is in progress — your local data is unaffected.</div>
+  {/if}
   <header class="topbar">
     <div class="brand">
-      Blotterbook {#if isStaging}<span class="badge">Staging</span>{/if}
+      Blotterbook {#if isStaging}<span class="badge">Staging</span>{/if}{#if flags.betaRibbon}<span class="badge beta">Beta</span>{/if}
     </div>
     <div class="meta">
       {metaLead}{#if dateRange}{metaLead ? ' · ' : ''}{dateRange}{/if}
@@ -486,7 +495,7 @@
   {#if error}
     <p class="msg error" role="alert">Could not start the app: {error}</p>
   {:else if loaded && PAGE_MODE === 'app' && !allTrades.length}
-    <Landing {setup} onload={loadCSV} msg={landingMsg} />
+    <Landing {setup} onload={loadCSV} msg={landingMsg} showBeta={flags.showBetaAdapters} />
   {:else if loaded}
     <FilterBar {filters} {roots} {tags} {savedFilters} count={metricsActive.n} onclear={clearFilters} onsave={saveView} onapply={applyView} ondelete={deleteView} />
     <Overview metrics={metricsActive} tradeCount={metricsActive.n} oncard={k => (cardModalKey = k)} />
@@ -623,6 +632,23 @@
     border-radius: 5px;
     padding: 2px 6px;
     vertical-align: middle;
+  }
+  /* A89: the betaRibbon flag badge — accent-toned so it reads distinctly from the staging badge. */
+  .badge.beta {
+    color: var(--accent);
+    border-color: var(--accent);
+    margin-left: 6px;
+  }
+  /* A89: admin maintenanceBanner flag. */
+  .maintbanner {
+    background: var(--panel2);
+    border: 1px solid var(--warn);
+    border-left: 3px solid var(--warn);
+    color: var(--txt);
+    border-radius: 8px;
+    padding: 9px 14px;
+    margin-bottom: 16px;
+    font-size: 13px;
   }
   .meta {
     font-size: 12px;

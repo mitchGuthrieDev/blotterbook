@@ -37,6 +37,26 @@ test('demo (Svelte): boots, explores read-only, never persists, write controls d
   expect(errors, errors.join('\n')).toHaveLength(0);
 });
 
+// A89: the admin feature flags are live again — App.svelte fetches /api/config at boot and applies
+// them. Mock the endpoint (the static e2e server has no Worker) and assert the betaRibbon badge +
+// maintenanceBanner render. Default (unmocked) boots show neither — covered implicitly by the specs
+// above, which never see a Beta badge or banner.
+test('demo (Svelte): admin flags drive the betaRibbon badge + maintenance banner (A89)', async ({ page }) => {
+  await page.route('**/api/config', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ flags: { betaRibbon: true, maintenanceBanner: true, showBetaAdapters: false } }),
+    })
+  );
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+
+  // Boots into the overview, then the flags resolve and the chrome appears.
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  await expect(page.locator('#sv-app .brand .badge.beta')).toHaveText('Beta');
+  await expect(page.locator('#sv-app .maintbanner')).toBeVisible();
+});
+
 // Staging is the Svelte 5 app (ADR-001/A27). It boots into the Overview by reusing the
 // pure-logic core (loadRefData + compute) over its OWN isolated IndexedDB, seeded once. Verify
 // it boots clean, renders real computed metrics, and that the seeded data PERSISTS across a
