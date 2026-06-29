@@ -316,21 +316,23 @@ test('staging (Svelte): module-header menu hides + re-adds a module (A71/R12)', 
   await expect(panels).toHaveCount(start);
 });
 
-// A71/R12: prod/demo keep the plain header (no module menu) — staging-only.
-test('demo (Svelte): dashboard module headers have no menu (A71)', async ({ page }) => {
+// A71/R12 promoted to all surfaces (CH16): demo now also has the module-header menu.
+test('demo (Svelte): dashboard module headers have a menu (A71, promoted)', async ({ page }) => {
   await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
   await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
   await expect(page.locator('#sv-app .dash section.panel').first()).toBeVisible();
-  await expect(page.locator('#sv-app .dash .pmenubtn')).toHaveCount(0);
+  await expect(page.locator('#sv-app .dash .pmenubtn').first()).toBeVisible();
+  await page.locator('#sv-app .dash section.panel .pmenubtn').first().click();
+  await expect(page.locator('#sv-app .dash .pmenupop button')).toHaveCount(4);
 });
 
-// A73: demo (and prod) render the full table with no pager — staging-only change.
-test('demo (Svelte): Manage-data trades table is not paginated (A73)', async ({ page }) => {
+// A73 promoted to all surfaces (CH16): demo now also paginates the trades table.
+test('demo (Svelte): Manage-data trades table paginates (A73, promoted)', async ({ page }) => {
   await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
   await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
   await page.click('.managebtn');
-  await expect(page.locator('.modal .tablewrap tbody tr').first()).toBeVisible();
-  await expect(page.locator('.modal .pager')).toHaveCount(0);
+  await expect(page.locator('.modal .tablewrap tbody tr')).toHaveCount(50);
+  await expect(page.locator('.modal .pginfo')).toContainText('1–50 of');
 });
 
 // A51: on a phone viewport the dashboard must not scroll the PAGE horizontally (body overflow-x:

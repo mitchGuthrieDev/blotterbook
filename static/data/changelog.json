@@ -4,6 +4,18 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.31.0",
+      "date": "2026-06-29",
+      "title": "Dashboard upgrades graduate from the staging sandbox",
+      "summary": "A batch of dashboard improvements move from the staging proving-ground to the main app and demo: a per-module header menu, a paginated trades table, and an account-level cost budget. As always, your trade data stays local to your browser.",
+      "highlights": [
+        "Module menu: click the ⋯ on any dashboard panel header to collapse, reorder, or hide it — and re-add hidden modules from the new “+ Add module” menu.",
+        "Faster Manage-data table: large imports now page through 50 trades at a time instead of rendering thousands of rows at once, while search still spans your full history.",
+        "Account-level cost budget: the Break-even & Cost panel now reads as a stable all-time budget, independent of the scope toggle and filters (every other panel stays filter-driven).",
+        "Polish: the performance-report export is now usable on phone-width screens, and the redundant Changelog link was removed from the app top bar."
+      ]
+    },
+    {
       "version": "0.26.0",
       "date": "2026-06-28",
       "title": "The public site, rebuilt on the same modern foundation",

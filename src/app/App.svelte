@@ -10,7 +10,7 @@
   //   staging  → real IndexedDB Store (isolated blotterbookStaging DB), seeded
   // A33 cutover: this app now mounts on ALL three surfaces (app/demo/staging.html).
   import { onMount, setContext } from 'svelte';
-  import { loadRefData, compute, costModel, emit, sessionOf, PAGE_MODE, STAGING_PAGE, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../lib/core.ts';
+  import { loadRefData, compute, costModel, emit, sessionOf, PAGE_MODE, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../lib/core.ts';
   import { Store } from '../lib/store.ts';
   import { createDemoStore } from '../lib/demostore.ts';
   import { Adapters } from '../lib/adapters.ts';
@@ -153,8 +153,8 @@
       persistOrder();
     },
     onreorderover: e => reorderOver(e, key),
-    // R12/A71 (staging only): the per-module header menu and its move/hide actions.
-    menu: STAGING_PAGE,
+    // R12/A71 (promoted to all surfaces, CH16): the per-module header menu and its move/hide actions.
+    menu: true,
     isFirst: visiblePanels[0] === key,
     isLast: visiblePanels[visiblePanels.length - 1] === key,
     onmoveup: () => movePanel(key, -1),
@@ -240,10 +240,10 @@
   const metricsActive = $derived(
     filters.scope === 'month' ? compute(filtered.filter(t => inMonth(t, calYear, calMonth))) : metricsAll
   );
-  // F22 (staging-only): the Break-even & Cost Budget panel reads as a stable, account-level budget,
-  // so on staging it computes from the FULL unfiltered dataset (all-time) — independent of the scope
-  // toggle and filter bar. Prod/demo keep the filter-driven metricsActive.
-  const breakEvenMetrics = $derived(STAGING_PAGE ? compute(allTrades) : metricsActive);
+  // F22 (promoted to all surfaces, CH16): the Break-even & Cost Budget panel reads as a stable,
+  // account-level budget — it always computes from the FULL unfiltered dataset (all-time), independent
+  // of the scope toggle and filter bar. Every other panel stays filter-driven (metricsActive).
+  const breakEvenMetrics = $derived(compute(allTrades));
   const roots = $derived([...new Set(allTrades.map(t => t.root).filter(Boolean))].sort());
   const tags = $derived([...new Set([...tradeMeta.values()].flatMap(m => m.tags || []))].sort());
   // A50: the active-filtered trades for the selected day → the read-only intraday trade table.
@@ -460,9 +460,8 @@
           </div>
         {/if}
       </div>
-      <!-- F21: the Changelog link is staging-noise inside the journal app; hidden on staging only,
-           kept on prod/demo until/unless promoted (CH16). -->
-      {#if !STAGING_PAGE}<a class="link" href="../changelog.html">Changelog</a>{/if}
+      <!-- F21 (promoted to all surfaces, CH16): the Changelog link was journal-app noise; removed from
+           the dashboard top bar on every surface. (The marketing changelog still lives at /changelog.html.) -->
       <a class="link" href="mailto:contact@blotterbook.com?subject=Blotterbook">Contact</a>
       {#if loaded && allTrades.length}<button type="button" class="exportbtn" onclick={() => (exportOpen = true)}>Export report</button>{/if}
       {#if loaded}<button type="button" class="managebtn" onclick={() => (manageOpen = true)}>Manage data</button>{/if}
@@ -478,8 +477,8 @@
     <Overview metrics={metricsActive} tradeCount={metricsActive.n} oncard={k => (cardModalKey = k)} />
     <div class="wsrow">
       <WorkspaceBar names={wsNames} value={wsSelected} onsave={saveWorkspace} onselect={selectWorkspace} saveDisabled={PAGE_MODE === 'demo'} />
-      {#if STAGING_PAGE && hiddenList.length}
-        <!-- R12 (staging): re-spawn a hidden module onto the dashboard. -->
+      {#if hiddenList.length}
+        <!-- R12 (promoted, CH16): re-spawn a hidden module onto the dashboard. -->
         <div class="addmod">
           <button
             type="button"
@@ -514,7 +513,7 @@
             {/snippet}
           </CalendarMonth>
         {:else if key === 'cost'}
-          <CostPanel panel={panelBundle(key)} metrics={breakEvenMetrics} {setup} {costInputs} allTime={STAGING_PAGE} />
+          <CostPanel panel={panelBundle(key)} metrics={breakEvenMetrics} {setup} {costInputs} allTime={true} />
         {:else if key === 'adv'}
           <AdvancedStats panel={panelBundle(key)} metrics={metricsActive} />
         {:else if key === 'defs'}

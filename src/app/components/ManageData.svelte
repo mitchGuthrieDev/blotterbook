@@ -5,7 +5,7 @@
   // are deferred. Operations that change the dataset call onchanged() so App recomputes the dashboard.
   import { onMount, getContext } from 'svelte';
   import { Adapters } from '../../lib/adapters.ts';
-  import { usd, money, emit, PAGE_MODE, STAGING_PAGE } from '../../lib/core.ts';
+  import { usd, money, emit, PAGE_MODE } from '../../lib/core.ts';
   import type { Trade, TradeMeta, StoredJournal, StoredTradeMeta, SavedFilter, StoreLike } from '../../lib/types.ts';
   import { readImage, downloadBlob } from '../lib/files.ts';
   import { modal } from '../lib/modal.ts';
@@ -56,11 +56,11 @@
       : trades
   );
 
-  // A73 (staging-only): page the trades table so a large import doesn't render thousands of rows at
-  // once. Search runs over the FULL `filtered` set; only the rendered window is sliced. Prod/demo
-  // render the whole table as before.
+  // A73 (promoted to all surfaces, CH16): page the trades table so a large import doesn't render
+  // thousands of rows at once. Search runs over the FULL `filtered` set; only the rendered window is
+  // sliced.
   const PAGE_SIZE = 50;
-  const paged = STAGING_PAGE;
+  const paged = true;
   let page = $state(0);
   const pageCount = $derived(Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)));
   const visible = $derived(paged ? filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE) : filtered);
