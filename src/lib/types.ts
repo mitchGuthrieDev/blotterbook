@@ -239,6 +239,10 @@ export interface PanelBundle {
   onmoveup?: () => void;
   onmovedown?: () => void;
   onhide?: () => void;
+  /* F26 (staging): grid modules reorder left/right rather than up/down, so the menu's move actions
+     carry their own labels. Default to "Move up"/"Move down" for the stacked full-width panels. */
+  moveUpLabel?: string;
+  moveDownLabel?: string;
 }
 
 /* ---- reference-data shapes (data/*.json, loaded by loadRefData) ---- */

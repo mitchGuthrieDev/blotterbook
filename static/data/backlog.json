@@ -3,7 +3,7 @@
   "title": "Blotterbook — improvement backlog (paste-ready prompts)",
   "intro": "From the 2026-06-25 audit. Each item is a self-contained prompt: scope, goal, constraints, \"done when\".",
   "tags": "Tags: P1 do-soon · P2 durable win · P3 polish. Send them one at a time (one surface/concern per turn).",
-  "updated": "2026-06-29 (added staging UI items F24/F25/F26 + L8)",
+  "updated": "2026-06-29 (shipped F24/F25/F26 + L8 to staging → archived)",
   "note": "Committed source of truth for the ACTIVE engineering backlog (open + guardrail items; replaces the retired .claude/backlog.md). Completed (Done) items are archived in data/backlog_archive.json to keep this file lean — the admin Backlog panel reads BOTH and merges them, so done items stay visible. The admin panel shows category/effort/status only; prompt + doneNote stay in the JSON.",
   "commitConvention": "Conventional-commit titles (enables CH12 automated versioning): when committing, and ESPECIALLY when titling a PR / squash-merge, lead the title with a conventional-commit type so the version bump can be derived automatically — `feat:` (new capability → minor), `fix:` (bug fix → patch), `chore:`/`refactor:`/`docs:`/`style:`/`test:`/`perf:` (→ patch), and append `!` (e.g. `feat!:`) or a `BREAKING CHANGE:` footer for a breaking change (→ major). Scope it when useful, e.g. `feat(staging): …`. Untyped/legacy titles default to a patch bump. Keep the existing Co-Authored-By and Claude-Session trailers on the commit body.",
   "donePolicy": "When an item's status is set to `done`, delete its `prompt` field and keep only the `doneNote` — the doneNote is the shipped record of what was actually done, so the original prompt is redundant and only bloats this file (the admin backlog panel never renders done-item prompts anyway). Keep `prompt` on `open` and `guardrail` items, since those are still the actionable spec. Applies retroactively: a done item should never carry a prompt. RECURRING ITEMS: an item with `recurring: true` (e.g. R1 repo audit, CH16 staging→prod promotion) is a perpetual driver — NEVER set its status to done, set completedDate, or strip its prompt; it stays open across every run and its prompt leads with a RECURRING/REPEATABLE marker. Each run ships its output as new items, not by closing the recurring item. ARCHIVE (post-split): completed items now live in `data/backlog_archive.json`. When you set an item to `done` and strip its prompt, MOVE the item object out of backlog.json into backlog_archive.json (the admin panel merges both). Recurring items never move — they stay open in backlog.json.",
@@ -414,54 +414,6 @@
       "completedDate": null,
       "partial": false,
       "prompt": "DISCUSSION/EVALUATION. Survey free static-analysis (SAST) tools we could add to CI (.github/workflows/ci.yml) for this stack (TS + Svelte + Cloudflare Functions): e.g. GitHub CodeQL (free for the repo's visibility tier), Semgrep OSS, npm/osv dependency scanning, and any Svelte/TS-aware linters beyond the current ESLint. For each: setup cost, signal/noise, false-positive burden, runtime in CI, and fit with A28 (no heavy/unpinned tooling) and the existing gates. Recommend which (if any) to adopt and how to wire them (a separate workflow vs a CI step, fail vs report). Done when: a written shortlist with a recommendation is delivered (adoption spun off as its own item).",
-      "doneNote": null
-    },
-    {
-      "id": "F24",
-      "title": "(staging) Donate button in the app header (opens Stripe in a new window)",
-      "category": "FEATURES",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "(STAGING) Add a Donate button to the app header/topbar that opens the Stripe donation page in a NEW window/tab (window.open / a target=\"_blank\" rel=\"noopener\" link) so the user is NOT redirected away from the dashboard. Use a Stripe Payment Link — the simplest one-off donation primitive (see R15) — so NO secret/API keys touch the static client; the link just opens Stripe's hosted page in a popup. Staging-scoped (proving ground): gate the control with STAGING_PAGE inside the shared header component until promoted via CH16. Keep it CSP-clean (no inline style=\"\" — A55; dynamic styles via the styleProps action), a11y-intact (a real focusable, labeled <button>/<a>), and respect popup-blockers (open only on a direct user click). Donate is read-only so it's demo-safe, but keep it staging-gated for now. Adjacent: R15 (Stripe scoping), F18 (donations/refund legal pack). Done when: a Donate control ships on the staging app header, clicking it opens the Stripe donation page in a separate window without navigating the dashboard away, and build + npm test are green.",
-      "doneNote": null
-    },
-    {
-      "id": "F25",
-      "title": "(staging) Trim Overview to the interactive stat cards; fold the rest into Advanced Statistics",
-      "category": "FEATURES",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "(STAGING) Slim the Overview stat-card section down to the interactive cards. KEEP these five exactly where they are — they're clickable and have pop-up menus: Net P&L, Win Rate, Profit Factor, Avg Win/Loss, and Max Drawdown. REMOVE the remaining (non-interactive) stat cards from that section and MOVE their information into the Advanced Statistics module so no metric is lost — it just relocates. First audit the current Overview/stat-card components in src/app/components/ to enumerate which cards are interactive vs static before editing. Staging-scoped: gate the change with STAGING_PAGE inside the shared component until promoted via CH16. Keep demo non-mutating, CSP-clean (no inline styles — A55), runes-only ($state/$derived), and a11y intact. Done when: only the five interactive cards remain in the Overview section, every removed card's metric is shown in Advanced Statistics, and build + npm test + e2e are green.",
-      "doneNote": null
-    },
-    {
-      "id": "L8",
-      "title": "(staging) Full-width module layout — reclaim the margin negative space",
-      "category": "LAYOUT (web vs mobile)",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "(STAGING) Update the dashboard module layout to use the full available viewport width so modules span edge-to-edge (within sensible gutters/padding) — remove the wasted negative space in the left/right margins. Find where the app shell constrains width (the max-width / centered wrapper in App.svelte or the layout CSS / a token in src/styles/tokens.css) and widen it for the app surfaces. Keep it responsive — don't break the mobile/narrow layout (the L-series concern) — and CSP-clean (no inline style=\"\" — A55; dynamic styles via the styleProps action). Staging-scoped: gate with STAGING_PAGE until promoted via CH16. Done when: the dashboard modules use the full width with the side margins reclaimed, the layout still holds at mobile widths, and build + npm test + e2e are green.",
-      "doneNote": null
-    },
-    {
-      "id": "F26",
-      "title": "(staging) Draggable grid for Calendar / Break-even & Cost / Advanced Stats modules",
-      "category": "FEATURES",
-      "priority": "P2",
-      "effort": "large",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "(STAGING) Convert the Trading Calendar, Break-even & Cost, and Advanced Statistics modules into a draggable GRID instead of stacked full-width rows (the other modules stay full-width). These three sit together in a grid the user can rearrange by click-and-drag to reorder their position within the grid. Build on / reconcile with the existing drag-reorder + layout-persistence system (App.svelte owns DEFAULT_ORDER + the render switch — see A108) so the grid order persists through the Store/layout prefs (the in-memory DemoStore means demo won't persist order — that's correct by construction, A33). Keep it CSP-clean (no inline style=\"\" — A55; positions via the styleProps CSSOM action), a11y-accessible (a keyboard reorder fallback, not mouse-only), runes-only, and responsive. Staging-scoped: gate with STAGING_PAGE until promoted via CH16. Adjacent: R13 (realtime resizable + snapping modules), A108 (self-contained dashboard modules). Done when: those three modules render in a reorderable grid, drag-to-reorder persists on app/staging and degrades cleanly on demo, and build + npm test + e2e are green.",
       "doneNote": null
     }
   ],

@@ -2636,6 +2636,50 @@
       "completedDate": "2026-06-29",
       "partial": false,
       "doneNote": "tms() now parses timestamps as UTC (trailing Z) so a holdMs DELTA is timezone-independent and stable across a DST boundary (a fixture asserts a 2h wall-clock hold on US spring-forward day). The other two sub-items were DECLINED with rationale: (b) normTime()'s exotic-format new Date() fallback stays as-is — recognized ISO/slash formats are already tz-safe, the fallback is rare and can't be made deterministic without knowing the source format; (c) compute().net cent-rounding left to display formatting to avoid breaking the gross===net curve-reconciliation invariant (drift is sub-cent)."
+    },
+    {
+      "id": "F24",
+      "title": "(staging) Donate button in the app header (opens Stripe in a new window)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Added a staging-only Donate button to the app header (App.svelte, gated on isStaging). openDonate() calls window.open(DONATE_URL, 'bb-donate', 'popup=yes,noopener,noreferrer,width=480,height=720') so the Stripe page opens in a separate named popup window and the dashboard is never navigated away (triggered on a direct click, so popup-blockers allow it). DONATE_URL is a PLACEHOLDER constant ('https://buy.stripe.com/test_PLACEHOLDER') — one spot to swap in the real Stripe Payment Link once it exists (R15/F18). CSP-clean (scoped .donatebtn style, accent-toned), a11y (real focusable <button> with title + focus-visible ring). e2e: staging click hits a stubbed window.open with target 'bb-donate'; demo asserts no button. Staging-gated pending CH16 promotion."
+    },
+    {
+      "id": "F25",
+      "title": "(staging) Trim Overview to the interactive stat cards; fold the rest into Advanced Statistics",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Overview trimmed (staging) to the five interactive (modal) cards — Net P&L, Win Rate, Profit Factor, Avg Win/Loss, Max Drawdown — via a STAGING_PAGE filter on MODAL_KEYS in Overview.svelte. The removed metrics were folded into AdvancedStats.svelte as staging-only rows so nothing is lost: Trades (+ trading days), Avg daily P&L, Best day, Worst day, Sharpe (daily); Expectancy/trade was already an Advanced-Stats row. Prod/demo keep the full card grid. e2e asserts exactly 5 cards + the folded rows on staging and the full grid on demo; the staging specs that previously read the removed 'trades' card now read the filter-bar 'N trades' count. Staging-gated pending CH16."
+    },
+    {
+      "id": "L8",
+      "title": "(staging) Full-width module layout — reclaim the margin negative space",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Full-width staging layout: a `body[data-mode='staging'] #sv-app` override drops the 1100px centered column (max-width:none with 24px side gutters, 10px on mobile) so the dashboard modules reclaim the wide side margins. Prod/demo keep the centered 1100px column. CSP-clean (scoped style, no inline). e2e asserts #sv-app renders > 1300px wide on a 1600px viewport (full-width) and the existing mobile no-horizontal-scroll spec still passes. Staging-gated pending CH16."
+    },
+    {
+      "id": "F26",
+      "title": "(staging) Draggable grid for Calendar / Break-even & Cost / Advanced Stats modules",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Calendar / Break-even & Cost / Advanced Statistics now render parallel in a reorderable grid (staging) instead of stacked full-width rows; the other modules stay full-width. App.svelte builds a renderSeq that collapses the three grid keys (cal/cost/adv) into ONE .modgrid block (CSS grid, auto-fit minmax(360px,1fr)) anchored at the first grid module's slot; the per-key panel switch moved into a `moduleBlock` snippet so it serves both the full-width and grid contexts. Drag reorders horizontally (reorderGridOver — clientX midpoint, rewrites only the visible grid keys back into their existing panelOrder slots so the block stays anchored and the full-width modules never move); the module menu's Move left/right (moveGrid, via Panel's new moveUpLabel/moveDownLabel props) is the keyboard fallback. Order persists through the existing Store.local seam (in-memory DemoStore means demo wouldn't persist — but F26 is staging-gated, so demo stays fully stacked). e2e covers menu-reorder + reload persistence on staging and asserts no grid on demo. Staging-gated pending CH16."
     }
   ]
 }

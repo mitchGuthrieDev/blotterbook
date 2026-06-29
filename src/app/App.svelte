@@ -85,6 +85,15 @@
     defs: 'Definitions & Caveats',
     term: 'Activity Terminal',
   };
+  // F26 (staging): these three modules render side-by-side in a reorderable grid instead of stacked
+  // full-width rows. The user drags them (or uses the module menu's Move left/right) to reorder within
+  // the grid; the rest stay full-width. Off on prod/demo (everything stays stacked) until promoted (CH16).
+  const GRID_KEYS = ['cal', 'cost', 'adv'];
+  const isGridKey = (k: string | null): boolean => !!k && isStaging && GRID_KEYS.includes(k);
+  // F24 (staging): the donate button opens this Stripe page in a separate popup window so the user is
+  // never navigated away from the dashboard. PLACEHOLDER — swap in the real Stripe Payment Link once it
+  // exists (see R15 / F18); kept as one constant so there's a single spot to update.
+  const DONATE_URL = 'https://buy.stripe.com/test_PLACEHOLDER';
   const LS_SUFFIX = PAGE_MODE === 'staging' ? '_staging' : '';
   const LS_ORDER = 'tj_order' + LS_SUFFIX;
   const LS_COLLAPSE = 'tj_collapsed' + LS_SUFFIX;
@@ -115,6 +124,27 @@
   let draggingKey = $state<string | null>(null);
   const visiblePanels = $derived(panelOrder.filter(k => !hiddenPanels[k]));
   const hiddenList = $derived(panelOrder.filter(k => hiddenPanels[k]));
+  // F26 (staging): the dashboard render sequence. On prod/demo every visible module is a full-width
+  // row (unchanged). On staging the grid modules (cal/cost/adv) collapse into ONE grid block, anchored
+  // at the first grid module's slot; the others render full-width in place. visibleGrid is their order.
+  type RenderItem = { type: 'full'; key: string } | { type: 'grid'; keys: string[] };
+  const visibleGrid = $derived(visiblePanels.filter(k => GRID_KEYS.includes(k)));
+  const renderSeq = $derived.by((): RenderItem[] => {
+    if (!isStaging) return visiblePanels.map(k => ({ type: 'full', key: k }));
+    const seq: RenderItem[] = [];
+    let placed = false;
+    for (const k of visiblePanels) {
+      if (GRID_KEYS.includes(k)) {
+        if (!placed) {
+          seq.push({ type: 'grid', keys: visibleGrid });
+          placed = true;
+        }
+      } else {
+        seq.push({ type: 'full', key: k });
+      }
+    }
+    return seq;
+  });
   let wsNames = $state<string[]>(Object.keys(asObject(store.local.get(WS_KEY, {}))));
   let wsSelected = $state('');
 
@@ -124,6 +154,10 @@
 
   // R12/A71 (staging): move a module one slot among the VISIBLE panels, then persist the new order.
   function movePanel(key: string, dir: -1 | 1) {
+    if (isGridKey(key)) {
+      moveGrid(key, dir);
+      return;
+    }
     const vis = panelOrder.filter(k => !hiddenPanels[k]);
     const vi = vis.indexOf(key);
     const swapWith = vis[vi + dir];
@@ -133,6 +167,35 @@
     const b = next.indexOf(swapWith);
     [next[a], next[b]] = [next[b], next[a]];
     panelOrder = next;
+    persistOrder();
+  }
+  // F26 (staging): the visible grid modules in panelOrder + the slots they occupy. Reordering rewrites
+  // only those slots, so the grid block stays anchored and the full-width modules around it never move.
+  const gridSlots = (): { slots: number[]; seq: string[] } => {
+    const slots: number[] = [];
+    const seq: string[] = [];
+    panelOrder.forEach((k, i) => {
+      if (GRID_KEYS.includes(k) && !hiddenPanels[k]) {
+        slots.push(i);
+        seq.push(k);
+      }
+    });
+    return { slots, seq };
+  };
+  const writeGrid = (slots: number[], seq: string[]) => {
+    const next = [...panelOrder];
+    slots.forEach((slot, i) => (next[slot] = seq[i]));
+    panelOrder = next;
+  };
+  // F26 (staging): move a grid module one position left/right within the grid (the menu's keyboard
+  // fallback for the drag reorder), then persist.
+  function moveGrid(key: string, dir: -1 | 1) {
+    const { slots, seq } = gridSlots();
+    const si = seq.indexOf(key);
+    const j = si + dir;
+    if (si < 0 || j < 0 || j >= seq.length) return;
+    [seq[si], seq[j]] = [seq[j], seq[si]];
+    writeGrid(slots, seq);
     persistOrder();
   }
   function hidePanel(key: string) {
@@ -156,6 +219,9 @@
   }
   function reorderOver(e: DragEvent, overKey: string) {
     if (!draggingKey || draggingKey === overKey) return;
+    // F26 (staging): grid modules reorder only among themselves (reorderGridOver) — never let one drop
+    // into the full-width stack, and never let a full-width module drop into the grid.
+    if (isGridKey(draggingKey)) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const after = e.clientY > rect.top + rect.height / 2;
     const next = panelOrder.filter(k => k !== draggingKey);
@@ -163,6 +229,20 @@
     if (idx < 0) return;
     next.splice(idx + (after ? 1 : 0), 0, draggingKey);
     panelOrder = next;
+  }
+  // F26 (staging): horizontal drag reorder WITHIN the grid. Uses clientX (columns), reorders only the
+  // visible grid modules, and writes back into their existing slots so the grid block stays anchored.
+  function reorderGridOver(e: DragEvent, overKey: string) {
+    if (!draggingKey || draggingKey === overKey) return;
+    if (!isGridKey(draggingKey) || !GRID_KEYS.includes(overKey)) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const after = e.clientX > rect.left + rect.width / 2;
+    const { slots, seq } = gridSlots();
+    const without = seq.filter(k => k !== draggingKey);
+    const oi = without.indexOf(overKey);
+    if (oi < 0) return;
+    without.splice(oi + (after ? 1 : 0), 0, draggingKey);
+    writeGrid(slots, without);
   }
   // The prop bundle each panel forwards to its <Panel> chrome.
   const panelBundle = (key: string): PanelBundle => ({
@@ -183,6 +263,29 @@
     onmoveup: () => movePanel(key, -1),
     onmovedown: () => movePanel(key, 1),
     onhide: () => hidePanel(key),
+  });
+  // F26 (staging): the bundle for a module rendered inside the grid — same chrome, but reorder is
+  // horizontal (reorderGridOver), the move actions read Move left/right, and isFirst/isLast track the
+  // module's position WITHIN the grid (not the whole dashboard).
+  const gridPanelBundle = (key: string): PanelBundle => ({
+    pkey: key,
+    collapsed: !!collapsedPanels[key],
+    dragging: draggingKey === key,
+    ontoggle: () => togglePanel(key),
+    onreorderstart: () => (draggingKey = key),
+    onreorderend: () => {
+      draggingKey = null;
+      persistOrder();
+    },
+    onreorderover: e => reorderGridOver(e, key),
+    menu: true,
+    isFirst: visibleGrid[0] === key,
+    isLast: visibleGrid[visibleGrid.length - 1] === key,
+    onmoveup: () => movePanel(key, -1),
+    onmovedown: () => movePanel(key, 1),
+    onhide: () => hidePanel(key),
+    moveUpLabel: 'Move left',
+    moveDownLabel: 'Move right',
   });
 
   // Workspace templates (Store.local seam).
@@ -370,6 +473,13 @@
     }
   }
 
+  // F24 (staging): open the donation page in a popup window (named target + popup feature) so the
+  // dashboard stays put — the user isn't redirected away. noopener/noreferrer keep the opened page
+  // from reaching back into this window. Triggered only on a direct click, so popup-blockers allow it.
+  function openDonate() {
+    window.open(DONATE_URL, 'bb-donate', 'popup=yes,noopener,noreferrer,width=480,height=720');
+  }
+
   function navMonth(delta: number) {
     let m = calMonth + delta;
     let y = calYear;
@@ -513,6 +623,9 @@
       <!-- F21 (promoted to all surfaces, CH16): the Changelog link was journal-app noise; removed from
            the dashboard top bar on every surface. (The marketing changelog still lives at /changelog.html.) -->
       <a class="link" href="mailto:contact@blotterbook.com?subject=Blotterbook">Contact</a>
+      <!-- F24 (staging): support the project. Opens the Stripe donation page in a separate popup window
+           (openDonate) so the dashboard is never navigated away. -->
+      {#if isStaging}<button type="button" class="donatebtn" onclick={openDonate} title="Support Blotterbook — opens Stripe in a new window">♥ Donate</button>{/if}
       {#if loaded && allTrades.length}<button type="button" class="exportbtn" onclick={() => (exportOpen = true)}>Export report</button>{/if}
       {#if loaded}<button type="button" class="managebtn" onclick={() => (manageOpen = true)}>Manage data</button>{/if}
     </div>
@@ -549,29 +662,44 @@
         </div>
       {/if}
     </div>
+    <!-- One module's chrome+content, keyed. Rendered both full-width and inside the F26 grid, so the
+         per-key switch lives in a snippet (the `panel` bundle differs between the two contexts). -->
+    {#snippet moduleBlock(key: string, panel: PanelBundle)}
+      {#if key === 'perf'}
+        <EquityCurve {panel} metrics={metricsAll} {costInputs} {journalDates} {selectedDate} onselect={d => (selectedDate = d)} />
+      {:else if key === 'cal'}
+        <CalendarMonth {panel} metrics={metricsAll} year={calYear} month={calMonth} onnav={navMonth} onjump={jumpToLatest} {selectedDate} {journalDates} onselect={d => (selectedDate = d)}>
+          {#snippet extra()}
+            {#if selectedDate}
+              <DayTrades date={selectedDate} trades={dayTrades} filtered={filtersActive} />
+              <JournalEditor date={selectedDate} onsaved={refreshNotes} onclose={() => (selectedDate = null)} />
+            {/if}
+          {/snippet}
+        </CalendarMonth>
+      {:else if key === 'blotter'}
+        <TradeBlotter {panel} trades={filtered} {tradeMeta} broker={setup.broker} filtered={filtersActive} onchanged={reloadAll} />
+      {:else if key === 'cost'}
+        <CostPanel {panel} metrics={breakEvenMetrics} {setup} {costInputs} allTime={true} disabled={isDemo} />
+      {:else if key === 'adv'}
+        <AdvancedStats {panel} metrics={metricsActive} />
+      {:else if key === 'defs'}
+        <Definitions {panel} />
+      {:else if key === 'term'}
+        <ActivityTerminal {panel} />
+      {/if}
+    {/snippet}
     <div class="dash" role="region" aria-label="Dashboard panels">
-      {#each visiblePanels as key (key)}
-        {#if key === 'perf'}
-          <EquityCurve panel={panelBundle(key)} metrics={metricsAll} {costInputs} {journalDates} {selectedDate} onselect={d => (selectedDate = d)} />
-        {:else if key === 'cal'}
-          <CalendarMonth panel={panelBundle(key)} metrics={metricsAll} year={calYear} month={calMonth} onnav={navMonth} onjump={jumpToLatest} {selectedDate} {journalDates} onselect={d => (selectedDate = d)}>
-            {#snippet extra()}
-              {#if selectedDate}
-                <DayTrades date={selectedDate} trades={dayTrades} filtered={filtersActive} />
-                <JournalEditor date={selectedDate} onsaved={refreshNotes} onclose={() => (selectedDate = null)} />
-              {/if}
-            {/snippet}
-          </CalendarMonth>
-        {:else if key === 'blotter'}
-          <TradeBlotter panel={panelBundle(key)} trades={filtered} {tradeMeta} broker={setup.broker} filtered={filtersActive} onchanged={reloadAll} />
-        {:else if key === 'cost'}
-          <CostPanel panel={panelBundle(key)} metrics={breakEvenMetrics} {setup} {costInputs} allTime={true} disabled={isDemo} />
-        {:else if key === 'adv'}
-          <AdvancedStats panel={panelBundle(key)} metrics={metricsActive} />
-        {:else if key === 'defs'}
-          <Definitions panel={panelBundle(key)} />
-        {:else if key === 'term'}
-          <ActivityTerminal panel={panelBundle(key)} />
+      {#each renderSeq as item (item.type === 'grid' ? 'bb-grid' : item.key)}
+        {#if item.type === 'grid'}
+          <!-- F26 (staging): the grid modules lined up parallel; drag (or the menu's Move left/right)
+               reorders them within the grid. -->
+          <div class="modgrid" role="group" aria-label="Module grid">
+            {#each item.keys as key (key)}
+              {@render moduleBlock(key, gridPanelBundle(key))}
+            {/each}
+          </div>
+        {:else}
+          {@render moduleBlock(item.key, panelBundle(item.key))}
         {/if}
       {/each}
     </div>
@@ -630,9 +758,21 @@
     margin: 0 auto;
     padding: 20px 16px 48px;
   }
+  /* L8 (staging): use the full viewport width — drop the 1100px centered column so the modules span
+     edge-to-edge (within the page gutters) instead of leaving wide empty margins. Prod/demo keep the
+     centered column until promoted (CH16). */
+  :global(body[data-mode='staging']) #sv-app {
+    max-width: none;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
   @media (max-width: 560px) {
     #sv-app {
       padding: 14px 10px 40px;
+    }
+    :global(body[data-mode='staging']) #sv-app {
+      padding-left: 10px;
+      padding-right: 10px;
     }
   }
   .topbar {
@@ -824,6 +964,39 @@
   .managebtn:hover,
   .exportbtn:hover {
     border-color: var(--hover-line);
+  }
+  /* F24 (staging): the Donate button — accent-toned so it reads as the primary "support" call. */
+  .donatebtn {
+    background: var(--accent);
+    color: var(--bg);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 7px 14px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .donatebtn:hover {
+    filter: brightness(1.08);
+  }
+  .donatebtn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  /* F26 (staging): the grid modules lined up parallel. auto-fit fits as many ≥360px columns as the
+     (now full-width — L8) row allows, dropping to a single column on narrow/mobile. align-items:start
+     keeps each column independent height (a collapsed module doesn't stretch its neighbours). */
+  .modgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 0 16px;
+    align-items: start;
+  }
+  /* The panels already carry their own top margin for vertical rhythm; the grid only adds the
+     horizontal gap, so columns align with the full-width modules above/below. */
+  .modgrid > :global(.panel) {
+    min-width: 0;
   }
   /* R12 (staging): the "Add module" control sits beside the workspace bar. */
   .wsrow {
