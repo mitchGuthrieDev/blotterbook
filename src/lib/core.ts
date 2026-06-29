@@ -20,47 +20,39 @@ export function minMax(arr: number[]) {
 }
 /* Page modes (document.body[data-mode]):
      ''        — the main app
-     'demo'    — in-memory sample data, never persists (its own trimmed top bar)
+     'demo'    — in-memory sample data, never persists
      'staging' — a clone of the main app on an ISOLATED IndexedDB, used to trial changes
                  before they reach the main app (features now ship to all surfaces — CH16) */
 export const PAGE_MODE = (document.body && document.body.dataset.mode) || '';
 export const STAGING_PAGE = PAGE_MODE === 'staging';
 
 /* ------------------------------------------------------------------
-   Orientation — how the modules fit together (read this first)
+   Orientation — how the pieces fit together (read this first)
 
-   Native ES modules (A20). partials/app-scripts.html is a single entry —
-   <script type="module" src="main.js"> — and main.js imports the rest. Each module
-   `export`s what others use and `import`s what it needs: no shared global scope and
-   no fixed load order. Module scripts are deferred, so boot() (main.js) runs after
-   the DOM is parsed; widgets.js is a side-effect import in main.js so its event
-   subscriptions register before boot() emits app:ready.
+   Post-A33, the app is a Svelte 5 SPA over a framework-agnostic pure-logic core; the vanilla
+   view layer (render/data/ui/export/datamanager/widgets/main/state.js + partials/app-*.html) was
+   deleted. The source tree is src/{lib,app,site} (A30):
 
-     core         this file: DOM helpers, metrics, formatting, cost model, refdata, event bus
-     render       cards, equity curve, calendar, advanced stats, break-even +
-                  the scope/filter/render driver
-     data         CSV import, demo data, filters, day-notes journal, session, setup
-     ui           collapsible/drag panels, file download, modal a11y + scroll-lock helpers
-     export       performance report
-     datamanager  Manage-data modal + per-trade editor
-     widgets      activity terminal, session pill, workspace templates, card-detail modals (CH16)
-     main         the ES-module entry: DOM event wiring + boot()
+     src/lib/  PURE-LOGIC CORE (native TS, node-tested, framework-agnostic — A29/A61)
+       core      this file: metrics (compute), formatting, cost model, refdata loading, event bus,
+                 shared pure helpers (sessionOf/isoWeek/niceTicks/axMoney/fmtDur/ratio/num)
+       adapters  platform CSV adapters + auto-detect    report  performance-report builder
+       store     IndexedDB persistence (+ Store.local)  demostore  in-memory Store for demo
+       curveseries  daily gross/net/take series         sampledata  demo CSV
+       format    esc/platformLabel + version badge      types  shared interfaces
+     src/app/  the journal SPA — App.svelte + components/ + lib/ (modal/actions/files/flags)
+     src/site/ marketing/info — Svelte SSG (components prerendered by vite-ssg.mjs)
+
+   Cross-component state is Svelte runes ($state/$derived) inside the components, NOT a shared
+   globals object; the active Store is provided via context('bb:store') (real IndexedDB for
+   app/staging, in-memory DemoStore for demo). Persistence is ALWAYS via the Store seam — never
+   call indexedDB directly from a component.
 
    Mode flags (derived from document.body[data-mode] above):
-     STAGING_PAGE     marks the staging sandbox. Its former feature set (web-grid dashboard,
-                      note dots, saved filters, activity terminal, session pill, workspace
-                      templates) was promoted to all surfaces (CH16); this flag now gates only
-                      the staging ENVIRONMENT — the isolated DB, the one-time sample seeding,
-                      and the F5 "open on the initial state" landing flow.
-     state.DEMO_MODE  true while the demo's in-memory dataset is loaded; suppresses ALL
-                      persistence (nothing is written to IndexedDB).
-
-   Shared mutable cross-module state lives on the `state` object (state.js), accessed as
-   state.X — e.g. state.TRADES, state.METRICS_ALL, state.SCOPE, state.calYear/calMonth,
-   state.selectedDate, state.JOURNAL_DATES, state.TRADE_META, state.SAVED_FILTERS — because an
-   ESM import binding is read-only. The const objects FILTERS/curveSel (render.js) are plain
-   exports (only their properties mutate). Persistence is ALWAYS via Store (store.js) — never
-   call indexedDB directly from app/render code.
+     STAGING_PAGE   marks the staging sandbox. Its former feature set was promoted to all surfaces
+                    (CH16); this flag now gates only the staging ENVIRONMENT — the isolated DB, the
+                    one-time sample seeding, and the "open on the initial state" landing flow.
+     PAGE_MODE === 'demo'   selects the in-memory DemoStore; the demo suppresses ALL persistence.
    ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------

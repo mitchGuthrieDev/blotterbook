@@ -108,17 +108,59 @@ export async function verifyStripeSignature(rawBody: string, sigHeader: string |
 }
 
 /* ---- S4: Cloudflare Access JWT verification ---- */
-let JWKS_CACHE: any = { url: null, at: 0, keys: null };
+// A88: type the JWKS cache + the JWT header/payload shapes instead of `any`.
+// Cloudflare Access JWKS keys carry a `kid` (key id) the lib's JsonWebKey type omits.
+interface Jwk extends JsonWebKey {
+  kid?: string;
+}
+interface JwksCache {
+  url: string | null;
+  at: number;
+  keys: Jwk[] | null;
+}
+interface JwtHeader {
+  alg?: string;
+  kid?: string;
+}
+interface JwtPayload {
+  exp?: number;
+  nbf?: number;
+  iss?: string;
+  aud?: string | string[];
+  email?: string;
+}
+// Non-secret diagnostic shape returned by inspectAccessJwt (the /api/admin-key?check debug aid).
+interface InspectResult {
+  present: boolean;
+  decodable?: boolean;
+  alg?: string | null;
+  kid?: string | null;
+  iss?: string | null;
+  email?: string | null;
+  aud?: string[];
+  exp?: number | null;
+  expired?: boolean | null;
+  issExpected?: string;
+  issMatches?: boolean;
+  audExpected?: string;
+  audMatches?: boolean;
+  kidFound?: boolean;
+  signatureValid?: boolean;
+  jwksError?: string;
+  error?: string;
+}
+let JWKS_CACHE: JwksCache = { url: null, at: 0, keys: null };
 const JWKS_TTL = 3600 * 1000;
 
-async function getJwks(teamDomain: string) {
+async function getJwks(teamDomain: string): Promise<Jwk[]> {
   const url = teamDomain.replace(/\/+$/, '') + '/cdn-cgi/access/certs';
   if (JWKS_CACHE.url === url && JWKS_CACHE.keys && Date.now() - JWKS_CACHE.at < JWKS_TTL) return JWKS_CACHE.keys;
   const r = await fetch(url, { cf: { cacheTtl: 3600 } });
   if (!r.ok) throw new Error('JWKS fetch failed: ' + r.status);
-  const j: any = await r.json();
-  JWKS_CACHE = { url, at: Date.now(), keys: j.keys || [] };
-  return JWKS_CACHE.keys;
+  const j = (await r.json()) as { keys?: Jwk[] };
+  const keys = j.keys || [];
+  JWKS_CACHE = { url, at: Date.now(), keys };
+  return keys;
 }
 
 /* Verify a Cloudflare Access JWT (RS256) against the team JWKS + audience + issuer
@@ -128,8 +170,8 @@ export async function verifyAccessJwt(assertion: string, teamDomain: string, aud
     if (!assertion || !teamDomain || !aud) return null;
     const parts = assertion.split('.');
     if (parts.length !== 3) return null;
-    const header = JSON.parse(b64urlToString(parts[0]));
-    const payload = JSON.parse(b64urlToString(parts[1]));
+    const header = JSON.parse(b64urlToString(parts[0])) as JwtHeader;
+    const payload = JSON.parse(b64urlToString(parts[1])) as JwtPayload;
     if (header.alg !== 'RS256' || !header.kid) return null;
 
     const now = Math.floor(Date.now() / 1000);
@@ -140,7 +182,7 @@ export async function verifyAccessJwt(assertion: string, teamDomain: string, aud
     const auds = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
     if (!auds.includes(aud)) return null;
 
-    const jwk = (await getJwks(teamDomain)).find((k: any) => k.kid === header.kid);
+    const jwk = (await getJwks(teamDomain)).find(k => k.kid === header.kid);
     if (!jwk) return null;
     const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
     const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64urlToBytes(parts[2]), enc.encode(parts[0] + '.' + parts[1]));
@@ -155,16 +197,16 @@ export async function verifyAccessJwt(assertion: string, teamDomain: string, aud
    reports, separately, the signature validity and the iss/aud/exp claim checks so a
    misconfigured ACCESS_TEAM_DOMAIN/ACCESS_AUD is obvious. Returns NO secrets — only
    the token's own claims and the configured (public) team domain / AUD identifier. */
-export async function inspectAccessJwt(assertion: string | null, teamDomain?: string, aud?: string) {
-  const out: any = { present: !!assertion };
+export async function inspectAccessJwt(assertion: string | null, teamDomain?: string, aud?: string): Promise<InspectResult> {
+  const out: InspectResult = { present: !!assertion };
   if (!assertion) return out;
   try {
     const parts = assertion.split('.');
     out.decodable = parts.length === 3;
     if (parts.length !== 3) return out;
-    const header = JSON.parse(b64urlToString(parts[0]));
-    const payload = JSON.parse(b64urlToString(parts[1]));
-    const norm = (s: any) => String(s || '').replace(/\/+$/, '');
+    const header = JSON.parse(b64urlToString(parts[0])) as JwtHeader;
+    const payload = JSON.parse(b64urlToString(parts[1])) as JwtPayload;
+    const norm = (s: unknown) => String(s || '').replace(/\/+$/, '');
     out.alg = header.alg || null;
     out.kid = header.kid || null;
     out.iss = payload.iss || null;
@@ -179,12 +221,12 @@ export async function inspectAccessJwt(assertion: string | null, teamDomain?: st
     }
     if (aud) {
       out.audExpected = aud;
-      out.audMatches = out.aud.includes(aud);
+      out.audMatches = (out.aud ?? []).includes(aud);
     }
     // signature check, independent of the claim checks above
     if (teamDomain && header.alg === 'RS256' && header.kid) {
       try {
-        const jwk = (await getJwks(teamDomain)).find((k: any) => k.kid === header.kid);
+        const jwk = (await getJwks(teamDomain)).find(k => k.kid === header.kid);
         out.kidFound = !!jwk;
         if (jwk) {
           const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
@@ -196,11 +238,11 @@ export async function inspectAccessJwt(assertion: string | null, teamDomain?: st
           );
         }
       } catch (e) {
-        out.jwksError = String((e as any)?.message || e).slice(0, 100);
+        out.jwksError = String((e as Error)?.message || e).slice(0, 100);
       }
     }
   } catch (e) {
-    out.error = String((e as any)?.message || e).slice(0, 100);
+    out.error = String((e as Error)?.message || e).slice(0, 100);
   }
   return out;
 }

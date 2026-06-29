@@ -1,8 +1,8 @@
 /* Cloudflare Pages Function — /api/config
    Admin-managed feature flags, stored in the `STATUS_KV` namespace under the `config` key.
 
-   GET  → returns the current config (no secrets). Public-readable so the app consumes flags
-          at boot (app/data.js loadFlags()).
+   GET  → returns the current config (no secrets). Public-readable so the app can consume flags
+          at boot. (The client mirror is src/app/lib/flags.ts — see A89.)
    POST → admin only (x-admin-key must match the ADMIN_KEY secret). Body is a partial config to
           merge: { flags?: {...} }. Flag keys are allow-listed to DEFAULTS.flags (S19).
 
@@ -16,17 +16,24 @@ import type { Ctx } from '../_lib/types.ts';
 
 const KEY = 'config';
 const cacheUrl = (request: Request) => new URL(request.url).origin + '/api/config';
-const DEFAULTS = {
+// A88: the stored config shape (flags + an admin-write timestamp), instead of `any`.
+interface Config {
+  flags: Record<string, boolean>;
+  updatedAt?: string;
+}
+const DEFAULTS: Config = {
   flags: { showBetaAdapters: true, maintenanceBanner: false, betaRibbon: false },
 };
 
-async function read(kv: KVNamespace | undefined): Promise<any> {
-  if (!kv) return { ...DEFAULTS };
+async function read(kv: KVNamespace | undefined): Promise<Config> {
+  if (!kv) return { ...DEFAULTS, flags: { ...DEFAULTS.flags } };
   try {
     const raw = await kv.get(KEY);
-    return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : { ...DEFAULTS };
+    if (!raw) return { ...DEFAULTS, flags: { ...DEFAULTS.flags } };
+    const stored = JSON.parse(raw) as Partial<Config>;
+    return { ...DEFAULTS, ...stored, flags: { ...DEFAULTS.flags, ...(stored.flags || {}) } };
   } catch (_) {
-    return { ...DEFAULTS };
+    return { ...DEFAULTS, flags: { ...DEFAULTS.flags } };
   }
 }
 
@@ -49,9 +56,9 @@ export async function onRequest(context: Ctx) {
     if (await rateLimited(env, 'config', request)) return json({ error: 'rate limited' }, 429);
     if (!(await isAdminAuthorized(request, env))) return json({ error: 'unauthorized' }, 401);
     if (!kv) return json({ error: 'STATUS_KV namespace is not bound' }, 500);
-    let body: any;
+    let body: { flags?: Record<string, unknown> } | null;
     try {
-      body = await request.json();
+      body = (await request.json()) as { flags?: Record<string, unknown> };
     } catch (_) {
       return json({ error: 'invalid JSON body' }, 400);
     }
@@ -59,8 +66,9 @@ export async function onRequest(context: Ctx) {
     // S19: allow-list flag keys to the declared schema (DEFAULTS.flags) and coerce to boolean, so a
     // client can't write arbitrary keys or oversized values into the world-readable config record.
     if (body && body.flags && typeof body.flags === 'object') {
+      const bf = body.flags;
       for (const k of Object.keys(DEFAULTS.flags)) {
-        if (k in body.flags) cur.flags[k] = !!body.flags[k];
+        if (k in bf) cur.flags[k] = !!bf[k];
       }
     }
     // versions are no longer writable (automated); any versions field in the body is ignored.

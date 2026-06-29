@@ -18,6 +18,12 @@ import type { Ctx } from '../_lib/types.ts';
 const KEY = 'live';
 const MODES = ['auto', 'live', 'offline', 'maintenance'];
 const cacheUrl = (request: Request) => new URL(request.url).origin + '/api/status';
+// A88: the persisted status record shape, instead of `any`.
+interface StatusRecord {
+  mode: string;
+  label?: string;
+  updatedAt?: string;
+}
 
 export async function onRequest(context: Ctx) {
   const { request, env } = context;
@@ -27,11 +33,11 @@ export async function onRequest(context: Ctx) {
     // CH27: the homepage Live pill pings this on every visit; edge-cache it for a short TTL so the
     // per-visitor Function invocation + KV read drops. Stale by ≤30s is harmless (and a POST purges).
     return cachedJson(context, cacheUrl(request), 30, async () => {
-      let v = { mode: 'auto' };
+      let v: StatusRecord = { mode: 'auto' };
       if (kv) {
         try {
           const raw = await kv.get(KEY);
-          if (raw) v = JSON.parse(raw);
+          if (raw) v = JSON.parse(raw) as StatusRecord;
         } catch (_) {}
       }
       return v;
@@ -44,14 +50,14 @@ export async function onRequest(context: Ctx) {
       return json({ error: 'unauthorized' }, 401);
     }
     if (!kv) return json({ error: 'STATUS_KV namespace is not bound to this Pages project' }, 500);
-    let body: any;
+    let body: { mode?: unknown; label?: unknown } | null;
     try {
-      body = await request.json();
+      body = (await request.json()) as { mode?: unknown; label?: unknown };
     } catch (_) {
       return json({ error: 'invalid JSON body' }, 400);
     }
-    const mode = MODES.includes(body && body.mode) ? body.mode : 'auto';
-    const rec = {
+    const mode = typeof body?.mode === 'string' && MODES.includes(body.mode) ? body.mode : 'auto';
+    const rec: StatusRecord = {
       mode,
       label: body && typeof body.label === 'string' ? body.label.slice(0, 40) : '',
       updatedAt: new Date().toISOString(),

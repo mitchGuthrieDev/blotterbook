@@ -13,9 +13,11 @@
     costInputs: CostInputs;
     /** F22 (staging): figures are all-time / account-level, independent of scope + filters. */
     allTime?: boolean;
+    /** A87: disable the cost-setup inputs on the demo surface (demo never mutates). */
+    disabled?: boolean;
     panel?: PanelBundle;
   }
-  let { metrics, setup, costInputs, allTime = false, panel = {} as PanelBundle }: Props = $props();
+  let { metrics, setup, costInputs, allTime = false, disabled = false, panel = {} as PanelBundle }: Props = $props();
 
   const feedGroups = $derived(BROKER_FEEDS[setup.broker] || {});
   const stateOpts = $derived(STATES.slice().sort((a: StateRow, b: StateRow) => (a[2] < b[2] ? -1 : 1)));
@@ -33,14 +35,14 @@
   <div class="setup">
     <label>
       <span>Broker</span>
-      <select value={setup.broker} onchange={onBroker}>
+      <select value={setup.broker} onchange={onBroker} {disabled}>
         <option value="">— Select broker —</option>
         {#each BROKER_ORDER as k (k)}<option value={k}>{BROKERS[k].name}</option>{/each}
       </select>
     </label>
     <label>
       <span>Data feed</span>
-      <select bind:value={setup.feed}>
+      <select bind:value={setup.feed} {disabled}>
         <option value="">— Select data feed —</option>
         {#each Object.entries(feedGroups) as [grp, list] (grp)}
           <optgroup label={grp}>
@@ -51,14 +53,14 @@
     </label>
     <label>
       <span>State</span>
-      <select bind:value={setup.stateAbbr}>
+      <select bind:value={setup.stateAbbr} {disabled}>
         <option value="">— Select state —</option>
         {#each stateOpts as [a, r, n] (a)}<option value={a}>{n}</option>{/each}
       </select>
     </label>
     <label>
       <span>Platform fee ($/mo)</span>
-      <input type="number" min="0" step="1" bind:value={setup.platform} />
+      <input type="number" min="0" step="1" bind:value={setup.platform} {disabled} />
     </label>
   </div>
 

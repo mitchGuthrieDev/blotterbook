@@ -31,12 +31,24 @@
     const d = date;
     savedMsg = '';
     ready = false;
-    store.getJournal(d).then(rec => {
-      text = rec.text || '';
-      tagsStr = (rec.tags || []).join(', ');
-      shots = rec.shots || [];
-      ready = true;
-    });
+    store.getJournal(d).then(
+      rec => {
+        text = rec.text || '';
+        tagsStr = (rec.tags || []).join(', ');
+        shots = rec.shots || [];
+        ready = true;
+      },
+      (err: unknown) => {
+        // A93: a read failure used to silently leave the form disabled forever. Re-enable on a blank
+        // record and tell the user, rather than hanging.
+        console.error('day-note load failed', err);
+        text = '';
+        tagsStr = '';
+        shots = [];
+        ready = true;
+        savedMsg = 'Could not load this day’s note.';
+      }
+    );
   });
 
   async function addShot(e: Event) {
@@ -52,7 +64,15 @@
     if (isDemo) return; // demo-never-persists guard
     saving = true;
     const tags = [...new Set(tagsStr.split(',').map(s => s.trim().toLowerCase()).filter(Boolean))];
-    await store.saveJournal(date, { text, tags, shots });
+    try {
+      await store.saveJournal(date, { text, tags, shots });
+    } catch (err: unknown) {
+      // A93: don't report "Saved" when the persist actually rejected.
+      console.error('day-note save failed', err);
+      savedMsg = 'Could not save — check your browser storage.';
+      saving = false;
+      return;
+    }
     saving = false;
     savedMsg = text.trim() || tags.length || shots.length ? 'Saved' : 'Cleared';
     emit('note:saved', { date });

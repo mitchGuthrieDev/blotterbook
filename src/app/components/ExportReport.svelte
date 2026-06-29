@@ -139,7 +139,10 @@
       </div>
     </div>
     {#if note}<div class="parsestatus {noteKind}">{note}</div>{/if}
-    <iframe bind:this={iframeEl} class="preview" title="Performance report preview" srcdoc={built.html} onload={applyStyles}></iframe>
+    <!-- S24: same-origin srcdoc (print + CSSOM styling need it) but NO allow-scripts — defense-in-depth
+         should an escaping bug ever slip past report.ts's esc(). The report carries no scripts of its own;
+         allow-modals keeps the parent-triggered print() dialog working. -->
+    <iframe bind:this={iframeEl} class="preview" title="Performance report preview" sandbox="allow-same-origin allow-modals" srcdoc={built.html} onload={applyStyles}></iframe>
   </div>
 </div>
 

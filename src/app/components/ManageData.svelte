@@ -11,6 +11,9 @@
   import { modal } from '../lib/modal.ts';
 
   const isDemo = PAGE_MODE === 'demo'; // demo is a read-only preview — write controls disabled + guarded (B23)
+  const isStaging = PAGE_MODE === 'staging';
+  // A86: only the staging sandbox brands its backup file + erase copy as "staging"; prod/demo are neutral.
+  const BACKUP_NAME = isStaging ? 'blotterbook-staging-backup.json' : 'blotterbook-backup.json';
 
   interface Props {
     onclose: () => void;
@@ -163,7 +166,7 @@
 
   async function exportBackup() {
     const data = await store.exportAll();
-    downloadBlob('blotterbook-staging-backup.json', new Blob([JSON.stringify(data)], { type: 'application/json' }));
+    downloadBlob(BACKUP_NAME, new Blob([JSON.stringify(data)], { type: 'application/json' }));
     msg = 'Backup downloaded.';
     emit('backup:created');
   }
@@ -187,9 +190,10 @@
 
   async function eraseAll() {
     if (isDemo) return;
-    if (!confirm('Erase ALL trades, day-notes and per-trade tags/notes in this staging sandbox? This cannot be undone.')) return;
+    const where = isStaging ? ' in this staging sandbox' : '';
+    if (!confirm(`Erase ALL trades, day-notes and per-trade tags/notes${where}? This cannot be undone.`)) return;
     await store.purge();
-    msg = 'All staging data erased.';
+    msg = isStaging ? 'All staging data erased.' : 'All local data erased.';
     emit('data:erased');
     await reload();
     onchanged();

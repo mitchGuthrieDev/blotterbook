@@ -36,6 +36,21 @@
     items?: BacklogItem[];
     categories?: string[];
   }
+  // A88: type the remaining /api/* JSON boundaries instead of letting r.json() flow in as `any`.
+  interface AdminKeyResp {
+    token?: string;
+    exp?: number;
+    email?: string;
+  }
+  interface ConfigResp {
+    flags?: Record<string, boolean>;
+    error?: string;
+  }
+  interface StatusSaveResp {
+    mode?: string;
+    label?: string;
+    error?: string;
+  }
 
   // The admin token (S3) is a live credential — kept in this page-session field only, never
   // localStorage (S10). autoKey() re-issues a fresh token on each load via Access.
@@ -137,7 +152,7 @@
   // never reaches the browser. Carried as x-admin-key for writes and in bb_staging for launching staging.
   function autoKey() {
     fetchT('/api/admin-key', { cache: 'no-store' })
-      .then(r => (r.ok ? r.json() : null))
+      .then(r => (r.ok ? (r.json() as Promise<AdminKeyResp>) : null))
       .then(d => {
         if (d && d.token) {
           adminKey = d.token;
@@ -173,7 +188,7 @@
       headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
       body: JSON.stringify({ mode, label: (label || '').trim() }),
     })
-      .then(r => r.json().then(d => ({ ok: r.ok, d })))
+      .then(r => r.json().then((d: StatusSaveResp) => ({ ok: r.ok, d })))
       .then(res => {
         if (res.ok) {
           setMsg('Saved: ' + res.d.mode + (res.d.label ? ' (“' + res.d.label + '”)' : ''), 'ok');
@@ -188,7 +203,7 @@
   }
   function loadConfig() {
     fetchT('/api/config', { cache: 'no-store' })
-      .then(r => r.json())
+      .then(r => r.json() as Promise<ConfigResp>)
       .then(c => {
         const f = c.flags || {};
         const next: Record<string, boolean> = {};
@@ -221,7 +236,7 @@
       headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
       body: JSON.stringify({ flags: $state.snapshot(flags) }),
     })
-      .then(r => r.json().then(d => ({ ok: r.ok, d })))
+      .then(r => r.json().then((d: ConfigResp) => ({ ok: r.ok, d })))
       .then(res => {
         if (res.ok) {
           setFlagMsg('Saved', 'ok');

@@ -1,14 +1,13 @@
 <script lang="ts">
-  // App root (A27 staging; A31 made it mode-aware for the coming prod/demo migration). Boots by
-  // REUSING the vanilla pure-logic core verbatim (A29): loadRefData + a Store + Adapters + compute().
-  // The view layer (this component + children) is the only thing rewritten in Svelte.
-  //
-  // A31: the persistence backend is chosen by PAGE_MODE and provided to the children via context
-  // ('bb:store'), so the same components work on every surface:
+  // App root: the journal SPA mounted on ALL three surfaces (app/demo/staging.html) since the A33
+  // cutover. Boots by REUSING the pure-logic core verbatim (A29): loadRefData + a Store + Adapters +
+  // compute(). The persistence backend is chosen by PAGE_MODE and provided to the children via
+  // context('bb:store'), so the same components work on every surface:
   //   app      → real IndexedDB Store (blotterbook DB), no seed (real user data; landing flow is A32)
   //   demo     → in-memory DemoStore (never persists), seeded
   //   staging  → real IndexedDB Store (isolated blotterbookStaging DB), seeded
-  // A33 cutover: this app now mounts on ALL three surfaces (app/demo/staging.html).
+  // Staging-only chrome (the "Staging" badge / proving-ground meta) is gated on `isStaging`; demo
+  // never persists (DemoStore) and every write path is additionally `isDemo`-guarded (A87).
   import { onMount, setContext } from 'svelte';
   import { loadRefData, compute, costModel, emit, sessionOf, PAGE_MODE, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../lib/core.ts';
   import { Store } from '../lib/store.ts';
@@ -18,9 +17,14 @@
   import type { Trade, FilterState, SavedFilter, SavedFilterDef, AppSetup, PanelBundle, Setup, StoredTradeMeta } from '../lib/types.ts';
 
   // Pick the backend by mode and share it with every child (they read getContext('bb:store')).
-  const store = PAGE_MODE === 'demo' ? createDemoStore() : Store;
-  const SEEDED = PAGE_MODE === 'staging' || PAGE_MODE === 'demo';
+  const isDemo = PAGE_MODE === 'demo';
+  const isStaging = PAGE_MODE === 'staging';
+  const store = isDemo ? createDemoStore() : Store;
+  const SEEDED = isStaging || isDemo;
   setContext('bb:store', store);
+  // A85: the topbar meta tagline is per-surface — only staging shows the "proving ground" copy, and
+  // only staging shows the "Staging" badge. Prod app shows just the date range; demo flags the sample.
+  const metaLead = isStaging ? 'Svelte 5 proving ground · isolated local data' : isDemo ? 'Interactive demo · sample data' : '';
   import Overview from './components/Overview.svelte';
   import EquityCurve from './components/EquityCurve.svelte';
   import CalendarMonth from './components/CalendarMonth.svelte';
@@ -168,7 +172,7 @@
     (store.local.get(WS_KEY, {}) as Record<string, { order: string[]; collapsed: Record<string, number>; hidden?: Record<string, number> }>) ||
     {};
   function saveWorkspace() {
-    if (PAGE_MODE === 'demo') return; // demo never persists new layouts (B23)
+    if (isDemo) return; // demo never persists new layouts (B23)
     const name = (window.prompt('Name this workspace layout:') || '').trim();
     if (!name) return;
     const t = readWs();
@@ -274,9 +278,11 @@
 
   // Persist the cost setup whenever it changes (after the initial load).
   $effect(() => {
-    if (!loaded) return;
+    if (!loaded || isDemo) return; // demo never persists (A87) — and its cost inputs are disabled
     void [setup.broker, setup.feed, setup.stateAbbr, setup.platform];
-    store.setMeta('setup', { broker: setup.broker, feed: setup.feed, state: setup.stateAbbr, platform: String(setup.platform) });
+    store
+      .setMeta('setup', { broker: setup.broker, feed: setup.feed, state: setup.stateAbbr, platform: String(setup.platform) })
+      .catch((e: unknown) => console.warn('setup persist failed', e)); // A93: surface, don't throw into the effect
   });
 
   // Seed the dataset once if the backend is empty (seeded surfaces only: staging + demo).
@@ -331,9 +337,15 @@
       landingMsg = r.error || 'Could not parse that CSV.';
       return;
     }
-    await store.addTrades(r.trades);
-    emit('data:imported', { added: r.trades.length });
-    await reloadAll();
+    try {
+      await store.addTrades(r.trades);
+      emit('data:imported', { added: r.trades.length });
+      await reloadAll();
+    } catch (e: unknown) {
+      // A93: a persist/reload failure must not leave the landing flow hung with no feedback.
+      console.error('CSV import failed', e);
+      landingMsg = 'Imported the file but could not save it locally — check your browser storage and try again.';
+    }
   }
 
   function navMonth(delta: number) {
@@ -373,6 +385,7 @@
   // Saved filter views — persisted in the vanilla-compatible {id,name,f} shape (f.symbol holds the
   // root value, matching render.js + the Store.importAll sanitizer's FILTER_FIELDS).
   async function saveView(name: string) {
+    if (isDemo) return; // A87: demo never persists (DemoStore + guard), belt-and-suspenders
     const f: SavedFilterDef = { from: filters.from, to: filters.to, symbol: filters.root, side: filters.side, session: filters.session, tag: filters.tag, dows: [...filters.dows] };
     const id = Date.now().toString(36) + savedFilters.length;
     savedFilters = [...savedFilters, { id, name: (name || '').trim() || `View ${savedFilters.length + 1}`, f }];
@@ -389,17 +402,19 @@
     filters.dows = Array.isArray(f.dows) ? [...f.dows] : [];
   }
   async function deleteView(id: string) {
+    if (isDemo) return; // A87
     savedFilters = savedFilters.filter(s => s.id !== id);
     await store.setMeta('savedFilters', $state.snapshot(savedFilters));
   }
   async function renameView(id: string, name: string) {
+    if (isDemo) return; // A87
     savedFilters = savedFilters.map(s => (s.id === id ? { ...s, name } : s));
     await store.setMeta('savedFilters', $state.snapshot(savedFilters));
   }
 
   onMount(() => {
     boot().catch((e: unknown) => {
-      console.error('staging boot failed', e);
+      console.error('app boot failed', e);
       error = e instanceof Error ? e.message : String(e);
       status = '';
     });
@@ -430,10 +445,10 @@
 <main id="sv-app">
   <header class="topbar">
     <div class="brand">
-      Blotterbook <span class="badge">Staging</span>
+      Blotterbook {#if isStaging}<span class="badge">Staging</span>{/if}
     </div>
     <div class="meta">
-      Svelte&nbsp;5 proving ground · isolated local data{#if dateRange} · {dateRange}{/if}
+      {metaLead}{#if dateRange}{metaLead ? ' · ' : ''}{dateRange}{/if}
     </div>
     <div class="topactions">
       <div class="sesswrap">
@@ -469,14 +484,14 @@
   </header>
 
   {#if error}
-    <p class="msg error" role="alert">Could not start the staging app: {error}</p>
+    <p class="msg error" role="alert">Could not start the app: {error}</p>
   {:else if loaded && PAGE_MODE === 'app' && !allTrades.length}
     <Landing {setup} onload={loadCSV} msg={landingMsg} />
   {:else if loaded}
     <FilterBar {filters} {roots} {tags} {savedFilters} count={metricsActive.n} onclear={clearFilters} onsave={saveView} onapply={applyView} ondelete={deleteView} />
     <Overview metrics={metricsActive} tradeCount={metricsActive.n} oncard={k => (cardModalKey = k)} />
     <div class="wsrow">
-      <WorkspaceBar names={wsNames} value={wsSelected} onsave={saveWorkspace} onselect={selectWorkspace} saveDisabled={PAGE_MODE === 'demo'} />
+      <WorkspaceBar names={wsNames} value={wsSelected} onsave={saveWorkspace} onselect={selectWorkspace} saveDisabled={isDemo} />
       {#if hiddenList.length}
         <!-- R12 (promoted, CH16): re-spawn a hidden module onto the dashboard. -->
         <div class="addmod">
@@ -513,7 +528,7 @@
             {/snippet}
           </CalendarMonth>
         {:else if key === 'cost'}
-          <CostPanel panel={panelBundle(key)} metrics={breakEvenMetrics} {setup} {costInputs} allTime={true} />
+          <CostPanel panel={panelBundle(key)} metrics={breakEvenMetrics} {setup} {costInputs} allTime={true} disabled={isDemo} />
         {:else if key === 'adv'}
           <AdvancedStats panel={panelBundle(key)} metrics={metricsActive} />
         {:else if key === 'defs'}
@@ -523,13 +538,6 @@
         {/if}
       {/each}
     </div>
-    <p class="note">
-      Svelte 5 app at prod parity (A32 + A34–A38): Overview, performance curve (overlays + day-notes),
-      trading calendar, advanced statistics, break-even/cost, filters/scope (incl. session/tag/saved
-      views), manage-data, screenshots, activity terminal, stat-card modals (A35), Definitions &amp;
-      Caveats (A37), export report (A34), and collapsible/drag-to-reorder panels with workspace
-      templates (A36). Pending the prod/demo cutover (A33) after live review.
-    </p>
   {:else}
     <p class="msg">{status}</p>
   {/if}
@@ -793,11 +801,5 @@
   }
   .error {
     color: var(--red);
-  }
-  .note {
-    margin-top: 22px;
-    font-size: 12px;
-    color: var(--faint);
-    line-height: 1.5;
   }
 </style>

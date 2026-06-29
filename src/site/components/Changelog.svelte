@@ -53,7 +53,7 @@
     fetch('/data/changelog.json', { headers: { Accept: 'application/json' } })
       .then(r => {
         if (!r.ok) throw new Error(String(r.status));
-        return r.json();
+        return r.json() as Promise<{ releases?: Release[] }>; // A88: type the boundary, no `any`
       })
       .then(d => {
         if (d && Array.isArray(d.releases) && d.releases.length) {
