@@ -10,13 +10,16 @@
     setup: AppSetup;
     onload: (file: File, platformId: string) => void;
     msg?: string;
+    /** A89: when false (admin showBetaAdapters flag off), hide beta adapters from the manual picker. */
+    showBeta?: boolean;
   }
-  let { setup, onload, msg = '' }: Props = $props();
+  let { setup, onload, msg = '', showBeta = true }: Props = $props();
 
   const feedGroups = $derived(BROKER_FEEDS[setup.broker] || {});
   const stateOpts = $derived(STATES.slice().sort((a, b) => (a[2] < b[2] ? -1 : 1)));
   const ready = $derived(!!(setup.broker && setup.feed && setup.stateAbbr));
-  const platforms = Adapters.list(); // [{id,label,beta}] for the override dropdown
+  // [{id,label,beta}] for the override dropdown — beta adapters are hidden when the flag is off (A89).
+  const platforms = $derived(Adapters.list().filter(p => showBeta || !p.beta));
 
   let fileInput: HTMLInputElement;
   let platformId = $state(''); // '' = auto-detect
