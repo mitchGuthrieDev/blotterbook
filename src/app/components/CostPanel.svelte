@@ -88,21 +88,25 @@
     </div>
 
     {#if cost.bySym.length}
-      <table class="bysym">
-        <thead><tr><th>Symbol</th><th>Trades</th><th>Contracts</th><th>$/side</th><th>$/RT</th><th>Commission</th></tr></thead>
-        <tbody>
-          {#each cost.bySym as r (r.root)}
-            <tr>
-              <td>{r.root}{#if !r.known}<span class="est" title="Exchange fee estimated (root not in fee table)">*</span>{/if}</td>
-              <td>{r.count}</td>
-              <td>{r.qty}</td>
-              <td>{money(r.rate)}</td>
-              <td>{money(r.rate * 2)}</td>
-              <td>{money(r.total)}</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+      <!-- A123: the 6-column table scrolls WITHIN the panel on a narrow width (mobile / narrow F26
+           grid column) rather than clipping its last column past the module border. -->
+      <div class="bywrap">
+        <table class="bysym">
+          <thead><tr><th>Symbol</th><th>Trades</th><th>Contracts</th><th>$/side</th><th>$/RT</th><th>Commission</th></tr></thead>
+          <tbody>
+            {#each cost.bySym as r (r.root)}
+              <tr>
+                <td>{r.root}{#if !r.known}<span class="est" title="Exchange fee estimated (root not in fee table)">*</span>{/if}</td>
+                <td>{r.count}</td>
+                <td>{r.qty}</td>
+                <td>{money(r.rate)}</td>
+                <td>{money(r.rate * 2)}</td>
+                <td>{money(r.total)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
       {#if cost.bySym.some(r => !r.known)}
         <p class="cnote"><span class="est">*</span> No published exchange fee on file — priced with a fallback estimate. Add the symbol to <code>data/exchange-fees.json</code> for an exact figure.</p>
       {/if}
@@ -213,10 +217,14 @@
   .line.sub span:last-child {
     color: var(--txt);
   }
+  /* A123: scroll the by-symbol table within the panel on narrow widths (no clipping past the border). */
+  .bywrap {
+    overflow-x: auto;
+    margin-top: 14px;
+  }
   .bysym {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 14px;
     font-size: 12px;
   }
   .bysym th {

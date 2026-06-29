@@ -2680,6 +2680,116 @@
       "completedDate": "2026-06-29",
       "partial": false,
       "doneNote": "Calendar / Break-even & Cost / Advanced Statistics now render parallel in a reorderable grid (staging) instead of stacked full-width rows; the other modules stay full-width. App.svelte builds a renderSeq that collapses the three grid keys (cal/cost/adv) into ONE .modgrid block (CSS grid, auto-fit minmax(360px,1fr)) anchored at the first grid module's slot; the per-key panel switch moved into a `moduleBlock` snippet so it serves both the full-width and grid contexts. Drag reorders horizontally (reorderGridOver — clientX midpoint, rewrites only the visible grid keys back into their existing panelOrder slots so the block stays anchored and the full-width modules never move); the module menu's Move left/right (moveGrid, via Panel's new moveUpLabel/moveDownLabel props) is the keyboard fallback. Order persists through the existing Store.local seam (in-memory DemoStore means demo wouldn't persist — but F26 is staging-gated, so demo stays fully stacked). e2e covers menu-reorder + reload persistence on staging and asserts no grid on demo. Staging-gated pending CH16."
+    },
+    {
+      "id": "F27",
+      "title": "(staging) Remove the Definitions & Caveats module — relegate it to a footer",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Removed the Definitions & Caveats dashboard module on staging (DEFAULT_ORDER drops 'defs') and relegated its parsing caveats to a page <footer> (contentinfo) below the dashboard — Definitions.svelte gained a `footer` prop that renders the shared caveat snippet without the Panel chrome. Prod/demo keep it as a dashboard panel. e2e: staging asserts no defs panel + a footer carrying the caveats; demo asserts the panel stays. Staging-gated pending CH16."
+    },
+    {
+      "id": "A121",
+      "title": "(staging) Calendar deselect on reclick / click-off + fix month-nav collapsing the panel",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Calendar selection + collapse fixes (staging). (1) onselect now TOGGLES — re-clicking the selected day deselects it (calendar + curve share the selection). (2) A window-click handler clears the selection when the click lands outside BOTH the calendar and performance panels (the two that drive day selection); Escape clears it too. (3) The 'can't uncollapse' bug: in the narrow F26 grid the calendar's month-nav header overflowed and pushed the collapse chevron off the panel — Panel's .phead now flex-wraps (and .pactions/.nav wrap, h2 min-width:0) so the chevron stays reachable and month nav never collapses the panel. e2e covers reclick/click-off deselect + month-nav-keeps-open. Staging-gated pending CH16."
+    },
+    {
+      "id": "A122",
+      "title": "(staging) Suppress the blue focus/selection outline when clicking the performance graph",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Suppressed the blue outline on the performance graph: .equity gets user-select:none (no text-selection highlight on a click/drag over the SVG labels) and :focus → outline:none, while :focus-visible keeps the keyboard focus ring. A mouse click shows no outline; keyboard focus stays visible/accessible. Pure CSS hardening (the chart ships on all surfaces)."
+    },
+    {
+      "id": "A123",
+      "title": "(staging) Fix value clipping / overflow in the Calendar + Break-even modules",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Fixed value clipping/overflow in the Calendar + Break-even modules at narrow F26-grid widths. The calendar's heavy month nav was the worst offender, so it MOVED out of the cramped panel header into a body toolbar (CalendarMonth .caltoolbar — nav left, month-net right, wraps on narrow); the header is now just title + menu + chevron and never wraps, which also keeps the collapse chevron reachable (A121). The 8-col grid always scrolls WITHIN the panel (.calendar overflow-x:auto + .calgrid min-width:480px) so day values never clip or spill past the border. Panel.svelte .phead/.pactions/h2 also flex-wrap + min-width:0 as a general safety net. The break-even by-symbol table now scrolls within the panel (a .bywrap overflow-x:auto wrapper) instead of clipping its last column on a narrow width (caught on a multi-width pass at 390px). CSS hardening; verified across 1920/1440/1280/1024/768/390px — no panel-border clipping and no horizontal page scroll at any width."
+    },
+    {
+      "id": "A124",
+      "title": "(staging) Activity Terminal only shows 'staging app ready' — restore the live event log",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Restored the Activity Terminal's live status log. Root cause: the terminal subscribes to the core event bus on MOUNT, which happens after boot() already fired its events, so the boot 'data:loaded' was missed and only 'staging app ready' showed. Fix: App emits the boot/status events ('refdata:loaded' + 'data:loaded') from a post-load $effect (runs after the terminal has mounted) rather than inside boot(); added a 'refdata:loaded' → 'reference data loaded' formatter. The terminal now shows the boot sequence plus ongoing events. Applied on all surfaces (pure bug fix). e2e asserts the multi-line boot log."
+    },
+    {
+      "id": "A125",
+      "title": "(staging) Donate button: drop the heart emoji + open a new tab instead of a popup window",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Donate button tweaks: dropped the heart emoji (label is now just 'Donate') and openDonate() opens the Stripe page in a NEW TAB — window.open(DONATE_URL, '_blank', 'noopener,noreferrer') — instead of a popup window. e2e updated to assert the _blank target + noopener and the heart-free label. Staging-gated pending CH16."
+    },
+    {
+      "id": "A126",
+      "title": "(staging) Performance graph shows an arbitrary red highlight regardless of filter/selection",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Removed the stray red highlight on the performance graph — it was the realized-drawdown shading rect (.ddband), which rendered by default (gross-only is the default overlay) and read as an 'arbitrary' red band. Dropped the ddband rect + its CSS + the now-dead drawdown/grossOnly computation from EquityCurve. e2e asserts no rect.ddband renders. Clean removal (the chart ships on all surfaces)."
+    },
+    {
+      "id": "F28",
+      "title": "(staging) Gradient fills for Net + Take-home plots, with gross/net/take overlay z-order",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Net + Take-home plots now get the same gradient AREA fill as Gross, layered back-to-front: gross/green furthest back, net/accent middle, take-home/take in front. EquityCurve build() now produces a per-series area path (line → baseline → close) alongside each line; the SVG renders each enabled series as fill+line in SERIES order using three <defs> gradients (eqfill-gross/net/take). Overlay toggles still work; the fills are pointer-transparent. e2e asserts 3 fills + 3 lines with all overlays on. Chart enhancement (ships on all surfaces)."
+    },
+    {
+      "id": "L9",
+      "title": "(staging) Headline interactive cards scale to span the full row width",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "The five interactive headline cards (after F25) span the full row on staging — .cards.staging uses grid-template-columns: repeat(5, minmax(0,1fr)) (→ 2 cols ≤900px, 1 col ≤520px), eliminating the ~400px right-margin gap seen on a 13in MacBook full screen. e2e asserts the last card reaches the row's right edge. Staging-gated pending CH16."
+    },
+    {
+      "id": "L10",
+      "title": "(staging) Equal-height grid modules to minimize negative space",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": ".modgrid uses align-items:stretch so the three grid modules (Calendar / Break-even / Advanced Stats) share a common height and their bottoms align, reclaiming the negative space below the shorter ones. NOTE the first cut also set the grid panels to height:100% which, combined with the panel's own margin-top:16px, pushed each panel 16px past its grid cell and OVERLAPPED the Trade Blotter below — fixed by removing height:100% (align-items:stretch already equalizes height accounting for the margin, no overlap). e2e asserts the three grid panels are equal height. Staging-gated pending CH16."
     }
   ]
 }
