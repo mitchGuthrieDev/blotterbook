@@ -22,6 +22,9 @@
     onmoveup?: () => void;
     onmovedown?: () => void;
     onhide?: () => void;
+    // F26 (staging): grid modules move left/right — the labels default to the stacked up/down wording.
+    moveUpLabel?: string;
+    moveDownLabel?: string;
     actions?: Snippet;
     children: Snippet;
   }
@@ -40,6 +43,8 @@
     onmoveup = () => {},
     onmovedown = () => {},
     onhide = () => {},
+    moveUpLabel = 'Move up',
+    moveDownLabel = 'Move down',
     actions,
     children,
   }: Props = $props();
@@ -114,8 +119,8 @@
         {#if menuOpen}
           <div class="pmenupop" role="menu" aria-label="{title} options">
             <button type="button" role="menuitem" onclick={() => runMenu(ontoggle)}>{collapsed ? 'Expand' : 'Collapse'}</button>
-            <button type="button" role="menuitem" disabled={isFirst} onclick={() => runMenu(onmoveup)}>Move up</button>
-            <button type="button" role="menuitem" disabled={isLast} onclick={() => runMenu(onmovedown)}>Move down</button>
+            <button type="button" role="menuitem" disabled={isFirst} onclick={() => runMenu(onmoveup)}>{moveUpLabel}</button>
+            <button type="button" role="menuitem" disabled={isLast} onclick={() => runMenu(onmovedown)}>{moveDownLabel}</button>
             <button type="button" role="menuitem" class="danger" onclick={() => runMenu(onhide)}>Hide module</button>
           </div>
         {/if}

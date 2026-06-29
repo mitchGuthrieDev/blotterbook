@@ -2,7 +2,7 @@
   // Advanced statistics — the deeper compute() metrics not shown in the Overview, presented as
   // label/value rows (A29: pure presentation of the existing metrics object). DOW_LABEL/usd/cls
   // are imported verbatim from the core.
-  import { usd, cls, ratio, num, fmtDur, DOW_LABEL } from '../../lib/core.ts';
+  import { usd, cls, ratio, num, fmtDur, DOW_LABEL, STAGING_PAGE } from '../../lib/core.ts';
   import type { Metrics } from '../../lib/core.ts';
   import type { PanelBundle } from '../../lib/types.ts';
   import Panel from './Panel.svelte';
@@ -28,7 +28,20 @@
     // omitted entirely for close-event exports (e.g. TradingView) that carry no hold duration.
     const held = (m.trades || []).filter(t => t.holdMs != null && t.holdMs > 0);
     const avgHold = held.length ? held.reduce((a, t) => a + t.holdMs!, 0) / held.length : null;
+    // F25 (staging): the headline metrics removed from the Overview card grid (everything but the
+    // five interactive cards) move here so no figure is lost — count, daily P&L, day extremes, and
+    // the daily Sharpe. Off on prod/demo, where those cards still live in the Overview (until CH16).
+    const folded = STAGING_PAGE
+      ? [
+          { k: 'Trades', v: `${m.n} · ${m.active} trading days` },
+          { k: 'Avg daily P&L', v: usd(m.avgDaily), tone: cls(m.avgDaily) },
+          { k: 'Best day', v: m.bestDay ? `${usd(m.bestDay.pnl)} · ${m.bestDay.date}` : '—', tone: 'pos' },
+          { k: 'Worst day', v: m.worstDay ? `${usd(m.worstDay.pnl)} · ${m.worstDay.date}` : '—', tone: 'neg' },
+          { k: 'Sharpe (daily)', v: num(m.sharpe) },
+        ]
+      : [];
     const rows = [
+      ...folded,
       { k: 'Payoff ratio (avg win / avg loss)', v: ratio(m.wl) },
       { k: 'Average win', v: usd(m.avgW), tone: 'pos' },
       { k: 'Average loss', v: usd(m.avgL), tone: 'neg' },

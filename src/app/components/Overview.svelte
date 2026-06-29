@@ -1,7 +1,7 @@
 <script lang="ts">
   // Overview cards — derived purely from the compute() metrics object (A29: no recomputation,
   // just presentation). Formatters (usd/money/cls) are imported verbatim from the core.
-  import { usd, money, cls, ratio, num } from '../../lib/core.ts';
+  import { usd, money, cls, ratio, num, STAGING_PAGE } from '../../lib/core.ts';
   import type { Metrics } from '../../lib/core.ts';
   import StatCard from './StatCard.svelte';
 
@@ -12,8 +12,11 @@
   }
   let { metrics, tradeCount, oncard = () => {} }: Props = $props();
   const MODAL_KEYS = new Set(['net', 'win', 'pf', 'wl', 'dd']); // cards with F14 detail modals
+  // F25 (staging): the Overview keeps ONLY the five interactive cards (each has a pop-up modal); the
+  // remaining static cards are removed here and folded into the Advanced Statistics panel instead.
+  // Prod/demo keep the full card grid until this is promoted (CH16).
 
-  const cards = $derived(build(metrics, tradeCount));
+  const cards = $derived(build(metrics, tradeCount).filter(c => !STAGING_PAGE || MODAL_KEYS.has(c.key)));
 
   function build(m: Metrics, n: number) {
     if (!m) return [];

@@ -70,8 +70,10 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   // Overview renders from compute() — the net P&L card must show a $ value.
   const net = page.locator('#sv-app [data-card="net"] .value');
   await expect(net).toContainText('$', { timeout: 5000 });
-  const tradesText = await page.locator('#sv-app [data-card="trades"] .value').textContent();
-  const seededCount = Number((tradesText || '').trim());
+  // F25 (staging): the Overview keeps only the five interactive cards — the "trades" card was folded
+  // into Advanced Statistics — so read the active trade count from the filter bar's "N trades" pill.
+  const count = page.locator('#sv-app .filterbar .count');
+  const seededCount = parseInt(((await count.textContent()) || '').replace(/[^\d]/g, ''), 10);
   expect(seededCount).toBeGreaterThan(0);
 
   // Stat-card detail modal (A35): clicking the Net card opens the drill-down with the waterfall.
@@ -120,8 +122,8 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
 
   // Filters/scope: switching to the calendar-month scope narrows the active trade count.
   await page.click('#sv-app .filterbar .scope button:last-child');
-  const monthText = await page.locator('#sv-app [data-card="trades"] .value').textContent();
-  expect(Number((monthText || '').trim())).toBeLessThan(seededCount);
+  const monthCount = parseInt(((await count.textContent()) || '').replace(/[^\d]/g, ''), 10);
+  expect(monthCount).toBeLessThan(seededCount);
 
   // Day-notes journal: select a calendar day, write a note, save → a note dot appears + persists.
   await page.locator('#sv-app .calendar .calgrid .cell.traded').first().click();
@@ -212,8 +214,8 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
   // duplication) and the app still boots clean from persisted data.
   await page.reload({ waitUntil: 'networkidle' });
   await expect(net).toContainText('$', { timeout: 5000 });
-  const afterText = await page.locator('#sv-app [data-card="trades"] .value').textContent();
-  expect(Number((afterText || '').trim())).toBe(seededCount);
+  const afterCount = parseInt(((await page.locator('#sv-app .filterbar .count').textContent()) || '').replace(/[^\d]/g, ''), 10);
+  expect(afterCount).toBe(seededCount);
 
   expect(errors, errors.join('\n')).toHaveLength(0);
 });
@@ -221,12 +223,15 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
 // A32: the staging filter bar's session (RTH/ETH) filter narrows the active dataset.
 test('staging (Svelte): session filter narrows the dataset', async ({ page }) => {
   await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
-  const trades = page.locator('#sv-app [data-card="trades"] .value');
-  const all = Number(((await trades.textContent()) || '').trim());
+  // F25 (staging): the trade count comes from the filter bar's "N trades" pill (the Overview "trades"
+  // card was folded into Advanced Statistics).
+  const count = page.locator('#sv-app .filterbar .count');
+  const readCount = async () => parseInt(((await count.textContent()) || '').replace(/[^\d]/g, ''), 10);
+  const all = await readCount();
   expect(all).toBeGreaterThan(0);
   await page.getByLabel('Session').selectOption('rth');
-  await expect(trades).not.toHaveText(String(all)); // RTH-only is a strict subset
-  expect(Number(((await trades.textContent()) || '').trim())).toBeLessThan(all);
+  await expect(count).not.toHaveText(`${all} trades`); // RTH-only is a strict subset
+  expect(await readCount()).toBeLessThan(all);
 
   // Saved-filter views: save the current filter set → a chip appears (persists to the Store).
   await page.fill('#sv-app .saved .vname', 'rth view');
@@ -347,9 +352,11 @@ test('staging (Svelte): Trade Blotter lists trades + inline note persists (F23)'
   await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
   const blotter = page.locator('#sv-app .panel[data-key="blotter"]');
   await expect(blotter).toBeVisible();
-  // Default position: directly below the Trading Calendar module.
-  const keys = await page.locator('#sv-app .dash section.panel').evaluateAll(els => els.map(e => e.getAttribute('data-key')));
-  expect(keys.indexOf('blotter')).toBe(keys.indexOf('cal') + 1);
+  // F26 (staging): cal/cost/adv now sit parallel in the module grid; the blotter stays a full-width
+  // row and is NOT inside the grid (it follows the grid block).
+  const gridKeys = await page.locator('#sv-app .modgrid section.panel').evaluateAll(els => els.map(e => e.getAttribute('data-key')));
+  expect(gridKeys).toEqual(['cal', 'cost', 'adv']);
+  expect(await page.locator('#sv-app .modgrid section.panel[data-key="blotter"]').count()).toBe(0);
   // Read-only table with rows + the eight columns.
   await expect(blotter.locator('.bltab tbody tr').first()).toBeVisible();
   await expect(blotter.locator('.bltab thead th')).toHaveCount(8);
@@ -360,6 +367,97 @@ test('staging (Svelte): Trade Blotter lists trades + inline note persists (F23)'
   await expect(page.locator('#sv-app .terminal .log')).toContainText('trade metadata updated');
   await page.reload({ waitUntil: 'networkidle' });
   await expect(page.locator('#sv-app .panel[data-key="blotter"] .bltab tbody tr .note').first()).toHaveValue('e2e blotter note');
+});
+
+// F24 (staging): the header Donate button opens the Stripe page in a separate popup window (window.open
+// with a named target) so the dashboard isn't navigated away. window.open is stubbed so no real
+// external request is made.
+test('staging (Svelte): header Donate button opens a popup (F24)', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__donate = [];
+    window.open = (url, target, features) => {
+      window.__donate.push({ url, target, features });
+      return null;
+    };
+  });
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  const donate = page.locator('#sv-app .donatebtn');
+  await expect(donate).toBeVisible();
+  await donate.click();
+  const calls = await page.evaluate(() => window.__donate);
+  expect(calls).toHaveLength(1);
+  expect(calls[0].target).toBe('bb-donate'); // named target → reused popup window, not the dashboard
+  expect(calls[0].url).toContain('stripe');
+});
+
+// F24 staging-gated: prod/demo show no Donate button (until promoted via CH16).
+test('demo (Svelte): no Donate button (F24 staging-gated)', async ({ page }) => {
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  await expect(page.locator('#sv-app .donatebtn')).toHaveCount(0);
+});
+
+// F25 (staging): the Overview keeps ONLY the five interactive (modal) cards; the rest fold into the
+// Advanced Statistics panel.
+test('staging (Svelte): Overview trimmed to 5 interactive cards; rest folded into Advanced Stats (F25)', async ({ page }) => {
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  await expect(page.locator('#sv-app .cards [data-card]')).toHaveCount(5);
+  for (const k of ['net', 'win', 'pf', 'wl', 'dd']) {
+    await expect(page.locator(`#sv-app .cards [data-card="${k}"]`)).toBeVisible();
+  }
+  await expect(page.locator('#sv-app .cards [data-card="trades"]')).toHaveCount(0);
+  // The metrics removed from the Overview now appear in the Advanced Statistics panel (which lives in
+  // the F26 grid).
+  const adv = page.locator('#sv-app .panel[data-key="adv"] .advstats');
+  await expect(adv).toContainText('Avg daily P&L');
+  await expect(adv).toContainText('Best day');
+  await expect(adv).toContainText('Sharpe (daily)');
+});
+
+// F25 staging-gated: prod/demo keep the full Overview card grid (until promoted via CH16).
+test('demo (Svelte): Overview keeps the full card grid (F25 staging-gated)', async ({ page }) => {
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  await expect(page.locator('#sv-app .cards [data-card="trades"]')).toBeVisible();
+  await expect(page.locator('#sv-app .cards [data-card="exp"]')).toBeVisible();
+});
+
+// L8 (staging): the dashboard uses the full viewport width (no 1100px centered column) so the modules
+// reclaim the side margins.
+test('staging (Svelte): dashboard uses full width (L8)', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  const w = await page.locator('#sv-app').evaluate(el => el.getBoundingClientRect().width);
+  expect(w).toBeGreaterThan(1300); // full-width on a 1600px viewport, not the ~1100px centered column
+});
+
+// F26 (staging): cal/cost/adv line up parallel in a reorderable grid; the module menu's "Move
+// left"/"Move right" reorders them within the grid (the keyboard fallback for drag), and it persists.
+test('staging (Svelte): grid modules reorder within the parallel grid (F26)', async ({ page }) => {
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  const gridKeys = () => page.locator('#sv-app .modgrid section.panel').evaluateAll(els => els.map(e => e.getAttribute('data-key')));
+  expect(await gridKeys()).toEqual(['cal', 'cost', 'adv']);
+  // Open the Calendar module's menu → "Move left" is disabled (already first); "Move right" moves it.
+  await page.locator('#sv-app .modgrid section.panel[data-key="cal"] .pmenubtn').click();
+  const pop = page.locator('#sv-app .modgrid section.panel[data-key="cal"] .pmenupop');
+  await expect(pop.locator('button', { hasText: 'Move left' })).toBeDisabled();
+  await pop.locator('button', { hasText: 'Move right' }).click();
+  expect(await gridKeys()).toEqual(['cost', 'cal', 'adv']);
+  // Persists across a reload (Store.local seam, staging-namespaced key).
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  expect(await gridKeys()).toEqual(['cost', 'cal', 'adv']);
+});
+
+// F26 staging-gated: prod/demo keep the modules stacked full-width (no grid) until promoted (CH16).
+test('demo (Svelte): no module grid — modules stay full-width (F26 staging-gated)', async ({ page }) => {
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  await expect(page.locator('#sv-app .modgrid')).toHaveCount(0);
 });
 
 // F23 promoted to all surfaces (CH16): the Trade Blotter now appears on demo too, directly below the
