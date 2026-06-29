@@ -104,7 +104,7 @@ page), update *all* of:
 | `static/robots.txt` / `static/sitemap.xml` | `/app/`, `/admin.html`, and the public-page canonical URLs (CH5/CH6) |
 | Page `<link rel="canonical">` + OG tags | the canonical URL of each marketing page (CH5) |
 | `vite.config.mjs` | `root: 'src'`, `publicDir: static/`, `outDir: dist/`, the 9 `rollupOptions.input` entry paths + the `ssg()` page list (A69) |
-| `vite-ssg.mjs` | maps each site page's URL → its `src/site/components/*.svelte` component (A69 prerender) |
+| `scripts/vite-ssg.mjs` | maps each site page's URL → its `src/site/components/*.svelte` component (A69 prerender; A95 moved it under `scripts/`) |
 | `scripts/build-manifest.mjs` | hashes `static/data/*.json`, with an explicit filename exclude-set |
 | `scripts/bump-version.mjs` | classifies prod-shipping surfaces by the `src/app/`, `src/lib/`, `src/site/`, `src/assets/`, `static/data/` prefixes + specific filenames |
 
@@ -174,7 +174,7 @@ To kill copy-paste drift across the info site, two things are single-sourced:
   `partials/app-*.html` fragments were already deleted in the A33 cutover.
 
 The marketing/info pages are a **build-time Svelte SSG** (no SvelteKit; A62 deferred):
-[`vite-ssg.mjs`](../vite-ssg.mjs) server-renders each page component (`svelte/server` `render()`)
+[`scripts/vite-ssg.mjs`](../scripts/vite-ssg.mjs) server-renders each page component (`svelte/server` `render()`)
 into its committed template's `<!--ssg-outlet-->` so every page ships as static, fully-rendered HTML
 (SEO + first paint) and then hydrates in place via a small client entry — **NOT** pulled behind the
 app SPA shell (ADR-001). The three app surfaces (`app/{app,demo,staging}.html`) are likewise
