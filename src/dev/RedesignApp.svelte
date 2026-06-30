@@ -10,10 +10,11 @@
   import { navSections, navItems, navLabel } from './nav';
   import Dashboard from './screens/Dashboard.svelte';
   import Calendar from './screens/Calendar.svelte';
+  import Analytics from './screens/Analytics.svelte';
   import Placeholder from './screens/Placeholder.svelte';
 
   // Screens are registered here as they're built; unregistered keys fall back to the Placeholder.
-  const SCREENS: Record<string, Component> = { dashboard: Dashboard, calendar: Calendar };
+  const SCREENS: Record<string, Component> = { dashboard: Dashboard, calendar: Calendar, analytics: Analytics };
 
   const fromHash = (): string => {
     const h = typeof location !== 'undefined' ? location.hash.replace(/^#/, '') : '';
