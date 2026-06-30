@@ -11,6 +11,7 @@
   import { usd, money, cls, rateFor, emit, PAGE_MODE, STAGING_PAGE, BROKERS } from '../../lib/core.ts';
   import type { Trade, StoredTradeMeta, StoreLike, PanelBundle } from '../../lib/types.ts';
   import Panel from './Panel.svelte';
+  import * as Select from '$ui/select';
 
   interface Props {
     trades?: Trade[];
@@ -122,13 +123,16 @@
     {#if STAGING_PAGE}
       <!-- F32 (staging): page-size selector + prev/next pager. -->
       <div class="blpager">
-        <label class="blpsize"
-          >Rows
-          <select aria-label="Rows per page" onchange={e => setPageSize((e.currentTarget as HTMLSelectElement).value)}>
-            {#each PAGE_SIZES as n (n)}<option value={n} selected={pageSize === n}>{n}</option>{/each}
-            <option value="all" selected={pageSize === Infinity}>All</option>
-          </select>
-        </label>
+        <div class="blpsize">
+          <span>Rows</span>
+          <Select.Root type="single" value={pageSize === Infinity ? 'all' : String(pageSize)} onValueChange={setPageSize}>
+            <Select.Trigger aria-label="Rows per page" class="px-2 py-1"><Select.Value /></Select.Trigger>
+            <Select.Content class="min-w-[5rem]">
+              {#each PAGE_SIZES as n (n)}<Select.Item value={String(n)} label={String(n)} />{/each}
+              <Select.Item value="all" label="All" />
+            </Select.Content>
+          </Select.Root>
+        </div>
         {#if pageCount > 1}
           <div class="blnav">
             <button type="button" disabled={page === 0} onclick={() => (page -= 1)}>‹ Prev</button>
@@ -255,15 +259,6 @@
     display: flex;
     align-items: center;
     gap: 6px;
-  }
-  .blpsize select {
-    background: var(--panel2);
-    color: var(--txt);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 4px 6px;
-    font: inherit;
-    font-size: 12px;
   }
   .blnav {
     display: flex;

@@ -174,7 +174,8 @@ test('staging (Svelte): boots into Overview with computed metrics, seeded data p
     'href',
     /^mailto:/
   );
-  await page.selectOption('.modal[aria-label="Export performance report"] select', 'md');
+  await page.locator('.modal[aria-label="Export performance report"] [aria-label="Download format"]').click(); // bits-ui Select (A128)
+  await page.getByRole('option', { name: 'Markdown (.md)' }).click();
   await expect(page.locator('.modal[aria-label="Export performance report"] .pri')).toBeEnabled();
   await page.click('.modal[aria-label="Export performance report"] [data-expclose]');
   await expect(page.locator('#sv-app .modal[aria-label="Export performance report"]')).toHaveCount(0);
@@ -367,11 +368,15 @@ test('staging (Svelte): Trade Blotter lists trades + inline note persists (F23)'
   // F32 (staging): the blotter paginates at 50/page by default.
   await expect(blotter.locator('.bltab tbody tr')).toHaveCount(50);
   await expect(blotter.locator('.blpager .pginfo')).toContainText('1–50 of');
-  await blotter.locator('.blpsize select').selectOption('25');
+  const pickRows = async name => {
+    await blotter.locator('.blpsize [aria-label="Rows per page"]').click();
+    await blotter.getByRole('option', { name, exact: true }).click(); // bits-ui listbox is in-tree under the panel
+  };
+  await pickRows('25'); // bits-ui Select (A128)
   await expect(blotter.locator('.bltab tbody tr')).toHaveCount(25);
-  await blotter.locator('.blpsize select').selectOption('all'); // "All" shows every row + hides the pager nav
+  await pickRows('All'); // "All" shows every row + hides the pager nav
   await expect(blotter.locator('.blnav')).toHaveCount(0);
-  await blotter.locator('.blpsize select').selectOption('50'); // back to a paged view for the note test below
+  await pickRows('50'); // back to a paged view for the note test below
   // Inline note: editable, persists across a reload via Store.saveTradeMeta (trademeta).
   const note = blotter.locator('.bltab tbody tr .note').first();
   await note.fill('e2e blotter note');

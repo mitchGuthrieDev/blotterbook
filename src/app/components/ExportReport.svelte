@@ -10,6 +10,7 @@
   import type { CostModel, ReportLabels } from '../../lib/types.ts';
   import { downloadBlob } from '../lib/files.ts';
   import * as Dialog from '$ui/dialog';
+  import * as Select from '$ui/select';
 
   interface Props {
     metrics: Metrics;
@@ -126,13 +127,17 @@
     <div class="bar">
       <strong>Performance report</strong>
       <div class="actions">
-        <select aria-label="Download format" bind:value={format}>
-          <option value="">Download as…</option>
-          <option value="pdf">PDF (print)</option>
-          <option value="md">Markdown (.md)</option>
-          <option value="png">Image (.png)</option>
-          <option value="jpeg">Image (.jpg)</option>
-        </select>
+        <Select.Root type="single" bind:value={format}>
+          <Select.Trigger aria-label="Download format" class="max-[560px]:min-w-0 max-[560px]:flex-1"
+            ><Select.Value placeholder="Download as…" /></Select.Trigger
+          >
+          <Select.Content>
+            <Select.Item value="pdf" label="PDF (print)" />
+            <Select.Item value="md" label="Markdown (.md)" />
+            <Select.Item value="png" label="Image (.png)" />
+            <Select.Item value="jpeg" label="Image (.jpg)" />
+          </Select.Content>
+        </Select.Root>
         <button type="button" class="pri" disabled={!format} onclick={doDownload}>Download</button>
         <a class="btn" href={rep.mailto}>Email a copy</a>
         <button type="button" class="btn" data-expclose onclick={onclose}>Close</button>
@@ -176,19 +181,6 @@
       width: 100%;
       justify-content: flex-start;
     }
-    .actions select {
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-  }
-  select {
-    background: var(--panel2);
-    color: var(--txt);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 7px 8px;
-    font-size: 13px;
-    font-family: var(--sans);
   }
   button,
   .btn {
