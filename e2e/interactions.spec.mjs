@@ -302,6 +302,93 @@ test('staging (Svelte): modal locks scroll + closes on Escape (A42)', async ({ p
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
 });
 
+// L11: dismissing a dialog by clicking the overlay (away from the content) must release bits-ui's
+// body scroll-lock so the page stays responsive — regression for the "site unresponsive until
+// refresh" bug (the dialogs were controlled-always-open `<Dialog.Root open>`, so bits-ui never ran
+// its open→false teardown and left body { pointer-events: none } stuck; fixed by `bind:open`). The
+// A42 test only covers the Escape path; this covers overlay click-away for all three dialogs.
+test('staging (Svelte): overlay click-away dismiss keeps the page responsive (L11)', async ({ page }) => {
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  const overlay = page.locator('[data-slot="dialog-overlay"]');
+  const bodyPE = () => page.evaluate(() => document.body.style.pointerEvents);
+
+  // Stat-card modal → click the overlay corner to dismiss.
+  await page.click('#sv-app [data-card="net"]');
+  await expect(page.locator('.modal[aria-label="Net PnL"]')).toBeVisible();
+  expect(await bodyPE()).toBe('none'); // scroll-lock engaged while open
+  await overlay.click({ position: { x: 5, y: 5 } });
+  await expect(page.locator('.modal[aria-label="Net PnL"]')).toHaveCount(0);
+  await expect.poll(bodyPE).toBe(''); // lock released → page interactive again
+  // No leftover portaled overlay/content nodes are intercepting clicks.
+  await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveCount(0);
+  await expect(page.locator('[data-slot="dialog-content"]')).toHaveCount(0);
+
+  // The page is genuinely responsive: a different card opens (would hang if body stayed pe:none).
+  await page.click('#sv-app [data-card="win"]', { timeout: 3000 });
+  await expect(page.locator('.modal[aria-label="Win Rate"]')).toBeVisible({ timeout: 3000 });
+  await overlay.click({ position: { x: 5, y: 5 } });
+  await expect(page.locator('.modal[aria-label="Win Rate"]')).toHaveCount(0);
+  await expect.poll(bodyPE).toBe('');
+
+  // Export-report dialog dismisses the same way.
+  await page.click('button:has-text("Export report")');
+  await expect(page.locator('.modal[aria-label="Export performance report"]')).toBeVisible();
+  await overlay.click({ position: { x: 5, y: 5 } });
+  await expect(page.locator('.modal[aria-label="Export performance report"]')).toHaveCount(0);
+  await expect.poll(bodyPE).toBe('');
+
+  // Manage-data dialog dismisses the same way, and the page stays interactive afterward.
+  await page.click('.managebtn');
+  await expect(page.locator('.modal[aria-label="Manage data"]')).toBeVisible();
+  await overlay.click({ position: { x: 5, y: 5 } });
+  await expect(page.locator('.modal[aria-label="Manage data"]')).toHaveCount(0);
+  await expect.poll(bodyPE).toBe('');
+  await page.click('#sv-app [data-card="pf"]', { timeout: 3000 });
+  await expect(page.locator('.modal[aria-label="Profit Factor"]')).toBeVisible({ timeout: 3000 });
+});
+
+// L12: the wide dialogs (Manage 960 / Export 880) must actually render wide on desktop. The canonical
+// dialog-content base ends with `sm:max-w-lg` (512px); a consumer `max-w-[960px]` does NOT dedupe
+// against the `sm:`-variant in tailwind-merge, so the dialog stayed clamped to 512px and clipped its
+// toolbar/table. The consumers now pass `sm:max-w-[…]` (same variant → dedupes). Guard the width.
+test('staging (Svelte): wide dialogs render at their intended width on desktop (L12)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  const contentW = () => page.locator('[data-slot="dialog-content"]').evaluate(el => Math.round(el.getBoundingClientRect().width));
+
+  await page.click('.managebtn');
+  await expect(page.locator('.modal[aria-label="Manage data"]')).toBeVisible();
+  expect(await contentW()).toBeGreaterThan(800); // ~960, not the clamped 512
+  await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 5, y: 5 } });
+  await expect(page.locator('.modal[aria-label="Manage data"]')).toHaveCount(0);
+
+  await page.click('button:has-text("Export report")');
+  await expect(page.locator('.modal[aria-label="Export performance report"]')).toBeVisible();
+  expect(await contentW()).toBeGreaterThan(760); // ~880, not 512
+});
+
+// L13: traded calendar cells must keep their P&L text legible — the colored cell base is a TINT, not
+// the solid token, so the same-hue P&L text reads against it (a solid var(--chart-2) bg under
+// var(--chart-2) text was invisible at 1:1 contrast after the re-platform).
+test('staging (Svelte): traded calendar cell P&L text is not the same color as its cell (L13)', async ({ page }) => {
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  const probe = await page
+    .locator('#sv-app .calendar .calgrid .cell.traded')
+    .first()
+    .evaluate(cell => {
+      const pnl = cell.querySelector('.dpnl');
+      return {
+        cellBg: getComputedStyle(cell).backgroundColor,
+        pnlColor: pnl ? getComputedStyle(pnl).color : null,
+      };
+    });
+  expect(probe.pnlColor).not.toBeNull();
+  expect(probe.pnlColor).not.toBe(probe.cellBg); // text color must differ from the cell background
+});
+
 // A45: a trade can be deleted from the manage-data table (with its meta), shrinking the row count.
 test('staging (Svelte): per-trade delete removes the trade (A45)', async ({ page }) => {
   await page.goto('/app/staging.html', { waitUntil: 'networkidle' });

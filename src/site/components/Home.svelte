@@ -2,7 +2,8 @@
   // Marketing homepage (A69 — ex index.html + site/lib/home.js). Self-contained (A9: the homepage
   // keeps its BESPOKE nav + footer + CSS, deliberately NOT the shared SiteShell/Nav/Footer): section
   // anchors, the hero CTAs + hamburger, and a fuller legal paragraph differ structurally from the
-  // info-site chrome. It links tokens.css for shared colors; everything else is the scoped CSS below.
+  // info-site chrome. Shared colors come from the design tokens in src/styles/tailwind.css (imported
+  // via the page's client entry); everything else is the scoped CSS below.
   //
   // The former home.js logic is ported into Svelte: header-border-on-scroll (svelte:window), the
   // CSS-only mobile menu (bound checkbox, closed on link tap), reveal-on-scroll (the `reveal` action),
@@ -257,7 +258,7 @@
       test data. Step-by-step export guides live in the <a href="howto.html">How&nbsp;To</a>.
     </p>
     <ul class="plat-grid mt-[34px] grid list-none grid-cols-3 gap-3 p-0 max-[760px]:grid-cols-2 max-[460px]:grid-cols-1" aria-label="Supported trading platforms and test status">
-      <li><a class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-tradingview"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_rgba(63,185,80,0.15)]" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">TradingView</b><span class="pstate font-mono text-[10.5px] text-chart-2">Verified · real data</span></a></li>
+      <li><a class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-tradingview"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">TradingView</b><span class="pstate font-mono text-[10.5px] text-chart-2">Verified · real data</span></a></li>
       <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-tradovate"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Tradovate</b><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a></li>
       <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-rithmic"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Rithmic R|Trader</b><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a></li>
       <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-sierrachart"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Sierra Chart</b><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a></li>
@@ -284,7 +285,7 @@
       with an optional donation. Cross-device <b>synced workspaces</b> are coming as a low-cost add-on.
     </p>
     <div class="price-grid mt-[34px] grid grid-cols-[1.1fr_1fr_1fr] items-stretch gap-4 max-[900px]:grid-cols-1">
-      <div class="plan flex flex-col rounded-[14px] border border-primary/50 bg-card p-[26px] shadow-[0_0_0_1px_rgba(106,160,255,0.15),0_14px_40px_-22px_rgba(106,160,255,0.5)]">
+      <div class="plan flex flex-col rounded-[14px] border border-primary/50 bg-card p-[26px] shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_15%,transparent),0_14px_40px_-22px_color-mix(in_srgb,var(--primary)_50%,transparent)]">
         <span class="ribbon mb-[14px] self-start rounded-[6px] bg-primary/12 px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-primary">Available now</span>
         <h3 class="mb-1 text-[18px] font-semibold">Blotterbook</h3>
         <p class="mb-[18px] text-[13px] leading-[1.5] text-muted-foreground">The full app, free for everyone — no account, nothing uploaded, runs in your browser.</p>
@@ -420,8 +421,8 @@
     z-index: -1;
     pointer-events: none;
     background:
-      radial-gradient(620px 420px at 18% -8%, rgba(106, 160, 255, 0.1), transparent 70%),
-      radial-gradient(560px 420px at 96% 4%, rgba(201, 139, 255, 0.08), transparent 70%);
+      radial-gradient(620px 420px at 18% -8%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%),
+      radial-gradient(560px 420px at 96% 4%, color-mix(in srgb, var(--chart-3) 8%, transparent), transparent 70%);
   }
   /* A128: the bare-<a> base color sits in @layer base so a utility text color on an <a> (e.g. the
      accent CTAs' text-primary-foreground) wins — without the layer this scoped rule would override the utility and
@@ -475,7 +476,7 @@
       right: 0;
       flex-direction: column;
       gap: 2px;
-      background: rgba(13, 16, 20, 0.98);
+      background: color-mix(in srgb, var(--background) 98%, transparent);
       backdrop-filter: saturate(150%) blur(10px);
       border-bottom: 1px solid var(--border);
       padding: 8px 16px 16px;
@@ -524,18 +525,18 @@
 
   /* ============ live pill — keyframe-driven (kept scoped per the keep-scoped rule) ============ */
   .livedot-live {
-    box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.5);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--chart-2) 50%, transparent);
     animation: pulse 2s infinite;
   }
   @keyframes pulse {
     0% {
-      box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.5);
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--chart-2) 50%, transparent);
     }
     70% {
-      box-shadow: 0 0 0 7px rgba(63, 185, 80, 0);
+      box-shadow: 0 0 0 7px transparent;
     }
     100% {
-      box-shadow: 0 0 0 0 rgba(63, 185, 80, 0);
+      box-shadow: 0 0 0 0 transparent;
     }
   }
 
@@ -556,12 +557,12 @@
   /* feature explorer: the active item tints its child .ficon — a descendant rule on the {@html}-free
      but state-toggled child, kept scoped. */
   .feat-item.is-active .ficon {
-    background: rgba(106, 160, 255, 0.22);
+    background: color-mix(in srgb, var(--primary) 22%, transparent);
   }
 
   /* F19: per-feature topic illustration. The shapes are injected via {@html}, so they DON'T receive
      Svelte's scope hash — the inner class selectors must stay :global() (SVG-child styling, kept
-     scoped per the keep-scoped rule). They pull from tokens.css so the graphics track the palette. */
+     scoped per the keep-scoped rule). They pull from the tailwind.css design tokens so the graphics track the palette. */
   .feat-graphic :global(.gx-grid) {
     stroke: var(--border);
     stroke-width: 1.5;

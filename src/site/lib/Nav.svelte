@@ -124,7 +124,7 @@
       right: 0;
       flex-direction: column;
       gap: 2px;
-      background: rgba(13, 16, 20, 0.98);
+      background: color-mix(in srgb, var(--background) 98%, transparent);
       backdrop-filter: saturate(150%) blur(10px);
       border-bottom: 1px solid var(--border);
       padding: 8px 16px 16px;

@@ -78,10 +78,20 @@
     { net: 'Net PnL', win: 'Win Rate', pf: 'Profit Factor', wl: 'Avg Win / Loss', dd: 'Max Drawdown' }[cardKey] || 'Detail'
   );
   const ddCurve = $derived(cardKey === 'dd' || cardKey === 'net' ? curvePath(m.curve) : null);
+
+  // Open state is OWNED by bits-ui (bind:open), not pinned to a literal `true`. A literal `open`
+  // leaves bits-ui's internal open stuck true while App's {#if} rug-pulls the component on dismiss —
+  // bits-ui never runs its open→false teardown, so the body scroll-lock's pointer-events:none can be
+  // left stuck (site unresponsive until refresh). With bind:open, dismiss flips this to false →
+  // bits-ui releases the lock cleanly, and the $effect tells App to unmount.
+  let open = $state(true);
+  $effect(() => {
+    if (!open) onclose();
+  });
 </script>
 
-<Dialog.Root open onOpenChange={(o: boolean) => !o && onclose()}>
-  <Dialog.Content class="modal max-w-[460px] gap-0 p-0 max-h-[88vh] overflow-auto" aria-label={title}>
+<Dialog.Root bind:open>
+  <Dialog.Content class="modal sm:max-w-[460px] gap-0 p-0 max-h-[88vh] overflow-auto" aria-label={title}>
     <div class="flex items-center justify-between border-b border-border px-4 py-3.5">
       <h2 class="m-0 text-[15px]">{title}</h2>
     </div>
@@ -148,7 +158,7 @@
           <span><b class="block font-mono text-[15px] text-foreground">{ratio(m.recovery)}</b> Recovery factor</span>
           <span><b class="block font-mono text-[15px] {tone(m.net)}">{usd(m.net)}</b> Net PnL</span>
         </div>
-        <p class="mb-3.5 mt-0 border-l-2 border-warn pl-2.5 text-[12px] leading-[1.55] text-muted-foreground">Max Drawdown is REALIZED only — computed on the closed-trade equity curve, peak-to-trough. The % is peak-relative and the duration counts trades from that peak to the trough. It does NOT capture open-position heat between entry and exit, and the % is undefined until the curve first goes positive.</p>
+        <p class="mb-3.5 mt-0 border-l-2 border-chart-4 pl-2.5 text-[12px] leading-[1.55] text-muted-foreground">Max Drawdown is REALIZED only — computed on the closed-trade equity curve, peak-to-trough. The % is peak-relative and the duration counts trades from that peak to the trough. It does NOT capture open-position heat between entry and exit, and the % is undefined until the curve first goes positive.</p>
         {#if ddCurve}
           <h3 class="mb-2 mt-3.5 text-[11px] uppercase tracking-[0.5px] text-muted-foreground">Equity curve · peak → trough</h3>
           <svg class="curve h-[90px] w-full" viewBox="0 0 {ddCurve.W} {ddCurve.H}" preserveAspectRatio="none">

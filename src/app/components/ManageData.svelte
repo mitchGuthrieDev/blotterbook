@@ -36,6 +36,13 @@
   }: Props = $props();
   const store = getContext('bb:store') as StoreLike; // A31: Store or DemoStore, chosen by App per mode
 
+  // bits-ui owns the open state (bind:open) so dismiss runs its open→false teardown (focus restore +
+  // scroll-lock release) instead of App's {#if} rug-pulling a still-"open" dialog — see StatCardModal.
+  let open = $state(true);
+  $effect(() => {
+    if (!open) onclose();
+  });
+
   let trades = $state<Trade[]>([]);
   let metaMap = $state(new Map<string, StoredTradeMeta>());
   let dayNotes = $state<StoredJournal[]>([]);
@@ -206,9 +213,9 @@
 
 <!-- Escape cancels an open per-trade editor first, otherwise closes the modal (A42) — handled via
      bits-ui's onEscapeKeydown (preventDefault keeps the dialog open while we clear the editor). -->
-<Dialog.Root open onOpenChange={(o: boolean) => !o && onclose()}>
+<Dialog.Root bind:open>
   <Dialog.Content
-    class="modal max-w-[960px] gap-0 p-0 max-h-[92vh] overflow-hidden flex flex-col"
+    class="modal sm:max-w-[960px] gap-0 p-0 max-h-[92vh] overflow-hidden flex flex-col"
     aria-label="Manage data"
     onEscapeKeydown={(e: KeyboardEvent) => {
       if (editing) {

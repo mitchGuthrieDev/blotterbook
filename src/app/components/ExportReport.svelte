@@ -2,7 +2,7 @@
   // Performance-report export (A34 — parity with vanilla export.js, F3/CH16). Builds the report
   // ONCE via report.js (A29 — the pure builder shared by the on-screen doc, the Markdown download
   // and the email summary) and renders it in an isolated <iframe> (its own baked-token palette, so
-  // it tracks tokens.css — A8). Download is disabled until a real format is chosen; PDF prints the
+  // it tracks the tailwind.css design tokens — A8). Download is disabled until a real format is chosen; PDF prints the
   // iframe, PNG/JPEG rasterize it, Markdown/Email reuse the builder's strings.
   import { buildReport, reportHtmlDoc } from '../../lib/core/report.ts';
   import { fmtDate } from '../../lib/core/core.ts';
@@ -55,6 +55,13 @@
     }
   }
 
+  // bits-ui owns the open state (bind:open) so dismiss runs its open→false teardown (focus restore +
+  // scroll-lock release) instead of App's {#if} rug-pulling a still-"open" dialog — see StatCardModal.
+  let open = $state(true);
+  $effect(() => {
+    if (!open) onclose();
+  });
+
   let format = $state('');
   let note = $state('');
   let noteKind = $state('');
@@ -92,6 +99,9 @@
             const ctx = cv.getContext('2d');
             if (!ctx) return reject(new Error('no 2d context'));
             ctx.scale(sc, sc);
+            // The live --background token is the source; the hex is only a last-resort default for the
+            // (practically unreachable) case where the custom property can't be read — there is no token
+            // to derive from when the token itself is unavailable (A113).
             ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--background').trim() || '#0d1014';
             ctx.fillRect(0, 0, w, h);
             ctx.drawImage(img, 0, 0);
@@ -130,8 +140,8 @@
   }
 </script>
 
-<Dialog.Root open onOpenChange={(o: boolean) => !o && onclose()}>
-  <Dialog.Content class="modal max-w-[880px] gap-0 p-0 max-h-[90vh] overflow-hidden flex flex-col" aria-label="Export performance report">
+<Dialog.Root bind:open>
+  <Dialog.Content class="modal sm:max-w-[880px] gap-0 p-0 max-h-[90vh] overflow-hidden flex flex-col" aria-label="Export performance report">
     <div class="flex items-center justify-between gap-3 border-b border-border bg-card px-3.5 py-3 max-[560px]:flex-wrap">
       <strong class="text-[13px]">Performance report</strong>
       <div class="flex items-center gap-2 max-[560px]:w-full max-[560px]:flex-wrap max-[560px]:justify-start">
@@ -145,7 +155,7 @@
         </Select.Root>
         <Button class="pri" disabled={!format} onclick={doDownload}>Download</Button>
         <a href={rep.mailto} class={buttonVariants({ variant: 'secondary' })}>Email a copy</a>
-        <Button variant="secondary" onclick={onclose}>Close</Button>
+        <Button variant="secondary" onclick={() => (open = false)}>Close</Button>
       </div>
     </div>
     {#if note}<div

@@ -224,13 +224,16 @@
     margin-left: 4px;
     vertical-align: middle;
   }
+  /* A tinted base (not the SOLID token) so the colored P&L text + muted day number/meta read against
+     it — a solid var(--chart-2) bg under var(--chart-2) text is invisible (1:1). The tint is derived
+     from the token via color-mix so it tracks the single token source (no hardcoded rgba literal). */
   .cell.pos {
-    background: var(--chart-2);
-    border-color: rgba(63, 185, 80, 0.4);
+    background: color-mix(in srgb, var(--chart-2) 14%, transparent);
+    border-color: color-mix(in srgb, var(--chart-2) 40%, transparent);
   }
   .cell.neg {
-    background: var(--destructive);
-    border-color: rgba(240, 74, 74, 0.4);
+    background: color-mix(in srgb, var(--destructive) 14%, transparent);
+    border-color: color-mix(in srgb, var(--destructive) 40%, transparent);
   }
   .dnum {
     font-size: 11px;

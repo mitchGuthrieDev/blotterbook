@@ -98,7 +98,7 @@ export function buildReport(m: Metrics, c: CostModel, labels: ReportLabels) {
 /* Assemble the standalone, self-contained report document (faithful port of export.js's
    sheetHtml + reportCss) for the iframe preview + print(PDF) + raster(PNG/JPEG). Kept DOM-free:
    the caller bakes the live design tokens into `tokenBlock` (a `:root{…}` string) via
-   getComputedStyle so the report palette tracks tokens.css (A8) without this module touching the DOM. */
+   getComputedStyle so the report palette tracks the tailwind.css design tokens (A8) without this module touching the DOM. */
 export function reportHtmlDoc(rep: ReturnType<typeof buildReport>, labels: Omit<ReportLabels, 'generated'>, tokenBlock: string) {
   const tile = (k: string, v: string, cl = '') =>
     `<div class="rtile"><div class="rk">${esc(k)}</div><div class="rv ${cl}">${esc(v)}</div></div>`;

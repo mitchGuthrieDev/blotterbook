@@ -5,8 +5,9 @@
   // component only carries ITS OWN page-specific CSS. These base rules are declared :global because
   // they style the slotted page markup (Svelte scoping doesn't cross the slot boundary) and the
   // document <body> — they're deliberately site-wide, the single source moved here from site.css.
-  // tokens.css stays the single source for colors/fonts (linked in each page template; read here as
-  // CSS vars). CSP-clean (A55): no inline style="" — Vite extracts this to a linked stylesheet.
+  // src/styles/tailwind.css is the single source for colors/fonts (the design tokens in :root, read
+  // here as CSS vars; tokens.css was deleted in ADR-002). CSP-clean (A55): no inline style="" — Vite
+  // extracts this to a linked stylesheet.
   import type { Snippet } from 'svelte';
   import Nav from './Nav.svelte';
   import Footer from './Footer.svelte';
@@ -65,8 +66,8 @@
       z-index: -1;
       pointer-events: none;
       background:
-        radial-gradient(620px 420px at 18% -8%, rgba(106, 160, 255, 0.1), transparent 70%),
-        radial-gradient(560px 420px at 96% 4%, rgba(201, 139, 255, 0.08), transparent 70%);
+        radial-gradient(620px 420px at 18% -8%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 70%),
+        radial-gradient(560px 420px at 96% 4%, color-mix(in srgb, var(--chart-3) 8%, transparent), transparent 70%);
     }
 
     /* page frame */

@@ -115,7 +115,7 @@
     top: 6px;
     bottom: 6px;
     width: 2px;
-    background: linear-gradient(180deg, var(--primary), rgba(201, 139, 255, 0.4), transparent);
+    background: linear-gradient(180deg, var(--primary), color-mix(in srgb, var(--chart-3) 40%, transparent), transparent);
   }
   .entry::before {
     content: '';
@@ -130,7 +130,7 @@
   }
   .entry.first::before {
     background: var(--primary);
-    box-shadow: 0 0 0 4px rgba(106, 160, 255, 0.15);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 15%, transparent);
   }
   .entry .highlights li::marker {
     color: var(--primary);

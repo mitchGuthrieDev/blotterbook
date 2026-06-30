@@ -32,7 +32,7 @@ Scope it when useful, e.g. `feat(staging): …`. Untyped titles default to a pat
 ## Versioning & deploy impact
 
 <!-- bump-version.mjs classifies the changed paths; this only documents the expected effect. -->
-- **Prod-shipping touched?** (`app/*`, `partials/*`, `assets/*`, `tokens.css`, the homepage/info pages, or `data/*` except `versions`/`backlog`/`backlog_archive`) → a version bump fires on merge. Non-shipping only (docs, `CLAUDE.md`, `admin.html`, `scripts/*`, `.github/*`, backlog JSON) → no bump.
+- **Prod-shipping touched?** (`src/app/*`, `src/lib/*` — the core + `components/ui` + `utils.ts`, `src/styles/*.css`, `src/assets/*`, `src/site/*` for the marketing/info pages, or `static/data/*` except `versions`/`backlog`/`backlog_archive`/`changelog`) → a version bump fires on merge. Non-shipping only (docs, `CLAUDE.md`, `src/admin.html` + `Admin.svelte`, `scripts/*`, `functions/*`, `.github/*`, the versions/backlog/changelog JSON) → no bump.
 - Do **not** hand-edit `data/versions.json` — CI bumps it.
 - If `prod` bumps, add a `data/changelog.json` entry (F13).
 
