@@ -51,7 +51,11 @@ const tracked = execSync('git ls-files src static/data', { cwd: ROOT })
 // admin/meta/generated). isProdShipping already covers ref data + manifest; isProdOnly covers the
 // marketing/info site; STAGING_ONLY covers the staging env page.
 const isAdmin = f => f === 'src/admin.html' || /^src\/site\/.*admin\.(?:ts|svelte)$/i.test(f);
-const classified = f => isProdShipping(f) || isProdOnly(f) || STAGING_ONLY.has(f) || NON_SHIPPING_DATA.has(f) || isAdmin(f);
+// Ambient type declarations (A128: src/vite-env.d.ts) are build-time-only — they emit no deploy
+// artifact, so they bump neither track. Recognized here as accounted-for (not a missing classification).
+const isAmbientTypes = f => /\.d\.ts$/.test(f);
+const classified = f =>
+  isProdShipping(f) || isProdOnly(f) || STAGING_ONLY.has(f) || NON_SHIPPING_DATA.has(f) || isAdmin(f) || isAmbientTypes(f);
 
 const unclassified = tracked.filter(f => !classified(f));
 ok(

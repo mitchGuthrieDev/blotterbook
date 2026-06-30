@@ -60,11 +60,16 @@ export const NON_SHIPPING_DATA = new Set([
   'static/data/changelog.json',
 ]);
 export function isProdShipping(f) {
-  if (f === 'src/app/app.html' || f === 'src/app/demo.html' || f === 'src/styles/tokens.css') return true;
+  if (f === 'src/app/app.html' || f === 'src/app/demo.html') return true;
   // A59/A30: every JS/TS/Svelte module under src/app/ (the SPA + glue, shared by all surfaces since
   // A33) and every module of the pure-logic core under src/lib/ ships to every surface.
   if (/^src\/app\/.*\.(?:js|ts|svelte)$/.test(f)) return true;
   if (/^src\/lib\/.*\.ts$/.test(f)) return true;
+  // A128: the shared design-system primitives ($ui — Button/Dialog/DropdownMenu/Popover/Select +
+  // cn()) ship in the app + site bundles, and the design-token / Tailwind entry CSS ships to every
+  // surface (tokens.css + tailwind.css). All bump prod+staging when changed.
+  if (/^src\/ui\/.*\.(?:js|ts|svelte)$/.test(f) && !/\.d\.ts$/.test(f)) return true;
+  if (/^src\/styles\/.*\.css$/.test(f)) return true;
   if (/^src\/assets\//.test(f)) return true; // bundled chrome (favicon/banner/icons), shared
   if (/^static\/data\//.test(f) && !NON_SHIPPING_DATA.has(f)) return true;
   return false;

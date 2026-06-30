@@ -35,6 +35,11 @@ ok(
 ok('app/staging.html is NOT prod', !isProdShipping('src/app/staging.html'));
 ok('app+demo shells + tokens are prod', ['src/app/app.html', 'src/app/demo.html', 'src/styles/tokens.css'].every(isProdShipping));
 ok(
+  'A128: $ui primitives + the Tailwind entry CSS are prod (shared design system)',
+  ['src/ui/button/button.svelte', 'src/ui/select/select-trigger.svelte', 'src/ui/utils.ts', 'src/styles/tailwind.css'].every(isProdShipping)
+);
+ok('A128: an ambient .d.ts ships nothing (no bump)', !isProdShipping('src/vite-env.d.ts'));
+ok(
   'site Svelte page is prod-only (A69 — marketing/info ships to prod, not staging)',
   isProdShipping('src/site/components/Home.svelte') === false &&
     classifySurfaces(['src/site/components/Home.svelte']).prod &&
