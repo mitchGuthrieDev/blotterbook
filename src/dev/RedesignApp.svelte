@@ -8,7 +8,7 @@
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import { Button } from '$lib/components/ui/button';
   import { navSections, navItems, navLabel } from './nav';
-  import Dashboard from './screens/Dashboard.svelte';
+  import Dashboard from '../app/screens/Dashboard.svelte';
   import Calendar from './screens/Calendar.svelte';
   import Analytics from './screens/Analytics.svelte';
   import Blotter from '../app/screens/Blotter.svelte';

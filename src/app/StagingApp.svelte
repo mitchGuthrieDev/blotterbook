@@ -2,21 +2,23 @@
   // Redesigned app root for the STAGING surface (UI redesign, Phase 3 cutover). Mounts the new sidebar
   // AppShell + a hash router over the seven screens, booting the REAL engine via createDashboard (real
   // IndexedDB Store, isolated to staging + seeded). The live /app/ + demo keep the current App.svelte
-  // until promoted — main.ts mounts this only for data-mode="staging". Screens are wired to real data
-  // one at a time; until a screen is wired it shows a "being wired" state, but the boot + data are real
-  // (the KPI overview below reads live metrics).
+  // until promoted — main.ts mounts this only for data-mode="staging". Screens read real data via props
+  // (the same components the /dev harness previews with mock data); a screen with no wiring yet shows a
+  // "being wired" state.
   import { onMount, setContext } from 'svelte';
   import { Store } from '../lib/core/store.ts';
-  import { usd, money, num, rateFor } from '../lib/core/core.ts';
+  import { usd, money, num, ratio, rateFor } from '../lib/core/core.ts';
   import AppShell from '$lib/components/shell/AppShell.svelte';
-  import * as Card from '$lib/components/ui/card';
   import { createDashboard } from './lib/dashboard.svelte.ts';
   import { navSections, navLabel, navItems } from './lib/nav';
+  import Dashboard, { type DashStat, type DayCell } from './screens/Dashboard.svelte';
   import Blotter, { type BlotterRow } from './screens/Blotter.svelte';
 
   const store = Store;
   setContext('bb:store', store);
   const dash = createDashboard(store, { seed: true }); // staging: isolated DB, seeded
+
+  const MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   const fromHash = (): string => {
     const h = typeof location !== 'undefined' ? location.hash.replace(/^#/, '') : '';
@@ -33,9 +35,39 @@
     active = key;
   }
 
-  // Map the real filtered trades → Blotter rows. Entry/exit prices aren't in the trade model (P&L
-  // events, not price bars), so they're left undefined → rendered "—"; hold comes from holdMs (fills
-  // exports only); fees from the broker rate (round-turn = rate × 2 × qty); tags/note from trademeta.
+  // ── Dashboard ────────────────────────────────────────────────────────────────────────────────
+  const dStats = $derived.by<DashStat[]>(() => {
+    const m = dash.metricsActive;
+    return [
+      { label: 'Net P&L', value: usd(m.net), up: m.net >= 0, note: `${m.wins}W · ${m.losses}L` },
+      { label: 'Win rate', value: `${m.winRate.toFixed(1)}%`, note: `${m.n} trades` },
+      { label: 'Profit factor', value: ratio(m.pf), note: 'gross win ÷ loss' },
+      { label: 'Expectancy', value: usd(m.expectancy), badge: 'per trade', up: m.expectancy >= 0, note: 'avg edge' },
+      { label: 'Max drawdown', value: m.maxDD > 0 ? `-${money(m.maxDD)}` : '$0', badge: `${m.maxDDpct.toFixed(1)}%`, up: false, note: 'of peak' },
+      { label: 'Sharpe (daily)', value: num(m.sharpe), note: `${m.active} trading days` },
+    ];
+  });
+  // The Trading Calendar module shows the cursor month from the all-time (filtered) days, independent
+  // of the scope toggle (mirrors the current app).
+  const calData = $derived.by(() => {
+    const y = dash.calYear,
+      mo = dash.calMonth;
+    const dayPnl: Record<number, DayCell> = {};
+    let net = 0;
+    for (const d of dash.metricsAll.days) {
+      const dt = new Date(d.date + 'T00:00:00');
+      if (dt.getFullYear() === y && dt.getMonth() === mo) {
+        dayPnl[dt.getDate()] = { pnl: d.pnl, tr: d.trades };
+        net += d.pnl;
+      }
+    }
+    return { dayPnl, net, firstDow: new Date(y, mo, 1).getDay(), daysInMonth: new Date(y, mo + 1, 0).getDate(), label: `${MON[mo]} ${y}` };
+  });
+
+  // ── Blotter ──────────────────────────────────────────────────────────────────────────────────
+  // Entry/exit prices aren't in the trade model (P&L events, not bars) → undefined → "—"; hold from
+  // holdMs (fills exports only); fees from the broker rate (round-turn = rate × 2 × qty); tags/note
+  // from trademeta; session from sessionOf().
   const blotterRows = $derived<BlotterRow[]>(
     dash.filtered.map(t => {
       const id = dash.tradeId(t);
@@ -59,17 +91,6 @@
     })
   );
 
-  // Live KPI overview from the real metrics — the proof that the new shell boots the real engine.
-  const m = $derived(dash.metricsActive);
-  const kpis = $derived([
-    { label: 'Net P&L', value: usd(m.net), tone: m.net >= 0 ? 'pos' : 'neg' },
-    { label: 'Win rate', value: `${m.winRate.toFixed(1)}%`, tone: 'plain' },
-    { label: 'Profit factor', value: num(m.pf), tone: 'plain' },
-    { label: 'Expectancy', value: usd(m.expectancy), tone: m.expectancy >= 0 ? 'pos' : 'neg' },
-    { label: 'Trades', value: `${m.n}`, tone: 'plain' },
-    { label: 'Max drawdown', value: m.maxDD > 0 ? `-${money(m.maxDD)}` : '$0', tone: 'neg' },
-  ]);
-
   onMount(() => {
     dash.boot().catch((e: unknown) => {
       console.error('staging app boot failed', e);
@@ -88,25 +109,17 @@
   {:else if !dash.loaded}
     <p class="text-sm text-muted-foreground">Loading…</p>
   {:else if active === 'dashboard'}
-    <div class="flex flex-col gap-4">
-      <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        {#each kpis as k (k.label)}
-          <Card.Root class="p-4">
-            <div class="text-xs text-muted-foreground">{k.label}</div>
-            <div class={['mt-1 text-xl font-semibold tabular-nums', k.tone === 'pos' ? 'text-chart-2' : k.tone === 'neg' ? 'text-destructive' : 'text-foreground']}>
-              {k.value}
-            </div>
-          </Card.Root>
-        {/each}
-      </div>
-      <Card.Root>
-        <Card.Content class="p-6 text-sm text-muted-foreground">
-          ✅ The redesigned shell is live on staging, booted against your real (seeded) data — the cards
-          above are computed from {m.n} trades. The full Dashboard, Calendar, Analytics, Blotter, CSV
-          Library, Trade Editor and Reports screens are being wired to this data next.
-        </Card.Content>
-      </Card.Root>
-    </div>
+    <Dashboard
+      stats={dStats}
+      curve={dash.metricsActive.curve}
+      dateRange={dash.dateRange}
+      monthLabel={calData.label}
+      monthNet={calData.net}
+      dayPnl={calData.dayPnl}
+      firstDow={calData.firstDow}
+      daysInMonth={calData.daysInMonth}
+      onscope={dash.setScope}
+    />
   {:else if active === 'blotter'}
     <Blotter rows={blotterRows} />
   {:else}

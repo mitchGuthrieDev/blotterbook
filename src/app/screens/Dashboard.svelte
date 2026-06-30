@@ -1,18 +1,18 @@
+<script lang="ts" module>
+  export type DashStat = { label: string; value: string; badge?: string; up?: boolean; note: string };
+  export type DayCell = { pnl: number; tr: number };
+</script>
+
 <script lang="ts">
-  // Dashboard surface mockup (UI redesign, Phase 2 — first screen). Re-frames the current app's
-  // dashboard in the new greyscale/mono language inside the sidebar shell: a scope/filter toolbar, a
-  // KPI stat-card row, and reorderable modules (Performance + Trading Calendar) with drag/menu
-  // affordances. Representative STATIC data — this is a layout mockup, not the live reactive engine
-  // (that integration comes when the look is approved). Utility-only styling, color only in the data.
+  // Dashboard — the redesigned overview: a scope toolbar, a KPI stat-card row, and the Performance
+  // (equity curve) + Trading Calendar modules. Data comes from props (real metrics on the staging app);
+  // the defaults below are the /dev mock for the preview harness. Color lives only in the P&L.
   import { SlidersHorizontal, Plus, GripVertical, MoreHorizontal } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import * as Card from '$lib/components/ui/card';
 
-  let scope = $state<'all' | 'month'>('all');
-  let overlay = $state<'gross' | 'net' | 'take'>('gross');
-
-  const stats: { label: string; value: string; badge?: string; up?: boolean; note: string }[] = [
+  const MOCK_STATS: DashStat[] = [
     { label: 'Net P&L', value: '+$79,467.75', badge: '+12.5%', up: true, note: '892W · 647L' },
     { label: 'Win rate', value: '58.0%', note: '1,539 trades' },
     { label: 'Profit factor', value: '3.01', note: 'gross win ÷ loss' },
@@ -20,24 +20,52 @@
     { label: 'Max drawdown', value: '-$502.75', badge: '0.8%', up: false, note: 'of peak' },
     { label: 'Sharpe (daily)', value: '0.80', note: '443 trading days' },
   ];
-
-  // Representative June grid: first day is Monday; a few traded days carry P&L tints.
-  const pnlByDay: Record<number, { pnl: number; tr: number }> = {
+  const MOCK_PNL: Record<number, DayCell> = {
     2: { pnl: 454, tr: 4 }, 3: { pnl: 383, tr: 4 }, 4: { pnl: 216, tr: 3 }, 5: { pnl: 90, tr: 4 },
     8: { pnl: 355, tr: 5 }, 9: { pnl: 426, tr: 3 }, 10: { pnl: -106, tr: 2 }, 11: { pnl: -91, tr: 4 },
     12: { pnl: -28, tr: 2 }, 15: { pnl: 338, tr: 2 }, 16: { pnl: 48, tr: 4 }, 17: { pnl: 96, tr: 3 },
     18: { pnl: 438, tr: 5 }, 22: { pnl: 93, tr: 5 }, 23: { pnl: 319, tr: 4 }, 24: { pnl: 380, tr: 5 },
     25: { pnl: 448, tr: 4 }, 26: { pnl: -270, tr: 5 }, 30: { pnl: 430, tr: 5 },
   };
+  const MOCK_CURVE = [0, 800, 1600, 2100, 3000, 3500, 4300, 5200, 6000, 7200, 8100, 9400];
+
+  interface Props {
+    stats?: DashStat[];
+    curve?: number[];
+    dateRange?: string;
+    monthLabel?: string;
+    monthNet?: number;
+    dayPnl?: Record<number, DayCell>;
+    firstDow?: number;
+    daysInMonth?: number;
+    onscope?: (s: 'all' | 'month') => void;
+  }
+  let {
+    stats = MOCK_STATS, curve = MOCK_CURVE, dateRange = '2024-07-01 → 2026-06-30',
+    monthLabel = 'June 2026', monthNet = 4016.5, dayPnl = MOCK_PNL, firstDow = 1, daysInMonth = 30, onscope,
+  }: Props = $props();
+
+  let scope = $state<'all' | 'month'>('all');
+  let overlay = $state<'gross' | 'net' | 'take'>('gross');
+  const setScope = (s: 'all' | 'month') => { scope = s; onscope?.(s); };
+
   const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const firstDow = 1; // Monday
-  const daysInMonth = 30;
-  const cells: (number | null)[] = [
-    ...Array.from({ length: firstDow }, () => null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
-  while (cells.length % 7 !== 0) cells.push(null);
   const money = (n: number) => `${n >= 0 ? '+' : '-'}$${Math.abs(n).toLocaleString()}`;
+  const cells = $derived.by<(number | null)[]>(() => {
+    const c: (number | null)[] = [...Array.from({ length: firstDow }, () => null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+    while (c.length % 7 !== 0) c.push(null);
+    return c;
+  });
+  // Equity curve points → SVG line + area paths, normalized into the viewBox.
+  function curvePaths(pts: number[], w = 1000, h = 280, pad = 12) {
+    if (pts.length < 2) return { line: '', area: '' };
+    const min = Math.min(...pts), max = Math.max(...pts), span = max - min || 1;
+    const X = (i: number) => (i / (pts.length - 1)) * w;
+    const Y = (v: number) => h - pad - ((v - min) / span) * (h - 2 * pad);
+    const line = pts.map((v, i) => `${i === 0 ? 'M' : 'L'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ');
+    return { line, area: `${line} L${w} ${h} L0 ${h} Z` };
+  }
+  const cp = $derived(curvePaths(curve));
 </script>
 
 {#snippet moduleHeader(title: string)}
@@ -67,13 +95,13 @@
   <!-- Toolbar -->
   <div class="flex flex-wrap items-center gap-3">
     <div class="flex items-center gap-0.5 rounded-md border border-border p-0.5">
-      {@render seg(scope === 'all', 'All time', () => (scope = 'all'))}
-      {@render seg(scope === 'month', 'This month', () => (scope = 'month'))}
+      {@render seg(scope === 'all', 'All time', () => setScope('all'))}
+      {@render seg(scope === 'month', 'This month', () => setScope('month'))}
     </div>
     <Button variant="outline" size="sm">
       <SlidersHorizontal class="size-4" /> Filters
     </Button>
-    <span class="ml-auto text-xs text-muted-foreground">2024-07-01 → 2026-06-30</span>
+    <span class="ml-auto text-xs text-muted-foreground">{dateRange}</span>
   </div>
 
   <!-- KPI stat cards -->
@@ -118,16 +146,8 @@
         {#each [56, 112, 168, 224] as y (y)}
           <line x1="0" y1={y} x2="1000" y2={y} class="stroke-border" stroke-width="1" />
         {/each}
-        <path
-          d="M0 270 L120 250 L240 215 L360 205 L480 160 L600 135 L720 95 L840 70 L1000 30 L1000 280 L0 280 Z"
-          fill="url(#perfFill)"
-        />
-        <path
-          d="M0 270 L120 250 L240 215 L360 205 L480 160 L600 135 L720 95 L840 70 L1000 30"
-          fill="none"
-          class="stroke-chart-2"
-          stroke-width="2"
-        />
+        <path d={cp.area} fill="url(#perfFill)" />
+        <path d={cp.line} fill="none" class="stroke-chart-2" stroke-width="2" />
       </svg>
     </Card.Content>
   </Card.Root>
@@ -137,8 +157,8 @@
     {@render moduleHeader('Trading Calendar')}
     <Card.Content>
       <div class="mb-3 flex items-center justify-between">
-        <span class="text-sm font-medium text-foreground">June 2026</span>
-        <span class="text-sm tabular-nums text-chart-2">+$4,016.50</span>
+        <span class="text-sm font-medium text-foreground">{monthLabel}</span>
+        <span class={['text-sm tabular-nums', monthNet >= 0 ? 'text-chart-2' : 'text-destructive']}>{money(monthNet)}</span>
       </div>
       <div class="grid grid-cols-7 gap-1.5">
         {#each weekdays as d (d)}
@@ -148,7 +168,7 @@
           {#if day === null}
             <div></div>
           {:else}
-            {@const t = pnlByDay[day]}
+            {@const t = dayPnl[day]}
             {@const up = t && t.pnl >= 0}
             <div
               class={[
