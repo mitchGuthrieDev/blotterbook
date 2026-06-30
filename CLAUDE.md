@@ -67,7 +67,7 @@ npm run preview                  # serve the built dist/ locally (production-lik
 
 # Tests / lint (the CI suite — run before pushing)
 npm test                         # = lint + typecheck + format:check + test:unit
-npm run test:unit                # the 6 node suites: adapters / auth / version / flags / tax / demostore
+npm run test:unit                # the 7 node suites: adapters / auth / version / flags / tax / demostore / curveandreport
 npm run lint                     # ESLint (flat config; .ts skipped — typechecked instead, A79)
 npm run typecheck                # tsc (src/lib/**/*.ts except src/lib/components) + tsc(functions) + svelte-check (src/app + src/site + src/lib/components) — A61
 npm run test:e2e                 # Playwright render tests — BUILDS then serves dist/, boots every surface
@@ -279,7 +279,7 @@ conforms to the rules below; keep it that way.
   bump-version.mjs      two-track version bump from a merge commit (run by CI; classifies src/ + static/ paths)
   vite-ssg.mjs          A69 SSG plugin — server-renders the site components into their templates at build time (A95: moved here from the repo root)
   check-bundle-size.mjs dev-only /app/-surface JS size budget (480 KiB ceiling) — fails the build if the app bundle crosses it (A96)
-  test-*.mjs            the CI test suite (adapters / auth / version / flags / tax / demostore)
+  test-*.mjs            the CI test suite (adapters / auth / version / flags / tax / demostore / curveandreport)
 /e2e/                   Playwright render/E2E specs (dev-only — R19 Tier A)
 /dist/                  Vite build output (GITIGNORED) — the artifact Cloudflare Pages serves (A26)
 vite.config.mjs         Vite multi-page build config (root:src, publicDir:static, 9 HTML entries → dist/)

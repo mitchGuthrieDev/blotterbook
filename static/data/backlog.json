@@ -451,42 +451,6 @@
       "partial": false,
       "prompt": "Add Interactive Brokers (IBKR) as a selectable broker in the cost model. NOTE IBKR is already a supported CSV ADAPTER (import) but is NOT yet a broker in the commission model. RESEARCH IBKR's published FUTURES commission rates (their tiered/fixed futures pricing, per-side, micro vs standard contracts) and add a broker entry to static/data/brokers.json ({name, comm:{micro,std}}), regenerate the manifest (scripts/build-manifest.mjs), and add any IBKR-specific data-feed options to static/data/feeds.json if relevant. Verify it shows in the broker selector and costModel() prices with its rates (no app-code change expected). CITE the rate source. Done when: IBKR is selectable, commissions compute correctly, the manifest is regenerated, and npm test is green.",
       "doneNote": null
-    },
-    {
-      "id": "A113",
-      "title": "Replace hardcoded brand-color literals in site components with token refs",
-      "category": "ARCHITECTURE / DUPLICATION",
-      "priority": "P2",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Spun off from the R1 audit (2026-06-30, post-ADR-002). The single source of design-token VALUES is src/styles/tailwind.css (tokens.css is deleted), but several site components re-type the brand palette as raw hex/rgba literals in their scoped <style>/inline SVG instead of referencing the tokens: Howto.svelte (~:257-262 stroke=\"#262d38\" x3 = --border, \"#3fb950\" = --chart-2, \"#6aa0ff\" = --primary, rgba(63,185,80,.18)); Home.svelte (~:478,527-538,559 rgba(13,16,20,.98) = --background, rgba(63,185,80,..), rgba(106,160,255,.22) = --primary); Nav.svelte (~:127 rgba(13,16,20,.98)); Changelog.svelte (~:118,133 rgba(106,160,255,..)/rgba(201,139,255,..) = --primary/--chart-3); SiteShell.svelte (~:68-69). Also the getComputedStyle('--background') || '#0d1014' fallback in ExportReport.svelte (~:95,102). Convert the FLAT duplicates to var(--token); for translucent washes derive from the token via color-mix(in srgb, var(--token) N%, transparent) (as CalendarMonth.svelte was converted in the audit pass). Leave genuinely bespoke alpha gradients if no clean token expression exists, but prefer color-mix. Verify line numbers before editing (they drift). Keep style-src 'self' (no inline style=\"\"). Done when: the flat color literals are token-derived and the site renders identically (e2e green).",
-      "doneNote": null
-    },
-    {
-      "id": "A114",
-      "title": "Doc-rot sweep: stale tokens.css / $ui comments + CLAUDE.md test-suite list",
-      "category": "COMMENTS / READABILITY",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Spun off from the R1 audit (2026-06-30, post-ADR-002). Comment/doc rot left by the shadcn re-platform — no functional impact, but misleading: (1) ~6 comments still describe the DELETED tokens.css as the live token source: SiteShell.svelte (~:8 'tokens.css stays the single source ... linked in each page template' — both clauses now false), Home.svelte (~:5,564), report.ts (~:101 'tracks tokens.css'), ExportReport.svelte (~:5). The source is now src/styles/tailwind.css. (2) WorkspaceBar.svelte (~:6) comment says 'native <select> -> $ui Select' but the import is $lib/components/ui/select and the $ui alias is gone. (3) adapters.ts (~:247-248) carries type-restating @param {..Fill[]}/@returns {..Trade[]} on pairFills, which CLAUDE.md says JSDoc must NOT do (and it is a block comment, not even consumed as JSDoc) — drop the type lines, keep any prose. (4) CLAUDE.md says 'the 6 node suites: adapters / auth / version / flags / tax / demostore' (lines ~70 and ~282) but test:unit now runs 7 (test-curveandreport.mjs was added for A98) — update the count + list. Verify each line number before editing. Done when: the stale references are corrected and the docs match the current architecture.",
-      "doneNote": null
-    },
-    {
-      "id": "A115",
-      "title": "Pin dev-tooling deps (caret ranges) or reconcile the pinned-deps doc",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Spun off from the R1 audit (2026-06-30). package.json devDependencies use caret ranges for @eslint/js, eslint, globals, prettier, typescript, and typescript-eslint, which deviates from the 'all deps pinned (no ^/~)' wording in CLAUDE.md/A28. Mitigating: all six are DEV-ONLY tooling (never shipped to the browser), every runtime/client dep (svelte, bits-ui, tailwindcss, @tailwindcss/vite, vite, clsx, tailwind-merge, tw-animate-css) is already exact-pinned, package-lock.json pins resolved versions (reproducible builds), and npm audit reports 0 vulnerabilities. Decide one of: (a) pin the six carets to exact versions to honor the stated invariant, or (b) update the doc to scope the pin requirement to runtime/client deps only (note ADR-002 explicitly RETIRED the minimal/pinned/audited dependency PILLAR, so this is a doc-vs-practice inconsistency, not a vuln). Recommend (a) for consistency. Done when: package.json and the doc agree.",
-      "doneNote": null
     }
   ],
   "howToDrive": [

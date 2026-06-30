@@ -254,12 +254,12 @@
         <div class="bg-card border border-border rounded-xl p-3.5 my-4">
           <p class="font-mono text-[10.5px] tracking-[0.08em] uppercase text-muted-foreground m-0 mb-2.5">Performance — cumulative P&amp;L</p>
           <svg viewBox="0 0 560 150" width="100%" height="140" preserveAspectRatio="none" role="img" aria-label="Example rising equity curve">
-            <line x1="40" y1="20" x2="540" y2="20" stroke="#262d38" />
-            <line x1="40" y1="75" x2="540" y2="75" stroke="#262d38" />
-            <line x1="40" y1="130" x2="540" y2="130" stroke="#262d38" />
-            <path d="M40,128 L120,108 L200,96 L280,72 L360,60 L440,34 L540,18 L540,130 L40,130 Z" fill="rgba(63,185,80,.18)" />
-            <path d="M40,128 L120,108 L200,96 L280,72 L360,60 L440,34 L540,18" fill="none" stroke="#3fb950" stroke-width="2.5" stroke-linejoin="round" />
-            <path d="M40,132 L120,116 L200,108 L280,90 L360,82 L440,60 L540,46" fill="none" stroke="#6aa0ff" stroke-width="1.8" opacity=".85" />
+            <line x1="40" y1="20" x2="540" y2="20" class="gl" />
+            <line x1="40" y1="75" x2="540" y2="75" class="gl" />
+            <line x1="40" y1="130" x2="540" y2="130" class="gl" />
+            <path d="M40,128 L120,108 L200,96 L280,72 L360,60 L440,34 L540,18 L540,130 L40,130 Z" class="area" />
+            <path d="M40,128 L120,108 L200,96 L280,72 L360,60 L440,34 L540,18" fill="none" class="gross" stroke-width="2.5" stroke-linejoin="round" />
+            <path d="M40,132 L120,116 L200,108 L280,90 L360,82 L440,60 L540,46" fill="none" class="net" stroke-width="1.8" opacity=".85" />
           </svg>
         </div>
         <p>The <b>Break-even &amp; Cost Budget</b> panel itemizes exactly where the money goes, from gross to take-home:</p>
@@ -500,5 +500,19 @@
   }
   .steps > li b {
     color: var(--foreground);
+  }
+  /* Illustrative equity-curve SVG — colors driven from the token source (var/color-mix) rather than
+     hardcoded hex, since SVG presentation attributes can't take var() (A113). */
+  .gl {
+    stroke: var(--border);
+  }
+  .area {
+    fill: color-mix(in srgb, var(--chart-2) 18%, transparent);
+  }
+  .gross {
+    stroke: var(--chart-2);
+  }
+  .net {
+    stroke: var(--primary);
   }
 </style>

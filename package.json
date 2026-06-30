@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.0.0",
-  "description": "Blotterbook tooling + build (ADR-001 / A26). Vite builds the static site + the /app/ surface into dist/ (the Cloudflare Pages output dir); dependencies are minimal/pinned/audited (guardrail A28) and the local-compute pillar is hard (no telemetry/egress). Dev-only tooling (ESLint/Prettier/Playwright) came in R19 Tier A.",
+  "description": "Blotterbook tooling + build (ADR-001 / A26; ADR-002 shadcn-svelte). Vite builds the static site + the /app/ surface into dist/ (the Cloudflare Pages output dir); dependencies are exact-pinned + lockfiled, and compute stays local (no telemetry/egress). Dev-only tooling (ESLint/Prettier/Playwright) came in R19 Tier A.",
   "scripts": {
     "test": "npm run lint && npm run typecheck && npm run format:check && npm run test:unit",
     "test:unit": "node scripts/test-adapters.mjs && node scripts/test-auth.mjs && node scripts/test-version.mjs && node scripts/test-flags.mjs && node scripts/test-tax.mjs && node scripts/test-demostore.mjs && node scripts/test-curveandreport.mjs",
@@ -21,23 +21,23 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20251011.0",
-    "@eslint/js": "^10.0.1",
+    "@eslint/js": "10.0.1",
     "@playwright/test": "1.56.1",
     "@sveltejs/vite-plugin-svelte": "7.1.2",
     "@tailwindcss/vite": "4.3.2",
     "bits-ui": "2.18.1",
     "clsx": "2.1.1",
-    "eslint": "^10.6.0",
-    "globals": "^17.7.0",
-    "prettier": "^3.9.0",
+    "eslint": "10.6.0",
+    "globals": "17.7.0",
+    "prettier": "3.9.0",
     "svelte": "5.56.4",
     "svelte-check": "4.3.3",
     "tailwind-merge": "3.6.0",
     "tailwind-variants": "3.2.2",
     "tailwindcss": "4.3.2",
     "tw-animate-css": "1.4.0",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.62.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.62.0",
     "vite": "8.1.0"
   }
 }

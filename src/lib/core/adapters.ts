@@ -243,9 +243,7 @@ function pointValue(root: string) {
      fills: [{ time, symbol, side:'buy'|'sell', qty>0, price[, realized][, commission] }]
      A closing fill realizes PnL against the oldest open lots. PnL uses the fill's
      own `realized` (apportioned by matched qty) when the export provides it, else
-     (exitPrice − entryPrice) × qty × pointValue(root). Output carries hold time.
-     @param {import('./types.ts').Fill[]} fills
-     @returns {import('./types.ts').Trade[]} */
+     (exitPrice − entryPrice) × qty × pointValue(root). Output carries hold time. */
 function pairFills(fills: Fill[]): Trade[] {
   const bySym = new Map<string, Fill[]>();
   // Timestamps are second-resolution, so same-second fills can't be ordered by time alone — FIFO

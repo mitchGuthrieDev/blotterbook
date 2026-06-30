@@ -2911,6 +2911,39 @@
       "completedDate": "2026-06-30",
       "partial": false,
       "doneNote": "DONE (2026-06-30) — full Tailwind v4 + shadcn-svelte + bits-ui + tailwind-variants adoption shipped across ~13 green commits. (1) INFRA: Tailwind v4 via @tailwindcss/vite on ALL surfaces (app/demo/staging + the 6 SSG marketing pages + admin); tokens.css -> @theme is the SINGLE source of token values (bg-accent/text-take/border-line/font-mono..., no JS-config duplication); cn() (clsx+tailwind-merge) + components.json + the $ui alias (mirrored in vite-ssg.mjs for the SSG prerender); deps pinned + lockfiled + npm audit clean (A28); preflight intentionally omitted so utilities are additive. (2) PRIMITIVES (src/ui/, alias $ui): Button (tailwind-variants tv() -- realises the deferred CH36 primitive), Dialog, DropdownMenu, Popover, Select -- shadcn-svelte composition over bits-ui, rendered in place (no Portal) so they stay under <main id=sv-app>. ALL hand-rolled UI replaced: the 3 modals (StatCardModal/ExportReport/ManageData) -> Dialog (modal.ts deleted); the Panel module menu + App Add-module menu -> DropdownMenu; the session-status pill -> Popover; EVERY native <select> in the repo -> $ui Select (app surfaces + the 2 SSG admin backlog filters -- proving the primitives prerender + hydrate through the A69 SSG path). e2e selectors updated as markup changed. (3) STYLING: the ~4,575 lines of scoped component CSS across all 28 components converted to Tailwind utilities (parallelised across worker agents, verified centrally). The deliberate HYBRID remainder stays scoped where utilities are worse: the SVG charts (EquityCurve, StatCardModal curve), the CalendarMonth grid/cells, @keyframes + the CSS-only mobile menu + the {@html} SVG :global rules (Home/Nav), the pseudo-element timeline/step-counter (Changelog/Howto), the styleProps-driven progress bar (Admin), Caveats' :global slotted-bullet rules, and SiteShell's base typography. SiteShell + Home base element rules were moved into @layer base so a utility on an element overrides the base per-element (fixed accent-on-accent invisible CTAs). (4) CSP unchanged (style-src 'self' -- utilities are a linked stylesheet, Floating-UI positions via the CSSOM, zero inline style attribute in dist); the A96 size budget was raised 200->400 KiB for the bits-ui + Floating-UI JS (documented in check-bundle-size.mjs; final ~385 KiB). (5) DOCS: docs/adr-002-tailwind-shadcn.md added + the CLAUDE.md styling/frontend conventions rewritten; A104 + R22 superseded and A55's CSP note clarified (Tailwind classes are NOT inline styles). Every commit kept npm test + e2e (47) + build/SSG/manifest-drift + size-budget green; verified desktop + mobile across app/demo/staging + the marketing SSG + admin. (6) BUTTON ADOPTION: the repeated secondary-control / primary / outline button idiom is centralised onto the $ui Button primitive (tailwind-variants) across ManageData / FilterBar / CalendarMonth / JournalEditor / Landing / ExportReport — the distinct red-danger buttons, icon-only chrome, stateful toggles, and chips are intentionally left as bespoke. The primitive defaults type=\"button\" and a no-underline base so buttonVariants() also styles anchors (e.g. ExportReport's \"Email a copy\" <a href>). — COMPLETED (2026-06-30, PR #80): the phased hybrid was finished as a full canonical re-platform — the in-house $ui primitives replaced by canonical shadcn-svelte components at src/lib/components/ui (bits-ui v2, via the CLI, portal-to-body); the shadcn SEMANTIC token system adopted wholesale in src/styles/tailwind.css (tokens.css DELETED; accent→primary, domain hues on chart-1..5); structure moved to $lib (core→src/lib/core, cn→src/lib/utils); the old pillars (local-compute moat / dependency-minimalism / tokens.css-single-source) retired. Docs: ADR-002 rewritten + CLAUDE.md/architecture.md updated. size-budget 480 KiB. All gates green; pixel-identical."
+    },
+    {
+      "id": "A113",
+      "title": "Replace hardcoded brand-color literals in site components with token refs",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-30",
+      "partial": false,
+      "doneNote": "DONE (2026-06-30) — Replaced hardcoded brand-color literals in site/app component styles with token references, so src/styles/tailwind.css stays the single source. Flat duplicates → var(--token); translucent washes → color-mix(in srgb, var(--token) N%, transparent). Howto.svelte: the illustrative equity-curve SVG (grid/area/gross/net) moved from hex presentation attrs to scoped CSS classes (SVG presentation attributes can't take var()). Home.svelte: body bg radial gradients, the mobile-nav backdrop, the live-pill pulse @keyframes, the active feature-icon tint, and the two Tailwind ARBITRARY box-shadow glows (shadow-[…color-mix(in_srgb,var(--token)_N%,transparent)]). Nav.svelte: mobile-menu backdrop. Changelog.svelte: timeline gradient + first-entry glow. SiteShell.svelte: body bg gradients. The only remaining hex is the documented last-resort canvas fillStyle fallback in ExportReport.svelte (no token to derive from when getComputedStyle('--background') itself fails) — kept + commented. Verified via Playwright that the Howto SVG resolves to the exact token colors (border #262d38 / chart-2 #3fb950 / primary #6aa0ff, area = chart-2 @18%) with 0 console errors; build + full 50-spec e2e green."
+    },
+    {
+      "id": "A114",
+      "title": "Doc-rot sweep: stale tokens.css / $ui comments + CLAUDE.md test-suite list",
+      "category": "COMMENTS / READABILITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-30",
+      "partial": false,
+      "doneNote": "DONE (2026-06-30) — Doc-rot sweep after the shadcn re-platform. Repointed 5 stale 'tokens.css' comments to src/styles/tailwind.css (SiteShell.svelte, Home.svelte ×2, report.ts, ExportReport.svelte; the accurate 'old tokens.css is gone' note in tailwind.css was left as-is). Corrected the '$ui Select' comment in WorkspaceBar.svelte to the canonical $lib/components/ui/select (the $ui alias is gone). Dropped the type-restating @param/@returns JSDoc on pairFills in adapters.ts (tsc owns the types; prose kept). Updated CLAUDE.md's '6 node suites: …' to '7 … / curveandreport' in both places (the Commands block + the repo-layout map) since test-curveandreport.mjs was added for A98. No functional change; typecheck/lint/format green."
+    },
+    {
+      "id": "A115",
+      "title": "Pin dev-tooling deps (caret ranges) or reconcile the pinned-deps doc",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-30",
+      "partial": false,
+      "doneNote": "DONE (2026-06-30) — Pinned the six dev-tooling deps that used caret ranges to exact versions in package.json: @eslint/js 10.0.1, eslint 10.6.0, globals 17.7.0, prettier 3.9.0, typescript 6.0.3, typescript-eslint 8.62.0 — each already the resolved version in package-lock.json, so reconciling the lock (npm install --package-lock-only) produced ZERO version churn (only the 6 range-spec strings changed). Every dependency is now exact-pinned, consistent with the stated convention (chose option (a)). Also refreshed the package.json description's retired-pillar framing ('dependencies are minimal/pinned/audited … local-compute pillar is hard' → 'exact-pinned + lockfiled, and compute stays local'). npm test + build + 50-spec e2e + check-deploy + size-budget all green; npm audit clean."
     }
   ]
 }
