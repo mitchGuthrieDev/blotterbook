@@ -7,6 +7,7 @@
   import { onMount } from 'svelte';
   import SiteShell from '../lib/SiteShell.svelte';
   import { platformLabel } from '../../lib/format.ts';
+  import * as Select from '$ui/select';
 
   // Shapes of the admin-only JSON this page fetches (status override, versions, backlog). Local to
   // this view — they aren't part of the shared pure-logic core (src/lib/types.ts).
@@ -96,6 +97,10 @@
   const bkCats = $derived((bkData && bkData.categories) || []);
   const bkStatuses = $derived([...new Set(bkItems.map(i => i.status).filter(Boolean))].sort());
   const bkEfforts = $derived([...new Set(bkItems.map(i => i.effort).filter(Boolean))].sort());
+  // A128: '' = "All" maps to a sentinel (bits-ui Select treats '' as no-value); items resolve labels.
+  const FILT_ALL = '__all__';
+  const statusItems = $derived([{ value: FILT_ALL, label: 'All' }, ...bkStatuses.map(s => ({ value: s, label: s }))]);
+  const effortItems = $derived([{ value: FILT_ALL, label: 'All' }, ...bkEfforts.map(e => ({ value: e, label: e }))]);
   // Per-category counts always reflect full totals (project health), not the active filter.
   const bkCounts = $derived(
     bkCats.map((c: string) => {
@@ -410,18 +415,22 @@
   {/if}
   <div class="bkfilters">
     <div class="fld">
-      <label class="lbl" for="bk_fstatus">Status</label>
-      <select id="bk_fstatus" bind:value={fStatus}>
-        <option value="">All</option>
-        {#each bkStatuses as s}<option value={s}>{s}</option>{/each}
-      </select>
+      <span class="lbl">Status</span>
+      <Select.Root type="single" value={fStatus || FILT_ALL} onValueChange={v => (fStatus = v === FILT_ALL ? '' : v)} items={statusItems}>
+        <Select.Trigger aria-label="Status" class="min-w-[150px]"><Select.Value /></Select.Trigger>
+        <Select.Content>
+          {#each statusItems as it (it.value)}<Select.Item value={it.value} label={it.label} />{/each}
+        </Select.Content>
+      </Select.Root>
     </div>
     <div class="fld">
-      <label class="lbl" for="bk_feffort">Effort</label>
-      <select id="bk_feffort" bind:value={fEffort}>
-        <option value="">All</option>
-        {#each bkEfforts as e}<option value={e}>{e}</option>{/each}
-      </select>
+      <span class="lbl">Effort</span>
+      <Select.Root type="single" value={fEffort || FILT_ALL} onValueChange={v => (fEffort = v === FILT_ALL ? '' : v)} items={effortItems}>
+        <Select.Trigger aria-label="Effort" class="min-w-[150px]"><Select.Value /></Select.Trigger>
+        <Select.Content>
+          {#each effortItems as it (it.value)}<Select.Item value={it.value} label={it.label} />{/each}
+        </Select.Content>
+      </Select.Root>
     </div>
     <button type="button" class="bkclear" onclick={clearFilters}>Clear filters</button>
     <span class="bkfnote">Counts above are full totals; filters narrow the list only.</span>
@@ -740,25 +749,11 @@
     flex-direction: column;
     gap: 5px;
   }
-  .bkfilters label.lbl {
+  .bkfilters .lbl {
     font-size: 10.5px;
     letter-spacing: 0.07em;
     text-transform: uppercase;
     color: var(--faint);
-  }
-  .bkfilters select {
-    background: var(--panel2);
-    border: 1px solid var(--line);
-    color: var(--txt);
-    font-family: inherit;
-    font-size: 13px;
-    padding: 7px 9px;
-    border-radius: 7px;
-    outline: none;
-    min-width: 150px;
-  }
-  .bkfilters select:focus {
-    border-color: var(--accent);
   }
   .bkfilters .bkclear {
     cursor: pointer;
