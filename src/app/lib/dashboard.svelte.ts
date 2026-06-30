@@ -67,7 +67,9 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
   async function reloadAll() {
     allTrades = await store.getAllTrades();
     journalDates = await store.journalDates();
-    journal = new Map((await store.getAllJournal()).map(j => [j.date, { text: j.text || '', tags: j.tags || [], shots: j.shots || [] }] as const));
+    journal = new Map(
+      (await store.getAllJournal()).map(j => [j.date, { text: j.text || '', tags: j.tags || [], shots: j.shots || [] }] as const)
+    );
     tradeMeta = new Map((await store.allTradeMeta()).map(m => [m.id, m] as const));
     savedFilters = ((await store.getMeta('savedFilters')) as SavedFilter[]) || [];
   }

@@ -22,11 +22,13 @@ const surfaces = [
     },
   },
   {
-    // Staging is the same Svelte 5 app on its isolated DB — boots straight into the Overview.
+    // UI-redesign Phase-3 cutover: staging is the NEW sidebar-shell SPA (StagingApp) on its isolated,
+    // seeded DB — boots straight into the redesigned Dashboard. (app/demo keep App.svelte above.)
     name: 'staging',
     path: '/app/staging.html',
     check: async page => {
-      await expect(page.locator('#sv-app [data-card="net"] .value')).not.toBeEmpty();
+      await expect(page.locator('nav[aria-label="Primary"]')).toContainText('Dashboard');
+      await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
     },
   },
   // A69: the marketing/info site is the Svelte SSG (prerendered HTML that hydrates in place).

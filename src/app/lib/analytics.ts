@@ -72,7 +72,10 @@ export function buildAnalytics(m: Metrics, trades: Trade[]): AnalyticsVM {
     dow[wd].pnl += t.pnl;
     dow[wd].n++;
   }
-  const wdays: SignedBar[] = dow.map((d, i) => ({ i, ...d })).filter(d => d.n).map(d => ({ label: WD[d.i], value: Math.round(d.pnl / d.n) }));
+  const wdays: SignedBar[] = dow
+    .map((d, i) => ({ i, ...d }))
+    .filter(d => d.n)
+    .map(d => ({ label: WD[d.i], value: Math.round(d.pnl / d.n) }));
 
   // ── Per-symbol breakdown (top 8 by |P&L|) ──
   const symMap = new Map<string, { trades: number; wins: number; pnl: number }>();

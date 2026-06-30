@@ -53,7 +53,13 @@ function priorBounds(from: string, to: string): { from: string; to: string } | n
   return { from: iso(pa), to: iso(pb) };
 }
 
-export function buildReportVM(allTrades: Trade[], range: ReportRange, compare: boolean, costInputs: CostInputs, labels: Omit<ReportLabels, 'generated' | 'scope'>): ReportVM {
+export function buildReportVM(
+  allTrades: Trade[],
+  range: ReportRange,
+  compare: boolean,
+  costInputs: CostInputs,
+  labels: Omit<ReportLabels, 'generated' | 'scope'>
+): ReportVM {
   const { from, to, label } = bounds(range);
   const slice = allTrades.filter(t => inRange(t, from, to));
   const m = compute(slice);
@@ -70,7 +76,12 @@ export function buildReportVM(allTrades: Trade[], range: ReportRange, compare: b
     { label: 'Profit factor', value: ratio(m.pf), prior: prior(x => ratio(x.pf)) },
     { label: 'Expectancy', value: usd(m.expectancy), prior: prior(x => usd(x.expectancy)), tone: tone(m.expectancy) },
     { label: 'Trades', value: `${m.n}`, prior: prior(x => `${x.n}`) },
-    { label: 'Max drawdown', value: m.maxDD > 0 ? `-${money(m.maxDD)}` : '$0', prior: prior(x => (x.maxDD > 0 ? `-${money(x.maxDD)}` : '$0')), tone: 'neg' },
+    {
+      label: 'Max drawdown',
+      value: m.maxDD > 0 ? `-${money(m.maxDD)}` : '$0',
+      prior: prior(x => (x.maxDD > 0 ? `-${money(x.maxDD)}` : '$0')),
+      tone: 'neg',
+    },
   ];
 
   // Calendar — the last active month in the slice (or the cursor month for an open range).
