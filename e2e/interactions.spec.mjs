@@ -302,6 +302,52 @@ test('staging (Svelte): modal locks scroll + closes on Escape (A42)', async ({ p
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
 });
 
+// L11: dismissing a dialog by clicking the overlay (away from the content) must release bits-ui's
+// body scroll-lock so the page stays responsive — regression for the "site unresponsive until
+// refresh" bug (the dialogs were controlled-always-open `<Dialog.Root open>`, so bits-ui never ran
+// its open→false teardown and left body { pointer-events: none } stuck; fixed by `bind:open`). The
+// A42 test only covers the Escape path; this covers overlay click-away for all three dialogs.
+test('staging (Svelte): overlay click-away dismiss keeps the page responsive (L11)', async ({ page }) => {
+  await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  const overlay = page.locator('[data-slot="dialog-overlay"]');
+  const bodyPE = () => page.evaluate(() => document.body.style.pointerEvents);
+
+  // Stat-card modal → click the overlay corner to dismiss.
+  await page.click('#sv-app [data-card="net"]');
+  await expect(page.locator('.modal[aria-label="Net PnL"]')).toBeVisible();
+  expect(await bodyPE()).toBe('none'); // scroll-lock engaged while open
+  await overlay.click({ position: { x: 5, y: 5 } });
+  await expect(page.locator('.modal[aria-label="Net PnL"]')).toHaveCount(0);
+  await expect.poll(bodyPE).toBe(''); // lock released → page interactive again
+  // No leftover portaled overlay/content nodes are intercepting clicks.
+  await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveCount(0);
+  await expect(page.locator('[data-slot="dialog-content"]')).toHaveCount(0);
+
+  // The page is genuinely responsive: a different card opens (would hang if body stayed pe:none).
+  await page.click('#sv-app [data-card="win"]', { timeout: 3000 });
+  await expect(page.locator('.modal[aria-label="Win Rate"]')).toBeVisible({ timeout: 3000 });
+  await overlay.click({ position: { x: 5, y: 5 } });
+  await expect(page.locator('.modal[aria-label="Win Rate"]')).toHaveCount(0);
+  await expect.poll(bodyPE).toBe('');
+
+  // Export-report dialog dismisses the same way.
+  await page.click('button:has-text("Export report")');
+  await expect(page.locator('.modal[aria-label="Export performance report"]')).toBeVisible();
+  await overlay.click({ position: { x: 5, y: 5 } });
+  await expect(page.locator('.modal[aria-label="Export performance report"]')).toHaveCount(0);
+  await expect.poll(bodyPE).toBe('');
+
+  // Manage-data dialog dismisses the same way, and the page stays interactive afterward.
+  await page.click('.managebtn');
+  await expect(page.locator('.modal[aria-label="Manage data"]')).toBeVisible();
+  await overlay.click({ position: { x: 5, y: 5 } });
+  await expect(page.locator('.modal[aria-label="Manage data"]')).toHaveCount(0);
+  await expect.poll(bodyPE).toBe('');
+  await page.click('#sv-app [data-card="pf"]', { timeout: 3000 });
+  await expect(page.locator('.modal[aria-label="Profit Factor"]')).toBeVisible({ timeout: 3000 });
+});
+
 // A45: a trade can be deleted from the manage-data table (with its meta), shrinking the row count.
 test('staging (Svelte): per-trade delete removes the trade (A45)', async ({ page }) => {
   await page.goto('/app/staging.html', { waitUntil: 'networkidle' });

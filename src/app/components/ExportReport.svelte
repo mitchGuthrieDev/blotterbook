@@ -55,6 +55,13 @@
     }
   }
 
+  // bits-ui owns the open state (bind:open) so dismiss runs its open→false teardown (focus restore +
+  // scroll-lock release) instead of App's {#if} rug-pulling a still-"open" dialog — see StatCardModal.
+  let open = $state(true);
+  $effect(() => {
+    if (!open) onclose();
+  });
+
   let format = $state('');
   let note = $state('');
   let noteKind = $state('');
@@ -130,7 +137,7 @@
   }
 </script>
 
-<Dialog.Root open onOpenChange={(o: boolean) => !o && onclose()}>
+<Dialog.Root bind:open>
   <Dialog.Content class="modal max-w-[880px] gap-0 p-0 max-h-[90vh] overflow-hidden flex flex-col" aria-label="Export performance report">
     <div class="flex items-center justify-between gap-3 border-b border-border bg-card px-3.5 py-3 max-[560px]:flex-wrap">
       <strong class="text-[13px]">Performance report</strong>
@@ -145,7 +152,7 @@
         </Select.Root>
         <Button class="pri" disabled={!format} onclick={doDownload}>Download</Button>
         <a href={rep.mailto} class={buttonVariants({ variant: 'secondary' })}>Email a copy</a>
-        <Button variant="secondary" onclick={onclose}>Close</Button>
+        <Button variant="secondary" onclick={() => (open = false)}>Close</Button>
       </div>
     </div>
     {#if note}<div

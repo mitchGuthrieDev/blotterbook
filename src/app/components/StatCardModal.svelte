@@ -78,9 +78,19 @@
     { net: 'Net PnL', win: 'Win Rate', pf: 'Profit Factor', wl: 'Avg Win / Loss', dd: 'Max Drawdown' }[cardKey] || 'Detail'
   );
   const ddCurve = $derived(cardKey === 'dd' || cardKey === 'net' ? curvePath(m.curve) : null);
+
+  // Open state is OWNED by bits-ui (bind:open), not pinned to a literal `true`. A literal `open`
+  // leaves bits-ui's internal open stuck true while App's {#if} rug-pulls the component on dismiss —
+  // bits-ui never runs its open→false teardown, so the body scroll-lock's pointer-events:none can be
+  // left stuck (site unresponsive until refresh). With bind:open, dismiss flips this to false →
+  // bits-ui releases the lock cleanly, and the $effect tells App to unmount.
+  let open = $state(true);
+  $effect(() => {
+    if (!open) onclose();
+  });
 </script>
 
-<Dialog.Root open onOpenChange={(o: boolean) => !o && onclose()}>
+<Dialog.Root bind:open>
   <Dialog.Content class="modal max-w-[460px] gap-0 p-0 max-h-[88vh] overflow-auto" aria-label={title}>
     <div class="flex items-center justify-between border-b border-border px-4 py-3.5">
       <h2 class="m-0 text-[15px]">{title}</h2>
