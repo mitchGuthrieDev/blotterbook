@@ -7,81 +7,34 @@
   let { variant = 'full' }: Props = $props();
 </script>
 
-<footer class="site">
-  <div class="frow">
-    <span class="fbrand"><span class="dot"></span>Blotterbook</span>
+<footer class="border-t border-line px-[22px] py-[34px] text-[12.5px] text-faint">
+  <div class="mx-auto flex max-w-[1080px] flex-wrap items-center justify-between gap-4">
+    <span class="inline-flex items-center gap-2 font-bold text-txt"
+      ><span class="h-2 w-2 rounded-[2px] bg-[linear-gradient(135deg,var(--accent),var(--take))]"></span>Blotterbook</span
+    >
     {#if variant === 'admin'}
-      <div class="flinks">
-        <a href="index.html">Home</a>
-        <a href="changelog.html">Changelog</a>
-        <a href="legal.html">Legal</a>
+      <div class="flex flex-wrap gap-4">
+        <a class="text-[13px] text-dim no-underline hover:underline" href="index.html">Home</a>
+        <a class="text-[13px] text-dim no-underline hover:underline" href="changelog.html">Changelog</a>
+        <a class="text-[13px] text-dim no-underline hover:underline" href="legal.html">Legal</a>
       </div>
-      <p class="disclaimer">Internal admin page — not for public use.</p>
+      <p class="mt-1.5 mb-0 w-full text-[11.5px] leading-[1.6] text-faint">Internal admin page — not for public use.</p>
     {:else}
-      <div class="flinks">
-        <a href="index.html">Home</a>
-        <a href="howto.html">How To</a>
-        <a href="roadmap.html">Roadmap</a>
-        <a href="changelog.html">Changelog</a>
-        <a href="legal.html">Legal</a>
-        <a href="/app/">Launch</a>
-        <a href="mailto:contact@blotterbook.com?subject=Blotterbook">Contact</a>
+      <div class="flex flex-wrap gap-4">
+        <a class="text-[13px] text-dim no-underline hover:underline" href="index.html">Home</a>
+        <a class="text-[13px] text-dim no-underline hover:underline" href="howto.html">How To</a>
+        <a class="text-[13px] text-dim no-underline hover:underline" href="roadmap.html">Roadmap</a>
+        <a class="text-[13px] text-dim no-underline hover:underline" href="changelog.html">Changelog</a>
+        <a class="text-[13px] text-dim no-underline hover:underline" href="legal.html">Legal</a>
+        <a class="text-[13px] text-dim no-underline hover:underline" href="/app/">Launch</a>
+        <a class="text-[13px] text-dim no-underline hover:underline" href="mailto:contact@blotterbook.com?subject=Blotterbook"
+          >Contact</a
+        >
       </div>
-      <p class="disclaimer">
+      <p class="mt-1.5 mb-0 w-full text-[11.5px] leading-[1.6] text-faint">
         Blotterbook is a trading journal and estimation tool — <b>not a broker</b>, and not financial, investment, or tax advice. All
         figures are estimates. Trading involves risk of loss.
       </p>
     {/if}
   </div>
 </footer>
-
-<style>
-  footer.site {
-    border-top: 1px solid var(--line);
-    padding: 34px 22px;
-    color: var(--faint);
-    font-size: 12.5px;
-  }
-  footer.site .frow {
-    max-width: 1080px;
-    margin: 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-  footer.site .fbrand {
-    font-weight: 700;
-    color: var(--txt);
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-  footer.site .fbrand .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-    background: linear-gradient(135deg, var(--accent), var(--take));
-  }
-  footer.site .flinks {
-    display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-  footer.site .flinks a {
-    color: var(--dim);
-    font-size: 13px;
-    text-decoration: none;
-  }
-  footer.site .flinks a:hover {
-    text-decoration: underline;
-  }
-  footer.site .disclaimer {
-    width: 100%;
-    margin: 6px 0 0;
-    font-size: 11.5px;
-    color: var(--faint);
-    line-height: 1.6;
-  }
-</style>

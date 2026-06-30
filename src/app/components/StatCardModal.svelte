@@ -2,7 +2,7 @@
   // Stat-card detail modal (A35 — parity with vanilla widgets.js CARD_VIEWS / openCardModal, F14).
   // Clicking a headline Overview card opens this drill-down. All data comes from compute() metrics +
   // costModel (A29 — reuses dowBuckets/DOW_LABEL/minMax from core); charts are small inline SVG/bars.
-  import { usd, money, cls, ratio, minMax, linePath, dowBuckets, DOW_LABEL } from '../../lib/core.ts';
+  import { usd, money, ratio, minMax, linePath, dowBuckets, DOW_LABEL } from '../../lib/core.ts';
   import type { Metrics } from '../../lib/core.ts';
   import type { CostModel, Trade } from '../../lib/types.ts';
   import * as Dialog from '$ui/dialog';
@@ -15,6 +15,9 @@
     onclose: () => void;
   }
   let { cardKey, metrics: m, cost: c, onclose }: Props = $props();
+
+  // Signed-value → text-color utility (replaces the scoped .pos/.neg rules; A128/ADR-002).
+  const tone = (v: number) => (v > 0 ? 'text-green' : v < 0 ? 'text-red' : 'text-txt');
 
   interface BarRow {
     label: string;
@@ -85,16 +88,16 @@
         >×</Dialog.Close
       >
     </div>
-    <div class="body">
+    <div class="px-4 pb-[18px] pt-3.5">
       {#if cardKey === 'net'}
-        <div class="stats">
-          <span><b class={cls(m.net)}>{usd(m.net)}</b> Gross</span>
-          <span><b class={cls(c.netPreTax)}>{usd(c.netPreTax)}</b> Net (pre-tax)</span>
-          <span><b class={cls(c.afterTax)}>{usd(c.afterTax)}</b> Take-home</span>
+        <div class="mb-3.5 flex flex-wrap gap-x-[18px] gap-y-1.5 text-[12px] text-dim">
+          <span><b class="block font-mono text-[15px] {tone(m.net)}">{usd(m.net)}</b> Gross</span>
+          <span><b class="block font-mono text-[15px] {tone(c.netPreTax)}">{usd(c.netPreTax)}</b> Net (pre-tax)</span>
+          <span><b class="block font-mono text-[15px] {tone(c.afterTax)}">{usd(c.afterTax)}</b> Take-home</span>
         </div>
-        <p class="defn">Net PnL = gross − per-symbol commissions − subscriptions (a full month per calendar month in your date range). Take-home is Net PnL after the estimated Section 1256 tax.</p>
-        {#if ddCurve}<svg class="curve" viewBox="0 0 {ddCurve.W} {ddCurve.H}" preserveAspectRatio="none"><path d={ddCurve.d} fill="none" /></svg>{/if}
-        <h3>Gross → net → take-home</h3>
+        <p class="mb-3.5 mt-0 text-[12px] leading-[1.55] text-dim">Net PnL = gross − per-symbol commissions − subscriptions (a full month per calendar month in your date range). Take-home is Net PnL after the estimated Section 1256 tax.</p>
+        {#if ddCurve}<svg class="curve h-[90px] w-full" viewBox="0 0 {ddCurve.W} {ddCurve.H}" preserveAspectRatio="none"><path d={ddCurve.d} fill="none" /></svg>{/if}
+        <h3 class="mb-2 mt-3.5 text-[11px] uppercase tracking-[0.5px] text-faint">Gross → net → take-home</h3>
         {@render barList(bars([
           { label: 'Gross', value: m.net },
           { label: '− Commissions', value: -c.totalComm },
@@ -104,54 +107,54 @@
           { label: 'Take-home', value: c.afterTax },
         ]))}
       {:else if cardKey === 'win'}
-        <div class="stats">
-          <span><b class="pos">{m.wins}</b> Wins</span>
-          <span><b class="neg">{m.losses}</b> Losses</span>
-          <span><b>{m.scratch}</b> Break-even</span>
+        <div class="mb-3.5 flex flex-wrap gap-x-[18px] gap-y-1.5 text-[12px] text-dim">
+          <span><b class="block font-mono text-[15px] text-green">{m.wins}</b> Wins</span>
+          <span><b class="block font-mono text-[15px] text-red">{m.losses}</b> Losses</span>
+          <span><b class="block font-mono text-[15px] text-txt">{m.scratch}</b> Break-even</span>
         </div>
-        <p class="defn">Win = realized PnL &gt; 0, Loss = &lt; 0, Scratch = exactly 0. Win Rate = wins ÷ total trades (scratches stay in the denominator).</p>
+        <p class="mb-3.5 mt-0 text-[12px] leading-[1.55] text-dim">Win = realized PnL &gt; 0, Loss = &lt; 0, Scratch = exactly 0. Win Rate = wins ÷ total trades (scratches stay in the denominator).</p>
         {@render splitBar([
           { value: m.wins, color: 'var(--green)', label: 'Wins' },
           { value: m.losses, color: 'var(--red)', label: 'Losses' },
           { value: m.scratch, color: 'var(--faint)', label: 'Break-even' },
         ])}
-        <h3>PnL by weekday</h3>
+        <h3 class="mb-2 mt-3.5 text-[11px] uppercase tracking-[0.5px] text-faint">PnL by weekday</h3>
         {@render barList(bars(dowBuckets(m.trades).map((d, i) => ({ label: `${DOW_LABEL[i]} (${d.n})`, value: d.pnl, n: d.n })).filter(d => d.n)))}
-        <h3>Long vs short (net PnL)</h3>
+        <h3 class="mb-2 mt-3.5 text-[11px] uppercase tracking-[0.5px] text-faint">Long vs short (net PnL)</h3>
         {@render barList(bars([
           { label: `Long (${m.long.n})`, value: m.long.pnl },
           { label: `Short (${m.short.n})`, value: m.short.pnl },
         ]))}
       {:else if cardKey === 'pf'}
-        <div class="stats"><span><b>{ratio(m.pf)}</b> gross profit ÷ gross loss</span></div>
-        <h3>Gross profit vs gross loss</h3>
+        <div class="mb-3.5 flex flex-wrap gap-x-[18px] gap-y-1.5 text-[12px] text-dim"><span><b class="block font-mono text-[15px] text-txt">{ratio(m.pf)}</b> gross profit ÷ gross loss</span></div>
+        <h3 class="mb-2 mt-3.5 text-[11px] uppercase tracking-[0.5px] text-faint">Gross profit vs gross loss</h3>
         {@render barList(bars([
           { label: 'Gross profit', value: c.pfGP, color: 'var(--green)' },
           { label: 'Gross loss', value: c.pfGL, color: 'var(--red)' },
         ]))}
-        <h3>By symbol</h3>
+        <h3 class="mb-2 mt-3.5 text-[11px] uppercase tracking-[0.5px] text-faint">By symbol</h3>
         {@render symPfTable(symPfRows(m.trades))}
       {:else if cardKey === 'wl'}
-        <div class="stats">
-          <span><b class="pos">{usd(m.avgW)}</b> Avg win</span>
-          <span><b class="neg">{usd(m.avgL)}</b> Avg loss</span>
-          <span><b>{ratio(m.wl)}</b> Ratio</span>
+        <div class="mb-3.5 flex flex-wrap gap-x-[18px] gap-y-1.5 text-[12px] text-dim">
+          <span><b class="block font-mono text-[15px] text-green">{usd(m.avgW)}</b> Avg win</span>
+          <span><b class="block font-mono text-[15px] text-red">{usd(m.avgL)}</b> Avg loss</span>
+          <span><b class="block font-mono text-[15px] text-txt">{ratio(m.wl)}</b> Ratio</span>
         </div>
-        <p class="defn">Avg Winner = gross profit ÷ winning trades; Avg Loser = gross loss ÷ losing trades. Payoff Ratio = Avg Winner ÷ |Avg Loser| — above 1 means your winners are bigger than your losers; pair it with win rate to read the edge.</p>
-        <h3>Win distribution</h3>
+        <p class="mb-3.5 mt-0 text-[12px] leading-[1.55] text-dim">Avg Winner = gross profit ÷ winning trades; Avg Loser = gross loss ÷ losing trades. Payoff Ratio = Avg Winner ÷ |Avg Loser| — above 1 means your winners are bigger than your losers; pair it with win rate to read the edge.</p>
+        <h3 class="mb-2 mt-3.5 text-[11px] uppercase tracking-[0.5px] text-faint">Win distribution</h3>
         {@render histChart(m.pnls.filter(p => p > 0), 'var(--green)')}
-        <h3>Loss distribution (absolute)</h3>
+        <h3 class="mb-2 mt-3.5 text-[11px] uppercase tracking-[0.5px] text-faint">Loss distribution (absolute)</h3>
         {@render histChart(m.pnls.filter(p => p < 0).map(p => -p), 'var(--red)')}
       {:else if cardKey === 'dd'}
-        <div class="stats">
-          <span><b class="neg">{usd(-m.maxDD)}</b> Max drawdown</span>
-          <span><b>{ratio(m.recovery)}</b> Recovery factor</span>
-          <span><b class={cls(m.net)}>{usd(m.net)}</b> Net PnL</span>
+        <div class="mb-3.5 flex flex-wrap gap-x-[18px] gap-y-1.5 text-[12px] text-dim">
+          <span><b class="block font-mono text-[15px] text-red">{usd(-m.maxDD)}</b> Max drawdown</span>
+          <span><b class="block font-mono text-[15px] text-txt">{ratio(m.recovery)}</b> Recovery factor</span>
+          <span><b class="block font-mono text-[15px] {tone(m.net)}">{usd(m.net)}</b> Net PnL</span>
         </div>
-        <p class="defn warn">Max Drawdown is REALIZED only — computed on the closed-trade equity curve, peak-to-trough. The % is peak-relative and the duration counts trades from that peak to the trough. It does NOT capture open-position heat between entry and exit, and the % is undefined until the curve first goes positive.</p>
+        <p class="mb-3.5 mt-0 border-l-2 border-warn pl-2.5 text-[12px] leading-[1.55] text-dim">Max Drawdown is REALIZED only — computed on the closed-trade equity curve, peak-to-trough. The % is peak-relative and the duration counts trades from that peak to the trough. It does NOT capture open-position heat between entry and exit, and the % is undefined until the curve first goes positive.</p>
         {#if ddCurve}
-          <h3>Equity curve · peak → trough</h3>
-          <svg class="curve" viewBox="0 0 {ddCurve.W} {ddCurve.H}" preserveAspectRatio="none">
+          <h3 class="mb-2 mt-3.5 text-[11px] uppercase tracking-[0.5px] text-faint">Equity curve · peak → trough</h3>
+          <svg class="curve h-[90px] w-full" viewBox="0 0 {ddCurve.W} {ddCurve.H}" preserveAspectRatio="none">
             <path d={ddCurve.d} fill="none" />
             {#if m.ddPeakIdx != null && m.ddTroughIdx != null}
               <line class="mark" x1={ddCurve.x(m.ddPeakIdx)} y1="0" x2={ddCurve.x(m.ddPeakIdx)} y2={ddCurve.H} />
@@ -165,19 +168,19 @@
 </Dialog.Root>
 
 {#snippet splitBar(segs: SplitSeg[])}
-  <div class="split">
+  <div class="split mb-3.5 flex h-[18px] gap-px overflow-hidden rounded-[5px]">
     {#each segs.filter(s => s.value > 0) as s, i (i)}
-      <span class="seg" use:styleProps={{ flex: s.value, background: s.color }} title="{s.label}: {s.value}">{s.value}</span>
+      <span class="seg flex min-w-[14px] items-center justify-center font-mono text-[10px] font-bold text-bg" use:styleProps={{ flex: s.value, background: s.color }} title="{s.label}: {s.value}">{s.value}</span>
     {/each}
   </div>
 {/snippet}
 
 {#snippet symPfTable(rows: SymPfRow[])}
-  <table class="symtab">
-    <thead><tr><th>Symbol</th><th>Trades</th><th>PF</th><th>Net</th></tr></thead>
+  <table class="symtab w-full border-collapse text-[12px]">
+    <thead><tr><th class="border-b border-line px-1.5 py-1 text-left font-semibold text-faint">Symbol</th><th class="border-b border-line px-1.5 py-1 text-right font-semibold text-faint">Trades</th><th class="border-b border-line px-1.5 py-1 text-right font-semibold text-faint">PF</th><th class="border-b border-line px-1.5 py-1 text-right font-semibold text-faint">Net</th></tr></thead>
     <tbody>
       {#each rows as r (r.root)}
-        <tr><td>{r.root}</td><td>{r.n}</td><td>{ratio(r.pf)}</td><td class={cls(r.net)}>{usd(r.net)}</td></tr>
+        <tr><td class="border-b border-line px-1.5 py-1 text-left font-mono">{r.root}</td><td class="border-b border-line px-1.5 py-1 text-right font-mono">{r.n}</td><td class="border-b border-line px-1.5 py-1 text-right font-mono">{ratio(r.pf)}</td><td class="border-b border-line px-1.5 py-1 text-right font-mono {tone(r.net)}">{usd(r.net)}</td></tr>
       {/each}
     </tbody>
   </table>
@@ -185,126 +188,33 @@
 
 {#snippet histChart(values: number[], color: string)}
   {#if values.length}
-    <div class="bars">
+    <div class="bars grid gap-[5px]">
       {#each hist(values) as b, i (i)}
-        <div class="bar">
-          <span class="bl">≥ {money(b.lo)}</span>
-          <span class="bt"><span class="fill" use:styleProps={{ width: b.pct + '%', background: color }}></span></span>
-          <span class="bv">{b.n}</span>
+        <div class="grid grid-cols-[130px_1fr_78px] items-center gap-2 text-[12px]">
+          <span class="overflow-hidden text-ellipsis whitespace-nowrap text-dim">≥ {money(b.lo)}</span>
+          <span class="h-3 overflow-hidden rounded-[4px] bg-panel2"><span class="block h-full" use:styleProps={{ width: b.pct + '%', background: color }}></span></span>
+          <span class="text-right font-mono text-txt">{b.n}</span>
         </div>
       {/each}
     </div>
   {:else}
-    <p class="empty">No trades in this bucket.</p>
+    <p class="text-[12px] text-dim">No trades in this bucket.</p>
   {/if}
 {/snippet}
 
 {#snippet barList(rows: RenderedBar[])}
-  <div class="bars">
+  <div class="bars grid gap-[5px]">
     {#each rows as r, i (i)}
-      <div class="bar">
-        <span class="bl">{r.label}</span>
-        <span class="bt"><span class="fill" use:styleProps={{ width: r.pct + '%', background: r.tone }}></span></span>
-        <span class="bv">{money(r.value)}</span>
+      <div class="grid grid-cols-[130px_1fr_78px] items-center gap-2 text-[12px]">
+        <span class="overflow-hidden text-ellipsis whitespace-nowrap text-dim">{r.label}</span>
+        <span class="h-3 overflow-hidden rounded-[4px] bg-panel2"><span class="block h-full" use:styleProps={{ width: r.pct + '%', background: r.tone }}></span></span>
+        <span class="text-right font-mono text-txt">{money(r.value)}</span>
       </div>
     {/each}
   </div>
 {/snippet}
 
 <style>
-  .split {
-    display: flex;
-    height: 18px;
-    border-radius: 5px;
-    overflow: hidden;
-    margin-bottom: 14px;
-    gap: 1px;
-  }
-  .seg {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 14px;
-    color: #0d1014;
-    font-size: 10px;
-    font-weight: 700;
-    font-family: var(--mono);
-  }
-  .symtab {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-  }
-  .symtab th {
-    text-align: right;
-    color: var(--faint);
-    font-weight: 600;
-    padding: 4px 6px;
-    border-bottom: 1px solid var(--line);
-  }
-  .symtab th:first-child {
-    text-align: left;
-  }
-  .symtab td {
-    text-align: right;
-    padding: 4px 6px;
-    font-family: var(--mono);
-    border-bottom: 1px solid var(--line);
-  }
-  .symtab td:first-child {
-    text-align: left;
-  }
-  .symtab td.pos {
-    color: var(--green);
-  }
-  .symtab td.neg {
-    color: var(--red);
-  }
-  .body {
-    padding: 14px 16px 18px;
-  }
-  .stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 18px;
-    font-size: 12px;
-    color: var(--dim);
-    margin-bottom: 14px;
-  }
-  .stats b {
-    font-family: var(--mono);
-    font-size: 15px;
-    display: block;
-    color: var(--txt);
-  }
-  .stats b.pos {
-    color: var(--green);
-  }
-  .stats b.neg {
-    color: var(--red);
-  }
-  h3 {
-    margin: 14px 0 8px;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--faint);
-  }
-  /* A97: the card's headline definition, distributed here from the standalone Definitions panel. */
-  .defn {
-    margin: 0 0 14px;
-    font-size: 12px;
-    line-height: 1.55;
-    color: var(--dim);
-  }
-  .defn.warn {
-    border-left: 2px solid var(--warn);
-    padding-left: 10px;
-  }
-  .curve {
-    width: 100%;
-    height: 90px;
-  }
   .curve path {
     stroke: var(--accent);
     stroke-width: 1.5;
@@ -318,37 +228,5 @@
   }
   .curve .mark.trough {
     stroke: var(--red);
-  }
-  .bars {
-    display: grid;
-    gap: 5px;
-  }
-  .bar {
-    display: grid;
-    grid-template-columns: 130px 1fr 78px;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-  }
-  .bl {
-    color: var(--dim);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .bt {
-    background: var(--panel2);
-    border-radius: 4px;
-    height: 12px;
-    overflow: hidden;
-  }
-  .fill {
-    display: block;
-    height: 100%;
-  }
-  .bv {
-    font-family: var(--mono);
-    text-align: right;
-    color: var(--txt);
   }
 </style>

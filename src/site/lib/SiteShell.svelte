@@ -27,10 +27,15 @@
 <Footer {variant} />
 
 <style>
-  :global {
-    * {
-      box-sizing: border-box;
-    }
+  /* A128: the site's base typography/chrome lives in @layer base so Tailwind utilities (a higher
+     layer in tailwind.css's `@layer theme, base, components, utilities` order) can override it
+     per-element during the utility migration — e.g. a utility text color on an <a> beats the global
+     a{color} rule. Without the layer, these unlayered :global rules would always win over utilities. */
+  @layer base {
+    :global {
+      * {
+        box-sizing: border-box;
+      }
     html {
       scroll-behavior: smooth;
     }
@@ -157,6 +162,7 @@
     }
     .note b {
       color: var(--txt);
+    }
     }
   }
 </style>

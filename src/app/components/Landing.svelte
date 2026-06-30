@@ -49,11 +49,11 @@
   }
 </script>
 
-<section class="landing">
+<section class="landing mx-auto mt-[6vh] max-w-[640px]">
   <h1>Blotterbook</h1>
-  <p class="sub">Set up your trading costs, then load a balance-history CSV (TradingView and others) to begin. Everything stays in your browser.</p>
+  <p class="mt-0 mb-[22px] text-[14px] leading-[1.5] text-dim">Set up your trading costs, then load a balance-history CSV (TradingView and others) to begin. Everything stays in your browser.</p>
 
-  <div class="setup">
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3 rounded-[10px] border border-line bg-panel p-4">
     <div class="field">
       <span>Broker</span>
       <Select.Root type="single" value={setup.broker} onValueChange={onBroker} items={brokerItems}>
@@ -92,9 +92,9 @@
     </label>
   </div>
 
-  <div class="load">
-    <button type="button" class="cta" onclick={() => fileInput.click()}>Load CSV</button>
-    <div class="platform field">
+  <div class="mt-[18px] flex items-center gap-[14px]">
+    <button type="button" class="cursor-pointer rounded-lg border-0 bg-accent px-[22px] py-[11px] text-[15px] font-bold text-bg" onclick={() => fileInput.click()}>Load CSV</button>
+    <div class="field">
       <span>Platform</span>
       <Select.Root
         type="single"
@@ -109,34 +109,15 @@
       </Select.Root>
     </div>
     <input bind:this={fileInput} type="file" accept=".csv,text/csv" hidden onchange={pick} />
-    {#if !ready}<span class="gate">Tip: pick broker, data feed and state so the cost/tax model is complete.</span>{/if}
+    {#if !ready}<span class="text-[12px] text-faint">Tip: pick broker, data feed and state so the cost/tax model is complete.</span>{/if}
   </div>
-  {#if msg}<p class="msg" role="alert">{msg}</p>{/if}
+  {#if msg}<p class="mt-3 text-[13px] text-red" role="alert">{msg}</p>{/if}
 </section>
 
 <style>
-  .landing {
-    max-width: 640px;
-    margin: 6vh auto 0;
-  }
   h1 {
     margin: 0 0 6px;
     font-size: 28px;
-  }
-  .sub {
-    color: var(--dim);
-    font-size: 14px;
-    line-height: 1.5;
-    margin: 0 0 22px;
-  }
-  .setup {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 12px;
-    padding: 16px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
   }
   label,
   .field {
@@ -158,30 +139,5 @@
   input:focus {
     outline: none;
     border-color: var(--accent);
-  }
-  .load {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-top: 18px;
-  }
-  .cta {
-    background: var(--accent);
-    color: #0d1014;
-    border: 0;
-    border-radius: 8px;
-    padding: 11px 22px;
-    font-size: 15px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  .gate {
-    font-size: 12px;
-    color: var(--faint);
-  }
-  .msg {
-    margin-top: 12px;
-    color: var(--red);
-    font-size: 13px;
   }
 </style>

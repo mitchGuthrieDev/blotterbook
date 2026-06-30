@@ -21,11 +21,24 @@
   ];
 </script>
 
-<header>
-  <nav class="nav">
-    <a class="wordmark" href="index.html"><span class="dot"></span>Blotterbook</a>
-    <input type="checkbox" id="navtoggle" class="navtoggle" aria-label="Toggle navigation menu" />
-    <div class="navlinks">
+<header
+  class="sticky top-0 z-50 border-b border-line bg-[rgba(13,16,20,0.86)] backdrop-blur-[10px] backdrop-saturate-150"
+>
+  <nav class="nav relative mx-auto flex max-w-[1080px] items-center px-[22px] py-[13px]">
+    <a
+      class="wordmark inline-flex items-center gap-[9px] text-[16px] font-bold text-txt no-underline hover:no-underline"
+      href="index.html"
+      ><span
+        class="dot h-[9px] w-[9px] rounded-[2px] bg-[linear-gradient(135deg,var(--accent),var(--take))]"
+      ></span>Blotterbook</a
+    >
+    <input
+      type="checkbox"
+      id="navtoggle"
+      class="navtoggle pointer-events-none absolute h-px w-px opacity-0"
+      aria-label="Toggle navigation menu"
+    />
+    <div class="navlinks ml-[6px] flex-wrap gap-1">
       {#if variant === 'admin'}
         <a href="index.html">Home</a>
         <a href="changelog.html">Changelog</a>
@@ -36,53 +49,27 @@
       {/if}
       <a class="navlaunch" href="/app/">Launch Blotterbook &rarr;</a>
     </div>
-    <a class="cta" href="/app/">Launch Blotterbook &rarr;</a>
-    <label class="hamburger" for="navtoggle" title="Menu"
-      ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg></label>
+    <a
+      class="cta ml-auto rounded-[9px] bg-accent px-[14px] py-2 text-[13.5px] font-semibold text-bg no-underline hover:no-underline hover:brightness-[1.08]"
+      href="/app/">Launch Blotterbook &rarr;</a
+    >
+    <label
+      class="hamburger ml-auto h-9 w-10 cursor-pointer items-center justify-center rounded-[9px] border border-line bg-panel"
+      for="navtoggle"
+      title="Menu"
+      ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg></label
+    >
   </nav>
 </header>
 
 <style>
-  header {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    backdrop-filter: saturate(150%) blur(10px);
-    background: rgba(13, 16, 20, 0.86);
-    border-bottom: 1px solid var(--line);
-  }
+  /* Layout/display props the responsive block below toggles stay scoped to avoid utility-vs-scoped
+     specificity fights at the bespoke 760px breakpoint; the rest moved to Tailwind utilities. */
   .nav {
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 13px 22px;
-    display: flex;
-    align-items: center;
     gap: 16px;
-    position: relative;
-  }
-  .wordmark {
-    font-weight: 700;
-    font-size: 16px;
-    color: var(--txt);
-    display: inline-flex;
-    align-items: center;
-    gap: 9px;
-    text-decoration: none;
-  }
-  .wordmark:hover {
-    text-decoration: none;
-  }
-  .wordmark .dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 2px;
-    background: linear-gradient(135deg, var(--accent), var(--take));
   }
   .navlinks {
     display: flex;
-    gap: 4px;
-    margin-left: 6px;
-    flex-wrap: wrap;
   }
   .navlinks a {
     color: var(--dim);
@@ -99,39 +86,9 @@
   .navlinks a.active {
     color: var(--txt);
   }
-  .cta {
-    margin-left: auto;
-    background: var(--accent);
-    color: var(--bg);
-    font-weight: 600;
-    font-size: 13.5px;
-    padding: 8px 14px;
-    border-radius: 9px;
-    text-decoration: none;
-  }
-  .cta:hover {
-    filter: brightness(1.08);
-    text-decoration: none;
-  }
   /* mobile menu (hamburger replaces the Launch button) */
-  .navtoggle {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    pointer-events: none;
-  }
   .hamburger {
     display: none;
-    margin-left: auto;
-    cursor: pointer;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 36px;
-    border: 1px solid var(--line);
-    border-radius: 9px;
-    background: var(--panel);
   }
   .hamburger svg {
     width: 20px;

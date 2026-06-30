@@ -131,9 +131,9 @@
 
 <Dialog.Root open onOpenChange={(o: boolean) => !o && onclose()}>
   <Dialog.Content class="modal top-[5vh] flex max-h-[90vh] max-w-[880px] flex-col overflow-hidden" aria-label="Export performance report">
-    <div class="bar">
-      <strong>Performance report</strong>
-      <div class="actions">
+    <div class="flex items-center justify-between gap-3 border-b border-line bg-panel px-3.5 py-3 max-[560px]:flex-wrap">
+      <strong class="text-[13px]">Performance report</strong>
+      <div class="flex items-center gap-2 max-[560px]:w-full max-[560px]:flex-wrap max-[560px]:justify-start">
         <Select.Root type="single" bind:value={format} items={FORMATS}>
           <Select.Trigger aria-label="Download format" class="max-[560px]:min-w-0 max-[560px]:flex-1"
             ><Select.Value placeholder="Download as…" /></Select.Trigger
@@ -142,89 +142,32 @@
             {#each FORMATS as f (f.value)}<Select.Item value={f.value} label={f.label} />{/each}
           </Select.Content>
         </Select.Root>
-        <button type="button" class="pri" disabled={!format} onclick={doDownload}>Download</button>
-        <a class="btn" href={rep.mailto}>Email a copy</a>
-        <button type="button" class="btn" data-expclose onclick={onclose}>Close</button>
+        <button
+          type="button"
+          class="pri cursor-pointer rounded-md border border-accent bg-accent px-3.5 py-[7px] text-[13px] font-semibold text-bg disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!format}
+          onclick={doDownload}>Download</button
+        >
+        <a
+          class="cursor-pointer rounded-md border border-line bg-panel2 px-3.5 py-[7px] text-[13px] text-txt no-underline"
+          href={rep.mailto}>Email a copy</a
+        >
+        <button
+          type="button"
+          class="cursor-pointer rounded-md border border-line bg-panel2 px-3.5 py-[7px] text-[13px] text-txt"
+          data-expclose
+          onclick={onclose}>Close</button
+        >
       </div>
     </div>
-    {#if note}<div class="parsestatus {noteKind}">{note}</div>{/if}
+    {#if note}<div
+        class="border-b border-line px-3.5 py-1.5 text-xs {noteKind === 'ok' ? 'text-green' : noteKind === 'err' ? 'text-red' : 'text-dim'}"
+      >
+        {note}
+      </div>{/if}
     <!-- S24: same-origin srcdoc (print + CSSOM styling need it) but NO allow-scripts — defense-in-depth
          should an escaping bug ever slip past report.ts's esc(). The report carries no scripts of its own;
          allow-modals keeps the parent-triggered print() dialog working. -->
-    <iframe bind:this={iframeEl} class="preview" title="Performance report preview" sandbox="allow-same-origin allow-modals" srcdoc={built.html} onload={applyStyles}></iframe>
+    <iframe bind:this={iframeEl} class="min-h-[50vh] w-full flex-1 border-0 bg-bg" title="Performance report preview" sandbox="allow-same-origin allow-modals" srcdoc={built.html} onload={applyStyles}></iframe>
   </Dialog.Content>
 </Dialog.Root>
-
-<style>
-  .bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--line);
-    background: var(--panel);
-  }
-  .bar strong {
-    font-size: 13px;
-  }
-  .actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  /* A74 (promoted to all surfaces, CH16): on narrow screens the controls bar doesn't fit on one row,
-     so the Download/Email/Close buttons clip off the right edge. Let the bar + actions wrap so every
-     control stays reachable; the modal itself is already width-capped and clips page scroll. */
-  @media (max-width: 560px) {
-    .bar {
-      flex-wrap: wrap;
-    }
-    .actions {
-      flex-wrap: wrap;
-      width: 100%;
-      justify-content: flex-start;
-    }
-  }
-  button,
-  .btn {
-    font-family: inherit;
-    font-size: 13px;
-    cursor: pointer;
-    border: 1px solid var(--line);
-    background: var(--panel2);
-    color: var(--txt);
-    padding: 7px 14px;
-    border-radius: 6px;
-    text-decoration: none;
-  }
-  .pri {
-    background: var(--accent);
-    color: var(--bg);
-    border-color: var(--accent);
-    font-weight: 600;
-  }
-  .pri:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  .parsestatus {
-    padding: 6px 14px;
-    font-size: 12px;
-    color: var(--dim);
-    border-bottom: 1px solid var(--line);
-  }
-  .parsestatus.ok {
-    color: var(--green);
-  }
-  .parsestatus.err {
-    color: var(--red);
-  }
-  .preview {
-    flex: 1;
-    width: 100%;
-    border: 0;
-    background: var(--bg);
-    min-height: 50vh;
-  }
-</style>
