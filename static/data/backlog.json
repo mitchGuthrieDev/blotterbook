@@ -3,7 +3,7 @@
   "title": "Blotterbook — improvement backlog (paste-ready prompts)",
   "intro": "From the 2026-06-25 audit. Each item is a self-contained prompt: scope, goal, constraints, \"done when\".",
   "tags": "Tags: P1 do-soon · P2 durable win · P3 polish. Send them one at a time (one surface/concern per turn).",
-  "updated": "2026-06-29 (shipped F31/F32/F33/F34 + A127 to staging/site -> archived)",
+  "updated": "2026-06-30 (added F35/F36 brokers + R22 library evaluation)",
   "note": "Committed source of truth for the ACTIVE engineering backlog (open + guardrail items; replaces the retired .claude/backlog.md). Completed (Done) items are archived in data/backlog_archive.json to keep this file lean — the admin Backlog panel reads BOTH and merges them, so done items stay visible. The admin panel shows category/effort/status only; prompt + doneNote stay in the JSON.",
   "commitConvention": "Conventional-commit titles (enables CH12 automated versioning): when committing, and ESPECIALLY when titling a PR / squash-merge, lead the title with a conventional-commit type so the version bump can be derived automatically — `feat:` (new capability → minor), `fix:` (bug fix → patch), `chore:`/`refactor:`/`docs:`/`style:`/`test:`/`perf:` (→ patch), and append `!` (e.g. `feat!:`) or a `BREAKING CHANGE:` footer for a breaking change (→ major). Scope it when useful, e.g. `feat(staging): …`. Untyped/legacy titles default to a patch bump. Keep the existing Co-Authored-By and Claude-Session trailers on the commit body.",
   "donePolicy": "When an item's status is set to `done`, delete its `prompt` field and keep only the `doneNote` — the doneNote is the shipped record of what was actually done, so the original prompt is redundant and only bloats this file (the admin backlog panel never renders done-item prompts anyway). Keep `prompt` on `open` and `guardrail` items, since those are still the actionable spec. Applies retroactively: a done item should never carry a prompt. RECURRING ITEMS: an item with `recurring: true` (e.g. R1 repo audit, CH16 staging→prod promotion) is a perpetual driver — NEVER set its status to done, set completedDate, or strip its prompt; it stays open across every run and its prompt leads with a RECURRING/REPEATABLE marker. Each run ships its output as new items, not by closing the recurring item. ARCHIVE (post-split): completed items now live in `data/backlog_archive.json`. When you set an item to `done` and strip its prompt, MOVE the item object out of backlog.json into backlog_archive.json (the admin panel merges both). Recurring items never move — they stay open in backlog.json.",
@@ -426,6 +426,42 @@
       "completedDate": null,
       "partial": false,
       "prompt": "DISCUSSION/ANALYSIS. Review the relationship between static/data/brokers.json (per-broker commission tiers: micro/std per-side) and static/data/exchange-fees.json (CME exchange/clearing/NFA fees + the micro set) and how costModel() in src/lib/core.ts combines them (broker commission + per-contract exchange fee -> per-symbol rate). Assess: overlap/duplication, whether the split is the right model, how the 'unknown exchange fee' fallback interacts with broker rates, schema consistency (schemaVersion, units), and how a future effective-dated rate history (F30) should be structured across BOTH files (do exchange/clearing/NFA fees also change over time?). Recommend keep/restructure + any spun-off items. Done when: a written assessment + recommendation is delivered. Adjacent: F30 (historical commission rates).",
+      "doneNote": null
+    },
+    {
+      "id": "F35",
+      "title": "Add Discount Trader as a selectable broker",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Add Discount Trading (Discount Trader) as a selectable broker in the cost model. RESEARCH its published FUTURES commission rates (per-side, micro vs standard contracts) and add a broker entry to static/data/brokers.json in the existing {name, comm:{micro,std}} shape, then regenerate the manifest (scripts/build-manifest.mjs) and commit the updated static/data/manifest.json. If the broker bundles specific data feeds, add them to static/data/feeds.json too. Verify it appears in the Break-even & Cost broker selector (BROKERS / BROKER_ORDER from src/lib/core.ts) and that costModel() prices trades with its rates — no app-code change should be needed (adapters/compute/costModel read the data). CITE the rate source in the commit. Done when: Discount Trader is selectable, its commissions compute correctly, the manifest is regenerated, and npm test is green.",
+      "doneNote": null
+    },
+    {
+      "id": "F36",
+      "title": "Add Interactive Brokers (IBKR) as a selectable broker",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Add Interactive Brokers (IBKR) as a selectable broker in the cost model. NOTE IBKR is already a supported CSV ADAPTER (import) but is NOT yet a broker in the commission model. RESEARCH IBKR's published FUTURES commission rates (their tiered/fixed futures pricing, per-side, micro vs standard contracts) and add a broker entry to static/data/brokers.json ({name, comm:{micro,std}}), regenerate the manifest (scripts/build-manifest.mjs), and add any IBKR-specific data-feed options to static/data/feeds.json if relevant. Verify it shows in the broker selector and costModel() prices with its rates (no app-code change expected). CITE the rate source. Done when: IBKR is selectable, commissions compute correctly, the manifest is regenerated, and npm test is green.",
+      "doneNote": null
+    },
+    {
+      "id": "R22",
+      "title": "Discussion: evaluate adding bits-ui / tailwind / svelte-spa-router / tailwind-variants / felte",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "DISCUSSION/ANALYSIS. Evaluate adding these libraries and what each could improve, weighed HARD against the repo's constraints — A28 (deps: minimal/pinned/audited, earn-its-weight, the local-compute/no-egress gate), the strict style-src 'self' CSP (S18/A55 — no inline styles; dynamic styles via the styleProps CSSOM action), A104 (the styling audit recommended KEEPING tokens + scoped component CSS, NOT utility-first), the MULTI-PAGE Vite architecture (ADR-001 — app/demo/staging mount points + prerendered marketing pages + static/_redirects rewrites; NOT a SPA-router model), Svelte 5 runes-only, and the A108 module registry. For EACH library give: a concrete benefit + where it would apply, integration cost/churn, CSP compatibility, bundle-size impact (the A96 size budget), and a keep/adopt/decline recommendation. (1) bits-ui — headless Svelte 5 UI primitives (menus/dialogs/popovers): could it replace the hand-rolled modal/menu a11y (src/app/lib/modal.ts, the Panel + stat-card menus) and does it stay CSP-clean + within budget? (2) tailwind + (4) tailwind-variants — utility-first CSS + a variant API: this directly contradicts A104's scoped-CSS recommendation and is in tension with style-src 'self' (assess Tailwind's actual CSP compatibility and whether utility-first is even desirable here) — make the explicit case for/against. (3) svelte-spa-router — a CLIENT-side SPA router: the app is a multi-page Vite build, so assess whether SPA routing fits at all or fights the architecture (and what it would replace). (5) felte — a Svelte form library: is there enough form complexity (cost-setup inputs, FilterBar, Manage-data editing) to justify it over the current runes-bound inputs? Done when: a written per-library assessment with a recommendation for each (+ any spun-off adoption items) is delivered.",
       "doneNote": null
     }
   ],
