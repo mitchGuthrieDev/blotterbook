@@ -7,6 +7,7 @@
   import type { AppSetup, CostInputs, PanelBundle, StateRow } from '../../lib/types.ts';
   import Panel from './Panel.svelte';
   import Caveats from './Caveats.svelte';
+  import * as Select from '$ui/select';
 
   interface Props {
     metrics: Metrics;
@@ -29,8 +30,16 @@
   const pct = (v: number) => (v * 100).toFixed(1) + '%';
   const cost = $derived(metrics ? costModel(metrics, costInputs) : null);
 
-  function onBroker(e: Event) {
-    setup.broker = (e.currentTarget as HTMLSelectElement).value;
+  // A128: select option/label arrays double as Root.items so Select.Value resolves the seeded value's
+  // label while the listbox is closed.
+  const brokerItems = $derived(BROKER_ORDER.map(k => ({ value: k, label: BROKERS[k].name })));
+  const feedItems = $derived(
+    Object.entries(feedGroups).flatMap(([, list]) => list.map(([name, c]) => ({ value: `${name}|${c}`, label: `${name} — $${c}` })))
+  );
+  const stateItems = $derived(stateOpts.map(([a, , n]) => ({ value: a, label: n })));
+
+  function onBroker(v: string) {
+    setup.broker = v;
     setup.feed = ''; // feed options depend on broker — reset like the vanilla populateFeeds()
   }
 </script>
@@ -38,31 +47,38 @@
 <Panel {...panel} title="Break-even &amp; Cost">
   <div class="costpanel">
   <div class="setup">
-    <label>
+    <div class="field">
       <span>Broker</span>
-      <select value={setup.broker} onchange={onBroker} {disabled}>
-        <option value="">— Select broker —</option>
-        {#each BROKER_ORDER as k (k)}<option value={k}>{BROKERS[k].name}</option>{/each}
-      </select>
-    </label>
-    <label>
+      <Select.Root type="single" value={setup.broker} onValueChange={onBroker} items={brokerItems} {disabled}>
+        <Select.Trigger aria-label="Broker"><Select.Value placeholder="— Select broker —" /></Select.Trigger>
+        <Select.Content>
+          {#each brokerItems as it (it.value)}<Select.Item value={it.value} label={it.label} />{/each}
+        </Select.Content>
+      </Select.Root>
+    </div>
+    <div class="field">
       <span>Data feed</span>
-      <select bind:value={setup.feed} {disabled}>
-        <option value="">— Select data feed —</option>
-        {#each Object.entries(feedGroups) as [grp, list] (grp)}
-          <optgroup label={grp}>
-            {#each list as [name, c] (name)}<option value={`${name}|${c}`}>{name} — ${c}</option>{/each}
-          </optgroup>
-        {/each}
-      </select>
-    </label>
-    <label>
+      <Select.Root type="single" bind:value={setup.feed} items={feedItems} {disabled}>
+        <Select.Trigger aria-label="Data feed"><Select.Value placeholder="— Select data feed —" /></Select.Trigger>
+        <Select.Content>
+          {#each Object.entries(feedGroups) as [grp, list] (grp)}
+            <Select.Group>
+              <Select.GroupHeading class="px-2 py-1 text-[10px] uppercase tracking-wide text-faint">{grp}</Select.GroupHeading>
+              {#each list as [name, c] (name)}<Select.Item value={`${name}|${c}`} label={`${name} — $${c}`} />{/each}
+            </Select.Group>
+          {/each}
+        </Select.Content>
+      </Select.Root>
+    </div>
+    <div class="field">
       <span>State</span>
-      <select bind:value={setup.stateAbbr} {disabled}>
-        <option value="">— Select state —</option>
-        {#each stateOpts as [a, r, n] (a)}<option value={a}>{n}</option>{/each}
-      </select>
-    </label>
+      <Select.Root type="single" bind:value={setup.stateAbbr} items={stateItems} {disabled}>
+        <Select.Trigger aria-label="State"><Select.Value placeholder="— Select state —" /></Select.Trigger>
+        <Select.Content>
+          {#each stateItems as it (it.value)}<Select.Item value={it.value} label={it.label} />{/each}
+        </Select.Content>
+      </Select.Root>
+    </div>
     <label>
       <span>Platform fee ($/mo)</span>
       <input type="number" min="0" step="1" bind:value={setup.platform} {disabled} />
@@ -143,14 +159,14 @@
     gap: 10px;
     margin-bottom: 16px;
   }
-  label {
+  label,
+  .field {
     display: flex;
     flex-direction: column;
     gap: 4px;
     font-size: 11px;
     color: var(--faint);
   }
-  select,
   input {
     background: var(--panel2);
     color: var(--txt);
@@ -158,12 +174,8 @@
     border-radius: 6px;
     padding: 7px 8px;
     font-size: 13px;
-    font-family: var(--sans);
-  }
-  input {
     font-family: var(--mono);
   }
-  select:focus,
   input:focus {
     outline: none;
     border-color: var(--accent);

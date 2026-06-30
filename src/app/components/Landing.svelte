@@ -5,6 +5,7 @@
   import { BROKERS, BROKER_ORDER, BROKER_FEEDS, STATES } from '../../lib/core.ts';
   import type { AppSetup } from '../../lib/types.ts';
   import { Adapters } from '../../lib/adapters.ts';
+  import * as Select from '$ui/select';
 
   interface Props {
     setup: AppSetup;
@@ -21,10 +22,24 @@
   // [{id,label,beta}] for the override dropdown — beta adapters are hidden when the flag is off (A89).
   const platforms = $derived(Adapters.list().filter(p => showBeta || !p.beta));
 
+  // A128: option/label arrays double as Root.items (Select.Value resolves labels while closed).
+  const brokerItems = $derived(BROKER_ORDER.map(k => ({ value: k, label: BROKERS[k].name })));
+  const feedItems = $derived(
+    Object.entries(feedGroups).flatMap(([, list]) => list.map(([name, c]) => ({ value: `${name}|${c}`, label: `${name} — $${c}` })))
+  );
+  const stateItems = $derived(stateOpts.map(([a, , n]) => ({ value: a, label: n })));
+  // The platform override's "Auto-detect" default is the empty string; bits-ui treats '' as no-value,
+  // so map it to a sentinel internally.
+  const AUTO = '__auto__';
+  const platformItems = $derived([
+    { value: AUTO, label: 'Auto-detect' },
+    ...platforms.map(p => ({ value: p.id, label: `${p.label}${p.beta ? ' (beta)' : ''}` })),
+  ]);
+
   let fileInput: HTMLInputElement;
   let platformId = $state(''); // '' = auto-detect
-  function onBroker(e: Event) {
-    setup.broker = (e.currentTarget as HTMLSelectElement).value;
+  function onBroker(v: string) {
+    setup.broker = v;
     setup.feed = '';
   }
   function pick(e: Event) {
@@ -39,31 +54,38 @@
   <p class="sub">Set up your trading costs, then load a balance-history CSV (TradingView and others) to begin. Everything stays in your browser.</p>
 
   <div class="setup">
-    <label>
+    <div class="field">
       <span>Broker</span>
-      <select value={setup.broker} onchange={onBroker}>
-        <option value="">— Select broker —</option>
-        {#each BROKER_ORDER as k (k)}<option value={k}>{BROKERS[k].name}</option>{/each}
-      </select>
-    </label>
-    <label>
+      <Select.Root type="single" value={setup.broker} onValueChange={onBroker} items={brokerItems}>
+        <Select.Trigger aria-label="Broker"><Select.Value placeholder="— Select broker —" /></Select.Trigger>
+        <Select.Content>
+          {#each brokerItems as it (it.value)}<Select.Item value={it.value} label={it.label} />{/each}
+        </Select.Content>
+      </Select.Root>
+    </div>
+    <div class="field">
       <span>Data feed</span>
-      <select bind:value={setup.feed}>
-        <option value="">— Select data feed —</option>
-        {#each Object.entries(feedGroups) as [grp, list] (grp)}
-          <optgroup label={grp}>
-            {#each list as [name, c] (name)}<option value={`${name}|${c}`}>{name} — ${c}</option>{/each}
-          </optgroup>
-        {/each}
-      </select>
-    </label>
-    <label>
+      <Select.Root type="single" bind:value={setup.feed} items={feedItems}>
+        <Select.Trigger aria-label="Data feed"><Select.Value placeholder="— Select data feed —" /></Select.Trigger>
+        <Select.Content>
+          {#each Object.entries(feedGroups) as [grp, list] (grp)}
+            <Select.Group>
+              <Select.GroupHeading class="px-2 py-1 text-[10px] uppercase tracking-wide text-faint">{grp}</Select.GroupHeading>
+              {#each list as [name, c] (name)}<Select.Item value={`${name}|${c}`} label={`${name} — $${c}`} />{/each}
+            </Select.Group>
+          {/each}
+        </Select.Content>
+      </Select.Root>
+    </div>
+    <div class="field">
       <span>State</span>
-      <select bind:value={setup.stateAbbr}>
-        <option value="">— Select state —</option>
-        {#each stateOpts as [a, r, n] (a)}<option value={a}>{n}</option>{/each}
-      </select>
-    </label>
+      <Select.Root type="single" bind:value={setup.stateAbbr} items={stateItems}>
+        <Select.Trigger aria-label="State"><Select.Value placeholder="— Select state —" /></Select.Trigger>
+        <Select.Content>
+          {#each stateItems as it (it.value)}<Select.Item value={it.value} label={it.label} />{/each}
+        </Select.Content>
+      </Select.Root>
+    </div>
     <label>
       <span>Platform fee ($/mo)</span>
       <input type="number" min="0" step="1" bind:value={setup.platform} />
@@ -72,13 +94,20 @@
 
   <div class="load">
     <button type="button" class="cta" onclick={() => fileInput.click()}>Load CSV</button>
-    <label class="platform">
+    <div class="platform field">
       <span>Platform</span>
-      <select bind:value={platformId}>
-        <option value="">Auto-detect</option>
-        {#each platforms as p (p.id)}<option value={p.id}>{p.label}{p.beta ? ' (beta)' : ''}</option>{/each}
-      </select>
-    </label>
+      <Select.Root
+        type="single"
+        value={platformId || AUTO}
+        onValueChange={v => (platformId = v === AUTO ? '' : v)}
+        items={platformItems}
+      >
+        <Select.Trigger aria-label="Platform"><Select.Value /></Select.Trigger>
+        <Select.Content>
+          {#each platformItems as it (it.value)}<Select.Item value={it.value} label={it.label} />{/each}
+        </Select.Content>
+      </Select.Root>
+    </div>
     <input bind:this={fileInput} type="file" accept=".csv,text/csv" hidden onchange={pick} />
     {#if !ready}<span class="gate">Tip: pick broker, data feed and state so the cost/tax model is complete.</span>{/if}
   </div>
@@ -109,14 +138,14 @@
     border: 1px solid var(--line);
     border-radius: 10px;
   }
-  label {
+  label,
+  .field {
     display: flex;
     flex-direction: column;
     gap: 4px;
     font-size: 11px;
     color: var(--faint);
   }
-  select,
   input {
     background: var(--panel2);
     color: var(--txt);
@@ -126,7 +155,6 @@
     font-size: 13px;
     font-family: var(--sans);
   }
-  select:focus,
   input:focus {
     outline: none;
     border-color: var(--accent);

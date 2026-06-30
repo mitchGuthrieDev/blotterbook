@@ -12,5 +12,6 @@ import Item from './select-item.svelte';
 const Root = SelectPrimitive.Root;
 const Value = SelectPrimitive.Value;
 const Group = SelectPrimitive.Group;
+const GroupHeading = SelectPrimitive.GroupHeading;
 
-export { Root, Value, Group, Trigger, Content, Item };
+export { Root, Value, Group, GroupHeading, Trigger, Content, Item };
