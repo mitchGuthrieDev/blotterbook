@@ -12,6 +12,7 @@
   import { createDashboard } from './lib/dashboard.svelte.ts';
   import { navSections, navLabel, navItems } from './lib/nav';
   import Dashboard, { type DashStat, type DayCell } from './screens/Dashboard.svelte';
+  import Calendar, { type CalDay, type DayTrade } from './screens/Calendar.svelte';
   import Blotter, { type BlotterRow } from './screens/Blotter.svelte';
 
   const store = Store;
@@ -63,6 +64,35 @@
     }
     return { dayPnl, net, firstDow: new Date(y, mo, 1).getDay(), daysInMonth: new Date(y, mo + 1, 0).getDate(), label: `${MON[mo]} ${y}` };
   });
+
+  // ── Calendar ─────────────────────────────────────────────────────────────────────────────────
+  // The full Calendar screen reads per-day records (P&L / trades / wins + a note flag) for the cursor
+  // month and a date→P&L map for the year heatmap, both from the all-time (filtered) days.
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const dateOf = (day: number) => `${dash.calYear}-${pad2(dash.calMonth + 1)}-${pad2(day)}`;
+  const calMonthDays = $derived.by<Record<number, CalDay>>(() => {
+    const out: Record<number, CalDay> = {};
+    for (const d of dash.metricsAll.days) {
+      const dt = new Date(d.date + 'T00:00:00');
+      if (dt.getFullYear() === dash.calYear && dt.getMonth() === dash.calMonth) {
+        out[dt.getDate()] = { pnl: d.pnl, trades: d.trades, wins: d.wins, note: dash.journalDates.has(d.date) };
+      }
+    }
+    return out;
+  });
+  const calYearPnl = $derived.by<Record<string, number>>(() => {
+    const out: Record<string, number> = {};
+    for (const d of dash.metricsAll.days) if (+d.date.slice(0, 4) === dash.calYear) out[d.date] = d.pnl;
+    return out;
+  });
+  const calTradesForDay = (day: number): DayTrade[] =>
+    dash.tradesForDay(dateOf(day)).map(t => ({
+      time: (t.time || '').slice(11, 16),
+      sym: t.root,
+      side: t.side === 'short' ? 'Short' : 'Long',
+      qty: t.qty ?? 1,
+      pnl: t.pnl,
+    }));
 
   // ── Blotter ──────────────────────────────────────────────────────────────────────────────────
   // Entry/exit prices aren't in the trade model (P&L events, not bars) → undefined → "—"; hold from
@@ -119,6 +149,20 @@
       firstDow={calData.firstDow}
       daysInMonth={calData.daysInMonth}
       onscope={dash.setScope}
+    />
+  {:else if active === 'calendar'}
+    <Calendar
+      monthDays={calMonthDays}
+      year={dash.calYear}
+      month={dash.calMonth}
+      monthLabel={calData.label}
+      yearPnl={calYearPnl}
+      onprev={() => dash.navMonth(-1)}
+      onnext={() => dash.navMonth(1)}
+      onlatest={() => dash.jumpToLatest()}
+      tradesForDay={calTradesForDay}
+      getNote={day => dash.noteFor(dateOf(day))}
+      onsavenote={(day, text) => dash.saveNote(dateOf(day), text)}
     />
   {:else if active === 'blotter'}
     <Blotter rows={blotterRows} />

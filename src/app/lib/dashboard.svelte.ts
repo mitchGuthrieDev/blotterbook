@@ -13,6 +13,7 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
   let loaded = $state(false);
   let error = $state('');
   let journalDates = $state<Set<string>>(new Set());
+  let journal = $state<Map<string, { text: string; tags: string[]; shots: string[] }>>(new Map());
   let tradeMeta = $state<Map<string, StoredTradeMeta>>(new Map());
   let savedFilters = $state<SavedFilter[]>([]);
   let setup = $state<AppSetup>({ broker: '', feed: '', stateAbbr: '', platform: 0 });
@@ -66,6 +67,7 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
   async function reloadAll() {
     allTrades = await store.getAllTrades();
     journalDates = await store.journalDates();
+    journal = new Map((await store.getAllJournal()).map(j => [j.date, { text: j.text || '', tags: j.tags || [], shots: j.shots || [] }] as const));
     tradeMeta = new Map((await store.allTradeMeta()).map(m => [m.id, m] as const));
     savedFilters = ((await store.getMeta('savedFilters')) as SavedFilter[]) || [];
   }
@@ -113,6 +115,23 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
   }
   const tradeId = (t: Trade) => store.tradeId(t);
   const brokerName = (id: string) => (BROKERS[id] && BROKERS[id].name) || id || '—';
+  const tradesForDay = (date: string) => filtered.filter(t => t.date === date);
+  const noteFor = (date: string) => journal.get(date)?.text ?? '';
+  async function saveNote(date: string, text: string) {
+    const ex = journal.get(date);
+    await store.saveJournal(date, { text, tags: ex?.tags ?? [], shots: ex?.shots ?? [] });
+    const next = new Map(journal);
+    if (text.trim()) {
+      next.set(date, { text, tags: ex?.tags ?? [], shots: ex?.shots ?? [] });
+      journalDates = new Set(journalDates).add(date);
+    } else {
+      next.delete(date);
+      const jd = new Set(journalDates);
+      jd.delete(date);
+      journalDates = jd;
+    }
+    journal = next;
+  }
 
   return {
     get allTrades() {
@@ -157,6 +176,9 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
     get journalDates() {
       return journalDates;
     },
+    get journal() {
+      return journal;
+    },
     get savedFilters() {
       return savedFilters;
     },
@@ -183,6 +205,9 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
     clearFilters,
     tradeId,
     brokerName,
+    tradesForDay,
+    noteFor,
+    saveNote,
     sessionOf,
   };
 }

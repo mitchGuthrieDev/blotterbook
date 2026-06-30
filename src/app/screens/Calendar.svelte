@@ -1,20 +1,23 @@
+<script lang="ts" module>
+  export type CalDay = { pnl: number; trades: number; wins: number; note?: boolean };
+  export type DayTrade = { time: string; sym: string; side: 'Long' | 'Short'; qty: number; pnl: number };
+</script>
+
 <script lang="ts">
-  // Calendar surface mockup (UI redesign, Phase 2 — 2nd screen). A full, dashboard-sized trade
-  // calendar — its own thing, richer than the dashboard Calendar module. Master–detail layout: a big
-  // month grid (or a year heatmap) on the left + a persistent right rail with the selected day's
-  // detail and the month/year summary. Cell treatments: heatmap intensity (P&L magnitude → opacity
-  // bucket, via literal utility classes so they stay CSP-safe — no inline style), a per-day target
-  // marker, the ISO-week totals column, and note dots. Representative STATIC data — layout mockup, not
-  // the live engine. Color only in the P&L data.
+  // Calendar surface (UI redesign). A full, dashboard-sized trade calendar — richer than the dashboard
+  // Calendar module. Master–detail: a big month grid (or a year heatmap) on the left + a persistent
+  // right rail with the selected day's detail and the month/year summary. Cell treatments: heatmap
+  // intensity (P&L magnitude → opacity bucket, via literal utility classes so they stay CSP-safe), a
+  // per-day target marker, the ISO-week totals column, and note dots. Data comes from props (real
+  // metrics + journal on the staging app); the defaults below are the /dev mock. Color only in the P&L.
   import { ChevronLeft, ChevronRight, X, Minus, Plus, Paperclip, ImagePlus, Check } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import * as Card from '$lib/components/ui/card';
   import { cn } from '$lib/utils';
 
-  type Day = { pnl: number; trades: number; wins: number; note?: boolean };
-  // June 2026 (1st is a Monday). A representative spread of trading days.
-  const monthDays: Record<number, Day> = {
+  // ── Mock defaults (the /dev preview) — June 2026 (1st is a Monday). ────────────────────────────
+  const MOCK_DAYS: Record<number, CalDay> = {
     2: { pnl: 454, trades: 4, wins: 3 }, 3: { pnl: 383, trades: 4, wins: 3, note: true }, 4: { pnl: 216, trades: 3, wins: 2 },
     5: { pnl: 90, trades: 4, wins: 2 }, 8: { pnl: 355, trades: 5, wins: 3 }, 9: { pnl: 426, trades: 3, wins: 3 },
     10: { pnl: -106, trades: 2, wins: 0 }, 11: { pnl: -91, trades: 4, wins: 1, note: true }, 12: { pnl: -28, trades: 2, wins: 1 },
@@ -23,11 +26,58 @@
     24: { pnl: 380, trades: 5, wins: 4 }, 25: { pnl: 448, trades: 4, wins: 4 }, 26: { pnl: -270, trades: 5, wins: 1 },
     30: { pnl: 430, trades: 5, wins: 3 },
   };
+  const MOCK_TRADES: DayTrade[] = [
+    { time: '09:34', sym: 'ES', side: 'Long', qty: 2, pnl: 180 },
+    { time: '10:12', sym: 'NQ', side: 'Short', qty: 1, pnl: -60 },
+    { time: '11:48', sym: 'ES', side: 'Long', qty: 3, pnl: 240 },
+    { time: '13:20', sym: 'CL', side: 'Short', qty: 1, pnl: 78 },
+  ];
+  const MOCK_NOTE = 'Held the morning ES long through the 09:45 push — sized right, trailed the stop under the 5m. Cut the NQ short fast when it failed. Discipline good.';
+  // Deterministic year heatmap for the /dev preview (a representative spread).
+  const MOCK_YEAR: Record<string, number> = (() => {
+    const o: Record<string, number> = {};
+    for (let i = 0; i < 365; i++) {
+      const d = new Date(2026, 0, 1 + i);
+      if (d.getDay() >= 1 && d.getDay() <= 5) o[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`] = Math.round(Math.sin(i * 0.9) * 260 + Math.cos(i * 0.37) * 180 + 40);
+    }
+    return o;
+  })();
+
+  interface Props {
+    monthDays?: Record<number, CalDay>;
+    year?: number;
+    month?: number; // 0-based
+    monthLabel?: string;
+    yearPnl?: Record<string, number>; // 'YYYY-MM-DD' → net P&L (for the heatmap)
+    onprev?: () => void;
+    onnext?: () => void;
+    onlatest?: () => void;
+    tradesForDay?: (day: number) => DayTrade[];
+    getNote?: (day: number) => string;
+    onsavenote?: (day: number, text: string) => void;
+  }
+  let {
+    monthDays = MOCK_DAYS,
+    year = 2026,
+    month = 5,
+    monthLabel = 'June 2026',
+    yearPnl = MOCK_YEAR,
+    onprev,
+    onnext,
+    onlatest,
+    tradesForDay = () => MOCK_TRADES,
+    getNote = () => MOCK_NOTE,
+    onsavenote,
+  }: Props = $props();
 
   let view = $state<'month' | 'year'>('month');
-  let selectedDay = $state<number | null>(18);
+  let selectedDay = $state<number | null>(null);
   let target = $state(200);
-  let note = $state('Held the morning ES long through the 09:45 push — sized right, trailed the stop under the 5m. Cut the NQ short fast when it failed. Discipline good.');
+  let note = $state('');
+  // Load the selected day's note when the selection (or the underlying journal) changes.
+  $effect(() => {
+    note = selectedDay ? getNote(selectedDay) : '';
+  });
 
   // ── Heatmap shades — literal classes (Tailwind-scannable), bucketed by |P&L|. ─────────────────
   const POS = ['bg-chart-2/10', 'bg-chart-2/20', 'bg-chart-2/35', 'bg-chart-2/55', 'bg-chart-2/75'];
@@ -39,13 +89,20 @@
   const shade = (pnl: number) => (pnl >= 0 ? POS : NEG)[lvl(pnl)];
   const money = (n: number) => `${n >= 0 ? '+' : '-'}$${Math.abs(n).toLocaleString()}`;
   const pct = (w: number, t: number) => (t ? Math.round((100 * w) / t) : 0);
+  // ISO-8601 week number (matches the core helper; inlined so the screen stays self-contained).
+  const isoWeek = (d: Date) => {
+    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+    const ys = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    return Math.ceil(((t.getTime() - ys.getTime()) / 86400000 + 1) / 7);
+  };
 
   // ── Month grid (Sunday-first, ISO-week column). ──────────────────────────────────────────────
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const firstDow = new Date(2026, 5, 1).getDay(); // Monday → 1
-  const daysInMonth = 30;
-  type Cell = { day: number; rec?: Day } | null;
-  const weeks: { wk: number; cells: Cell[]; pnl: number; days: number }[] = (() => {
+  type Cell = { day: number; rec?: CalDay } | null;
+  const weeks = $derived.by<{ wk: number; cells: Cell[]; pnl: number; days: number }[]>(() => {
+    const firstDow = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
     const flat: Cell[] = [
       ...Array.from({ length: firstDow }, () => null),
       ...Array.from({ length: daysInMonth }, (_, i) => ({ day: i + 1, rec: monthDays[i + 1] })),
@@ -54,66 +111,69 @@
     const rows: { wk: number; cells: Cell[]; pnl: number; days: number }[] = [];
     for (let i = 0; i < flat.length; i += 7) {
       const cells = flat.slice(i, i + 7);
-      const traded = cells.filter((c): c is { day: number; rec: Day } => !!c?.rec);
-      rows.push({ wk: 23 + i / 7, cells, pnl: traded.reduce((s, c) => s + c.rec.pnl, 0), days: traded.length });
+      const traded = cells.filter((c): c is { day: number; rec: CalDay } => !!c?.rec);
+      const anyDay = cells.find((c): c is { day: number; rec?: CalDay } => !!c);
+      rows.push({ wk: anyDay ? isoWeek(new Date(year, month, anyDay.day)) : 0, cells, pnl: traded.reduce((s, c) => s + c.rec.pnl, 0), days: traded.length });
     }
     return rows;
-  })();
+  });
 
   // ── Month summary stats. ─────────────────────────────────────────────────────────────────────
-  const traded = Object.entries(monthDays).map(([d, v]) => ({ day: +d, ...v })).sort((a, b) => a.day - b.day);
-  const monthNet = traded.reduce((s, t) => s + t.pnl, 0);
-  const winDays = traded.filter(t => t.pnl > 0).length;
-  const lossDays = traded.filter(t => t.pnl < 0).length;
-  const avgDay = monthNet / traded.length;
-  const bestDay = traded.reduce((m, t) => (t.pnl > m.pnl ? t : m));
-  const worstDay = traded.reduce((m, t) => (t.pnl < m.pnl ? t : m));
-  const streak = (() => {
+  const traded = $derived(
+    Object.entries(monthDays)
+      .map(([d, v]) => ({ day: +d, ...v }))
+      .sort((a, b) => a.day - b.day)
+  );
+  const monthNet = $derived(traded.reduce((s, t) => s + t.pnl, 0));
+  const winDays = $derived(traded.filter(t => t.pnl > 0).length);
+  const lossDays = $derived(traded.filter(t => t.pnl < 0).length);
+  const avgDay = $derived(traded.length ? monthNet / traded.length : 0);
+  const bestDay = $derived(traded.length ? traded.reduce((m, t) => (t.pnl > m.pnl ? t : m)) : null);
+  const worstDay = $derived(traded.length ? traded.reduce((m, t) => (t.pnl < m.pnl ? t : m)) : null);
+  const streak = $derived.by(() => {
     let s = 0;
     for (let i = traded.length - 1; i >= 0; i--) {
       if (traded[i].pnl > 0) s++;
       else break;
     }
     return s;
-  })();
+  });
   const DOW_LBL = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-  const dowPnl = DOW_LBL.map((lbl, i) => ({
-    lbl,
-    pnl: traded.filter(t => new Date(2026, 5, t.day).getDay() === i + 1).reduce((s, t) => s + t.pnl, 0),
-  }));
+  const dowPnl = $derived(
+    DOW_LBL.map((lbl, i) => ({
+      lbl,
+      pnl: traded.filter(t => new Date(year, month, t.day).getDay() === i + 1).reduce((s, t) => s + t.pnl, 0),
+    }))
+  );
 
-  // ── Selected day detail (mock trades). ───────────────────────────────────────────────────────
+  // ── Selected day detail (real trades for the day). ───────────────────────────────────────────
   const sel = $derived(selectedDay ? monthDays[selectedDay] : undefined);
-  const dayTrades = [
-    { time: '09:34', sym: 'ES', side: 'Long', qty: 2, pnl: 180 },
-    { time: '10:12', sym: 'NQ', side: 'Short', qty: 1, pnl: -60 },
-    { time: '11:48', sym: 'ES', side: 'Long', qty: 3, pnl: 240 },
-    { time: '13:20', sym: 'CL', side: 'Short', qty: 1, pnl: 78 },
-  ];
-  const bestTrade = dayTrades.reduce((m, t) => (t.pnl > m.pnl ? t : m));
-  const worstTrade = dayTrades.reduce((m, t) => (t.pnl < m.pnl ? t : m));
+  const dayTrades = $derived(selectedDay ? tradesForDay(selectedDay) : []);
+  const bestTrade = $derived(dayTrades.length ? dayTrades.reduce((m, t) => (t.pnl > m.pnl ? t : m)) : null);
+  const worstTrade = $derived(dayTrades.length ? dayTrades.reduce((m, t) => (t.pnl < m.pnl ? t : m)) : null);
 
-  // ── Year heatmap (deterministic representative data). ────────────────────────────────────────
-  type YCell = { pnl: number; trading: boolean; m: number } | null;
-  const yearCols: YCell[][] = (() => {
-    const lead = new Date(2026, 0, 1).getDay();
+  // ── Year heatmap (week columns, Sunday-first; trading = a day with P&L). ──────────────────────
+  type YCell = { date: string; pnl: number; trading: boolean; m: number } | null;
+  const yearCols = $derived.by<YCell[][]>(() => {
+    const lead = new Date(year, 0, 1).getDay();
+    const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+    const len = isLeap ? 366 : 365;
     const flat: YCell[] = Array.from({ length: lead }, () => null);
-    for (let i = 0; i < 365; i++) {
-      const d = new Date(2026, 0, 1 + i);
-      const dow = d.getDay();
-      const trading = dow >= 1 && dow <= 5;
-      const pnl = trading ? Math.round(Math.sin(i * 0.9) * 260 + Math.cos(i * 0.37) * 180 + 40) : 0;
-      flat.push({ pnl, trading, m: d.getMonth() });
+    for (let i = 0; i < len; i++) {
+      const d = new Date(year, 0, 1 + i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const has = key in yearPnl;
+      flat.push({ date: key, pnl: yearPnl[key] ?? 0, trading: has, m: d.getMonth() });
     }
     while (flat.length % 7 !== 0) flat.push(null);
     const cols: YCell[][] = [];
     for (let i = 0; i < flat.length; i += 7) cols.push(flat.slice(i, i + 7));
     return cols;
-  })();
-  const yearCells = yearCols.flat().filter((c): c is { pnl: number; trading: boolean; m: number } => !!c?.trading);
-  const yearNet = yearCells.reduce((s, c) => s + c.pnl, 0);
-  const yearWin = yearCells.filter(c => c.pnl > 0).length;
-  const yearLoss = yearCells.filter(c => c.pnl < 0).length;
+  });
+  const yearCells = $derived(yearCols.flat().filter((c): c is { date: string; pnl: number; trading: boolean; m: number } => !!c?.trading));
+  const yearNet = $derived(yearCells.reduce((s, c) => s + c.pnl, 0));
+  const yearWin = $derived(yearCells.filter(c => c.pnl > 0).length);
+  const yearLoss = $derived(yearCells.filter(c => c.pnl < 0).length);
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 </script>
 
@@ -145,10 +205,10 @@
     </div>
     {#if view === 'month'}
       <div class="flex items-center gap-1.5">
-        <Button variant="outline" size="icon" class="size-8" aria-label="Previous month"><ChevronLeft class="size-4" /></Button>
-        <span class="min-w-[8.5rem] text-center text-sm font-semibold">June 2026</span>
-        <Button variant="outline" size="icon" class="size-8" aria-label="Next month"><ChevronRight class="size-4" /></Button>
-        <Button variant="secondary" size="sm">Latest</Button>
+        <Button variant="outline" size="icon" class="size-8" aria-label="Previous month" onclick={() => onprev?.()}><ChevronLeft class="size-4" /></Button>
+        <span class="min-w-[8.5rem] text-center text-sm font-semibold">{monthLabel}</span>
+        <Button variant="outline" size="icon" class="size-8" aria-label="Next month" onclick={() => onnext?.()}><ChevronRight class="size-4" /></Button>
+        <Button variant="secondary" size="sm" onclick={() => onlatest?.()}>Latest</Button>
       </div>
       <!-- Daily target stepper -->
       <div class="flex items-center gap-1.5 rounded-md border border-border px-2 py-1">
@@ -162,7 +222,7 @@
         </button>
       </div>
     {:else}
-      <span class="text-sm font-semibold">2026</span>
+      <span class="text-sm font-semibold">{year}</span>
     {/if}
     <span class={cn('ml-auto text-sm font-semibold tabular-nums', (view === 'month' ? monthNet : yearNet) < 0 ? 'text-destructive' : 'text-chart-2')}>
       {money(view === 'month' ? monthNet : yearNet)}
@@ -230,7 +290,7 @@
                   {#each col as cell, ri (ri)}
                     <div
                       class={cn('size-[10px] rounded-[2px]', cell ? (cell.trading ? shade(cell.pnl) : 'bg-secondary/50') : 'bg-transparent')}
-                      title={cell?.trading ? `${MON[cell.m]} · ${money(cell.pnl)}` : ''}
+                      title={cell?.trading ? `${cell.date} · ${money(cell.pnl)}` : ''}
                     ></div>
                   {/each}
                 </div>
@@ -255,7 +315,7 @@
       {#if view === 'month' && selectedDay && sel}
         <Card.Root>
           <div class="flex items-center justify-between border-b border-border px-4 py-2.5">
-            <span class="text-sm font-semibold">June {selectedDay}, 2026</span>
+            <span class="text-sm font-semibold">{monthLabel.split(' ')[0]} {selectedDay}, {year}</span>
             <button type="button" class="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Close day detail" onclick={() => (selectedDay = null)}>
               <X class="size-4" />
             </button>
@@ -265,8 +325,8 @@
             <div class="grid grid-cols-2 gap-2">
               {@render stat('Day P&L', money(sel.pnl), sel.pnl >= 0 ? 'pos' : 'neg')}
               {@render stat('Win rate', `${pct(sel.wins, sel.trades)}%`)}
-              {@render stat('Best trade', money(bestTrade.pnl), 'pos')}
-              {@render stat('Worst trade', money(worstTrade.pnl), 'neg')}
+              {@render stat('Best trade', bestTrade ? money(bestTrade.pnl) : '—', 'pos')}
+              {@render stat('Worst trade', worstTrade ? money(worstTrade.pnl) : '—', 'neg')}
             </div>
 
             <!-- Trades list -->
@@ -275,7 +335,7 @@
               <div class="overflow-hidden rounded-md border border-border">
                 {#each dayTrades as t, i (i)}
                   <div class={cn('flex items-center gap-2 px-2.5 py-1.5 text-xs', i > 0 && 'border-t border-border')}>
-                    <span class="tabular-nums text-muted-foreground">{t.time}</span>
+                    <span class="tabular-nums text-muted-foreground">{t.time || '—'}</span>
                     <span class="font-medium">{t.sym}</span>
                     <Badge variant="outline" class={t.side === 'Long' ? 'border-chart-2/40 text-chart-2' : 'border-destructive/40 text-destructive'}>{t.side}</Badge>
                     <span class="text-muted-foreground">×{t.qty}</span>
@@ -293,11 +353,11 @@
                 bind:value={note}
               ></textarea>
               <div class="mt-1.5 flex justify-end">
-                <Button size="sm">Save note</Button>
+                <Button size="sm" onclick={() => selectedDay && onsavenote?.(selectedDay, note)}>Save note</Button>
               </div>
             </div>
 
-            <!-- Attachments -->
+            <!-- Attachments (storage deferred — Phase 3 wires notes; screenshots land next) -->
             <div>
               <div class="mb-1 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 <Paperclip class="size-3" /> Attachments
@@ -317,7 +377,7 @@
       <!-- Month / year summary -->
       <Card.Root>
         <div class="border-b border-border px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {view === 'month' ? 'June summary' : '2026 summary'}
+          {view === 'month' ? `${monthLabel.split(' ')[0]} summary` : `${year} summary`}
         </div>
         <div class="space-y-3 p-4">
           {#if view === 'month'}
@@ -326,8 +386,8 @@
               {@render stat('Avg / day', money(Math.round(avgDay)), avgDay >= 0 ? 'pos' : 'neg')}
               {@render stat('Win days', `${winDays}`, 'pos')}
               {@render stat('Loss days', `${lossDays}`, 'neg')}
-              {@render stat('Best day', money(bestDay.pnl), 'pos')}
-              {@render stat('Worst day', money(worstDay.pnl), 'neg')}
+              {@render stat('Best day', bestDay ? money(bestDay.pnl) : '—', 'pos')}
+              {@render stat('Worst day', worstDay ? money(worstDay.pnl) : '—', 'neg')}
             </div>
             <div class="rounded-md border border-border bg-background px-3 py-2 text-xs">
               <span class="text-muted-foreground">Current streak</span>
@@ -351,7 +411,7 @@
               {@render stat('Win days', `${yearWin}`, 'pos')}
               {@render stat('Loss days', `${yearLoss}`, 'neg')}
             </div>
-            <p class="text-[11px] text-muted-foreground">Pick a month from the heatmap to drill into its daily grid.</p>
+            <p class="text-[11px] text-muted-foreground">Switch to Month to drill into a day's trades and note.</p>
           {/if}
         </div>
       </Card.Root>
