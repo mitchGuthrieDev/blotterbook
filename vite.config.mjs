@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
 import { ssg } from './scripts/vite-ssg.mjs';
 
@@ -35,7 +36,11 @@ export default defineConfig({
   // Verbatim-static assets (data/*.json, _headers, _redirects, robots.txt, sitemap.xml,
   // assets/og-image.png) live in static/ and are copied to dist/ root by Vite (A30).
   publicDir: r('static'),
-  plugins: [svelte(), ssg(SSG_PAGES)],
+  // $ui → the shared design-system primitives (A128). Tailwind v4 via @tailwindcss/vite scans all
+  // source surfaces (src/app + src/site + src/ui) and emits the utility stylesheet (CSP-safe — a
+  // linked sheet, never inline style="").
+  resolve: { alias: { $ui: r('src/ui') } },
+  plugins: [tailwindcss(), svelte(), ssg(SSG_PAGES)],
   build: {
     // Pin the output baseline to match tsconfig's `target: ES2022` (A96) for deterministic,
     // reproducible bundles. Modern-browser audience (local-compute desktop tool) — deliberately

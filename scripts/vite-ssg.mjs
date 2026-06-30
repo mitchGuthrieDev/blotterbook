@@ -52,6 +52,11 @@ export function ssg(pages) {
         // (both long-lived handles) — and we close the server here in buildStart regardless.
         server: { middlewareMode: true, hmr: false, watch: null },
         optimizeDeps: { noDiscovery: true },
+        // Mirror the main build's $ui alias (A128) so site components that import the shared
+        // design-system primitives resolve during prerender. The Tailwind plugin is NOT needed here:
+        // SSR ignores CSS imports (utility classes are emitted by the real build), so prerendered
+        // markup carries the class names and the linked utility sheet styles them on first paint.
+        resolve: { alias: { $ui: resolve(projectRoot, 'src/ui') } },
         plugins: [svelte(svelteConfig)],
       });
       try {

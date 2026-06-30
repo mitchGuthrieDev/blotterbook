@@ -1,0 +1,48 @@
+/* Tailwind v4 entry (A128 — Tailwind/shadcn-svelte/bits-ui adoption; reverses A104 + the R22
+   declines). The utility layer ships alongside the scoped component CSS during the phased migration.
+
+   tokens.css stays the SINGLE SOURCE of design-token VALUES (it is linked by every surface). The
+   @theme block below does NOT duplicate any value — it only maps the existing token CSS vars into
+   Tailwind's theme namespace so they surface as utilities (bg-accent / text-take / border-line /
+   font-mono …). Edit colors/fonts only in tokens.css.
+
+   Preflight is intentionally NOT imported: utilities are additive so they never reset the
+   not-yet-migrated scoped CSS. We add only a border-box base so sizing utilities behave as
+   documented. (When the migration is complete this file can adopt full `@import "tailwindcss"`.)
+
+   CSP (style-src 'self', S18/A55) is preserved: Tailwind emits a linked stylesheet of classes —
+   never an inline style="" — so utility classes are NOT inline styles. Dynamic, data-driven styles
+   still go through the styleProps CSSOM action. */
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@theme {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel2: var(--panel2);
+  --color-line: var(--line);
+  --color-hover-line: var(--hover-line);
+  --color-txt: var(--txt);
+  --color-dim: var(--dim);
+  --color-faint: var(--faint);
+  --color-green: var(--green);
+  --color-green-bg: var(--green-bg);
+  --color-red: var(--red);
+  --color-red-bg: var(--red-bg);
+  --color-accent: var(--accent);
+  --color-take: var(--take);
+  --color-warn: var(--warn);
+
+  --font-mono: var(--mono);
+  --font-sans: var(--sans);
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    box-sizing: border-box;
+  }
+}
