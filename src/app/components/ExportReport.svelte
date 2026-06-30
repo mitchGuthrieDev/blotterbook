@@ -4,10 +4,10 @@
   // and the email summary) and renders it in an isolated <iframe> (its own baked-token palette, so
   // it tracks tokens.css — A8). Download is disabled until a real format is chosen; PDF prints the
   // iframe, PNG/JPEG rasterize it, Markdown/Email reuse the builder's strings.
-  import { buildReport, reportHtmlDoc } from '../../lib/report.ts';
-  import { fmtDate } from '../../lib/core.ts';
-  import type { Metrics } from '../../lib/core.ts';
-  import type { CostModel, ReportLabels } from '../../lib/types.ts';
+  import { buildReport, reportHtmlDoc } from '../../lib/core/report.ts';
+  import { fmtDate } from '../../lib/core/core.ts';
+  import type { Metrics } from '../../lib/core/core.ts';
+  import type { CostModel, ReportLabels } from '../../lib/core/types.ts';
   import { downloadBlob } from '../lib/files.ts';
   import * as Dialog from '$ui/dialog';
   import * as Select from '$ui/select';

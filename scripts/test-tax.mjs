@@ -35,10 +35,10 @@ function numModelFrom(src, re, label) {
 }
 
 // Tolerate an optional TS type annotation on the export (`TAXMODEL: TaxModel = {…}`) — A61.
-const lit = numModelFrom(readFileSync('src/lib/core.ts', 'utf8'), /TAXMODEL\s*(?::\s*\w+)?\s*=\s*\{([^}]*)\}/, 'src/lib/core.ts');
+const lit = numModelFrom(readFileSync('src/lib/core/core.ts', 'utf8'), /TAXMODEL\s*(?::\s*\w+)?\s*=\s*\{([^}]*)\}/, 'src/lib/core/core.ts');
 const json = JSON.parse(readFileSync('static/data/state-tax.json', 'utf8')).model || {};
 
-console.log('A19 — state-tax model default: src/lib/core.ts TAXMODEL vs static/data/state-tax.json model');
+console.log('A19 — state-tax model default: src/lib/core/core.ts TAXMODEL vs static/data/state-tax.json model');
 const lk = Object.keys(lit).sort(),
   jk = Object.keys(json).sort();
 ok('non-empty model parsed', lk.length > 0 && jk.length > 0, `core=${lk.length} json=${jk.length}`);

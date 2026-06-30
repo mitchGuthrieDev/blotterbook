@@ -6,7 +6,7 @@
    (the Svelte app never mounts it). It's kept as the seam for the planned
    A4/A16 CloudStore tier; it must stay lint/typecheck-clean so it doesn't
    bit-rot before it's wired (CH35). Today every user is on the "local" tier:
-   data lives in IndexedDB via Store (src/lib/store.ts). Accounts and payments
+   data lives in IndexedDB via Store (src/lib/core/store.ts). Accounts and payments
    are NOT implemented in the app yet.
 
    The planned tiers (see functions/README.md):

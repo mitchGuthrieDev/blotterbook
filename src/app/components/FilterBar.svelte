@@ -3,7 +3,7 @@
   // set and recomputes metrics. `filters` is a shared reactive object (mutated in place — Svelte 5
   // deep reactivity propagates to App's deriveds). Scope = all-time vs the calendar's current month.
   // Session + tag filters and saved-filter views from the vanilla bar are deferred to a later slice.
-  import type { FilterState, SavedFilter } from '../../lib/types.ts';
+  import type { FilterState, SavedFilter } from '../../lib/core/types.ts';
   import * as Select from '$ui/select';
   import { Button } from '$ui/button';
 

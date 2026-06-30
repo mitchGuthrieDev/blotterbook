@@ -5,7 +5,7 @@
    plain Node never touches IndexedDB or localStorage (neither exists here — any reference would
    throw). Runs with Node built-ins only. */
 import assert from 'node:assert/strict';
-import { createDemoStore } from '../src/lib/demostore.ts';
+import { createDemoStore } from '../src/lib/core/demostore.ts';
 
 let pass = 0;
 const ok = (name, cond) => {

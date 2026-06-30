@@ -2,9 +2,9 @@
   // Break-even & cost (A27; A32). REUSES costModel() verbatim (A29). The cost setup is now owned by
   // App and shared with the curve overlays — this panel binds its form to the shared `setup` object
   // and renders the breakdown from costModel(metrics, costInputs). No DOM-id coupling; App persists.
-  import { costModel, BROKERS, BROKER_ORDER, BROKER_FEEDS, STATES, usd, money } from '../../lib/core.ts';
-  import type { Metrics } from '../../lib/core.ts';
-  import type { AppSetup, CostInputs, PanelBundle, StateRow } from '../../lib/types.ts';
+  import { costModel, BROKERS, BROKER_ORDER, BROKER_FEEDS, STATES, usd, money } from '../../lib/core/core.ts';
+  import type { Metrics } from '../../lib/core/core.ts';
+  import type { AppSetup, CostInputs, PanelBundle, StateRow } from '../../lib/core/types.ts';
   import Panel from './Panel.svelte';
   import Caveats from './Caveats.svelte';
   import * as Select from '$ui/select';

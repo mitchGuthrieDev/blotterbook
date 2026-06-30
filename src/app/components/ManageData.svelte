@@ -4,9 +4,9 @@
   // Adapters — A29); this component is only the view. Per-trade screenshots from the vanilla editor
   // are deferred. Operations that change the dataset call onchanged() so App recomputes the dashboard.
   import { onMount, getContext } from 'svelte';
-  import { Adapters } from '../../lib/adapters.ts';
-  import { usd, money, emit, PAGE_MODE } from '../../lib/core.ts';
-  import type { Trade, TradeMeta, StoredJournal, StoredTradeMeta, SavedFilter, StoreLike } from '../../lib/types.ts';
+  import { Adapters } from '../../lib/core/adapters.ts';
+  import { usd, money, emit, PAGE_MODE } from '../../lib/core/core.ts';
+  import type { Trade, TradeMeta, StoredJournal, StoredTradeMeta, SavedFilter, StoreLike } from '../../lib/core/types.ts';
   import { readImage, downloadBlob } from '../lib/files.ts';
   import * as Dialog from '$ui/dialog';
   import { Button } from '$ui/button';

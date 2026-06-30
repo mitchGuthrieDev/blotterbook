@@ -1,8 +1,8 @@
 <script lang="ts">
   // Overview cards — derived purely from the compute() metrics object (A29: no recomputation,
   // just presentation). Formatters (usd/money/cls) are imported verbatim from the core.
-  import { usd, money, cls, ratio, num, STAGING_PAGE } from '../../lib/core.ts';
-  import type { Metrics } from '../../lib/core.ts';
+  import { usd, money, cls, ratio, num, STAGING_PAGE } from '../../lib/core/core.ts';
+  import type { Metrics } from '../../lib/core/core.ts';
   import StatCard from './StatCard.svelte';
 
   interface Props {

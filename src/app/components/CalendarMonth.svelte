@@ -2,9 +2,9 @@
   // Sunday-first month calendar of daily P&L, derived from compute()'s m.days (A29 — no
   // recomputation). The cursor starts on the latest trade's month. Includes day-note dots, day
   // selection → dashboard scoping + curve cross-link, and the left ISO-Week column (A40).
-  import { pad2, usd, money, usdWhole, isoWeek } from '../../lib/core.ts';
-  import type { Metrics } from '../../lib/core.ts';
-  import type { PanelBundle } from '../../lib/types.ts';
+  import { pad2, usd, money, usdWhole, isoWeek } from '../../lib/core/core.ts';
+  import type { Metrics } from '../../lib/core/core.ts';
+  import type { PanelBundle } from '../../lib/core/types.ts';
   import type { Snippet } from 'svelte';
   import Panel from './Panel.svelte';
   import { Button } from '$ui/button';

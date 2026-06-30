@@ -2,9 +2,9 @@
   // Stat-card detail modal (A35 — parity with vanilla widgets.js CARD_VIEWS / openCardModal, F14).
   // Clicking a headline Overview card opens this drill-down. All data comes from compute() metrics +
   // costModel (A29 — reuses dowBuckets/DOW_LABEL/minMax from core); charts are small inline SVG/bars.
-  import { usd, money, ratio, minMax, linePath, dowBuckets, DOW_LABEL } from '../../lib/core.ts';
-  import type { Metrics } from '../../lib/core.ts';
-  import type { CostModel, Trade } from '../../lib/types.ts';
+  import { usd, money, ratio, minMax, linePath, dowBuckets, DOW_LABEL } from '../../lib/core/core.ts';
+  import type { Metrics } from '../../lib/core/core.ts';
+  import type { CostModel, Trade } from '../../lib/core/types.ts';
   import * as Dialog from '$ui/dialog';
   import { styleProps } from '../lib/actions.ts';
 

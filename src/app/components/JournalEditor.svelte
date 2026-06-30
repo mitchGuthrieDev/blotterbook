@@ -5,9 +5,9 @@
   // store.validShot allow-list (base64 images only — S15/S18). An empty save deletes the row.
   import { getContext } from 'svelte';
   import { Button } from '$ui/button';
-  import { emit, PAGE_MODE } from '../../lib/core.ts';
+  import { emit, PAGE_MODE } from '../../lib/core/core.ts';
   import { readImage } from '../lib/files.ts';
-  import type { StoreLike } from '../../lib/types.ts';
+  import type { StoreLike } from '../../lib/core/types.ts';
 
   interface Props {
     date: string;

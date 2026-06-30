@@ -6,7 +6,7 @@
   // *parsing* caveats that gate every grouping and need one discoverable home (what a "trade" is;
   // US-date/Eastern-time assumptions).
   import Panel from './Panel.svelte';
-  import type { PanelBundle } from '../../lib/types.ts';
+  import type { PanelBundle } from '../../lib/core/types.ts';
 
   interface Props {
     panel?: PanelBundle;

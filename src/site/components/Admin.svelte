@@ -6,11 +6,11 @@
   // shared core (format.ts). Admin-specific CSS is folded into the scoped block below.
   import { onMount } from 'svelte';
   import SiteShell from '../lib/SiteShell.svelte';
-  import { platformLabel } from '../../lib/format.ts';
+  import { platformLabel } from '../../lib/core/format.ts';
   import * as Select from '$ui/select';
 
   // Shapes of the admin-only JSON this page fetches (status override, versions, backlog). Local to
-  // this view — they aren't part of the shared pure-logic core (src/lib/types.ts).
+  // this view — they aren't part of the shared pure-logic core (src/lib/core/types.ts).
   interface StatusInfo {
     mode?: string;
     label?: string;

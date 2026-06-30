@@ -8,8 +8,8 @@
   // model costModel() uses) rather than recomputing fees. On demo the inline Note input is disabled and
   // saveNote() is guarded by isDemo (A87), so the module stays non-mutating there.
   import { getContext } from 'svelte';
-  import { usd, money, rateFor, emit, PAGE_MODE, STAGING_PAGE, BROKERS } from '../../lib/core.ts';
-  import type { Trade, StoredTradeMeta, StoreLike, PanelBundle } from '../../lib/types.ts';
+  import { usd, money, rateFor, emit, PAGE_MODE, STAGING_PAGE, BROKERS } from '../../lib/core/core.ts';
+  import type { Trade, StoredTradeMeta, StoreLike, PanelBundle } from '../../lib/core/types.ts';
   import Panel from './Panel.svelte';
   import * as Select from '$ui/select';
 

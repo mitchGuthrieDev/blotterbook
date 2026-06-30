@@ -7,11 +7,11 @@
   //
   // The viewBox WIDTH tracks the measured pixel width (like vanilla renderCurve) so the SVG text
   // labels aren't horizontally stretched — height is fixed, so both axes render at ~1:1.
-  import { usd, money, axMoney, niceTicks, linePath, blendedRateFor } from '../../lib/core.ts';
-  import type { Metrics } from '../../lib/core.ts';
-  import { dailySeries } from '../../lib/curveseries.ts';
-  import type { DailyPoint } from '../../lib/curveseries.ts';
-  import type { CostInputs, PanelBundle } from '../../lib/types.ts';
+  import { usd, money, axMoney, niceTicks, linePath, blendedRateFor } from '../../lib/core/core.ts';
+  import type { Metrics } from '../../lib/core/core.ts';
+  import { dailySeries } from '../../lib/core/curveseries.ts';
+  import type { DailyPoint } from '../../lib/core/curveseries.ts';
+  import type { CostInputs, PanelBundle } from '../../lib/core/types.ts';
   import Panel from './Panel.svelte';
   import { styleProps } from '../lib/actions.ts';
 

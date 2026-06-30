@@ -2,7 +2,7 @@
 //
 // Side-effect import of format.ts (ex assets/util.js) preserves the S14 `?k=` token strip on load
 // (and the version-badge population) exactly as the vanilla surfaces got it. Then mount the Svelte app.
-import '../lib/format.ts';
+import '../lib/core/format.ts';
 import '../styles/tailwind.css'; // A128 — Tailwind utility layer for the app surfaces (app/demo/staging)
 import { mount } from 'svelte';
 import App from './App.svelte';

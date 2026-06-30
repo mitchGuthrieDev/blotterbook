@@ -8,8 +8,8 @@
    Pure view-layer wiring: the framework-agnostic core (A29) is untouched, and the selectors read DashCtx
    getters, so reactivity is preserved at the call site in App (the spread re-runs when a read changes). */
 import type { Component } from 'svelte';
-import type { Metrics } from '../../lib/core.ts';
-import type { AppSetup, CostInputs, Trade, StoredTradeMeta } from '../../lib/types.ts';
+import type { Metrics } from '../../lib/core/core.ts';
+import type { AppSetup, CostInputs, Trade, StoredTradeMeta } from '../../lib/core/types.ts';
 import EquityCurve from '../components/EquityCurve.svelte';
 import CalendarMonth from '../components/CalendarMonth.svelte';
 import TradeBlotter from '../components/TradeBlotter.svelte';

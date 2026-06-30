@@ -3,9 +3,9 @@
   // logs the action events shared code emits (note saved, CSV imported, backup, erase, trade edit).
   // The vanilla terminal does the same; here the Svelte components fire the emits.
   import { onMount } from 'svelte';
-  import { onEvent, pad2 } from '../../lib/core.ts';
+  import { onEvent, pad2 } from '../../lib/core/core.ts';
   import Panel from './Panel.svelte';
-  import type { PanelBundle } from '../../lib/types.ts';
+  import type { PanelBundle } from '../../lib/core/types.ts';
 
   interface Line {
     id: number;

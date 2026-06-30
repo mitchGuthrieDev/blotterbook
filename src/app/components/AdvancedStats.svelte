@@ -2,9 +2,9 @@
   // Advanced statistics — the deeper compute() metrics not shown in the Overview, presented as
   // label/value rows (A29: pure presentation of the existing metrics object). DOW_LABEL/usd/cls
   // are imported verbatim from the core.
-  import { usd, cls, ratio, num, fmtDur, DOW_LABEL, STAGING_PAGE } from '../../lib/core.ts';
-  import type { Metrics } from '../../lib/core.ts';
-  import type { PanelBundle } from '../../lib/types.ts';
+  import { usd, cls, ratio, num, fmtDur, DOW_LABEL, STAGING_PAGE } from '../../lib/core/core.ts';
+  import type { Metrics } from '../../lib/core/core.ts';
+  import type { PanelBundle } from '../../lib/core/types.ts';
   import Panel from './Panel.svelte';
   import Caveats from './Caveats.svelte';
 

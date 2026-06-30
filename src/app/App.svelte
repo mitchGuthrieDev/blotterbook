@@ -9,13 +9,13 @@
   // Staging-only chrome (the "Staging" badge / proving-ground meta) is gated on `isStaging`; demo
   // never persists (DemoStore) and every write path is additionally `isDemo`-guarded (A87).
   import { onMount, setContext } from 'svelte';
-  import { loadRefData, compute, costModel, emit, sessionOf, PAGE_MODE, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../lib/core.ts';
-  import { Store } from '../lib/store.ts';
-  import { createDemoStore } from '../lib/demostore.ts';
-  import { Adapters } from '../lib/adapters.ts';
-  import { demoCSV } from '../lib/sampledata.ts';
+  import { loadRefData, compute, costModel, emit, sessionOf, PAGE_MODE, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../lib/core/core.ts';
+  import { Store } from '../lib/core/store.ts';
+  import { createDemoStore } from '../lib/core/demostore.ts';
+  import { Adapters } from '../lib/core/adapters.ts';
+  import { demoCSV } from '../lib/core/sampledata.ts';
   import { APP_FLAGS, loadFlags, type AppFlags } from './lib/flags.ts';
-  import type { Trade, FilterState, SavedFilter, SavedFilterDef, AppSetup, PanelBundle, Setup, StoredTradeMeta } from '../lib/types.ts';
+  import type { Trade, FilterState, SavedFilter, SavedFilterDef, AppSetup, PanelBundle, Setup, StoredTradeMeta } from '../lib/core/types.ts';
 
   // Pick the backend by mode and share it with every child (they read getContext('bb:store')).
   const isDemo = PAGE_MODE === 'demo';

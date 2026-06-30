@@ -2,9 +2,9 @@
   // App-mode landing (A32). Shown only on the `app` surface when there's no data yet (staging/demo
   // seed instead). Set up costs (broker/feed/state/platform — bound to the shared setup) and load a
   // balance-history CSV; a successful load populates the Store and App switches to the dashboard.
-  import { BROKERS, BROKER_ORDER, BROKER_FEEDS, STATES } from '../../lib/core.ts';
-  import type { AppSetup } from '../../lib/types.ts';
-  import { Adapters } from '../../lib/adapters.ts';
+  import { BROKERS, BROKER_ORDER, BROKER_FEEDS, STATES } from '../../lib/core/core.ts';
+  import type { AppSetup } from '../../lib/core/types.ts';
+  import { Adapters } from '../../lib/core/adapters.ts';
   import * as Select from '$ui/select';
   import { Button } from '$ui/button';
 

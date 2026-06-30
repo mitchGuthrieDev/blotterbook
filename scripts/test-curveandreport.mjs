@@ -1,6 +1,6 @@
 /* A98 — unit coverage for the two primary end-user DELIVERABLES that previously had only e2e
-   render coverage (not calc coverage): the performance curve (src/lib/curveseries.ts dailySeries)
-   and the export report (src/lib/report.ts buildReport). Also spot-checks costModel() with qty>1
+   render coverage (not calc coverage): the performance curve (src/lib/core/curveseries.ts dailySeries)
+   and the export report (src/lib/core/report.ts buildReport). Also spot-checks costModel() with qty>1
    trades and the isoWeek() 52/53 boundary. Pure-logic only (A29).
 
    The cost model + curve read live reference data (broker/exchange tables) that the app fetches via
@@ -16,9 +16,9 @@ globalThis.fetch = async url => {
   return { ok: true, json: async () => JSON.parse(txt) };
 };
 
-const { compute, costModel, isoWeek, rateFor, blendedRateFor, loadRefData, money } = await import('../src/lib/core.ts');
-const { dailySeries } = await import('../src/lib/curveseries.ts');
-const { buildReport } = await import('../src/lib/report.ts');
+const { compute, costModel, isoWeek, rateFor, blendedRateFor, loadRefData, money } = await import('../src/lib/core/core.ts');
+const { dailySeries } = await import('../src/lib/core/curveseries.ts');
+const { buildReport } = await import('../src/lib/core/report.ts');
 
 await loadRefData();
 
