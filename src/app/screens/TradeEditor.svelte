@@ -1,10 +1,29 @@
+<script lang="ts" module>
+  export type EditorRow = {
+    id: string;
+    date: string;
+    time: string;
+    symbol: string;
+    side: 'Long' | 'Short';
+    qty: number;
+    entry: number;
+    exit: number;
+    pnl: number;
+    fees: number;
+    tags: string[];
+    note: string;
+    isNew?: boolean;
+  };
+</script>
+
 <script lang="ts">
-  // Trade Editor surface mockup (UI redesign, Phase 2 — 6th screen; Data Management). The edit-focused
-  // sibling of the Blotter: a spreadsheet-style editable table. Click any cell to edit inline (text /
-  // number / side-toggle); tags + note edit via a Popover. Edits are tracked as a DRAFT — dirty rows
-  // are highlighted and committed via a sticky Save all / Revert bar (not instantly). Add a manual
-  // trade, bulk-select for delete (confirm) or bulk-edit (add a tag). shadcn-svelte primitives;
-  // representative static data; color only in P&L.
+  // Trade Editor surface (UI redesign; Data Management). The edit-focused sibling of the Blotter: a
+  // spreadsheet-style table. On the /dev mock (coreEditable) every cell edits inline and edits stage as
+  // a draft. On the staging app, imported trades are IMMUTABLE — the trade id is a content hash and
+  // there's no updateTrade — so the editable layer is per-trade METADATA: tags + notes persist (via
+  // saveTradeMeta) and rows can be deleted; the core price/qty/P&L cells render read-only (the figures
+  // came from your CSV) and entry/exit aren't in the trade model. Save all / Revert commit the staged
+  // tag/note edits. shadcn-svelte primitives; color only in P&L.
   import { Plus, Trash2, Tag, StickyNote, Pencil } from '@lucide/svelte';
   import { cn } from '$lib/utils';
   import { Button } from '$lib/components/ui/button';
@@ -17,11 +36,7 @@
   import * as Popover from '$lib/components/ui/popover';
   import * as AlertDialog from '$lib/components/ui/alert-dialog';
 
-  type Row = {
-    id: string; date: string; time: string; symbol: string; side: 'Long' | 'Short';
-    qty: number; entry: number; exit: number; pnl: number; fees: number; tags: string[]; note: string; isNew?: boolean;
-  };
-  const seed: Row[] = [
+  const MOCK: EditorRow[] = [
     { id: 't1', date: '2026-06-24', time: '09:34', symbol: 'ES', side: 'Long', qty: 2, entry: 5482.25, exit: 5486.0, pnl: 375, fees: 4.7, tags: ['breakout'], note: 'Clean retest.' },
     { id: 't2', date: '2026-06-24', time: '10:18', symbol: 'NQ', side: 'Short', qty: 1, entry: 19840.5, exit: 19852.0, pnl: -230, fees: 2.4, tags: ['fade'], note: '' },
     { id: 't3', date: '2026-06-24', time: '11:46', symbol: 'ES', side: 'Long', qty: 3, entry: 5489.0, exit: 5492.75, pnl: 562, fees: 7.05, tags: ['trend', 'A+'], note: '' },
@@ -29,19 +44,47 @@
     { id: 't5', date: '2026-06-25', time: '10:05', symbol: 'NQ', side: 'Long', qty: 1, entry: 19860.0, exit: 19878.5, pnl: 370, fees: 2.4, tags: ['trend'], note: 'Sized up.' },
     { id: 't6', date: '2026-06-26', time: '13:15', symbol: 'MES', side: 'Long', qty: 5, entry: 5502.5, exit: 5504.0, pnl: 188, fees: 3.5, tags: ['scalp'], note: '' },
   ];
-  const clone = (r: Row): Row => structuredClone($state.snapshot(r));
-  let rows = $state<Row[]>(seed.map(clone));
-  let original = new Map<string, Row>(seed.map(r => [r.id, clone(r)]));
+
+  interface Props {
+    rows?: EditorRow[];
+    /** /dev mock edits every field inline; staging edits only tags/notes (imported trades are fixed). */
+    coreEditable?: boolean;
+    /** Persist the staged tag/note edits (staging passes the Store write-through). */
+    onsave?: (rows: EditorRow[]) => void | Promise<void>;
+    /** Persist a delete of the given trade ids. */
+    ondelete?: (ids: string[]) => void | Promise<void>;
+  }
+  let { rows: rowsProp = MOCK, coreEditable = true, onsave, ondelete }: Props = $props();
+
+  const clone = (r: EditorRow): EditorRow => structuredClone($state.snapshot(r));
+  // svelte-ignore state_referenced_locally — initial seed only; the $effect below resyncs on change.
+  let draft = $state<EditorRow[]>(rowsProp.map(clone));
+  // svelte-ignore state_referenced_locally
+  let original = $state<Map<string, EditorRow>>(new Map(rowsProp.map(r => [r.id, clone(r)])));
+  // Reseed the draft when the incoming row SET changes (initial load, external delete/import). Tag/note
+  // saves keep the same id-set and clear their own dirty state optimistically in saveAll().
+  // svelte-ignore state_referenced_locally
+  let lastKey = rowsProp.map(r => r.id).join('|');
+  $effect(() => {
+    const key = rowsProp.map(r => r.id).join('|');
+    if (key !== lastKey) {
+      lastKey = key;
+      draft = rowsProp.map(clone);
+      original = new Map(rowsProp.map(r => [r.id, clone(r)]));
+      selected = new Set();
+    }
+  });
 
   let editing = $state<{ id: string; field: string } | null>(null);
   let selected = $state<Set<string>>(new Set());
   let pendingDelete = $state<string[]>([]);
   let deleteOpen = $state(false);
   let bulkTag = $state('');
+  let saving = $state(false);
   let nextId = 100;
 
   const isEditing = (id: string, field: string) => editing?.id === id && editing.field === field;
-  const startEdit = (id: string, field: string) => (editing = { id, field });
+  const startEdit = (id: string, field: string) => coreEditable && (editing = { id, field });
   const stopEdit = () => (editing = null);
   function onCellKey(e: KeyboardEvent) {
     if (e.key === 'Enter' || e.key === 'Escape') (e.currentTarget as HTMLInputElement).blur();
@@ -51,45 +94,54 @@
     node.select();
   }
   function setText(id: string, field: 'symbol' | 'date' | 'time', v: string) {
-    rows = rows.map(r => (r.id === id ? { ...r, [field]: v } : r));
+    draft = draft.map(r => (r.id === id ? { ...r, [field]: v } : r));
   }
   function setNum(id: string, field: 'qty' | 'entry' | 'exit' | 'pnl' | 'fees', v: number) {
-    rows = rows.map(r => (r.id === id ? { ...r, [field]: Number.isNaN(v) ? 0 : v } : r));
+    draft = draft.map(r => (r.id === id ? { ...r, [field]: Number.isNaN(v) ? 0 : v } : r));
   }
   function toggleSide(id: string) {
-    rows = rows.map(r => (r.id === id ? { ...r, side: r.side === 'Long' ? 'Short' : 'Long' } : r));
+    if (!coreEditable) return;
+    draft = draft.map(r => (r.id === id ? { ...r, side: r.side === 'Long' ? 'Short' : 'Long' } : r));
   }
   function addTag(id: string, tag: string) {
     const t = tag.trim();
     if (!t) return;
-    rows = rows.map(r => (r.id === id && !r.tags.includes(t) ? { ...r, tags: [...r.tags, t] } : r));
+    draft = draft.map(r => (r.id === id && !r.tags.includes(t) ? { ...r, tags: [...r.tags, t] } : r));
   }
   function removeTag(id: string, tag: string) {
-    rows = rows.map(r => (r.id === id ? { ...r, tags: r.tags.filter(x => x !== tag) } : r));
+    draft = draft.map(r => (r.id === id ? { ...r, tags: r.tags.filter(x => x !== tag) } : r));
   }
   function setNote(id: string, v: string) {
-    rows = rows.map(r => (r.id === id ? { ...r, note: v } : r));
+    draft = draft.map(r => (r.id === id ? { ...r, note: v } : r));
   }
 
-  const editFields = (r: Row) => JSON.stringify({ ...r, isNew: undefined });
-  const isDirty = (r: Row) => {
+  const editFields = (r: EditorRow) => JSON.stringify({ ...r, isNew: undefined });
+  const isDirty = (r: EditorRow) => {
     const o = original.get(r.id);
     return !o || editFields(o) !== editFields(r);
   };
-  const dirtyCount = $derived(rows.filter(isDirty).length);
-  const netPnl = $derived(rows.reduce((s, r) => s + r.pnl, 0));
+  const dirtyCount = $derived(draft.filter(isDirty).length);
+  const netPnl = $derived(draft.reduce((s, r) => s + r.pnl, 0));
 
-  function saveAll() {
-    original = new Map(rows.map(r => [r.id, clone({ ...r, isNew: false })]));
-    rows = rows.map(r => ({ ...r, isNew: false }));
+  async function saveAll() {
+    if (onsave) {
+      saving = true;
+      try {
+        await onsave(draft.filter(isDirty).map(clone));
+      } finally {
+        saving = false;
+      }
+    }
+    original = new Map(draft.map(r => [r.id, clone({ ...r, isNew: false })]));
+    draft = draft.map(r => ({ ...r, isNew: false }));
   }
   function revert() {
-    rows = [...original.values()].map(clone);
+    draft = [...original.values()].map(clone);
     selected = new Set();
   }
   function addTrade() {
     const id = `t-new-${nextId++}`;
-    rows = [...rows, { id, date: '2026-06-30', time: '00:00', symbol: '', side: 'Long', qty: 1, entry: 0, exit: 0, pnl: 0, fees: 0, tags: [], note: '', isNew: true }];
+    draft = [...draft, { id, date: '2026-06-30', time: '00:00', symbol: '', side: 'Long', qty: 1, entry: 0, exit: 0, pnl: 0, fees: 0, tags: [], note: '', isNew: true }];
     startEdit(id, 'symbol');
   }
   function toggleRow(id: string, v: boolean) {
@@ -98,33 +150,35 @@
     else next.delete(id);
     selected = next;
   }
-  const allSelected = $derived(rows.length > 0 && rows.every(r => selected.has(r.id)));
-  const someSelected = $derived(rows.some(r => selected.has(r.id)) && !allSelected);
+  const allSelected = $derived(draft.length > 0 && draft.every(r => selected.has(r.id)));
+  const someSelected = $derived(draft.some(r => selected.has(r.id)) && !allSelected);
   function toggleAll(v: boolean) {
-    selected = v ? new Set(rows.map(r => r.id)) : new Set();
+    selected = v ? new Set(draft.map(r => r.id)) : new Set();
   }
   function askDelete(ids: string[]) {
     pendingDelete = ids;
     deleteOpen = true;
   }
-  function doDelete() {
+  async function doDelete() {
     const del = new Set(pendingDelete);
-    rows = rows.filter(r => !del.has(r.id));
+    draft = draft.filter(r => !del.has(r.id));
     del.forEach(id => original.delete(id));
     selected = new Set();
     deleteOpen = false;
+    if (ondelete) await ondelete([...del]);
   }
   function applyBulkTag() {
     const t = bulkTag.trim();
     if (!t) return;
-    rows = rows.map(r => (selected.has(r.id) && !r.tags.includes(t) ? { ...r, tags: [...r.tags, t] } : r));
+    draft = draft.map(r => (selected.has(r.id) && !r.tags.includes(t) ? { ...r, tags: [...r.tags, t] } : r));
     bulkTag = '';
   }
   const money = (n: number) => `${n >= 0 ? '+' : '-'}$${Math.abs(n).toLocaleString()}`;
+  const numText = (v: number) => (Number.isFinite(v) ? `${v}` : '—');
 </script>
 
-{#snippet textCell(row: Row, field: 'symbol' | 'date' | 'time', value: string, align: string)}
-  {#if isEditing(row.id, field)}
+{#snippet textCell(row: EditorRow, field: 'symbol' | 'date' | 'time', value: string, align: string)}
+  {#if coreEditable && isEditing(row.id, field)}
     <input
       use:focusSelect
       {value}
@@ -133,15 +187,17 @@
       onkeydown={onCellKey}
       class={cn('h-7 w-full rounded border border-ring bg-background px-1.5 text-sm outline-none', align)}
     />
-  {:else}
+  {:else if coreEditable}
     <button type="button" onclick={() => startEdit(row.id, field)} class={cn('block w-full rounded px-1.5 py-1 text-sm hover:bg-accent', align)}>
       {value || '—'}
     </button>
+  {:else}
+    <span class={cn('block w-full px-1.5 py-1 text-sm', align)}>{value || '—'}</span>
   {/if}
 {/snippet}
 
-{#snippet numCell(row: Row, field: 'qty' | 'entry' | 'exit' | 'pnl' | 'fees', value: number, extra: string)}
-  {#if isEditing(row.id, field)}
+{#snippet numCell(row: EditorRow, field: 'qty' | 'entry' | 'exit' | 'pnl' | 'fees', value: number, extra: string)}
+  {#if coreEditable && isEditing(row.id, field)}
     <input
       use:focusSelect
       type="number"
@@ -151,18 +207,24 @@
       onkeydown={onCellKey}
       class="h-7 w-full rounded border border-ring bg-background px-1.5 text-right text-sm outline-none"
     />
-  {:else}
+  {:else if coreEditable}
     <button type="button" onclick={() => startEdit(row.id, field)} class={cn('block w-full rounded px-1.5 py-1 text-right text-sm tabular-nums hover:bg-accent', extra)}>
-      {value}
+      {numText(value)}
     </button>
+  {:else}
+    <span class={cn('block w-full px-1.5 py-1 text-right text-sm tabular-nums', extra)}>{numText(value)}</span>
   {/if}
 {/snippet}
 
 <div class="flex flex-col gap-4">
   <!-- Toolbar -->
   <div class="flex flex-wrap items-center gap-3">
-    <Button size="sm" onclick={addTrade}><Plus class="size-4" /> Add trade</Button>
-    <span class="text-xs text-muted-foreground">Click any cell to edit. Changes are staged until you save.</span>
+    {#if coreEditable}
+      <Button size="sm" onclick={addTrade}><Plus class="size-4" /> Add trade</Button>
+      <span class="text-xs text-muted-foreground">Click any cell to edit. Changes are staged until you save.</span>
+    {:else}
+      <span class="text-xs text-muted-foreground">Imported trades are fixed — edit <span class="text-foreground">tags</span> and <span class="text-foreground">notes</span>, or delete rows. Changes are staged until you save.</span>
+    {/if}
     <span class={cn('ml-auto text-sm font-semibold tabular-nums', netPnl >= 0 ? 'text-chart-2' : 'text-destructive')}>Net {money(netPnl)}</span>
   </div>
 
@@ -210,7 +272,7 @@
           </Table.Row>
         </Table.Header>
         <Table.Body>
-          {#each rows as row (row.id)}
+          {#each draft as row (row.id)}
             {@const dirty = isDirty(row)}
             <Table.Row class={cn(dirty && 'bg-primary/5')} data-state={selected.has(row.id) ? 'selected' : undefined}>
               <Table.Cell class="pl-3">
@@ -223,9 +285,13 @@
               <Table.Cell class="p-1 text-muted-foreground">{@render textCell(row, 'time', row.time, 'text-left')}</Table.Cell>
               <Table.Cell class="p-1 font-medium">{@render textCell(row, 'symbol', row.symbol, 'text-left')}</Table.Cell>
               <Table.Cell class="p-1">
-                <button type="button" onclick={() => toggleSide(row.id)} title="Toggle side">
+                {#if coreEditable}
+                  <button type="button" onclick={() => toggleSide(row.id)} title="Toggle side">
+                    <Badge variant="outline" class={row.side === 'Long' ? 'border-chart-2/40 text-chart-2' : 'border-destructive/40 text-destructive'}>{row.side}</Badge>
+                  </button>
+                {:else}
                   <Badge variant="outline" class={row.side === 'Long' ? 'border-chart-2/40 text-chart-2' : 'border-destructive/40 text-destructive'}>{row.side}</Badge>
-                </button>
+                {/if}
               </Table.Cell>
               <Table.Cell class="p-1">{@render numCell(row, 'qty', row.qty, '')}</Table.Cell>
               <Table.Cell class="p-1 text-muted-foreground">{@render numCell(row, 'entry', row.entry, 'text-muted-foreground')}</Table.Cell>
@@ -284,8 +350,8 @@
     <div class="sticky bottom-0 flex items-center justify-between rounded-md border border-primary/40 bg-card px-4 py-2.5 shadow-lg">
       <span class="flex items-center gap-2 text-sm"><Pencil class="size-4 text-primary" /> {dirtyCount} unsaved {dirtyCount === 1 ? 'change' : 'changes'}</span>
       <div class="flex gap-2">
-        <Button variant="ghost" size="sm" onclick={revert}>Revert</Button>
-        <Button size="sm" onclick={saveAll}>Save all</Button>
+        <Button variant="ghost" size="sm" onclick={revert} disabled={saving}>Revert</Button>
+        <Button size="sm" onclick={saveAll} disabled={saving}>{saving ? 'Saving…' : 'Save all'}</Button>
       </div>
     </div>
   {/if}

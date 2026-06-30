@@ -16,6 +16,7 @@
   import Analytics from './screens/Analytics.svelte';
   import { buildAnalytics } from './lib/analytics.ts';
   import Blotter, { type BlotterRow } from './screens/Blotter.svelte';
+  import TradeEditor, { type EditorRow } from './screens/TradeEditor.svelte';
 
   const store = Store;
   setContext('bb:store', store);
@@ -126,6 +127,35 @@
     })
   );
 
+  // ── Trade Editor ─────────────────────────────────────────────────────────────────────────────
+  // Imported trades are immutable → the editor edits the metadata layer (tags + note). entry/exit
+  // aren't in the trade model (NaN → "—"); fees from the broker rate; core cells render read-only.
+  const editorRows = $derived<EditorRow[]>(
+    dash.filtered.map(t => {
+      const id = dash.tradeId(t);
+      const qty = t.qty ?? 1;
+      const meta = dash.tradeMeta.get(id);
+      const r = dash.setup.broker ? rateFor(dash.setup.broker, t.root) : null;
+      return {
+        id,
+        date: t.date,
+        time: (t.time || '').slice(11, 16),
+        symbol: t.root,
+        side: t.side === 'short' ? 'Short' : 'Long',
+        qty,
+        entry: NaN,
+        exit: NaN,
+        pnl: t.pnl,
+        fees: r ? +(r.rate * 2 * qty).toFixed(2) : NaN,
+        tags: meta?.tags ?? [],
+        note: meta?.note ?? '',
+      };
+    })
+  );
+  async function persistEditorRows(changed: EditorRow[]) {
+    for (const r of changed) await dash.saveTradeMeta(r.id, r.tags, r.note);
+  }
+
   onMount(() => {
     dash.boot().catch((e: unknown) => {
       console.error('staging app boot failed', e);
@@ -187,6 +217,8 @@
     />
   {:else if active === 'blotter'}
     <Blotter rows={blotterRows} />
+  {:else if active === 'trades'}
+    <TradeEditor rows={editorRows} coreEditable={false} onsave={persistEditorRows} ondelete={ids => dash.deleteTrades(ids)} />
   {:else}
     <div class="grid min-h-[60vh] place-items-center">
       <div class="flex max-w-md flex-col items-center gap-2 text-center">

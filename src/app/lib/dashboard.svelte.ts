@@ -116,6 +116,17 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
   const tradeId = (t: Trade) => store.tradeId(t);
   const brokerName = (id: string) => (BROKERS[id] && BROKERS[id].name) || id || '—';
   const tradesForDay = (date: string) => filtered.filter(t => t.date === date);
+  // Persist per-trade metadata (tags + note) — imported trades are immutable (the id is a content
+  // hash, no updateTrade), so the Trade Editor edits this metadata layer, not the core fields.
+  async function saveTradeMeta(id: string, tags: string[], note: string) {
+    const ex = tradeMeta.get(id);
+    await store.saveTradeMeta(id, { tags, note, shots: ex?.shots ?? [] });
+    await reloadAll();
+  }
+  async function deleteTrades(ids: string[]) {
+    for (const id of ids) await store.deleteTrade(id);
+    await reloadAll();
+  }
   const noteFor = (date: string) => journal.get(date)?.text ?? '';
   async function saveNote(date: string, text: string) {
     const ex = journal.get(date);
@@ -208,6 +219,8 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
     tradesForDay,
     noteFor,
     saveNote,
+    saveTradeMeta,
+    deleteTrades,
     sessionOf,
   };
 }

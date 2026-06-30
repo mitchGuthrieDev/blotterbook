@@ -13,7 +13,7 @@
   import Analytics from '../app/screens/Analytics.svelte';
   import Blotter from '../app/screens/Blotter.svelte';
   import CsvLibrary from './screens/CsvLibrary.svelte';
-  import TradeEditor from './screens/TradeEditor.svelte';
+  import TradeEditor from '../app/screens/TradeEditor.svelte';
   import Reports from './screens/Reports.svelte';
   import Placeholder from './screens/Placeholder.svelte';
 
