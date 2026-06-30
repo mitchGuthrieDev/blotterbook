@@ -121,4 +121,13 @@
     color: var(--foreground);
     font-family: var(--font-sans);
   }
+  /* This build ships no Tailwind preflight, so native form controls keep their UA chrome (e.g. a
+     light <button> background). The redesign/dev surfaces (data-mode="dev") use many raw <button>s as
+     styled controls — neutralize the native fill there so unstyled buttons inherit the dark theme.
+     Scoped to dev so the live app/site (which style their own buttons) are untouched. */
+  [data-mode='dev'] button {
+    appearance: none;
+    background-color: transparent;
+    background-image: none;
+  }
 }
