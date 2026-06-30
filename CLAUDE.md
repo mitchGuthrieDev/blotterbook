@@ -119,6 +119,30 @@ So:
 - **Design tokens live only in `tokens.css`** — every page links it (app surfaces, homepage, and the
   info/admin pages); Svelte components read the token CSS vars. Don't duplicate colors/fonts. (A69
   folded the old `home.css`/`site.css`/`admin.css` into scoped component `<style>` blocks.)
+- **Styling = Tailwind v4 utilities + the `$ui` primitives, on top of `tokens.css` (A128 / [ADR-002](docs/adr-002-tailwind-shadcn.md)).**
+  We adopted Tailwind v4 (`@tailwindcss/vite`) + shadcn-svelte + bits-ui + tailwind-variants — a
+  deliberate, approved reversal of A104/R22. The single Tailwind entry is
+  [`src/styles/tailwind.css`](src/styles/tailwind.css): its `@theme` block maps the **`tokens.css`
+  CSS vars** into Tailwind's theme namespace (`bg-accent`/`text-take`/`border-line`/`font-mono`…) —
+  `tokens.css` stays the SINGLE source of values; never duplicate token values into a JS config.
+  Prefer utilities for new styling; existing scoped `<style>` is migrating to utilities incrementally
+  (hybrid is fine — leave genuinely bespoke things like the EquityCurve SVG / CalendarMonth grid
+  scoped). Shared accessible primitives live in **`src/ui/`** (alias `$ui`): `Button` (tailwind-
+  variants `tv()`), `Dialog`, `DropdownMenu`, `Popover`, `Select` (shadcn-svelte composition over
+  bits-ui). Use these for dialogs/menus/popovers/selects instead of hand-rolling a11y. They render
+  **in place (no Portal)** so they stay under `<main id="sv-app">` (e2e + a few styles target
+  `#sv-app …`). `cn()` (`$ui/utils`) composes classes (clsx + tailwind-merge). New deps are pinned +
+  lockfiled + `npm audit`-clean, client-only (A28). Consult the Svelte MCP server + the shadcn-svelte/
+  bits-ui docs when touching these.
+- **Tailwind classes are NOT inline styles — CSP `style-src 'self'` still holds (S18/A55).** Tailwind
+  emits a linked stylesheet of classes (`class="bg-accent"`), never an inline `style=""` attribute,
+  and bits-ui/Floating-UI positions popups via `element.style` in JS (CSSOM — not gated by CSP, same
+  as the `styleProps` action). The invariant is unchanged: **never add a literal `style=""` attribute
+  to markup** — use utilities/`styleProps` for dynamic styling. After UI work, grep `src/` for a new
+  `style="` and keep the CSP/SSG e2e specs + `_headers` green. A class on a `$ui` primitive's ROOT
+  element doesn't get the parent's Svelte scope hash, so style such elements with utilities (or the
+  primitive), not scoped descendant CSS; for a trigger that must keep scoped styling, use bits-ui's
+  `child` snippet so the real element stays in your template.
 - **Marketing/info site = Svelte SSG (A69).** `index/howto/roadmap/changelog/legal/admin.html` are
   hand-authored, marker-free **templates** (head meta + tokens link + `<div id="app"><!--ssg-outlet--></div>`
   + a client-entry `<script>`). At build time [`vite-ssg.mjs`](scripts/vite-ssg.mjs) server-renders each page
