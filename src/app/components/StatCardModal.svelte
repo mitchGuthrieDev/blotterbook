@@ -216,7 +216,7 @@
 
 <style>
   .curve path {
-    stroke: var(--accent);
+    stroke: var(--primary);
     stroke-width: 1.5;
     vector-effect: non-scaling-stroke;
   }

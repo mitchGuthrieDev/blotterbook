@@ -10,7 +10,7 @@
 <footer class="border-t border-line px-[22px] py-[34px] text-[12.5px] text-faint">
   <div class="mx-auto flex max-w-[1080px] flex-wrap items-center justify-between gap-4">
     <span class="inline-flex items-center gap-2 font-bold text-txt"
-      ><span class="h-2 w-2 rounded-[2px] bg-[linear-gradient(135deg,var(--accent),var(--take))]"></span>Blotterbook</span
+      ><span class="h-2 w-2 rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--take))]"></span>Blotterbook</span
     >
     {#if variant === 'admin'}
       <div class="flex flex-wrap gap-4">

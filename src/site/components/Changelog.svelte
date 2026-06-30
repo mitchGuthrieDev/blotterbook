@@ -84,7 +84,7 @@
           <span
             class="ver font-mono text-xs font-semibold rounded-[5px] border px-2 py-0.5 {r.beta
               ? 'text-dim bg-panel border-line'
-              : 'text-accent bg-[rgba(106,160,255,0.12)] border-[rgba(106,160,255,0.28)]'}"
+              : 'text-primary bg-[rgba(106,160,255,0.12)] border-[rgba(106,160,255,0.28)]'}"
             >v{r.version}</span
           >
           <span class="font-mono text-[12.5px] text-dim">{fmtDate(r.date)}</span>
@@ -115,7 +115,7 @@
     top: 6px;
     bottom: 6px;
     width: 2px;
-    background: linear-gradient(180deg, var(--accent), rgba(201, 139, 255, 0.4), transparent);
+    background: linear-gradient(180deg, var(--primary), rgba(201, 139, 255, 0.4), transparent);
   }
   .entry::before {
     content: '';
@@ -126,13 +126,13 @@
     height: 12px;
     border-radius: 50%;
     background: var(--panel2);
-    border: 2px solid var(--accent);
+    border: 2px solid var(--primary);
   }
   .entry.first::before {
-    background: var(--accent);
+    background: var(--primary);
     box-shadow: 0 0 0 4px rgba(106, 160, 255, 0.15);
   }
   .entry .highlights li::marker {
-    color: var(--accent);
+    color: var(--primary);
   }
 </style>

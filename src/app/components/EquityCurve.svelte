@@ -70,7 +70,7 @@
   const padB = 22; // x-axis date labels
   const SERIES: Series[] = [
     { key: 'gross', label: 'Gross', color: 'var(--green)' },
-    { key: 'net', label: 'Net', color: 'var(--accent)' },
+    { key: 'net', label: 'Net', color: 'var(--primary)' },
     { key: 'take', label: 'Take-home', color: 'var(--take)' },
   ];
 
@@ -222,8 +222,8 @@
             <stop offset="100%" stop-color="var(--green)" stop-opacity="0" />
           </linearGradient>
           <linearGradient id="eqfill-net" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.24" />
-            <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
+            <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.24" />
+            <stop offset="100%" stop-color="var(--primary)" stop-opacity="0" />
           </linearGradient>
           <linearGradient id="eqfill-take" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="var(--take)" stop-opacity="0.24" />
@@ -287,7 +287,7 @@
     outline: none;
   }
   .equity:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--primary);
     outline-offset: 2px;
   }
   /* F28: the per-series gradient area fills sit behind the lines; they never intercept the pointer. */
@@ -316,7 +316,7 @@
     stroke-dasharray: 3 3;
   }
   .sel {
-    stroke: var(--accent);
+    stroke: var(--primary);
     stroke-width: 1.5;
     stroke-dasharray: 4 3;
   }
@@ -337,7 +337,7 @@
     font-weight: 700;
   }
   .notedot {
-    fill: var(--accent);
+    fill: var(--primary);
     stroke: var(--bg);
     stroke-width: 1.5;
   }

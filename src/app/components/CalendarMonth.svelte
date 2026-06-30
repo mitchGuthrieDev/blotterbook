@@ -204,12 +204,12 @@
     border-color: var(--hover-line);
   }
   .cell:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--primary);
     outline-offset: 1px;
   }
   .cell.selected {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent) inset;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary) inset;
   }
   .cell.empty {
     border-color: transparent;
@@ -220,7 +220,7 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--primary);
     margin-left: 4px;
     vertical-align: middle;
   }

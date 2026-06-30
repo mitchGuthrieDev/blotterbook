@@ -258,7 +258,7 @@
       <input bind:this={csvInput} type="file" accept=".csv,text/csv" hidden onchange={importCSV} />
       <input bind:this={backupInput} type="file" accept="application/json,.json" hidden onchange={importBackup} />
     </div>
-    {#if msg}<p class="m-0 border-b border-line px-4 py-2 text-[12px] text-accent">{msg}</p>{/if}
+    {#if msg}<p class="m-0 border-b border-line px-4 py-2 text-[12px] text-primary">{msg}</p>{/if}
 
     {#if dayNotes.length}
       <details class="daynotes border-b border-line px-4 py-2 [&_summary]:cursor-pointer [&_summary]:text-[12px] [&_summary]:font-bold [&_summary]:uppercase [&_summary]:tracking-[0.5px] [&_summary]:text-faint [&_ul]:m-0 [&_ul]:mt-2 [&_ul]:list-none [&_ul]:p-0 [&_li]:flex [&_li]:items-center [&_li]:gap-2.5 [&_li]:border-b [&_li]:border-line [&_li]:py-[5px] [&_li]:text-[12px]">
@@ -266,7 +266,7 @@
         <ul>
           {#each dayNotes as n (n.date)}
             <li>
-              <Button size="sm" class="flex-none font-mono text-accent" onclick={() => onopenday(n.date)}>{n.date}</Button>
+              <Button size="sm" class="flex-none font-mono text-primary" onclick={() => onopenday(n.date)}>{n.date}</Button>
               <span class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-dim">{n.text || '(tags/screenshots only)'}</span>
               {#if (n.tags || []).length}<span class="flex-none font-mono text-faint">{n.tags.join(', ')}</span>{/if}
               <button type="button" class="flex-none cursor-pointer border-0 bg-transparent text-[16px] leading-none text-faint hover:text-red disabled:cursor-not-allowed disabled:opacity-45" disabled={isDemo} aria-label="Delete day note" onclick={() => deleteDay(n.date)}>×</button>
@@ -282,7 +282,7 @@
         <ul>
           {#each savedFilters as sf (sf.id)}
             <li>
-              <Button size="sm" class="flex-none font-mono text-accent" onclick={() => onapplyview(sf)}>{sf.name}</Button>
+              <Button size="sm" class="flex-none font-mono text-primary" onclick={() => onapplyview(sf)}>{sf.name}</Button>
               <span class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-dim"></span>
               <Button size="sm" class="sfbtn flex-none" disabled={isDemo} onclick={() => renameView(sf)}>Rename</Button>
               <button type="button" class="flex-none cursor-pointer border-0 bg-transparent text-[16px] leading-none text-faint hover:text-red disabled:cursor-not-allowed disabled:opacity-45" disabled={isDemo} aria-label="Delete saved filter" onclick={() => ondeleteview(sf.id)}>×</button>

@@ -19,6 +19,6 @@
 >
   {#snippet children({ selected })}
     <span class="truncate">{label ?? value}</span>
-    {#if selected}<span aria-hidden="true" class="ml-auto pl-2 text-accent">✓</span>{/if}
+    {#if selected}<span aria-hidden="true" class="ml-auto pl-2 text-primary">✓</span>{/if}
   {/snippet}
 </SelectPrimitive.Item>

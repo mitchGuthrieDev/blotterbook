@@ -332,7 +332,7 @@
     <div class="flex flex-col gap-[5px]">
       <label class="text-[10.5px] tracking-[0.07em] text-faint uppercase" for="label">Custom label (optional)</label>
       <input
-        class="min-w-[240px] rounded-[7px] border border-line bg-panel2 px-[10px] py-2 font-mono text-[13px] text-txt outline-none focus:border-accent"
+        class="min-w-[240px] rounded-[7px] border border-line bg-panel2 px-[10px] py-2 font-mono text-[13px] text-txt outline-none focus:border-primary"
         type="text"
         id="label"
         maxlength="40"
@@ -353,7 +353,7 @@
     <div class="m-0 mb-3 flex max-w-[320px] flex-col gap-[5px]">
       <label class="text-[10.5px] tracking-[0.07em] text-faint uppercase" for="adminkey">Admin key</label>
       <input
-        class="rounded-[7px] border border-line bg-panel px-[10px] py-2 font-mono text-[13px] text-txt outline-none focus:border-accent"
+        class="rounded-[7px] border border-line bg-panel px-[10px] py-2 font-mono text-[13px] text-txt outline-none focus:border-primary"
         type="password"
         id="adminkey"
         placeholder="ADMIN_KEY"
@@ -366,9 +366,9 @@
   <div class="mx-0 my-[14px] flex flex-wrap gap-[10px]">
     {#each MODES as md (md.m)}
       <button
-        class="inline-flex cursor-pointer items-center gap-2 rounded-[9px] border border-line bg-panel2 px-4 py-[10px] font-sans text-[13.5px] text-txt hover:border-accent {(status?.mode ||
+        class="inline-flex cursor-pointer items-center gap-2 rounded-[9px] border border-line bg-panel2 px-4 py-[10px] font-sans text-[13.5px] text-txt hover:border-primary {(status?.mode ||
           'auto') === md.m
-          ? 'border-accent bg-panel'
+          ? 'border-primary bg-panel'
           : ''}"
         data-mode={md.m}
         onclick={() => save(md.m)}
@@ -380,7 +380,7 @@
               ? 'bg-red'
               : md.m === 'maintenance'
                 ? 'bg-warn'
-                : 'bg-accent'}"
+                : 'bg-primary'}"
         ></span>{md.label}
       </button>
     {/each}
@@ -394,7 +394,7 @@
   </p>
   <div class="mx-0 my-[14px] flex flex-wrap gap-[10px]">
     <button
-      class="inline-flex cursor-pointer items-center gap-2 rounded-[9px] border border-line bg-panel2 px-4 py-[10px] font-sans text-[13.5px] text-txt hover:border-accent"
+      class="inline-flex cursor-pointer items-center gap-2 rounded-[9px] border border-line bg-panel2 px-4 py-[10px] font-sans text-[13.5px] text-txt hover:border-primary"
       onclick={launchStaging}><span class="h-2 w-2 rounded-full bg-warn"></span>Launch staging env &rarr;</button
     >
   </div>
@@ -420,14 +420,14 @@
   <div class="mx-0 my-[10px] flex flex-col gap-[9px]">
     {#each FLAGS as f (f.key)}
       <label class="flex cursor-pointer items-center gap-[10px] text-[13.5px] text-txt"
-        ><input class="h-4 w-4 accent-[var(--accent)]" type="checkbox" bind:checked={flags[f.key]} /><span>{f.label}</span></label
+        ><input class="h-4 w-4 accent-[var(--primary)]" type="checkbox" bind:checked={flags[f.key]} /><span>{f.label}</span></label
       >
     {/each}
   </div>
   <div class="mx-0 my-[14px] flex flex-wrap gap-[10px]">
     <button
-      class="inline-flex cursor-pointer items-center gap-2 rounded-[9px] border border-line bg-panel2 px-4 py-[10px] font-sans text-[13.5px] text-txt hover:border-accent"
-      onclick={saveFlags}><span class="h-2 w-2 rounded-full bg-accent"></span>Save flags</button
+      class="inline-flex cursor-pointer items-center gap-2 rounded-[9px] border border-line bg-panel2 px-4 py-[10px] font-sans text-[13.5px] text-txt hover:border-primary"
+      onclick={saveFlags}><span class="h-2 w-2 rounded-full bg-primary"></span>Save flags</button
     >
   </div>
   <p class="mt-[10px] min-h-4 font-mono text-[12.5px] {flagmsg.kind === 'ok' ? 'text-green' : flagmsg.kind === 'err' ? 'text-red' : ''}">
@@ -479,7 +479,7 @@
     </div>
     <button
       type="button"
-      class="cursor-pointer rounded-[7px] border border-line bg-panel2 px-3 py-2 font-sans text-[12.5px] text-dim hover:border-accent hover:text-txt"
+      class="cursor-pointer rounded-[7px] border border-line bg-panel2 px-3 py-2 font-sans text-[12.5px] text-dim hover:border-primary hover:text-txt"
       onclick={clearFilters}>Clear filters</button
     >
     <span class="ml-auto self-center font-mono text-[11px] text-faint">Counts above are full totals; filters narrow the list only.</span>
@@ -498,7 +498,7 @@
               : i.status === 'open'
                 ? 'border-[rgba(227,179,65,0.4)] text-warn'
                 : i.status === 'guardrail'
-                  ? 'border-[rgba(106,160,255,0.4)] text-accent'
+                  ? 'border-[rgba(106,160,255,0.4)] text-primary'
                   : 'border-line text-dim'}">{badgeText(i.status)}</span
           >
         </div>

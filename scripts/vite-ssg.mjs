@@ -56,7 +56,7 @@ export function ssg(pages) {
         // design-system primitives resolve during prerender. The Tailwind plugin is NOT needed here:
         // SSR ignores CSS imports (utility classes are emitted by the real build), so prerendered
         // markup carries the class names and the linked utility sheet styles them on first paint.
-        resolve: { alias: { $ui: resolve(projectRoot, 'src/ui') } },
+        resolve: { alias: { $lib: resolve(projectRoot, 'src/lib'), $ui: resolve(projectRoot, 'src/ui') } },
         plugins: [svelte(svelteConfig)],
       });
       try {

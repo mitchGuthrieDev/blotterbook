@@ -108,7 +108,7 @@
               <td class="text-right font-mono text-dim">−{money(commOf(t))}</td>
               <td class="w-full min-w-[160px] whitespace-normal">
                 <input
-                  class="note w-full rounded-[5px] border border-transparent bg-panel2 px-1.5 py-1 font-[inherit] text-[12px] text-txt not-disabled:hover:border-line focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:bg-transparent"
+                  class="note w-full rounded-[5px] border border-transparent bg-panel2 px-1.5 py-1 font-[inherit] text-[12px] text-txt not-disabled:hover:border-line focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:bg-transparent"
                   type="text"
                   value={noteOf(t)}
                   disabled={isDemo}

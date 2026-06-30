@@ -85,7 +85,7 @@
   class:collapsed
   class:dragging
   class:opacity-[0.55]={dragging}
-  class:border-accent={dragging}
+  class:border-primary={dragging}
   data-key={pkey}
   draggable={armed}
   ondragstart={onDragStart}

@@ -39,7 +39,7 @@ export default defineConfig({
   // $ui → the shared design-system primitives (A128). Tailwind v4 via @tailwindcss/vite scans all
   // source surfaces (src/app + src/site + src/ui) and emits the utility stylesheet (CSP-safe — a
   // linked sheet, never inline style="").
-  resolve: { alias: { $ui: r('src/ui') } },
+  resolve: { alias: { $lib: r('src/lib'), $ui: r('src/ui') } },
   plugins: [tailwindcss(), svelte(), ssg(SSG_PAGES)],
   build: {
     // Pin the output baseline to match tsconfig's `target: ES2022` (A96) for deterministic,

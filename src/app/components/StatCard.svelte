@@ -17,7 +17,7 @@
 <!-- A128: scoped CSS → Tailwind utilities (tokens via @theme). `.value` kept as the e2e hook. -->
 <div
   class="rounded-[10px] border border-line bg-panel px-3.5 py-3 {onclick
-    ? 'cursor-pointer hover:border-hover-line focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent'
+    ? 'cursor-pointer hover:border-hover-line focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary'
     : ''}"
   data-card={card}
   role={onclick ? 'button' : undefined}

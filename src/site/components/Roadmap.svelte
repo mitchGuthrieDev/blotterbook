@@ -110,7 +110,7 @@
   <ul class="mt-[18px] list-none p-0">
     <li class="flex items-start gap-3 border-b border-line py-[11px]">
       <span
-        class="mt-px flex h-5 w-5 flex-none items-center justify-center rounded-[6px] border border-[rgba(106,160,255,0.5)] bg-[rgba(106,160,255,0.14)] text-[12px] text-accent"
+        class="mt-px flex h-5 w-5 flex-none items-center justify-center rounded-[6px] border border-[rgba(106,160,255,0.5)] bg-[rgba(106,160,255,0.14)] text-[12px] text-primary"
         >&#9679;</span
       >
       <div class="flex-1">
@@ -129,7 +129,7 @@
     </li>
     <li class="flex items-start gap-3 border-b border-line py-[11px]">
       <span
-        class="mt-px flex h-5 w-5 flex-none items-center justify-center rounded-[6px] border border-[rgba(106,160,255,0.5)] bg-[rgba(106,160,255,0.14)] text-[12px] text-accent"
+        class="mt-px flex h-5 w-5 flex-none items-center justify-center rounded-[6px] border border-[rgba(106,160,255,0.5)] bg-[rgba(106,160,255,0.14)] text-[12px] text-primary"
         >&#9679;</span
       >
       <div class="flex-1">
@@ -142,7 +142,7 @@
     </li>
     <li class="flex items-start gap-3 border-b border-line py-[11px]">
       <span
-        class="mt-px flex h-5 w-5 flex-none items-center justify-center rounded-[6px] border border-[rgba(106,160,255,0.5)] bg-[rgba(106,160,255,0.14)] text-[12px] text-accent"
+        class="mt-px flex h-5 w-5 flex-none items-center justify-center rounded-[6px] border border-[rgba(106,160,255,0.5)] bg-[rgba(106,160,255,0.14)] text-[12px] text-primary"
         >&#9679;</span
       >
       <div class="flex-1">

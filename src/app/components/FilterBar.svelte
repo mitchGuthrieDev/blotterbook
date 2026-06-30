@@ -55,22 +55,22 @@
   <div class="scope flex" role="group" aria-label="Scope" title={SCOPE_HELP}>
     <button
       type="button"
-      class="cursor-pointer rounded-l-md border px-3 py-[7px] text-xs {filters.scope === 'all' ? 'border-accent bg-accent font-bold text-bg' : 'border-line bg-panel2 text-dim'}"
+      class="cursor-pointer rounded-l-md border px-3 py-[7px] text-xs {filters.scope === 'all' ? 'border-primary bg-primary font-bold text-bg' : 'border-line bg-panel2 text-dim'}"
       aria-pressed={filters.scope === 'all'}
       onclick={() => (filters.scope = 'all')}>All time</button
     >
     <button
       type="button"
-      class="cursor-pointer rounded-r-md border border-l-0 px-3 py-[7px] text-xs {filters.scope === 'month' ? 'border-accent bg-accent font-bold text-bg' : 'border-line bg-panel2 text-dim'}"
+      class="cursor-pointer rounded-r-md border border-l-0 px-3 py-[7px] text-xs {filters.scope === 'month' ? 'border-primary bg-primary font-bold text-bg' : 'border-line bg-panel2 text-dim'}"
       aria-pressed={filters.scope === 'month'}
       onclick={() => (filters.scope = 'month')}>Calendar month</button
     >
   </div>
   <label class="flex flex-col gap-[3px] text-[11px] text-faint"
-    >From<input type="date" bind:value={filters.from} class="rounded-md border border-line bg-panel2 px-2 py-1.5 text-[13px] font-sans text-txt focus:border-accent focus:outline-none" /></label
+    >From<input type="date" bind:value={filters.from} class="rounded-md border border-line bg-panel2 px-2 py-1.5 text-[13px] font-sans text-txt focus:border-primary focus:outline-none" /></label
   >
   <label class="flex flex-col gap-[3px] text-[11px] text-faint"
-    >To<input type="date" bind:value={filters.to} class="rounded-md border border-line bg-panel2 px-2 py-1.5 text-[13px] font-sans text-txt focus:border-accent focus:outline-none" /></label
+    >To<input type="date" bind:value={filters.to} class="rounded-md border border-line bg-panel2 px-2 py-1.5 text-[13px] font-sans text-txt focus:border-primary focus:outline-none" /></label
   >
   <div class="selfield flex flex-col gap-[3px] text-[11px] text-faint">
     <span>Symbol</span>
@@ -114,7 +114,7 @@
     {#each DOW as d, i (d)}
       <button
         type="button"
-        class="cursor-pointer rounded-[5px] border px-[7px] py-1.5 font-mono text-[11px] {filters.dows.includes(i) ? 'border-accent bg-accent font-bold text-bg' : 'border-line bg-panel2 text-dim'}"
+        class="cursor-pointer rounded-[5px] border px-[7px] py-1.5 font-mono text-[11px] {filters.dows.includes(i) ? 'border-primary bg-primary font-bold text-bg' : 'border-line bg-panel2 text-dim'}"
         aria-pressed={filters.dows.includes(i)}
         onclick={() => toggleDow(i)}>{d}</button
       >
@@ -135,7 +135,7 @@
   <Button size="sm" class="savebtn" onclick={save}>Save view</Button>
   {#each savedFilters as sf (sf.id)}
     <span class="chip inline-flex items-stretch overflow-hidden rounded-md border border-line">
-      <button type="button" class="apply cursor-pointer border-0 bg-panel px-2.5 py-1.5 text-xs text-accent" onclick={() => onapply(sf)}>{sf.name}</button>
+      <button type="button" class="apply cursor-pointer border-0 bg-panel px-2.5 py-1.5 text-xs text-primary" onclick={() => onapply(sf)}>{sf.name}</button>
       <button
         type="button"
         class="del cursor-pointer border-0 border-l border-line bg-panel px-2 py-1.5 text-faint hover:text-red"

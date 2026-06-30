@@ -29,7 +29,7 @@
       class="wordmark inline-flex items-center gap-[9px] text-[16px] font-bold text-txt no-underline hover:no-underline"
       href="index.html"
       ><span
-        class="dot h-[9px] w-[9px] rounded-[2px] bg-[linear-gradient(135deg,var(--accent),var(--take))]"
+        class="dot h-[9px] w-[9px] rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--take))]"
       ></span>Blotterbook</a
     >
     <input
@@ -50,7 +50,7 @@
       <a class="navlaunch" href="/app/">Launch Blotterbook &rarr;</a>
     </div>
     <a
-      class="cta ml-auto rounded-[9px] bg-accent px-[14px] py-2 text-[13.5px] font-semibold text-bg no-underline hover:no-underline hover:brightness-[1.08]"
+      class="cta ml-auto rounded-[9px] bg-primary px-[14px] py-2 text-[13.5px] font-semibold text-bg no-underline hover:no-underline hover:brightness-[1.08]"
       href="/app/">Launch Blotterbook &rarr;</a
     >
     <label
@@ -99,7 +99,7 @@
     stroke-linecap: round;
   }
   .navtoggle:focus-visible ~ .hamburger {
-    border-color: var(--accent);
+    border-color: var(--primary);
   }
   .navlaunch {
     display: none;
@@ -145,7 +145,7 @@
     .navlinks a.navlaunch {
       display: block;
       color: var(--bg);
-      background: var(--accent);
+      background: var(--primary);
       font-weight: 600;
       border-radius: 9px;
       margin-top: 10px;

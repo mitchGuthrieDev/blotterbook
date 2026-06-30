@@ -52,7 +52,7 @@
       line-height: 1.6;
     }
     a {
-      color: var(--accent);
+      color: var(--primary);
       text-decoration: none;
     }
     a:hover {
@@ -83,7 +83,7 @@
       font-size: 12px;
       letter-spacing: 0.16em;
       text-transform: uppercase;
-      color: var(--accent);
+      color: var(--primary);
       margin: 0 0 14px;
     }
     h1 {
@@ -150,7 +150,7 @@
     .note {
       background: var(--panel);
       border: 1px solid var(--line);
-      border-left: 3px solid var(--accent);
+      border-left: 3px solid var(--primary);
       border-radius: 10px;
       padding: 14px 16px;
       margin: 16px 0;

@@ -93,8 +93,8 @@
     <button type="button" class="cursor-pointer border-0 bg-transparent text-[20px] leading-none text-dim hover:text-txt" onclick={onclose} aria-label="Close day note">×</button>
   </div>
   {#if isDemo}<p class="demonote m-0 mb-2 text-[12px] text-warn">Day-notes are read-only in the demo — nothing is saved.</p>{/if}
-  <textarea class="box-border w-full resize-y rounded-[7px] border border-line bg-panel2 p-2.5 font-sans text-[13px] text-txt focus:border-accent focus:outline-none" bind:value={text} rows="4" disabled={!ready || isDemo} placeholder={`What happened on ${date}? Setups, mistakes, market context…`}></textarea>
-  <input class="box-border mt-2 w-full rounded-[7px] border border-line bg-panel2 px-2.5 py-2 font-sans text-[13px] text-txt focus:border-accent focus:outline-none" type="text" bind:value={tagsStr} disabled={!ready || isDemo} placeholder="tags (comma separated)" />
+  <textarea class="box-border w-full resize-y rounded-[7px] border border-line bg-panel2 p-2.5 font-sans text-[13px] text-txt focus:border-primary focus:outline-none" bind:value={text} rows="4" disabled={!ready || isDemo} placeholder={`What happened on ${date}? Setups, mistakes, market context…`}></textarea>
+  <input class="box-border mt-2 w-full rounded-[7px] border border-line bg-panel2 px-2.5 py-2 font-sans text-[13px] text-txt focus:border-primary focus:outline-none" type="text" bind:value={tagsStr} disabled={!ready || isDemo} placeholder="tags (comma separated)" />
   <div class="mt-2.5 flex flex-wrap items-center gap-2">
     {#each shots as s, i (i)}
       <span class="shot relative inline-block">

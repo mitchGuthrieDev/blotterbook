@@ -490,7 +490,7 @@
     border-radius: 50%;
     background: var(--panel2);
     border: 1px solid var(--line);
-    color: var(--accent);
+    color: var(--primary);
     font-family: var(--mono);
     font-size: 13px;
     display: flex;

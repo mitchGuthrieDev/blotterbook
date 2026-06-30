@@ -89,7 +89,7 @@
     </div>
     <label class="flex flex-col gap-1 text-[11px] text-faint">
       <span>Platform fee ($/mo)</span>
-      <input type="number" min="0" step="1" bind:value={setup.platform} class="rounded-md border border-line bg-panel2 p-2 text-[13px] font-sans text-txt focus:border-accent focus:outline-none" />
+      <input type="number" min="0" step="1" bind:value={setup.platform} class="rounded-md border border-line bg-panel2 p-2 text-[13px] font-sans text-txt focus:border-primary focus:outline-none" />
     </label>
   </div>
 

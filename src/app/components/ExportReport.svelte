@@ -33,7 +33,7 @@
   // without report.js touching the DOM (A8). System fonts + a CSS-gradient dot → no external assets.
   function tokenBlock() {
     const cs = getComputedStyle(document.documentElement);
-    const vars = ['--bg', '--panel', '--panel2', '--line', '--txt', '--dim', '--faint', '--green', '--red', '--accent', '--take', '--mono', '--sans'];
+    const vars = ['--bg', '--panel', '--panel2', '--line', '--txt', '--dim', '--faint', '--green', '--red', '--primary', '--take', '--mono', '--sans'];
     return ':root{' + vars.map(n => `${n}:${cs.getPropertyValue(n).trim()}`).join(';') + ';}';
   }
 

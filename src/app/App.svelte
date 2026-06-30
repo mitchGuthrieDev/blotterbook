@@ -851,10 +851,10 @@
     text-decoration: none;
   }
   .brandlink:hover {
-    color: var(--accent);
+    color: var(--primary);
   }
   .brandlink:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--primary);
     outline-offset: 2px;
     border-radius: 3px;
   }
@@ -871,8 +871,8 @@
   }
   /* A89: the betaRibbon flag badge — accent-toned so it reads distinctly from the staging badge. */
   .badge.beta {
-    color: var(--accent);
-    border-color: var(--accent);
+    color: var(--primary);
+    border-color: var(--primary);
     margin-left: 6px;
   }
   /* A89: admin maintenanceBanner flag. */
@@ -987,7 +987,7 @@
   }
   .link {
     font-size: 13px;
-    color: var(--accent);
+    color: var(--primary);
     text-decoration: none;
   }
   .link:hover {
@@ -1009,9 +1009,9 @@
   }
   /* F24 (staging): the Donate button — accent-toned so it reads as the primary "support" call. */
   .donatebtn {
-    background: var(--accent);
+    background: var(--primary);
     color: var(--bg);
-    border: 1px solid var(--accent);
+    border: 1px solid var(--primary);
     border-radius: 6px;
     padding: 7px 14px;
     font: inherit;
@@ -1023,7 +1023,7 @@
     filter: brightness(1.08);
   }
   .donatebtn:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--primary);
     outline-offset: 2px;
   }
   /* F26 (staging): the grid modules lined up parallel. auto-fit fits as many ≥360px columns as the

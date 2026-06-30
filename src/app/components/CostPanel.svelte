@@ -87,7 +87,7 @@
         step="1"
         bind:value={setup.platform}
         {disabled}
-        class="rounded-md border border-line bg-panel2 px-2 py-[7px] font-mono text-[13px] text-txt focus:border-accent focus:outline-none"
+        class="rounded-md border border-line bg-panel2 px-2 py-[7px] font-mono text-[13px] text-txt focus:border-primary focus:outline-none"
       />
     </label>
   </div>
