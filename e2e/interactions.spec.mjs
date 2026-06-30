@@ -291,7 +291,9 @@ test('staging (Svelte): modal locks scroll + closes on Escape (A42)', async ({ p
   expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden'); // B36 scroll-lock
   await page.keyboard.press('Escape');
   await expect(page.locator('.modal[aria-label="Net PnL"]')).toHaveCount(0);
-  expect(await page.evaluate(() => document.body.style.overflow)).toBe(''); // lock released
+  // Lock released. bits-ui (A128) debounces its scroll-lock teardown a tick before restoring the
+  // body style (vs. the old use:modal which cleared it synchronously), so poll for release.
+  await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
 });
 
 // A45: a trade can be deleted from the manage-data table (with its meta), shrinking the row count.

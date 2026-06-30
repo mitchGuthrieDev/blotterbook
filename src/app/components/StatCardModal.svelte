@@ -5,7 +5,7 @@
   import { usd, money, cls, ratio, minMax, linePath, dowBuckets, DOW_LABEL } from '../../lib/core.ts';
   import type { Metrics } from '../../lib/core.ts';
   import type { CostModel, Trade } from '../../lib/types.ts';
-  import { modal } from '../lib/modal.ts';
+  import * as Dialog from '$ui/dialog';
   import { styleProps } from '../lib/actions.ts';
 
   interface Props {
@@ -77,11 +77,13 @@
   const ddCurve = $derived(cardKey === 'dd' || cardKey === 'net' ? curvePath(m.curve) : null);
 </script>
 
-<div class="overlay" role="presentation" onclick={(e: MouseEvent) => e.target === e.currentTarget && onclose()}>
-  <div class="modal" role="dialog" aria-modal="true" aria-label={title} tabindex="-1" use:modal={{ onclose }}>
-    <div class="head">
-      <h2>{title}</h2>
-      <button type="button" class="x" onclick={onclose} aria-label="Close">×</button>
+<Dialog.Root open onOpenChange={(o: boolean) => !o && onclose()}>
+  <Dialog.Content class="modal" aria-label={title}>
+    <div class="flex items-center justify-between border-b border-line px-4 py-3.5">
+      <h2 class="m-0 text-[15px]">{title}</h2>
+      <Dialog.Close class="x cursor-pointer border-0 bg-transparent text-[22px] leading-none text-dim hover:text-txt" aria-label="Close"
+        >×</Dialog.Close
+      >
     </div>
     <div class="body">
       {#if cardKey === 'net'}
@@ -159,8 +161,8 @@
         {/if}
       {/if}
     </div>
-  </div>
-</div>
+  </Dialog.Content>
+</Dialog.Root>
 
 {#snippet splitBar(segs: SplitSeg[])}
   <div class="split">
@@ -210,16 +212,6 @@
 {/snippet}
 
 <style>
-  .overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 6vh 16px;
-    z-index: 60;
-  }
   .split {
     display: flex;
     height: 18px;
@@ -267,34 +259,6 @@
   }
   .symtab td.neg {
     color: var(--red);
-  }
-  .modal {
-    background: var(--bg);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    width: 100%;
-    max-width: 460px;
-    max-height: 88vh;
-    overflow: auto;
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--line);
-  }
-  .head h2 {
-    margin: 0;
-    font-size: 15px;
-  }
-  .x {
-    background: transparent;
-    border: 0;
-    color: var(--dim);
-    font-size: 22px;
-    line-height: 1;
-    cursor: pointer;
   }
   .body {
     padding: 14px 16px 18px;

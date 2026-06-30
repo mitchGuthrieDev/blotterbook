@@ -12,10 +12,15 @@ const DIST = resolve(ROOT, 'dist');
 const ENTRY = resolve(DIST, 'app/app.html');
 
 // Ceiling for the sum of the app shell's JS (uncompressed bytes). Baseline at introduction was
-// ~167 KiB across three chunks (main + the disclose-version/svelte runtime + format); this leaves
-// ~20% headroom to catch a regression without flapping on noise. Raise deliberately (with a commit
-// message saying why) when a real feature legitimately grows the bundle.
-const BUDGET_BYTES = 200 * 1024;
+// ~167 KiB across three chunks (main + the disclose-version/svelte runtime + format); raise
+// deliberately (with a commit message saying why) when a real feature legitimately grows the bundle.
+//
+// A128: raised 200 → 340 KiB for the deliberate adoption of bits-ui as the accessible-component
+// foundation (Dialog/Select/DropdownMenu/Popover + Floating UI positioning). This is an approved
+// architectural reversal of the R22 "keep it lean" decline — the shipped JS grows in exchange for a
+// consistent, accessible primitive system. The ceiling keeps ~20% headroom over the full-primitive
+// total to still catch an *accidental* regression on top of the intentional growth.
+const BUDGET_BYTES = 340 * 1024;
 
 let html;
 try {
