@@ -22,14 +22,14 @@
 </script>
 
 <header
-  class="sticky top-0 z-50 border-b border-line bg-[rgba(13,16,20,0.86)] backdrop-blur-[10px] backdrop-saturate-150"
+  class="sticky top-0 z-50 border-b border-border bg-background/86 backdrop-blur-[10px] backdrop-saturate-150"
 >
   <nav class="nav relative mx-auto flex max-w-[1080px] items-center px-[22px] py-[13px]">
     <a
-      class="wordmark inline-flex items-center gap-[9px] text-[16px] font-bold text-txt no-underline hover:no-underline"
+      class="wordmark inline-flex items-center gap-[9px] text-[16px] font-bold text-foreground no-underline hover:no-underline"
       href="index.html"
       ><span
-        class="dot h-[9px] w-[9px] rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--take))]"
+        class="dot h-[9px] w-[9px] rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--chart-3))]"
       ></span>Blotterbook</a
     >
     <input
@@ -50,11 +50,11 @@
       <a class="navlaunch" href="/app/">Launch Blotterbook &rarr;</a>
     </div>
     <a
-      class="cta ml-auto rounded-[9px] bg-primary px-[14px] py-2 text-[13.5px] font-semibold text-bg no-underline hover:no-underline hover:brightness-[1.08]"
+      class="cta ml-auto rounded-[9px] bg-primary px-[14px] py-2 text-[13.5px] font-semibold text-primary-foreground no-underline hover:no-underline hover:brightness-[1.08]"
       href="/app/">Launch Blotterbook &rarr;</a
     >
     <label
-      class="hamburger ml-auto h-9 w-10 cursor-pointer items-center justify-center rounded-[9px] border border-line bg-panel"
+      class="hamburger ml-auto h-9 w-10 cursor-pointer items-center justify-center rounded-[9px] border border-border bg-card"
       for="navtoggle"
       title="Menu"
       ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg></label
@@ -72,19 +72,19 @@
     display: flex;
   }
   .navlinks a {
-    color: var(--dim);
+    color: var(--muted-foreground);
     font-size: 13.5px;
     padding: 7px 11px;
     border-radius: 7px;
     text-decoration: none;
   }
   .navlinks a:hover {
-    color: var(--txt);
-    background: var(--panel);
+    color: var(--foreground);
+    background: var(--card);
     text-decoration: none;
   }
   .navlinks a.active {
-    color: var(--txt);
+    color: var(--foreground);
   }
   /* mobile menu (hamburger replaces the Launch button) */
   .hamburger {
@@ -93,7 +93,7 @@
   .hamburger svg {
     width: 20px;
     height: 20px;
-    stroke: var(--txt);
+    stroke: var(--foreground);
     stroke-width: 2;
     fill: none;
     stroke-linecap: round;
@@ -126,7 +126,7 @@
       gap: 2px;
       background: rgba(13, 16, 20, 0.98);
       backdrop-filter: saturate(150%) blur(10px);
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--border);
       padding: 8px 16px 16px;
       margin: 0;
     }
@@ -136,7 +136,7 @@
     .navlinks a {
       font-size: 15px;
       padding: 12px 10px;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--border);
       border-left: none;
     }
     .navlinks a:last-child {
@@ -144,7 +144,7 @@
     }
     .navlinks a.navlaunch {
       display: block;
-      color: var(--bg);
+      color: var(--background);
       background: var(--primary);
       font-weight: 600;
       border-radius: 9px;

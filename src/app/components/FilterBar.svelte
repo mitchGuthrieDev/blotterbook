@@ -51,28 +51,28 @@
     'All time covers every trade; Calendar month restricts the cards, graph, and statistics to the month shown on the calendar. The calendar always shows the navigated month.';
 </script>
 
-<section class="filterbar mb-4 flex flex-wrap items-end gap-x-3 gap-y-2.5 rounded-[10px] border border-line bg-panel px-3.5 py-3">
+<section class="filterbar mb-4 flex flex-wrap items-end gap-x-3 gap-y-2.5 rounded-[10px] border border-border bg-card px-3.5 py-3">
   <div class="scope flex" role="group" aria-label="Scope" title={SCOPE_HELP}>
     <button
       type="button"
-      class="cursor-pointer rounded-l-md border px-3 py-[7px] text-xs {filters.scope === 'all' ? 'border-primary bg-primary font-bold text-bg' : 'border-line bg-panel2 text-dim'}"
+      class="cursor-pointer rounded-l-md border px-3 py-[7px] text-xs {filters.scope === 'all' ? 'border-primary bg-primary font-bold text-primary-foreground' : 'border-border bg-secondary text-muted-foreground'}"
       aria-pressed={filters.scope === 'all'}
       onclick={() => (filters.scope = 'all')}>All time</button
     >
     <button
       type="button"
-      class="cursor-pointer rounded-r-md border border-l-0 px-3 py-[7px] text-xs {filters.scope === 'month' ? 'border-primary bg-primary font-bold text-bg' : 'border-line bg-panel2 text-dim'}"
+      class="cursor-pointer rounded-r-md border border-l-0 px-3 py-[7px] text-xs {filters.scope === 'month' ? 'border-primary bg-primary font-bold text-primary-foreground' : 'border-border bg-secondary text-muted-foreground'}"
       aria-pressed={filters.scope === 'month'}
       onclick={() => (filters.scope = 'month')}>Calendar month</button
     >
   </div>
-  <label class="flex flex-col gap-[3px] text-[11px] text-faint"
-    >From<input type="date" bind:value={filters.from} class="rounded-md border border-line bg-panel2 px-2 py-1.5 text-[13px] font-sans text-txt focus:border-primary focus:outline-none" /></label
+  <label class="flex flex-col gap-[3px] text-[11px] text-muted-foreground"
+    >From<input type="date" bind:value={filters.from} class="rounded-md border border-border bg-secondary px-2 py-1.5 text-[13px] font-sans text-foreground focus:border-primary focus:outline-none" /></label
   >
-  <label class="flex flex-col gap-[3px] text-[11px] text-faint"
-    >To<input type="date" bind:value={filters.to} class="rounded-md border border-line bg-panel2 px-2 py-1.5 text-[13px] font-sans text-txt focus:border-primary focus:outline-none" /></label
+  <label class="flex flex-col gap-[3px] text-[11px] text-muted-foreground"
+    >To<input type="date" bind:value={filters.to} class="rounded-md border border-border bg-secondary px-2 py-1.5 text-[13px] font-sans text-foreground focus:border-primary focus:outline-none" /></label
   >
-  <div class="selfield flex flex-col gap-[3px] text-[11px] text-faint">
+  <div class="selfield flex flex-col gap-[3px] text-[11px] text-muted-foreground">
     <span>Symbol</span>
     <Select.Root type="single" value={filters.root || ALL} onValueChange={v => (filters.root = v === ALL ? '' : v)} items={rootItems}>
       <Select.Trigger aria-label="Symbol"><Select.Value /></Select.Trigger>
@@ -114,19 +114,19 @@
     {#each DOW as d, i (d)}
       <button
         type="button"
-        class="cursor-pointer rounded-[5px] border px-[7px] py-1.5 font-mono text-[11px] {filters.dows.includes(i) ? 'border-primary bg-primary font-bold text-bg' : 'border-line bg-panel2 text-dim'}"
+        class="cursor-pointer rounded-[5px] border px-[7px] py-1.5 font-mono text-[11px] {filters.dows.includes(i) ? 'border-primary bg-primary font-bold text-primary-foreground' : 'border-border bg-secondary text-muted-foreground'}"
         aria-pressed={filters.dows.includes(i)}
         onclick={() => toggleDow(i)}>{d}</button
       >
     {/each}
   </div>
-  <span class="count ml-auto self-center font-mono text-xs text-faint">{count} trade{count === 1 ? '' : 's'}</span>
-  <Button variant="outline" class="clear text-dim" onclick={onclear}>Clear</Button>
+  <span class="count ml-auto self-center font-mono text-xs text-muted-foreground">{count} trade{count === 1 ? '' : 's'}</span>
+  <Button variant="outline" class="clear text-muted-foreground" onclick={onclear}>Clear</Button>
 </section>
 
 <section class="saved mb-4 mt-[-8px] flex flex-wrap items-center gap-2">
   <input
-    class="vname rounded-md border border-line bg-panel2 px-2 py-1.5 text-xs text-txt"
+    class="vname rounded-md border border-border bg-secondary px-2 py-1.5 text-xs text-foreground"
     type="text"
     placeholder="Name this view…"
     bind:value={viewName}
@@ -134,11 +134,11 @@
   />
   <Button variant="secondary" size="sm" class="savebtn" onclick={save}>Save view</Button>
   {#each savedFilters as sf (sf.id)}
-    <span class="chip inline-flex items-stretch overflow-hidden rounded-md border border-line">
-      <button type="button" class="apply cursor-pointer border-0 bg-panel px-2.5 py-1.5 text-xs text-primary" onclick={() => onapply(sf)}>{sf.name}</button>
+    <span class="chip inline-flex items-stretch overflow-hidden rounded-md border border-border">
+      <button type="button" class="apply cursor-pointer border-0 bg-card px-2.5 py-1.5 text-xs text-primary" onclick={() => onapply(sf)}>{sf.name}</button>
       <button
         type="button"
-        class="del cursor-pointer border-0 border-l border-line bg-panel px-2 py-1.5 text-faint hover:text-red"
+        class="del cursor-pointer border-0 border-l border-border bg-card px-2 py-1.5 text-muted-foreground hover:text-destructive"
         aria-label="Delete view {sf.name}"
         onclick={() => ondelete(sf.id)}>×</button
       >

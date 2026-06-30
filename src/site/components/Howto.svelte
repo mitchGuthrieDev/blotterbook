@@ -21,64 +21,64 @@
       aria-label="How-to contents"
     >
       <div
-        class="font-mono text-[10.5px] tracking-[0.1em] uppercase text-faint mt-4 mb-1.5"
+        class="font-mono text-[10.5px] tracking-[0.1em] uppercase text-muted-foreground mt-4 mb-1.5"
       >
         Background
       </div>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#intro-futures">What is futures trading?</a>
       <div
-        class="font-mono text-[10.5px] tracking-[0.1em] uppercase text-faint mt-4 mb-1.5"
+        class="font-mono text-[10.5px] tracking-[0.1em] uppercase text-muted-foreground mt-4 mb-1.5"
       >
         Getting started
       </div>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#gs-firstrun">First run</a>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#gs-setup">Broker &amp; costs</a>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#gs-load">Loading your CSV</a>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#gs-dashboard">Reading the dashboard</a>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#gs-manage">Managing &amp; backing up data</a>
       <div
-        class="font-mono text-[10.5px] tracking-[0.1em] uppercase text-faint mt-4 mb-1.5"
+        class="font-mono text-[10.5px] tracking-[0.1em] uppercase text-muted-foreground mt-4 mb-1.5"
       >
         Importing by platform
       </div>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#imp-tradingview">TradingView</a>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#imp-tradovate">Tradovate</a>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#imp-rithmic">Rithmic R|Trader</a>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#imp-sierrachart">Sierra Chart</a>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#imp-tradestation">TradeStation</a>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#imp-motivewave">MotiveWave</a>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#imp-webull">Webull</a>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#imp-ibkr">Interactive Brokers</a>
       <a
-        class="block text-dim py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-txt hover:bg-panel hover:no-underline"
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#imp-schwab">Schwab / thinkorswim</a>
     </nav>
 
@@ -126,7 +126,7 @@
       </section>
 
       <!-- ============ GETTING STARTED ============ -->
-      <section id="gs-firstrun" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="gs-firstrun" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">First run</h2>
         <p>
           Blotterbook runs entirely in your browser — there's no sign-up and your trade data never leaves the page. Open the app and you'll
@@ -143,80 +143,80 @@
         </div>
       </section>
 
-      <section id="gs-setup" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="gs-setup" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">Broker &amp; costs</h2>
         <p>
           The <b>Broker &amp; Costs</b> panel sets how your true costs are modeled. Your <i>broker</i> sets commission rates; your
           <i>data feed</i> and <i>platform fee</i> are monthly subscriptions; your <i>state</i> drives the tax estimate (it's auto-filled
           from your region, but you can change it). None of this depends on which platform your CSV came from.
         </p>
-        <div class="bg-panel border border-line rounded-xl p-3.5 my-4">
-          <p class="font-mono text-[10.5px] tracking-[0.08em] uppercase text-faint m-0 mb-2.5">Broker &amp; Costs</p>
+        <div class="bg-card border border-border rounded-xl p-3.5 my-4">
+          <p class="font-mono text-[10.5px] tracking-[0.08em] uppercase text-muted-foreground m-0 mb-2.5">Broker &amp; Costs</p>
           <div class="flex gap-2.5 flex-wrap">
             <div class="flex-1 min-w-[130px]">
-              <span class="block text-[10px] tracking-[0.06em] uppercase text-faint mb-1">Broker</span>
+              <span class="block text-[10px] tracking-[0.06em] uppercase text-muted-foreground mb-1">Broker</span>
               <div
-                class="bg-panel2 border border-line rounded-md px-2.5 py-2 font-mono text-[12px] text-txt flex justify-between items-center"
+                class="bg-secondary border border-border rounded-md px-2.5 py-2 font-mono text-[12px] text-foreground flex justify-between items-center"
               >
-                TradingView PaperTrade <span class="text-faint">&#9662;</span>
+                TradingView PaperTrade <span class="text-muted-foreground">&#9662;</span>
               </div>
             </div>
             <div class="flex-1 min-w-[130px]">
-              <span class="block text-[10px] tracking-[0.06em] uppercase text-faint mb-1">Data feed /mo</span>
+              <span class="block text-[10px] tracking-[0.06em] uppercase text-muted-foreground mb-1">Data feed /mo</span>
               <div
-                class="bg-panel2 border border-line rounded-md px-2.5 py-2 font-mono text-[12px] text-txt flex justify-between items-center"
+                class="bg-secondary border border-border rounded-md px-2.5 py-2 font-mono text-[12px] text-foreground flex justify-between items-center"
               >
-                CME Group — $7 <span class="text-faint">&#9662;</span>
+                CME Group — $7 <span class="text-muted-foreground">&#9662;</span>
               </div>
             </div>
             <div class="flex-1 min-w-[130px]">
-              <span class="block text-[10px] tracking-[0.06em] uppercase text-faint mb-1">Platform fee /mo</span>
+              <span class="block text-[10px] tracking-[0.06em] uppercase text-muted-foreground mb-1">Platform fee /mo</span>
               <div
-                class="bg-panel2 border border-line rounded-md px-2.5 py-2 font-mono text-[12px] text-txt flex justify-between items-center"
+                class="bg-secondary border border-border rounded-md px-2.5 py-2 font-mono text-[12px] text-foreground flex justify-between items-center"
               >
                 $35
               </div>
             </div>
             <div class="flex-1 min-w-[130px]">
-              <span class="block text-[10px] tracking-[0.06em] uppercase text-faint mb-1">State (tax)</span>
+              <span class="block text-[10px] tracking-[0.06em] uppercase text-muted-foreground mb-1">State (tax)</span>
               <div
-                class="bg-panel2 border border-line rounded-md px-2.5 py-2 font-mono text-[12px] text-txt flex justify-between items-center"
+                class="bg-secondary border border-border rounded-md px-2.5 py-2 font-mono text-[12px] text-foreground flex justify-between items-center"
               >
-                Texas <span class="text-faint">&#9662;</span>
+                Texas <span class="text-muted-foreground">&#9662;</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="gs-load" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="gs-load" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">Loading your CSV</h2>
         <p>
           Click <b>Load CSV</b> and choose your platform's export. Blotterbook reads the header row, <b>auto-detects the platform</b>, and
           shows what it found — it does not enter the app until you confirm. If detection is wrong or blank, pick the platform from the
           dropdown to re-parse. Only <code>.csv</code> files are accepted, and nothing imports unless parsing succeeds.
         </p>
-        <div class="bg-panel border border-line rounded-xl p-3.5 my-4">
-          <p class="font-mono text-[10.5px] tracking-[0.08em] uppercase text-faint m-0 mb-2.5">Load &amp; detect</p>
+        <div class="bg-card border border-border rounded-xl p-3.5 my-4">
+          <p class="font-mono text-[10.5px] tracking-[0.08em] uppercase text-muted-foreground m-0 mb-2.5">Load &amp; detect</p>
           <div class="flex gap-2.5 flex-wrap">
             <div class="flex-1 min-w-[130px] max-w-[150px]">
-              <span class="block text-[10px] tracking-[0.06em] uppercase text-faint mb-1">&nbsp;</span>
+              <span class="block text-[10px] tracking-[0.06em] uppercase text-muted-foreground mb-1">&nbsp;</span>
               <div
-                class="bg-panel2 border border-line rounded-md px-2.5 py-2 font-mono text-[12px] text-txt flex justify-between items-center"
+                class="bg-secondary border border-border rounded-md px-2.5 py-2 font-mono text-[12px] text-foreground flex justify-between items-center"
               >
                 Load CSV
               </div>
             </div>
             <div class="flex-1 min-w-[130px]">
-              <span class="block text-[10px] tracking-[0.06em] uppercase text-faint mb-1">Platform</span>
+              <span class="block text-[10px] tracking-[0.06em] uppercase text-muted-foreground mb-1">Platform</span>
               <div
-                class="bg-panel2 border border-line rounded-md px-2.5 py-2 font-mono text-[12px] text-txt flex justify-between items-center"
+                class="bg-secondary border border-border rounded-md px-2.5 py-2 font-mono text-[12px] text-foreground flex justify-between items-center"
               >
-                TradingView <span class="text-faint">&#9662;</span>
+                TradingView <span class="text-muted-foreground">&#9662;</span>
               </div>
             </div>
           </div>
-          <p class="font-mono text-[12px] text-green mt-3">Detected TradingView · 63 trades ready to import</p>
+          <p class="font-mono text-[12px] text-chart-2 mt-3">Detected TradingView · 63 trades ready to import</p>
         </div>
         <p>
           Then press <b>Start Blotterbook</b>. Re-uploads are safe — trades are de-duplicated by a stable id, so importing an overlapping
@@ -224,25 +224,25 @@
         </p>
       </section>
 
-      <section id="gs-dashboard" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="gs-dashboard" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">Reading the dashboard</h2>
         <p>
           Once loaded, the dashboard summarizes performance <b>after</b> costs and an estimated tax bill — not just gross P&amp;L. The
           headline cards give you the shape at a glance:
         </p>
-        <div class="bg-panel border border-line rounded-xl p-3.5 my-4">
-          <p class="font-mono text-[10.5px] tracking-[0.08em] uppercase text-faint m-0 mb-2.5">Headline stats</p>
+        <div class="bg-card border border-border rounded-xl p-3.5 my-4">
+          <p class="font-mono text-[10.5px] tracking-[0.08em] uppercase text-muted-foreground m-0 mb-2.5">Headline stats</p>
           <div class="grid grid-cols-3 gap-2.5 max-[560px]:grid-cols-2">
-            <div class="bg-panel2 border border-line rounded-[9px] px-3 py-[11px]">
-              <div class="text-[10px] tracking-[0.07em] uppercase text-dim">Net P&amp;L</div>
+            <div class="bg-secondary border border-border rounded-[9px] px-3 py-[11px]">
+              <div class="text-[10px] tracking-[0.07em] uppercase text-muted-foreground">Net P&amp;L</div>
               <div class="font-mono text-[20px] font-semibold mt-[5px] pos">+$3,771</div>
             </div>
-            <div class="bg-panel2 border border-line rounded-[9px] px-3 py-[11px]">
-              <div class="text-[10px] tracking-[0.07em] uppercase text-dim">Win rate</div>
+            <div class="bg-secondary border border-border rounded-[9px] px-3 py-[11px]">
+              <div class="text-[10px] tracking-[0.07em] uppercase text-muted-foreground">Win rate</div>
               <div class="font-mono text-[20px] font-semibold mt-[5px]">60.3%</div>
             </div>
-            <div class="bg-panel2 border border-line rounded-[9px] px-3 py-[11px]">
-              <div class="text-[10px] tracking-[0.07em] uppercase text-dim">Profit factor</div>
+            <div class="bg-secondary border border-border rounded-[9px] px-3 py-[11px]">
+              <div class="text-[10px] tracking-[0.07em] uppercase text-muted-foreground">Profit factor</div>
               <div class="font-mono text-[20px] font-semibold mt-[5px] pos">4.03</div>
             </div>
           </div>
@@ -251,8 +251,8 @@
           The <b>Performance</b> graph plots cumulative P&amp;L; toggle the Gross / Net / Take-home overlays to see what costs and tax
           remove:
         </p>
-        <div class="bg-panel border border-line rounded-xl p-3.5 my-4">
-          <p class="font-mono text-[10.5px] tracking-[0.08em] uppercase text-faint m-0 mb-2.5">Performance — cumulative P&amp;L</p>
+        <div class="bg-card border border-border rounded-xl p-3.5 my-4">
+          <p class="font-mono text-[10.5px] tracking-[0.08em] uppercase text-muted-foreground m-0 mb-2.5">Performance — cumulative P&amp;L</p>
           <svg viewBox="0 0 560 150" width="100%" height="140" preserveAspectRatio="none" role="img" aria-label="Example rising equity curve">
             <line x1="40" y1="20" x2="540" y2="20" stroke="#262d38" />
             <line x1="40" y1="75" x2="540" y2="75" stroke="#262d38" />
@@ -263,25 +263,25 @@
           </svg>
         </div>
         <p>The <b>Break-even &amp; Cost Budget</b> panel itemizes exactly where the money goes, from gross to take-home:</p>
-        <div class="bg-panel border border-line rounded-xl p-3.5 my-4">
-          <p class="font-mono text-[10.5px] tracking-[0.08em] uppercase text-faint m-0 mb-2.5">Break-even &amp; cost budget</p>
-          <div class="flex justify-between py-[7px] border-b border-line text-[13px]">
-            <span class="text-dim">Gross P&amp;L</span><span class="font-mono pos">$3,899.50</span>
+        <div class="bg-card border border-border rounded-xl p-3.5 my-4">
+          <p class="font-mono text-[10.5px] tracking-[0.08em] uppercase text-muted-foreground m-0 mb-2.5">Break-even &amp; cost budget</p>
+          <div class="flex justify-between py-[7px] border-b border-border text-[13px]">
+            <span class="text-muted-foreground">Gross P&amp;L</span><span class="font-mono pos">$3,899.50</span>
           </div>
-          <div class="flex justify-between py-[7px] border-b border-line text-[13px]">
-            <span class="text-dim">Commissions (all-in)</span><span class="font-mono neg">-$78.30</span>
+          <div class="flex justify-between py-[7px] border-b border-border text-[13px]">
+            <span class="text-muted-foreground">Commissions (all-in)</span><span class="font-mono neg">-$78.30</span>
           </div>
-          <div class="flex justify-between py-[7px] border-b border-line text-[13px]">
-            <span class="text-dim">Subscriptions ($50/mo &times; 1)</span><span class="font-mono neg">-$50.00</span>
+          <div class="flex justify-between py-[7px] border-b border-border text-[13px]">
+            <span class="text-muted-foreground">Subscriptions ($50/mo &times; 1)</span><span class="font-mono neg">-$50.00</span>
           </div>
-          <div class="flex justify-between py-[7px] border-b border-line text-[13px]">
-            <span class="text-txt font-semibold">Net P&amp;L (pre-tax)</span><span class="font-mono text-txt font-semibold">$3,771.20</span>
+          <div class="flex justify-between py-[7px] border-b border-border text-[13px]">
+            <span class="text-foreground font-semibold">Net P&amp;L (pre-tax)</span><span class="font-mono text-foreground font-semibold">$3,771.20</span>
           </div>
-          <div class="flex justify-between py-[7px] border-b border-line text-[13px]">
-            <span class="text-dim">Est. 1256 tax (22.5%)</span><span class="font-mono neg">-$848.52</span>
+          <div class="flex justify-between py-[7px] border-b border-border text-[13px]">
+            <span class="text-muted-foreground">Est. 1256 tax (22.5%)</span><span class="font-mono neg">-$848.52</span>
           </div>
           <div class="flex justify-between py-[7px] text-[13px]">
-            <span class="text-txt font-semibold">After-tax take-home</span><span class="font-mono text-txt font-semibold pos">$2,922.68</span>
+            <span class="text-foreground font-semibold">After-tax take-home</span><span class="font-mono text-foreground font-semibold pos">$2,922.68</span>
           </div>
         </div>
         <p>
@@ -290,7 +290,7 @@
         </p>
       </section>
 
-      <section id="gs-manage" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="gs-manage" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">Managing &amp; backing up data</h2>
         <p>
           Open <b>Manage data</b> (top bar) to import more CSVs, search and delete individual trades, and — importantly —
@@ -301,12 +301,12 @@
       </section>
 
       <!-- ============ IMPORTING BY PLATFORM ============ -->
-      <section id="imp-tradingview" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="imp-tradingview" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">
           TradingView
           <span
-            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-[rgba(63,185,80,0.4)] bg-[rgba(63,185,80,0.1)] text-green"
-          ><span class="w-[7px] h-[7px] rounded-full bg-green"></span>Tested on real data</span>
+            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-chart-2/40 bg-chart-2/10 text-chart-2"
+          ><span class="w-[7px] h-[7px] rounded-full bg-chart-2"></span>Tested on real data</span>
         </h2>
         <p>Blotterbook's reference format. Works with the Paper Trading account and connected brokers.</p>
         <ol class="steps">
@@ -320,11 +320,11 @@
         </p>
       </section>
 
-      <section id="imp-tradovate" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="imp-tradovate" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">Tradovate
           <span
-            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-[rgba(227,179,65,0.35)] bg-[rgba(227,179,65,0.1)] text-warn"
-          ><span class="w-[7px] h-[7px] rounded-full bg-warn"></span>Beta · synthetic-tested</span>
+            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-chart-4/35 bg-chart-4/10 text-chart-4"
+          ><span class="w-[7px] h-[7px] rounded-full bg-chart-4"></span>Beta · synthetic-tested</span>
         </h2>
         <ol class="steps">
           <li>In the Tradovate web app, open the <b>Orders</b> tab (not Performance).</li>
@@ -337,11 +337,11 @@
         </p>
       </section>
 
-      <section id="imp-rithmic" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="imp-rithmic" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">Rithmic R|Trader
           <span
-            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-[rgba(227,179,65,0.35)] bg-[rgba(227,179,65,0.1)] text-warn"
-          ><span class="w-[7px] h-[7px] rounded-full bg-warn"></span>Beta · synthetic-tested</span>
+            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-chart-4/35 bg-chart-4/10 text-chart-4"
+          ><span class="w-[7px] h-[7px] rounded-full bg-chart-4"></span>Beta · synthetic-tested</span>
         </h2>
         <ol class="steps">
           <li>In R&nbsp;|&nbsp;Trader, click <b>File → Orders History</b>.</li>
@@ -357,11 +357,11 @@
         </p>
       </section>
 
-      <section id="imp-sierrachart" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="imp-sierrachart" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">Sierra Chart
           <span
-            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-[rgba(227,179,65,0.35)] bg-[rgba(227,179,65,0.1)] text-warn"
-          ><span class="w-[7px] h-[7px] rounded-full bg-warn"></span>Beta · synthetic-tested</span>
+            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-chart-4/35 bg-chart-4/10 text-chart-4"
+          ><span class="w-[7px] h-[7px] rounded-full bg-chart-4"></span>Beta · synthetic-tested</span>
         </h2>
         <ol class="steps">
           <li>Open <b>Trade → Trade Activity Log</b>.</li>
@@ -374,11 +374,11 @@
         </p>
       </section>
 
-      <section id="imp-tradestation" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="imp-tradestation" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">TradeStation
           <span
-            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-[rgba(227,179,65,0.35)] bg-[rgba(227,179,65,0.1)] text-warn"
-          ><span class="w-[7px] h-[7px] rounded-full bg-warn"></span>Beta · synthetic-tested</span>
+            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-chart-4/35 bg-chart-4/10 text-chart-4"
+          ><span class="w-[7px] h-[7px] rounded-full bg-chart-4"></span>Beta · synthetic-tested</span>
         </h2>
         <ol class="steps">
           <li>From the platform's <b>Accounts</b> / trade history (or Client Center), choose a date range.</li>
@@ -390,11 +390,11 @@
         </p>
       </section>
 
-      <section id="imp-motivewave" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="imp-motivewave" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">MotiveWave
           <span
-            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-[rgba(227,179,65,0.35)] bg-[rgba(227,179,65,0.1)] text-warn"
-          ><span class="w-[7px] h-[7px] rounded-full bg-warn"></span>Beta · synthetic-tested</span>
+            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-chart-4/35 bg-chart-4/10 text-chart-4"
+          ><span class="w-[7px] h-[7px] rounded-full bg-chart-4"></span>Beta · synthetic-tested</span>
         </h2>
         <ol class="steps">
           <li>Add a <b>Trades</b> panel (Trade Report).</li>
@@ -406,11 +406,11 @@
         </p>
       </section>
 
-      <section id="imp-webull" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="imp-webull" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">Webull
           <span
-            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-[rgba(227,179,65,0.35)] bg-[rgba(227,179,65,0.1)] text-warn"
-          ><span class="w-[7px] h-[7px] rounded-full bg-warn"></span>Beta · synthetic-tested</span>
+            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-chart-4/35 bg-chart-4/10 text-chart-4"
+          ><span class="w-[7px] h-[7px] rounded-full bg-chart-4"></span>Beta · synthetic-tested</span>
         </h2>
         <ol class="steps">
           <li>On Webull <b>desktop</b>, go to <b>Account → Orders → Order History</b>.</li>
@@ -422,11 +422,11 @@
         </p>
       </section>
 
-      <section id="imp-ibkr" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="imp-ibkr" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">Interactive Brokers
           <span
-            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-[rgba(227,179,65,0.35)] bg-[rgba(227,179,65,0.1)] text-warn"
-          ><span class="w-[7px] h-[7px] rounded-full bg-warn"></span>Beta · synthetic-tested</span>
+            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-chart-4/35 bg-chart-4/10 text-chart-4"
+          ><span class="w-[7px] h-[7px] rounded-full bg-chart-4"></span>Beta · synthetic-tested</span>
         </h2>
         <ol class="steps">
           <li>Create a <b>Flex Query</b> (Trade Confirmation / Trades) — or use an Activity Statement.</li>
@@ -439,11 +439,11 @@
         </p>
       </section>
 
-      <section id="imp-schwab" class="scroll-mt-[72px] mt-[18px] border-t border-line pt-6">
+      <section id="imp-schwab" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">Schwab / thinkorswim
           <span
-            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-[rgba(227,179,65,0.35)] bg-[rgba(227,179,65,0.1)] text-warn"
-          ><span class="w-[7px] h-[7px] rounded-full bg-warn"></span>Beta · synthetic-tested</span>
+            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-chart-4/35 bg-chart-4/10 text-chart-4"
+          ><span class="w-[7px] h-[7px] rounded-full bg-chart-4"></span>Beta · synthetic-tested</span>
         </h2>
         <ol class="steps">
           <li>Open the desktop <b>thinkorswim</b> platform → <b>Monitor → Account Statement</b>.</li>
@@ -488,10 +488,10 @@
     width: 26px;
     height: 26px;
     border-radius: 50%;
-    background: var(--panel2);
-    border: 1px solid var(--line);
+    background: var(--secondary);
+    border: 1px solid var(--border);
     color: var(--primary);
-    font-family: var(--mono);
+    font-family: var(--font-mono);
     font-size: 13px;
     display: flex;
     align-items: center;
@@ -499,6 +499,6 @@
     font-weight: 600;
   }
   .steps > li b {
-    color: var(--txt);
+    color: var(--foreground);
   }
 </style>

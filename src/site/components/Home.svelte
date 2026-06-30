@@ -132,11 +132,11 @@
 <header
   id="hdr"
   class="sticky top-0 z-50 border-b backdrop-blur-[10px] backdrop-saturate-150 transition-[border-color,background] duration-[250ms] {scrolled
-    ? 'border-line bg-[rgba(13,16,20,0.86)]'
-    : 'border-transparent bg-[rgba(13,16,20,0.72)]'}"
+    ? 'border-border bg-background/86'
+    : 'border-transparent bg-background/72'}"
 >
   <nav class="nav relative mx-auto flex max-w-[1180px] items-center gap-[18px] px-[22px] py-[13px]">
-    <a class="wordmark inline-flex items-center gap-[9px] text-[16px] font-bold tracking-[0.01em] text-txt" href="#home"><span class="dot h-[9px] w-[9px] rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--take))]"></span>Blotterbook</a>
+    <a class="wordmark inline-flex items-center gap-[9px] text-[16px] font-bold tracking-[0.01em] text-foreground" href="#home"><span class="dot h-[9px] w-[9px] rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--chart-3))]"></span>Blotterbook</a>
     <input type="checkbox" id="navtoggle" class="navtoggle pointer-events-none absolute h-px w-px opacity-0" aria-label="Toggle navigation menu" bind:checked={navOpen} />
     <div class="navlinks ml-2 flex flex-wrap gap-1" role="presentation" onclick={() => (navOpen = false)}>
       <a href="#features">Features</a>
@@ -149,9 +149,9 @@
       <a class="navlaunch" href="/app/">Launch Blotterbook &rarr;</a>
     </div>
     <div class="navcta ml-auto flex items-center gap-[10px]">
-      <a class="btn-primary inline-flex items-center gap-[7px] rounded-[9px] bg-primary px-4 py-[9px] text-[13.5px] font-semibold text-bg transition-[filter,transform] duration-150 hover:translate-y-[-1px] hover:brightness-[1.08]" href="/app/">Launch Blotterbook &rarr;</a>
+      <a class="btn-primary inline-flex items-center gap-[7px] rounded-[9px] bg-primary px-4 py-[9px] text-[13.5px] font-semibold text-primary-foreground transition-[filter,transform] duration-150 hover:translate-y-[-1px] hover:brightness-[1.08]" href="/app/">Launch Blotterbook &rarr;</a>
     </div>
-    <label class="hamburger ml-auto hidden h-9 w-10 cursor-pointer items-center justify-center rounded-[9px] border border-line bg-panel" for="navtoggle" title="Menu">
+    <label class="hamburger ml-auto hidden h-9 w-10 cursor-pointer items-center justify-center rounded-[9px] border border-border bg-card" for="navtoggle" title="Menu">
       <svg viewBox="0 0 24 24" aria-hidden="true" class="h-5 w-5 fill-none stroke-txt stroke-2 [stroke-linecap:round]"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
     </label>
   </nav>
@@ -161,34 +161,34 @@
 <section id="home" class="flex min-h-screen scroll-mt-0 flex-col items-center justify-center px-[22px] pb-[72px] pt-[88px] text-center">
   <div class="inner flex w-full max-w-[1180px] flex-col items-center">
     <div
-      class="livepill mb-[22px] inline-flex items-center gap-2 rounded-full border border-line bg-panel px-[13px] py-[6px] font-mono text-[12px] tracking-[0.04em] {pillState === 'live' || pillState === 'maint' ? 'text-txt' : 'text-dim'}"
+      class="livepill mb-[22px] inline-flex items-center gap-2 rounded-full border border-border bg-card px-[13px] py-[6px] font-mono text-[12px] tracking-[0.04em] {pillState === 'live' || pillState === 'maint' ? 'text-foreground' : 'text-muted-foreground'}"
       title="Checks whether the live Blotterbook app is responding"
     >
       <span
         class="livedot relative h-2 w-2 flex-none rounded-full {pillState === 'live'
-          ? 'bg-green livedot-live'
+          ? 'bg-chart-2 livedot-live'
           : pillState === 'down'
-            ? 'bg-red'
+            ? 'bg-destructive'
             : pillState === 'maint'
-              ? 'bg-warn'
+              ? 'bg-chart-4'
               : 'bg-faint'}"
       ></span><span>{pillText}</span>
     </div>
-    <div class="banner w-full max-w-[880px]"><img src="assets/banner.svg" alt="Blotterbook — futures journal and cost dashboard" class="block h-auto w-full rounded-[14px] border border-line" /></div>
-    <p class="tag mx-auto mt-6 max-w-[620px] text-[clamp(15px,1.7vw,17px)] leading-[1.6] text-dim">
+    <div class="banner w-full max-w-[880px]"><img src="assets/banner.svg" alt="Blotterbook — futures journal and cost dashboard" class="block h-auto w-full rounded-[14px] border border-border" /></div>
+    <p class="tag mx-auto mt-6 max-w-[620px] text-[clamp(15px,1.7vw,17px)] leading-[1.6] text-muted-foreground">
       A fast, private futures trading journal and true-cost dashboard. Import your broker CSV and see real, after-cost, after-tax
       performance — everything runs in your browser.
     </p>
     <div class="hero-ctas mt-[30px] flex flex-wrap justify-center gap-3">
-      <a class="cta-lg inline-flex items-center gap-[9px] rounded-[11px] bg-primary px-7 py-[14px] text-[15px] font-semibold text-bg transition-[filter,transform] duration-150 hover:translate-y-[-1px] hover:brightness-[1.08]" href="/app/">Launch Blotterbook &rarr;</a>
-      <a class="cta-ghost inline-flex items-center gap-2 rounded-[11px] border border-line bg-panel px-6 py-[13px] text-[15px] font-medium text-txt transition-[border-color,background] duration-150 hover:border-primary hover:bg-panel2" href="/app/demo.html">See Demo</a>
+      <a class="cta-lg inline-flex items-center gap-[9px] rounded-[11px] bg-primary px-7 py-[14px] text-[15px] font-semibold text-primary-foreground transition-[filter,transform] duration-150 hover:translate-y-[-1px] hover:brightness-[1.08]" href="/app/">Launch Blotterbook &rarr;</a>
+      <a class="cta-ghost inline-flex items-center gap-2 rounded-[11px] border border-border bg-card px-6 py-[13px] text-[15px] font-medium text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-secondary" href="/app/demo.html">See Demo</a>
     </div>
     <div class="hero-strip mt-10 flex max-w-[780px] flex-wrap justify-center gap-7">
-      <div class="min-w-[180px] flex-1 text-[13px] leading-[1.55] text-dim [&>b]:mb-[5px] [&>b]:block [&>b]:text-[14px] [&>b]:text-txt"><b>Private by design</b>Your trades are parsed and stored locally. Nothing is uploaded.</div>
-      <div class="min-w-[180px] flex-1 text-[13px] leading-[1.55] text-dim [&>b]:mb-[5px] [&>b]:block [&>b]:text-[14px] [&>b]:text-txt"><b>True cost &amp; tax model</b>Per-symbol commissions, data fees, and a Section 1256 tax estimate.</div>
-      <div class="min-w-[180px] flex-1 text-[13px] leading-[1.55] text-dim [&>b]:mb-[5px] [&>b]:block [&>b]:text-[14px] [&>b]:text-txt"><b>Journal &amp; analyze</b>Calendar, equity curve, filters, day-notes, and deep statistics.</div>
+      <div class="min-w-[180px] flex-1 text-[13px] leading-[1.55] text-muted-foreground [&>b]:mb-[5px] [&>b]:block [&>b]:text-[14px] [&>b]:text-foreground"><b>Private by design</b>Your trades are parsed and stored locally. Nothing is uploaded.</div>
+      <div class="min-w-[180px] flex-1 text-[13px] leading-[1.55] text-muted-foreground [&>b]:mb-[5px] [&>b]:block [&>b]:text-[14px] [&>b]:text-foreground"><b>True cost &amp; tax model</b>Per-symbol commissions, data fees, and a Section 1256 tax estimate.</div>
+      <div class="min-w-[180px] flex-1 text-[13px] leading-[1.55] text-muted-foreground [&>b]:mb-[5px] [&>b]:block [&>b]:text-[14px] [&>b]:text-foreground"><b>Journal &amp; analyze</b>Calendar, equity curve, filters, day-notes, and deep statistics.</div>
     </div>
-    <div class="scrollhint mt-[46px] font-mono text-[12px] tracking-[0.1em] text-faint">SCROLL ↓</div>
+    <div class="scrollhint mt-[46px] font-mono text-[12px] tracking-[0.1em] text-muted-foreground">SCROLL ↓</div>
   </div>
 </section>
 
@@ -197,17 +197,17 @@
   <div class="inner reveal mx-auto w-full max-w-[1180px]" use:reveal>
     <p class="mb-[14px] font-mono text-[12px] uppercase tracking-[0.16em] text-primary">Features</p>
     <h2 class="h2 mb-[14px] text-[clamp(26px,4vw,40px)] font-bold leading-[1.12] tracking-[-0.02em]">Everything in one private dashboard</h2>
-    <p class="mb-2 max-w-[680px] text-[clamp(15px,1.6vw,17px)] leading-[1.6] text-dim">
+    <p class="mb-2 max-w-[680px] text-[clamp(15px,1.6vw,17px)] leading-[1.6] text-muted-foreground">
       Blotterbook turns a raw broker export into an honest picture of your trading — gross, net of every fee, and after an estimated tax
       bill. No accounts, no uploads, no dependencies.
     </p>
 
     <!-- condensed use-cases, horizontal -->
     <div class="uc-row mt-[30px] grid grid-cols-4 gap-[14px] max-[900px]:grid-cols-2 max-[560px]:grid-cols-1">
-      <div class="ucx relative overflow-hidden rounded-[12px] border border-line bg-panel p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--take))] before:content-['']"><p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-take">Cost intelligence</p><h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Brokers &amp; feeds vs. real PnL</h3><p class="m-0 text-[12.5px] leading-[1.55] text-dim">Flip commission tiers and data feeds; watch your net move across your real history.</p></div>
-      <div class="ucx relative overflow-hidden rounded-[12px] border border-line bg-panel p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--take))] before:content-['']"><p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-take">Tax planning</p><h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Location-based estimates</h3><p class="m-0 text-[12.5px] leading-[1.55] text-dim">A Section 1256 blend on positive net profit, by state — know it long before April.</p></div>
-      <div class="ucx relative overflow-hidden rounded-[12px] border border-line bg-panel p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--take))] before:content-['']"><p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-take">Business budgeting</p><h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Break-even before you trade</h3><p class="m-0 text-[12.5px] leading-[1.55] text-dim">Subscriptions + commissions become a break-even-per-trade and a clear cost waterfall.</p></div>
-      <div class="ucx relative overflow-hidden rounded-[12px] border border-line bg-panel p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--take))] before:content-['']"><p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-take">Discipline &amp; review</p><h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Journal every session</h3><p class="m-0 text-[12.5px] leading-[1.55] text-dim">Day-notes, equity-curve markup, and stats by session and weekday to find your edge.</p></div>
+      <div class="ucx relative overflow-hidden rounded-[12px] border border-border bg-card p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--chart-3))] before:content-['']"><p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-chart-3">Cost intelligence</p><h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Brokers &amp; feeds vs. real PnL</h3><p class="m-0 text-[12.5px] leading-[1.55] text-muted-foreground">Flip commission tiers and data feeds; watch your net move across your real history.</p></div>
+      <div class="ucx relative overflow-hidden rounded-[12px] border border-border bg-card p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--chart-3))] before:content-['']"><p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-chart-3">Tax planning</p><h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Location-based estimates</h3><p class="m-0 text-[12.5px] leading-[1.55] text-muted-foreground">A Section 1256 blend on positive net profit, by state — know it long before April.</p></div>
+      <div class="ucx relative overflow-hidden rounded-[12px] border border-border bg-card p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--chart-3))] before:content-['']"><p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-chart-3">Business budgeting</p><h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Break-even before you trade</h3><p class="m-0 text-[12.5px] leading-[1.55] text-muted-foreground">Subscriptions + commissions become a break-even-per-trade and a clear cost waterfall.</p></div>
+      <div class="ucx relative overflow-hidden rounded-[12px] border border-border bg-card p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--chart-3))] before:content-['']"><p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-chart-3">Discipline &amp; review</p><h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Journal every session</h3><p class="m-0 text-[12.5px] leading-[1.55] text-muted-foreground">Day-notes, equity-curve markup, and stats by session and weekday to find your edge.</p></div>
     </div>
 
     <!-- clickable feature list (left) + detail (right) -->
@@ -216,10 +216,10 @@
         {#each FEATURES as f, i (f.title)}
           <button
             type="button"
-            class="feat-item flex w-full cursor-pointer appearance-none items-center gap-[13px] rounded-[12px] border bg-panel px-4 py-[14px] text-left transition-[border-color,background,transform] duration-[180ms] hover:translate-x-[2px] hover:border-hover-line focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary {activeFeat ===
+            class="feat-item flex w-full cursor-pointer appearance-none items-center gap-[13px] rounded-[12px] border bg-card px-4 py-[14px] text-left transition-[border-color,background,transform] duration-[180ms] hover:translate-x-[2px] hover:border-ring focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary {activeFeat ===
             i
-              ? 'is-active border-primary bg-panel2'
-              : 'border-line'}"
+              ? 'is-active border-primary bg-secondary'
+              : 'border-border'}"
             role="tab"
             id="feattab-{i}"
             aria-controls="featDetail"
@@ -229,19 +229,19 @@
             onclick={() => (activeFeat = i)}
             onkeydown={onFeatKeydown}
           >
-            <span class="ficon flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px] bg-[rgba(106,160,255,0.12)]"><svg viewBox="0 0 24 24" aria-hidden="true" class="h-[18px] w-[18px] fill-none stroke-primary stroke-[1.8] [stroke-linecap:round] [stroke-linejoin:round]">{@html f.icon}</svg></span><span class="text-[14.5px] font-semibold tracking-[-0.01em]">{f.title}</span>
+            <span class="ficon flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px] bg-primary/12"><svg viewBox="0 0 24 24" aria-hidden="true" class="h-[18px] w-[18px] fill-none stroke-primary stroke-[1.8] [stroke-linecap:round] [stroke-linejoin:round]">{@html f.icon}</svg></span><span class="text-[14.5px] font-semibold tracking-[-0.01em]">{f.title}</span>
           </button>
         {/each}
       </div>
-      <div class="feat-detail flex flex-col justify-center rounded-[14px] border border-line bg-panel px-[30px] py-7" id="featDetail" role="tabpanel" tabindex="0" aria-live="polite" aria-labelledby="feattab-{activeFeat}">
-        <svg class="feat-graphic mb-5 h-auto w-full max-w-[320px] rounded-[12px] border border-line bg-panel2 p-[6px]" viewBox="0 0 260 140" role="img" aria-label="{FEATURES[activeFeat].title} — illustration">{@html FEATURES[activeFeat].graphic}</svg>
+      <div class="feat-detail flex flex-col justify-center rounded-[14px] border border-border bg-card px-[30px] py-7" id="featDetail" role="tabpanel" tabindex="0" aria-live="polite" aria-labelledby="feattab-{activeFeat}">
+        <svg class="feat-graphic mb-5 h-auto w-full max-w-[320px] rounded-[12px] border border-border bg-secondary p-[6px]" viewBox="0 0 260 140" role="img" aria-label="{FEATURES[activeFeat].title} — illustration">{@html FEATURES[activeFeat].graphic}</svg>
         <h3 class="mb-[11px] text-[21px] font-semibold tracking-[-0.015em]">{FEATURES[activeFeat].title}</h3>
-        <p class="m-0 max-w-[54ch] text-[15px] leading-[1.7] text-dim">{FEATURES[activeFeat].body}</p>
+        <p class="m-0 max-w-[54ch] text-[15px] leading-[1.7] text-muted-foreground">{FEATURES[activeFeat].body}</p>
       </div>
     </div>
 
-    <div class="dual-pitch mt-[30px] inline-flex flex-wrap items-center gap-[14px] rounded-[11px] border border-line bg-panel px-[18px] py-[14px] text-[14px] text-dim [&_b]:text-txt">
-      <span><b>The pitch:</b> profit calculator <span class="font-mono text-faint">&amp;</span> budgeting tool <span class="font-mono text-faint">+</span> a private trade journal — without a single byte leaving your browser.</span>
+    <div class="dual-pitch mt-[30px] inline-flex flex-wrap items-center gap-[14px] rounded-[11px] border border-border bg-card px-[18px] py-[14px] text-[14px] text-muted-foreground [&_b]:text-foreground">
+      <span><b>The pitch:</b> profit calculator <span class="font-mono text-muted-foreground">&amp;</span> budgeting tool <span class="font-mono text-muted-foreground">+</span> a private trade journal — without a single byte leaving your browser.</span>
     </div>
   </div>
 </section>
@@ -251,25 +251,25 @@
   <div class="inner reveal mx-auto w-full max-w-[1180px]" use:reveal>
     <p class="mb-[14px] font-mono text-[12px] uppercase tracking-[0.16em] text-primary">Supported platforms</p>
     <h2 class="h2 mb-[14px] text-[clamp(26px,4vw,40px)] font-bold leading-[1.12] tracking-[-0.02em]">Bring trades from the platform you already use</h2>
-    <p class="mb-2 max-w-[680px] text-[clamp(15px,1.6vw,17px)] leading-[1.6] text-dim">
+    <p class="mb-2 max-w-[680px] text-[clamp(15px,1.6vw,17px)] leading-[1.6] text-muted-foreground">
       Blotterbook auto-detects your export's format and normalizes it — your broker is a separate, cost-only setting. <b>TradingView</b> is
       verified against real exports; the others are in <b>beta</b>, built from each platform's documented format and exercised with synthetic
       test data. Step-by-step export guides live in the <a href="howto.html">How&nbsp;To</a>.
     </p>
     <ul class="plat-grid mt-[34px] grid list-none grid-cols-3 gap-3 p-0 max-[760px]:grid-cols-2 max-[460px]:grid-cols-1" aria-label="Supported trading platforms and test status">
-      <li><a class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-line bg-panel px-4 py-[15px] text-txt no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-hover-line hover:no-underline" href="howto.html#imp-tradingview"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-green shadow-[0_0_0_3px_rgba(63,185,80,0.15)]" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">TradingView</b><span class="pstate font-mono text-[10.5px] text-green">Verified · real data</span></a></li>
-      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-line bg-panel px-4 py-[15px] text-txt no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-hover-line hover:no-underline" href="howto.html#imp-tradovate"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-warn" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Tradovate</b><span class="pstate font-mono text-[10.5px] text-dim">Beta · synthetic</span></a></li>
-      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-line bg-panel px-4 py-[15px] text-txt no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-hover-line hover:no-underline" href="howto.html#imp-rithmic"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-warn" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Rithmic R|Trader</b><span class="pstate font-mono text-[10.5px] text-dim">Beta · synthetic</span></a></li>
-      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-line bg-panel px-4 py-[15px] text-txt no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-hover-line hover:no-underline" href="howto.html#imp-sierrachart"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-warn" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Sierra Chart</b><span class="pstate font-mono text-[10.5px] text-dim">Beta · synthetic</span></a></li>
-      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-line bg-panel px-4 py-[15px] text-txt no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-hover-line hover:no-underline" href="howto.html#imp-tradestation"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-warn" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">TradeStation</b><span class="pstate font-mono text-[10.5px] text-dim">Beta · synthetic</span></a></li>
-      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-line bg-panel px-4 py-[15px] text-txt no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-hover-line hover:no-underline" href="howto.html#imp-motivewave"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-warn" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">MotiveWave</b><span class="pstate font-mono text-[10.5px] text-dim">Beta · synthetic</span></a></li>
-      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-line bg-panel px-4 py-[15px] text-txt no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-hover-line hover:no-underline" href="howto.html#imp-webull"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-warn" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Webull</b><span class="pstate font-mono text-[10.5px] text-dim">Beta · synthetic</span></a></li>
-      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-line bg-panel px-4 py-[15px] text-txt no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-hover-line hover:no-underline" href="howto.html#imp-ibkr"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-warn" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Interactive Brokers</b><span class="pstate font-mono text-[10.5px] text-dim">Beta · synthetic</span></a></li>
-      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-line bg-panel px-4 py-[15px] text-txt no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-hover-line hover:no-underline" href="howto.html#imp-schwab"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-warn" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Schwab / thinkorswim</b><span class="pstate font-mono text-[10.5px] text-dim">Beta · synthetic</span></a></li>
+      <li><a class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-tradingview"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_rgba(63,185,80,0.15)]" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">TradingView</b><span class="pstate font-mono text-[10.5px] text-chart-2">Verified · real data</span></a></li>
+      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-tradovate"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Tradovate</b><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a></li>
+      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-rithmic"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Rithmic R|Trader</b><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a></li>
+      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-sierrachart"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Sierra Chart</b><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a></li>
+      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-tradestation"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">TradeStation</b><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a></li>
+      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-motivewave"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">MotiveWave</b><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a></li>
+      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-webull"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Webull</b><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a></li>
+      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-ibkr"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Interactive Brokers</b><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a></li>
+      <li><a class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline" href="howto.html#imp-schwab"><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b class="flex-1 text-[15px] font-semibold">Schwab / thinkorswim</b><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a></li>
     </ul>
-    <p class="plat-legend mt-5 flex flex-wrap items-center gap-5 text-[12.5px] text-dim">
-      <span><span class="lg mr-[7px] inline-block h-[10px] w-[10px] rounded-full bg-green align-middle"></span>Tested on real exports</span>
-      <span><span class="lg mr-[7px] inline-block h-[10px] w-[10px] rounded-full bg-warn align-middle"></span>Beta — built from docs &amp; synthetic tests; verify the numbers</span>
+    <p class="plat-legend mt-5 flex flex-wrap items-center gap-5 text-[12.5px] text-muted-foreground">
+      <span><span class="lg mr-[7px] inline-block h-[10px] w-[10px] rounded-full bg-chart-2 align-middle"></span>Tested on real exports</span>
+      <span><span class="lg mr-[7px] inline-block h-[10px] w-[10px] rounded-full bg-chart-4 align-middle"></span>Beta — built from docs &amp; synthetic tests; verify the numbers</span>
     </p>
   </div>
 </section>
@@ -279,49 +279,49 @@
   <div class="inner reveal mx-auto w-full max-w-[1180px]" use:reveal>
     <p class="mb-[14px] font-mono text-[12px] uppercase tracking-[0.16em] text-primary">Pricing</p>
     <h2 class="h2 mb-[14px] text-[clamp(26px,4vw,40px)] font-bold leading-[1.12] tracking-[-0.02em]">Free for everyone. Support if it helps.</h2>
-    <p class="mb-2 max-w-[680px] text-[clamp(15px,1.6vw,17px)] leading-[1.6] text-dim">
+    <p class="mb-2 max-w-[680px] text-[clamp(15px,1.6vw,17px)] leading-[1.6] text-muted-foreground">
       Blotterbook is free for everyone — the whole CSV-driven app, no account, nothing uploaded. If it saves you money, back the project
       with an optional donation. Cross-device <b>synced workspaces</b> are coming as a low-cost add-on.
     </p>
     <div class="price-grid mt-[34px] grid grid-cols-[1.1fr_1fr_1fr] items-stretch gap-4 max-[900px]:grid-cols-1">
-      <div class="plan flex flex-col rounded-[14px] border border-[rgba(106,160,255,0.5)] bg-panel p-[26px] shadow-[0_0_0_1px_rgba(106,160,255,0.15),0_14px_40px_-22px_rgba(106,160,255,0.5)]">
-        <span class="ribbon mb-[14px] self-start rounded-[6px] bg-[rgba(106,160,255,0.12)] px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-primary">Available now</span>
+      <div class="plan flex flex-col rounded-[14px] border border-primary/50 bg-card p-[26px] shadow-[0_0_0_1px_rgba(106,160,255,0.15),0_14px_40px_-22px_rgba(106,160,255,0.5)]">
+        <span class="ribbon mb-[14px] self-start rounded-[6px] bg-primary/12 px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-primary">Available now</span>
         <h3 class="mb-1 text-[18px] font-semibold">Blotterbook</h3>
-        <p class="mb-[18px] text-[13px] leading-[1.5] text-dim">The full app, free for everyone — no account, nothing uploaded, runs in your browser.</p>
+        <p class="mb-[18px] text-[13px] leading-[1.5] text-muted-foreground">The full app, free for everyone — no account, nothing uploaded, runs in your browser.</p>
         <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em]">Free</div>
         <ul class="my-4 mb-[22px] flex list-none flex-col gap-[10px] p-0">
-          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-dim"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Full journal, cost model, and tax estimate</li>
-          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-dim"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Live broker, fee, and feed reference data</li>
-          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-dim"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Everything runs locally in your browser</li>
+          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-muted-foreground"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Full journal, cost model, and tax estimate</li>
+          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-muted-foreground"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Live broker, fee, and feed reference data</li>
+          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-muted-foreground"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Everything runs locally in your browser</li>
         </ul>
-        <p class="mt-auto text-[12px] leading-[1.5] text-faint">No sign-up required to use the app.</p>
+        <p class="mt-auto text-[12px] leading-[1.5] text-muted-foreground">No sign-up required to use the app.</p>
       </div>
 
-      <div class="plan flex flex-col rounded-[14px] border border-line bg-panel p-[26px]">
-        <span class="mb-[14px] self-start rounded-[6px] border border-[rgba(201,139,255,0.4)] px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-take">Optional</span>
+      <div class="plan flex flex-col rounded-[14px] border border-border bg-card p-[26px]">
+        <span class="mb-[14px] self-start rounded-[6px] border border-chart-3/40 px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-chart-3">Optional</span>
         <h3 class="mb-1 text-[18px] font-semibold">Back the project</h3>
-        <p class="mb-[18px] text-[13px] leading-[1.5] text-dim">Pay-what-helps support that keeps Blotterbook free and funds new features.</p>
-        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em]">$25 <small class="text-[14px] font-normal text-dim">one-time</small></div>
-        <div class="mt-[6px] font-mono text-[22px] font-bold tracking-[-0.02em]">$50 <small class="text-[14px] font-normal text-dim">/ year</small></div>
+        <p class="mb-[18px] text-[13px] leading-[1.5] text-muted-foreground">Pay-what-helps support that keeps Blotterbook free and funds new features.</p>
+        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em]">$25 <small class="text-[14px] font-normal text-muted-foreground">one-time</small></div>
+        <div class="mt-[6px] font-mono text-[22px] font-bold tracking-[-0.02em]">$50 <small class="text-[14px] font-normal text-muted-foreground">/ year</small></div>
         <ul class="my-4 mb-[22px] flex list-none flex-col gap-[10px] p-0">
-          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-dim"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Keeps the free app free for everyone</li>
-          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-dim"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Funds adapters, analytics, and fixes</li>
-          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-dim"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Supporter recognition (planned)</li>
+          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-muted-foreground"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Keeps the free app free for everyone</li>
+          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-muted-foreground"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Funds adapters, analytics, and fixes</li>
+          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-muted-foreground"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Supporter recognition (planned)</li>
         </ul>
-        <p class="mt-auto text-[12px] leading-[1.5] text-faint">Donations open soon — secure checkout via Stripe.</p>
+        <p class="mt-auto text-[12px] leading-[1.5] text-muted-foreground">Donations open soon — secure checkout via Stripe.</p>
       </div>
 
-      <div class="plan flex flex-col rounded-[14px] border border-line bg-panel p-[26px] opacity-[0.62]">
-        <span class="mb-[14px] self-start rounded-[6px] border border-line px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-faint">Planned</span>
+      <div class="plan flex flex-col rounded-[14px] border border-border bg-card p-[26px] opacity-[0.62]">
+        <span class="mb-[14px] self-start rounded-[6px] border border-border px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">Planned</span>
         <h3 class="mb-1 text-[18px] font-semibold">Synced workspaces</h3>
-        <p class="mb-[18px] text-[13px] leading-[1.5] text-dim">End-to-end-encrypted sync of your trades, notes, tags &amp; saved filters across devices.</p>
-        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em] text-dim">$5 <small class="text-[14px] font-normal text-dim">/ month</small></div>
+        <p class="mb-[18px] text-[13px] leading-[1.5] text-muted-foreground">End-to-end-encrypted sync of your trades, notes, tags &amp; saved filters across devices.</p>
+        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em] text-muted-foreground">$5 <small class="text-[14px] font-normal text-muted-foreground">/ month</small></div>
         <ul class="my-4 mb-[22px] flex list-none flex-col gap-[10px] p-0">
-          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-dim"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-faint stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Use Blotterbook on all your devices</li>
-          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-dim"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-faint stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Zero-knowledge: we still never see your data</li>
-          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-dim"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-faint stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>No more re-uploading CSVs per device</li>
+          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-muted-foreground"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-faint stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Use Blotterbook on all your devices</li>
+          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-muted-foreground"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-faint stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>Zero-knowledge: we still never see your data</li>
+          <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-muted-foreground"><svg viewBox="0 0 24 24" class="mt-[2px] h-[15px] w-[15px] flex-none fill-none stroke-faint stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"><path d="M20 6L9 17l-5-5" /></svg>No more re-uploading CSVs per device</li>
         </ul>
-        <p class="mt-auto text-[12px] leading-[1.5] text-faint">Not ready yet — on the roadmap.</p>
+        <p class="mt-auto text-[12px] leading-[1.5] text-muted-foreground">Not ready yet — on the roadmap.</p>
       </div>
     </div>
   </div>
@@ -332,48 +332,48 @@
   <div class="inner reveal mx-auto w-full max-w-[1180px]" use:reveal>
     <p class="mb-[14px] font-mono text-[12px] uppercase tracking-[0.16em] text-primary">FAQ</p>
     <h2 class="h2 mb-[14px] text-[clamp(26px,4vw,40px)] font-bold leading-[1.12] tracking-[-0.02em]">Questions, limitations, and the fine print</h2>
-    <p class="mb-2 max-w-[680px] text-[clamp(15px,1.6vw,17px)] leading-[1.6] text-dim">Blotterbook is deliberately honest about what it does and doesn't measure. Here's the straight version.</p>
-    <div class="faq-list mt-[30px] max-w-[840px] border-t border-line">
-      <details class="border-b border-line">
-        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-txt transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>What data does Blotterbook need, and where does it go?</summary>
-        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-dim [&_code]:rounded-[5px] [&_code]:border [&_code]:border-line [&_code]:bg-panel [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-txt">It reads a balance-history CSV exported from TradingView. Required columns are <code>Time</code>, <code>Realized PnL (value)</code>, and <code>Action</code>; each row is treated as one position-close event. Everything is parsed and stored locally in your browser via IndexedDB — your trade data never leaves the page.</p>
+    <p class="mb-2 max-w-[680px] text-[clamp(15px,1.6vw,17px)] leading-[1.6] text-muted-foreground">Blotterbook is deliberately honest about what it does and doesn't measure. Here's the straight version.</p>
+    <div class="faq-list mt-[30px] max-w-[840px] border-t border-border">
+      <details class="border-b border-border">
+        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>What data does Blotterbook need, and where does it go?</summary>
+        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground">It reads a balance-history CSV exported from TradingView. Required columns are <code>Time</code>, <code>Realized PnL (value)</code>, and <code>Action</code>; each row is treated as one position-close event. Everything is parsed and stored locally in your browser via IndexedDB — your trade data never leaves the page.</p>
       </details>
-      <details class="border-b border-line">
-        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-txt transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>Do I need an account, and is anything uploaded?</summary>
-        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-dim [&_code]:rounded-[5px] [&_code]:border [&_code]:border-line [&_code]:bg-panel [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-txt">No account, no sign-up, nothing uploaded. The only outbound network call is loading the app's own reference-data JSON (brokers, fees, feeds, state tax). Use <code>Manage data</code> any time to back up, edit, or wipe everything stored in your browser.</p>
+      <details class="border-b border-border">
+        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>Do I need an account, and is anything uploaded?</summary>
+        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground">No account, no sign-up, nothing uploaded. The only outbound network call is loading the app's own reference-data JSON (brokers, fees, feeds, state tax). Use <code>Manage data</code> any time to back up, edit, or wipe everything stored in your browser.</p>
       </details>
-      <details class="border-b border-line">
-        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-txt transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>How are commissions and fees calculated?</summary>
-        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-dim [&_code]:rounded-[5px] [&_code]:border [&_code]:border-line [&_code]:bg-panel [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-txt">For each symbol, the all-in per-side cost is the broker's commission (micro or standard tier) plus the CME exchange, clearing, and NFA fee. A round turn is two sides. Broker rates come from editable reference data, so they can be kept current and may drift from your real fills — they're a close model, not your statement.</p>
+      <details class="border-b border-border">
+        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>How are commissions and fees calculated?</summary>
+        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground">For each symbol, the all-in per-side cost is the broker's commission (micro or standard tier) plus the CME exchange, clearing, and NFA fee. A round turn is two sides. Broker rates come from editable reference data, so they can be kept current and may drift from your real fills — they're a close model, not your statement.</p>
       </details>
-      <details class="border-b border-line">
-        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-txt transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>How does the tax estimate work?</summary>
-        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-dim [&_code]:rounded-[5px] [&_code]:border [&_code]:border-line [&_code]:bg-panel [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-txt">It uses a Section 1256 model: a blended rate of 60% long-term and 40% short-term federal rates plus your selected state's top marginal rate, applied to net pre-tax profit only when positive. It's a rough planning estimate to gauge take-home — not tax advice, and not a substitute for a professional.</p>
+      <details class="border-b border-border">
+        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>How does the tax estimate work?</summary>
+        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground">It uses a Section 1256 model: a blended rate of 60% long-term and 40% short-term federal rates plus your selected state's top marginal rate, applied to net pre-tax profit only when positive. It's a rough planning estimate to gauge take-home — not tax advice, and not a substitute for a professional.</p>
       </details>
-      <details class="border-b border-line">
-        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-txt transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>Which brokers and instruments are supported?</summary>
-        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-dim [&_code]:rounded-[5px] [&_code]:border [&_code]:border-line [&_code]:bg-panel [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-txt">Modeled brokers include AMP, EdgeClear, Tradovate / NinjaTrader, Optimus, Charles Schwab (thinkorswim), Interactive Brokers, and TradeStation. Instruments are CME futures, reduced to a root ticker (for example <code>MESM2025</code> becomes <code>MES</code>). Unknown symbols fall back to a default fee and are flagged.</p>
+      <details class="border-b border-border">
+        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>Which brokers and instruments are supported?</summary>
+        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground">Modeled brokers include AMP, EdgeClear, Tradovate / NinjaTrader, Optimus, Charles Schwab (thinkorswim), Interactive Brokers, and TradeStation. Instruments are CME futures, reduced to a root ticker (for example <code>MESM2025</code> becomes <code>MES</code>). Unknown symbols fall back to a default fee and are flagged.</p>
       </details>
-      <details class="border-b border-line">
-        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-txt transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>What are the known limitations?</summary>
-        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-dim [&_code]:rounded-[5px] [&_code]:border [&_code]:border-line [&_code]:bg-panel [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-txt">Drawdown is realized-only from the closed-trade curve, with no open-position heat. The export carries close timestamps only, so holding time isn't derivable. Calendar-day and RTH/ETH session grouping use the literal timestamp, not the CME session day. Sharpe is illustrative — daily PnL, population standard deviation, not annualized.</p>
+      <details class="border-b border-border">
+        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>What are the known limitations?</summary>
+        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground">Drawdown is realized-only from the closed-trade curve, with no open-position heat. The export carries close timestamps only, so holding time isn't derivable. Calendar-day and RTH/ETH session grouping use the literal timestamp, not the CME session day. Sharpe is illustrative — daily PnL, population standard deviation, not annualized.</p>
       </details>
-      <details class="border-b border-line">
-        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-txt transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>Will my data sync across devices?</summary>
-        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-dim [&_code]:rounded-[5px] [&_code]:border [&_code]:border-line [&_code]:bg-panel [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-txt">Not today. Local storage is per-browser, so data isn't synced across devices and is cleared if you clear site data — keep your original CSV or a backup. Re-uploading is safe: trades are de-duplicated by a stable id, so overlapping exports only add genuinely new rows. Cross-device <b>synced workspaces</b> (end-to-end encrypted, ~$5/month) are the one planned paid add-on — see Pricing.</p>
+      <details class="border-b border-border">
+        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>Will my data sync across devices?</summary>
+        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground">Not today. Local storage is per-browser, so data isn't synced across devices and is cleared if you clear site data — keep your original CSV or a backup. Re-uploading is safe: trades are de-duplicated by a stable id, so overlapping exports only add genuinely new rows. Cross-device <b>synced workspaces</b> (end-to-end encrypted, ~$5/month) are the one planned paid add-on — see Pricing.</p>
       </details>
-      <details class="border-b border-line">
-        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-txt transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>What does it cost?</summary>
-        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-dim [&_code]:rounded-[5px] [&_code]:border [&_code]:border-line [&_code]:bg-panel [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-txt">The app is <b>free for everyone</b> and stays free. You can optionally <b>back the project</b> with a $25 one-time or $50/year donation (checkout via Stripe, coming soon). The only planned paid feature is <b>synced workspaces</b> — end-to-end-encrypted cross-device sync at about $5/month — which isn't ready yet. Nothing else is gated.</p>
+      <details class="border-b border-border">
+        <summary class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"><svg class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>What does it cost?</summary>
+        <p class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground">The app is <b>free for everyone</b> and stays free. You can optionally <b>back the project</b> with a $25 one-time or $50/year donation (checkout via Stripe, coming soon). The only planned paid feature is <b>synced workspaces</b> — end-to-end-encrypted cross-device sync at about $5/month — which isn't ready yet. Nothing else is gated.</p>
       </details>
     </div>
   </div>
 </section>
 
-<footer class="border-t border-line px-[22px] py-10 text-center text-faint">
+<footer class="border-t border-border px-[22px] py-10 text-center text-muted-foreground">
   <div class="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-[18px]">
-    <span class="inline-flex items-center gap-2 font-bold text-txt"><span class="dot h-2 w-2 rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--take))]"></span>Blotterbook</span>
-    <div class="flex flex-wrap gap-[18px] [&_a]:text-[13px] [&_a]:text-dim [&_a:hover]:text-txt">
+    <span class="inline-flex items-center gap-2 font-bold text-foreground"><span class="dot h-2 w-2 rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--chart-3))]"></span>Blotterbook</span>
+    <div class="flex flex-wrap gap-[18px] [&_a]:text-[13px] [&_a]:text-muted-foreground [&_a:hover]:text-foreground">
       <a href="#features">Features</a>
       <a href="#platforms">Platforms</a>
       <a href="#pricing">Pricing</a>
@@ -384,7 +384,7 @@
       <a href="/app/">Launch</a>
       <a href="mailto:contact@blotterbook.com?subject=Blotterbook">Contact</a>
     </div>
-    <p class="mt-2 w-full text-[12px] text-faint">
+    <p class="mt-2 w-full text-[12px] text-muted-foreground">
       Blotterbook is a trading journal and cost/tax estimation tool — <b>not a broker</b>, and not financial, investment, or tax advice. It
       runs entirely in your browser; your trade data never leaves the page. All figures are estimates. Trading involves risk of loss. See
       <a href="legal.html">Legal &amp; Disclaimers</a>.
@@ -406,9 +406,9 @@
     min-height: 100%;
   }
   :global(body) {
-    background: var(--bg);
-    color: var(--txt);
-    font-family: var(--sans);
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     line-height: 1.5;
     overflow-x: hidden;
@@ -424,7 +424,7 @@
       radial-gradient(560px 420px at 96% 4%, rgba(201, 139, 255, 0.08), transparent 70%);
   }
   /* A128: the bare-<a> base color sits in @layer base so a utility text color on an <a> (e.g. the
-     accent CTAs' text-bg) wins — without the layer this scoped rule would override the utility and
+     accent CTAs' text-primary-foreground) wins — without the layer this scoped rule would override the utility and
      render the CTA text invisible (accent-on-primary). Home is self-contained (not under SiteShell). */
   @layer base {
     a {
@@ -439,7 +439,7 @@
      box/flex props of .nav/.wordmark/.navcta/.hamburger/etc. are utilities on the elements; these
      rules cover the link tinting and the <=760px responsive behavior. */
   .navlinks a {
-    color: var(--dim);
+    color: var(--muted-foreground);
     font-size: 13.5px;
     padding: 7px 11px;
     border-radius: 7px;
@@ -448,8 +448,8 @@
       background 0.15s;
   }
   .navlinks a:hover {
-    color: var(--txt);
-    background: var(--panel);
+    color: var(--foreground);
+    background: var(--card);
   }
   .navtoggle:focus-visible ~ .hamburger {
     border-color: var(--primary);
@@ -477,7 +477,7 @@
       gap: 2px;
       background: rgba(13, 16, 20, 0.98);
       backdrop-filter: saturate(150%) blur(10px);
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--border);
       padding: 8px 16px 16px;
       margin: 0;
     }
@@ -487,7 +487,7 @@
     .navlinks a {
       font-size: 15px;
       padding: 12px 10px;
-      border-bottom: 1px solid var(--line);
+      border-bottom: 1px solid var(--border);
     }
     .navlinks a:last-child {
       border-bottom: none;
@@ -495,7 +495,7 @@
     /* match the desktop nav button exactly — .navlinks a would otherwise tint the text dim */
     .navlinks a.navlaunch {
       display: block;
-      color: var(--bg);
+      color: var(--background);
       background: var(--primary);
       font-weight: 600;
       border-radius: 9px;
@@ -504,7 +504,7 @@
     }
     .navlinks a.navlaunch:hover {
       background: var(--primary);
-      color: var(--bg);
+      color: var(--background);
     }
   }
 
@@ -563,24 +563,24 @@
      Svelte's scope hash — the inner class selectors must stay :global() (SVG-child styling, kept
      scoped per the keep-scoped rule). They pull from tokens.css so the graphics track the palette. */
   .feat-graphic :global(.gx-grid) {
-    stroke: var(--line);
+    stroke: var(--border);
     stroke-width: 1.5;
     fill: none;
   }
   .feat-graphic :global(.gx-panel) {
-    fill: var(--panel2);
-    stroke: var(--line);
+    fill: var(--secondary);
+    stroke: var(--border);
     stroke-width: 1.5;
   }
   .feat-graphic :global(.gx-line) {
     fill: none;
-    stroke: var(--green);
+    stroke: var(--chart-2);
     stroke-width: 3;
     stroke-linecap: round;
     stroke-linejoin: round;
   }
   .feat-graphic :global(.gx-area) {
-    fill: var(--green);
+    fill: var(--chart-2);
     opacity: 0.16;
   }
   .feat-graphic :global(.gx-stroke-primary) {
@@ -591,19 +591,19 @@
     stroke-linejoin: round;
   }
   .feat-graphic :global(.gx-green) {
-    fill: var(--green);
+    fill: var(--chart-2);
   }
   .feat-graphic :global(.gx-primary) {
     fill: var(--primary);
   }
   .feat-graphic :global(.gx-take) {
-    fill: var(--take);
+    fill: var(--chart-3);
   }
   .feat-graphic :global(.gx-red) {
-    fill: var(--red);
+    fill: var(--destructive);
   }
   .feat-graphic :global(.gx-faint) {
-    fill: var(--faint);
+    fill: var(--muted-foreground);
     opacity: 0.5;
   }
 

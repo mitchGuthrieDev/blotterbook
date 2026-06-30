@@ -217,56 +217,56 @@
       }
     }}
   >
-    <div class="flex items-center justify-between border-b border-line px-4 py-3.5">
+    <div class="flex items-center justify-between border-b border-border px-4 py-3.5">
       <h2 class="m-0 text-[15px]">Manage data</h2>
     </div>
 
-    <div class="summary grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2 border-b border-line px-4 py-3">
-      <div class="dmstat rounded-[7px] border border-line bg-panel2 px-[9px] py-[7px]">
-        <div class="text-[10px] uppercase tracking-[0.4px] text-faint">Trades</div>
-        <div class="dv mt-[3px] text-[14px] font-bold text-txt">{trades.length}</div>
+    <div class="summary grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2 border-b border-border px-4 py-3">
+      <div class="dmstat rounded-[7px] border border-border bg-secondary px-[9px] py-[7px]">
+        <div class="text-[10px] uppercase tracking-[0.4px] text-muted-foreground">Trades</div>
+        <div class="dv mt-[3px] text-[14px] font-bold text-foreground">{trades.length}</div>
       </div>
-      <div class="dmstat rounded-[7px] border border-line bg-panel2 px-[9px] py-[7px]">
-        <div class="text-[10px] uppercase tracking-[0.4px] text-faint">Date range</div>
-        <div class="dv mt-[3px] font-mono text-[12px] font-bold text-txt">{dmRange}</div>
+      <div class="dmstat rounded-[7px] border border-border bg-secondary px-[9px] py-[7px]">
+        <div class="text-[10px] uppercase tracking-[0.4px] text-muted-foreground">Date range</div>
+        <div class="dv mt-[3px] font-mono text-[12px] font-bold text-foreground">{dmRange}</div>
       </div>
-      <div class="dmstat rounded-[7px] border border-line bg-panel2 px-[9px] py-[7px]">
-        <div class="text-[10px] uppercase tracking-[0.4px] text-faint">Day notes</div>
-        <div class="dv mt-[3px] text-[14px] font-bold text-txt">{dayNotes.length}</div>
+      <div class="dmstat rounded-[7px] border border-border bg-secondary px-[9px] py-[7px]">
+        <div class="text-[10px] uppercase tracking-[0.4px] text-muted-foreground">Day notes</div>
+        <div class="dv mt-[3px] text-[14px] font-bold text-foreground">{dayNotes.length}</div>
       </div>
-      <div class="dmstat rounded-[7px] border border-line bg-panel2 px-[9px] py-[7px]">
-        <div class="text-[10px] uppercase tracking-[0.4px] text-faint">Tagged trades</div>
-        <div class="dv mt-[3px] text-[14px] font-bold text-txt">{metaMap.size}</div>
+      <div class="dmstat rounded-[7px] border border-border bg-secondary px-[9px] py-[7px]">
+        <div class="text-[10px] uppercase tracking-[0.4px] text-muted-foreground">Tagged trades</div>
+        <div class="dv mt-[3px] text-[14px] font-bold text-foreground">{metaMap.size}</div>
       </div>
-      <div class="dmstat rounded-[7px] border border-line bg-panel2 px-[9px] py-[7px]">
-        <div class="text-[10px] uppercase tracking-[0.4px] text-faint">Local size</div>
-        <div class="dv mt-[3px] font-mono text-[12px] font-bold text-txt">{localKb}</div>
+      <div class="dmstat rounded-[7px] border border-border bg-secondary px-[9px] py-[7px]">
+        <div class="text-[10px] uppercase tracking-[0.4px] text-muted-foreground">Local size</div>
+        <div class="dv mt-[3px] font-mono text-[12px] font-bold text-foreground">{localKb}</div>
       </div>
     </div>
 
-    {#if isDemo}<p class="demonote m-0 border-b border-line px-4 py-2 text-[12px] text-warn">This is a read-only demo — loading, editing, importing and erasing are disabled, and nothing is saved.</p>{/if}
+    {#if isDemo}<p class="demonote m-0 border-b border-border px-4 py-2 text-[12px] text-chart-4">This is a read-only demo — loading, editing, importing and erasing are disabled, and nothing is saved.</p>{/if}
 
-    <div class="toolbar flex flex-wrap gap-2 border-b border-line px-4 py-3">
+    <div class="toolbar flex flex-wrap gap-2 border-b border-border px-4 py-3">
       <Button variant="secondary" disabled={isDemo} onclick={() => csvInput.click()}>Load CSV</Button>
       <Button variant="secondary" disabled={isDemo} onclick={exportBackup}>Export backup</Button>
       <Button variant="secondary" disabled={isDemo} onclick={() => backupInput.click()}>Import backup</Button>
-      <button type="button" class="cursor-pointer rounded-md border border-[rgba(240,74,74,0.5)] bg-panel2 px-3 py-[7px] text-[13px] text-red hover:bg-red-bg disabled:cursor-not-allowed disabled:opacity-45" disabled={isDemo} onclick={eraseAll}>Erase all local data</button>
-      <input type="text" class="search ml-auto min-w-[180px] cursor-text rounded-md border border-line bg-panel2 px-3 py-[7px] text-[13px] text-txt" placeholder="Search symbol / date" bind:value={search} />
+      <button type="button" class="cursor-pointer rounded-md border border-destructive/50 bg-secondary px-3 py-[7px] text-[13px] text-destructive hover:bg-destructive/15 disabled:cursor-not-allowed disabled:opacity-45" disabled={isDemo} onclick={eraseAll}>Erase all local data</button>
+      <input type="text" class="search ml-auto min-w-[180px] cursor-text rounded-md border border-border bg-secondary px-3 py-[7px] text-[13px] text-foreground" placeholder="Search symbol / date" bind:value={search} />
       <input bind:this={csvInput} type="file" accept=".csv,text/csv" hidden onchange={importCSV} />
       <input bind:this={backupInput} type="file" accept="application/json,.json" hidden onchange={importBackup} />
     </div>
-    {#if msg}<p class="m-0 border-b border-line px-4 py-2 text-[12px] text-primary">{msg}</p>{/if}
+    {#if msg}<p class="m-0 border-b border-border px-4 py-2 text-[12px] text-primary">{msg}</p>{/if}
 
     {#if dayNotes.length}
-      <details class="daynotes border-b border-line px-4 py-2 [&_summary]:cursor-pointer [&_summary]:text-[12px] [&_summary]:font-bold [&_summary]:uppercase [&_summary]:tracking-[0.5px] [&_summary]:text-faint [&_ul]:m-0 [&_ul]:mt-2 [&_ul]:list-none [&_ul]:p-0 [&_li]:flex [&_li]:items-center [&_li]:gap-2.5 [&_li]:border-b [&_li]:border-line [&_li]:py-[5px] [&_li]:text-[12px]">
+      <details class="daynotes border-b border-border px-4 py-2 [&_summary]:cursor-pointer [&_summary]:text-[12px] [&_summary]:font-bold [&_summary]:uppercase [&_summary]:tracking-[0.5px] [&_summary]:text-muted-foreground [&_ul]:m-0 [&_ul]:mt-2 [&_ul]:list-none [&_ul]:p-0 [&_li]:flex [&_li]:items-center [&_li]:gap-2.5 [&_li]:border-b [&_li]:border-border [&_li]:py-[5px] [&_li]:text-[12px]">
         <summary>Day notes ({dayNotes.length})</summary>
         <ul>
           {#each dayNotes as n (n.date)}
             <li>
               <Button variant="secondary" size="sm" class="flex-none font-mono text-primary" onclick={() => onopenday(n.date)}>{n.date}</Button>
-              <span class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-dim">{n.text || '(tags/screenshots only)'}</span>
-              {#if (n.tags || []).length}<span class="flex-none font-mono text-faint">{n.tags.join(', ')}</span>{/if}
-              <button type="button" class="flex-none cursor-pointer border-0 bg-transparent text-[16px] leading-none text-faint hover:text-red disabled:cursor-not-allowed disabled:opacity-45" disabled={isDemo} aria-label="Delete day note" onclick={() => deleteDay(n.date)}>×</button>
+              <span class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground">{n.text || '(tags/screenshots only)'}</span>
+              {#if (n.tags || []).length}<span class="flex-none font-mono text-muted-foreground">{n.tags.join(', ')}</span>{/if}
+              <button type="button" class="flex-none cursor-pointer border-0 bg-transparent text-[16px] leading-none text-muted-foreground hover:text-destructive disabled:cursor-not-allowed disabled:opacity-45" disabled={isDemo} aria-label="Delete day note" onclick={() => deleteDay(n.date)}>×</button>
             </li>
           {/each}
         </ul>
@@ -274,15 +274,15 @@
     {/if}
 
     {#if savedFilters.length}
-      <details class="savedfilters border-b border-line px-4 py-2 [&_summary]:cursor-pointer [&_summary]:text-[12px] [&_summary]:font-bold [&_summary]:uppercase [&_summary]:tracking-[0.5px] [&_summary]:text-faint [&_ul]:m-0 [&_ul]:mt-2 [&_ul]:list-none [&_ul]:p-0 [&_li]:flex [&_li]:items-center [&_li]:gap-2.5 [&_li]:border-b [&_li]:border-line [&_li]:py-[5px] [&_li]:text-[12px]">
+      <details class="savedfilters border-b border-border px-4 py-2 [&_summary]:cursor-pointer [&_summary]:text-[12px] [&_summary]:font-bold [&_summary]:uppercase [&_summary]:tracking-[0.5px] [&_summary]:text-muted-foreground [&_ul]:m-0 [&_ul]:mt-2 [&_ul]:list-none [&_ul]:p-0 [&_li]:flex [&_li]:items-center [&_li]:gap-2.5 [&_li]:border-b [&_li]:border-border [&_li]:py-[5px] [&_li]:text-[12px]">
         <summary>Saved filters ({savedFilters.length})</summary>
         <ul>
           {#each savedFilters as sf (sf.id)}
             <li>
               <Button variant="secondary" size="sm" class="flex-none font-mono text-primary" onclick={() => onapplyview(sf)}>{sf.name}</Button>
-              <span class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-dim"></span>
+              <span class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground"></span>
               <Button variant="secondary" size="sm" class="sfbtn flex-none" disabled={isDemo} onclick={() => renameView(sf)}>Rename</Button>
-              <button type="button" class="flex-none cursor-pointer border-0 bg-transparent text-[16px] leading-none text-faint hover:text-red disabled:cursor-not-allowed disabled:opacity-45" disabled={isDemo} aria-label="Delete saved filter" onclick={() => ondeleteview(sf.id)}>×</button>
+              <button type="button" class="flex-none cursor-pointer border-0 bg-transparent text-[16px] leading-none text-muted-foreground hover:text-destructive disabled:cursor-not-allowed disabled:opacity-45" disabled={isDemo} aria-label="Delete saved filter" onclick={() => ondeleteview(sf.id)}>×</button>
             </li>
           {/each}
         </ul>
@@ -291,7 +291,7 @@
 
     <div class="tablewrap overflow-auto px-4 pb-4">
       <table
-        class="w-full border-collapse text-[12px] [&_th]:sticky [&_th]:top-0 [&_th]:border-b [&_th]:border-line [&_th]:bg-bg [&_th]:px-2 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:text-faint [&_td]:border-b [&_td]:border-line [&_td]:px-2 [&_td]:py-[6px] [&_td]:font-mono [&_th.r]:text-right [&_td.r]:text-right"
+        class="w-full border-collapse text-[12px] [&_th]:sticky [&_th]:top-0 [&_th]:border-b [&_th]:border-border [&_th]:bg-background [&_th]:px-2 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border [&_td]:px-2 [&_td]:py-[6px] [&_td]:font-mono [&_th.r]:text-right [&_td.r]:text-right"
       >
         <thead>
           <tr><th>Date</th><th>Time</th><th>Symbol</th><th class="r">Qty</th><th class="r">P&L</th><th>Tags</th><th>Note</th><th></th></tr>
@@ -302,21 +302,21 @@
             {@const id = store.tradeId(t)}
             <tr class={editing === id ? '[&_td]:border-b-0' : ''}>
               <td>{t.date}</td>
-              <td class="text-dim">{(t.time || '').slice(11, 16)}</td>
+              <td class="text-muted-foreground">{(t.time || '').slice(11, 16)}</td>
               <td>{t.symbol}</td>
               <td class="r">{t.qty || 1}</td>
-              <td class="r {t.pnl > 0 ? 'text-green' : t.pnl < 0 ? 'text-red' : ''}">{usd(t.pnl)}</td>
+              <td class="r {t.pnl > 0 ? 'text-chart-2' : t.pnl < 0 ? 'text-destructive' : ''}">{usd(t.pnl)}</td>
               <td class="tags">{(m.tags || []).join(', ')}</td>
-              <td class="max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap text-dim">{m.note || ''}</td>
+              <td class="max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap text-muted-foreground">{m.note || ''}</td>
               <td class="r whitespace-nowrap">
                 <Button variant="secondary" size="sm" class="edit" disabled={isDemo} onclick={() => openEdit(t)}>Edit</Button>
-                <button type="button" class="del ml-1.5 cursor-pointer rounded-[5px] border border-line bg-panel2 px-2.5 py-[3px] text-[12px] text-red hover:border-[rgba(240,74,74,0.5)] hover:bg-red-bg disabled:cursor-not-allowed disabled:opacity-45" disabled={isDemo} aria-label="Delete trade" onclick={() => deleteTrade(t)}>Delete</button>
+                <button type="button" class="del ml-1.5 cursor-pointer rounded-[5px] border border-border bg-secondary px-2.5 py-[3px] text-[12px] text-destructive hover:border-destructive/50 hover:bg-destructive/15 disabled:cursor-not-allowed disabled:opacity-45" disabled={isDemo} aria-label="Delete trade" onclick={() => deleteTrade(t)}>Delete</button>
               </td>
             </tr>
             {#if editing === id}
-              <tr class="[&>td]:bg-panel">
+              <tr class="[&>td]:bg-card">
                 <td colspan="8">
-                  <div class="editrow flex flex-wrap items-end gap-2.5 py-1.5 [&_label]:flex [&_label]:flex-col [&_label]:gap-[3px] [&_label]:font-sans [&_label]:text-[11px] [&_label]:text-faint [&_input]:rounded-md [&_input]:border [&_input]:border-line [&_input]:bg-panel2 [&_input]:px-2 [&_input]:py-1.5 [&_input]:font-sans [&_input]:text-[13px] [&_input]:text-txt">
+                  <div class="editrow flex flex-wrap items-end gap-2.5 py-1.5 [&_label]:flex [&_label]:flex-col [&_label]:gap-[3px] [&_label]:font-sans [&_label]:text-[11px] [&_label]:text-muted-foreground [&_input]:rounded-md [&_input]:border [&_input]:border-border [&_input]:bg-secondary [&_input]:px-2 [&_input]:py-1.5 [&_input]:font-sans [&_input]:text-[13px] [&_input]:text-foreground">
                     <label>Tags <input type="text" class="etags" bind:value={editTags} placeholder="comma, separated" /></label>
                     <label class="!flex-1 !min-w-[200px]">Note <input type="text" class="enote" bind:value={editNote} placeholder="per-trade note" /></label>
                     <Button class="save" onclick={saveEdit}>Save</Button>
@@ -325,11 +325,11 @@
                   <div class="editshots flex flex-wrap items-center gap-2 pb-2">
                     {#each editShots as s, i (i)}
                       <span class="shot relative inline-block">
-                        <img src={s} alt="screenshot {i + 1}" class="block h-11 rounded-md border border-line" />
-                        <button type="button" class="absolute -top-1.5 -right-1.5 h-[18px] w-[18px] cursor-pointer rounded-full border-0 bg-red text-[12px] leading-none text-white" aria-label="Remove screenshot" onclick={() => (editShots = editShots.filter((_, j) => j !== i))}>×</button>
+                        <img src={s} alt="screenshot {i + 1}" class="block h-11 rounded-md border border-border" />
+                        <button type="button" class="absolute -top-1.5 -right-1.5 h-[18px] w-[18px] cursor-pointer rounded-full border-0 bg-destructive text-[12px] leading-none text-white" aria-label="Remove screenshot" onclick={() => (editShots = editShots.filter((_, j) => j !== i))}>×</button>
                       </span>
                     {/each}
-                    <button type="button" class="cursor-pointer rounded-md border border-dashed border-line bg-panel2 px-3 py-1.5 text-[12px] text-dim" onclick={() => editShotInput?.click()}>+ screenshot</button>
+                    <button type="button" class="cursor-pointer rounded-md border border-dashed border-border bg-secondary px-3 py-1.5 text-[12px] text-muted-foreground" onclick={() => editShotInput?.click()}>+ screenshot</button>
                     <input bind:this={editShotInput} type="file" accept="image/*" hidden onchange={addEditShot} />
                   </div>
                 </td>
@@ -338,9 +338,9 @@
           {/each}
         </tbody>
       </table>
-      {#if !filtered.length}<p class="px-1 py-5 text-[13px] text-dim">No trades{search ? ' match the search' : ''}.</p>{/if}
+      {#if !filtered.length}<p class="px-1 py-5 text-[13px] text-muted-foreground">No trades{search ? ' match the search' : ''}.</p>{/if}
       {#if paged && filtered.length > PAGE_SIZE}
-        <div class="pager mt-2.5 flex items-center justify-center gap-3 text-[12px] text-dim">
+        <div class="pager mt-2.5 flex items-center justify-center gap-3 text-[12px] text-muted-foreground">
           <Button variant="secondary" size="sm" disabled={page === 0} onclick={() => (page -= 1)}>‹ Prev</Button>
           <span class="pginfo [font-variant-numeric:tabular-nums]">{page * PAGE_SIZE + 1}–{Math.min(filtered.length, (page + 1) * PAGE_SIZE)} of {filtered.length}</span>
           <Button variant="secondary" size="sm" disabled={page >= pageCount - 1} onclick={() => (page += 1)}>Next ›</Button>

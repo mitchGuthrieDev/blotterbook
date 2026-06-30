@@ -52,10 +52,10 @@
 
 <section class="landing mx-auto mt-[6vh] max-w-[640px]">
   <h1 class="m-0 mb-1.5 text-[28px]">Blotterbook</h1>
-  <p class="mt-0 mb-[22px] text-[14px] leading-[1.5] text-dim">Set up your trading costs, then load a balance-history CSV (TradingView and others) to begin. Everything stays in your browser.</p>
+  <p class="mt-0 mb-[22px] text-[14px] leading-[1.5] text-muted-foreground">Set up your trading costs, then load a balance-history CSV (TradingView and others) to begin. Everything stays in your browser.</p>
 
-  <div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3 rounded-[10px] border border-line bg-panel p-4">
-    <div class="field flex flex-col gap-1 text-[11px] text-faint">
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3 rounded-[10px] border border-border bg-card p-4">
+    <div class="field flex flex-col gap-1 text-[11px] text-muted-foreground">
       <span>Broker</span>
       <Select.Root type="single" value={setup.broker} onValueChange={onBroker} items={brokerItems}>
         <Select.Trigger aria-label="Broker"><Select.Value placeholder="— Select broker —" /></Select.Trigger>
@@ -64,21 +64,21 @@
         </Select.Content>
       </Select.Root>
     </div>
-    <div class="field flex flex-col gap-1 text-[11px] text-faint">
+    <div class="field flex flex-col gap-1 text-[11px] text-muted-foreground">
       <span>Data feed</span>
       <Select.Root type="single" bind:value={setup.feed} items={feedItems}>
         <Select.Trigger aria-label="Data feed"><Select.Value placeholder="— Select data feed —" /></Select.Trigger>
         <Select.Content>
           {#each Object.entries(feedGroups) as [grp, list] (grp)}
             <Select.Group>
-              <Select.Label class="px-2 py-1 text-[10px] uppercase tracking-wide text-faint">{grp}</Select.Label>
+              <Select.Label class="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">{grp}</Select.Label>
               {#each list as [name, c] (name)}<Select.Item value={`${name}|${c}`} label={`${name} — $${c}`} />{/each}
             </Select.Group>
           {/each}
         </Select.Content>
       </Select.Root>
     </div>
-    <div class="field flex flex-col gap-1 text-[11px] text-faint">
+    <div class="field flex flex-col gap-1 text-[11px] text-muted-foreground">
       <span>State</span>
       <Select.Root type="single" bind:value={setup.stateAbbr} items={stateItems}>
         <Select.Trigger aria-label="State"><Select.Value placeholder="— Select state —" /></Select.Trigger>
@@ -87,15 +87,15 @@
         </Select.Content>
       </Select.Root>
     </div>
-    <label class="flex flex-col gap-1 text-[11px] text-faint">
+    <label class="flex flex-col gap-1 text-[11px] text-muted-foreground">
       <span>Platform fee ($/mo)</span>
-      <input type="number" min="0" step="1" bind:value={setup.platform} class="rounded-md border border-line bg-panel2 p-2 text-[13px] font-sans text-txt focus:border-primary focus:outline-none" />
+      <input type="number" min="0" step="1" bind:value={setup.platform} class="rounded-md border border-border bg-secondary p-2 text-[13px] font-sans text-foreground focus:border-primary focus:outline-none" />
     </label>
   </div>
 
   <div class="mt-[18px] flex items-center gap-[14px]">
     <Button size="lg" onclick={() => fileInput.click()}>Load CSV</Button>
-    <div class="field flex flex-col gap-1 text-[11px] text-faint">
+    <div class="field flex flex-col gap-1 text-[11px] text-muted-foreground">
       <span>Platform</span>
       <Select.Root
         type="single"
@@ -110,8 +110,8 @@
       </Select.Root>
     </div>
     <input bind:this={fileInput} type="file" accept=".csv,text/csv" hidden onchange={pick} />
-    {#if !ready}<span class="text-[12px] text-faint">Tip: pick broker, data feed and state so the cost/tax model is complete.</span>{/if}
+    {#if !ready}<span class="text-[12px] text-muted-foreground">Tip: pick broker, data feed and state so the cost/tax model is complete.</span>{/if}
   </div>
-  {#if msg}<p class="mt-3 text-[13px] text-red" role="alert">{msg}</p>{/if}
+  {#if msg}<p class="mt-3 text-[13px] text-destructive" role="alert">{msg}</p>{/if}
 </section>
 

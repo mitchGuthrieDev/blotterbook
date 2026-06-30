@@ -26,7 +26,7 @@
 </script>
 
 <div class="wsbar mt-4 flex items-center gap-2.5">
-  <div class="wslabel flex items-center gap-2 text-[11px] uppercase tracking-[0.5px] text-faint">
+  <div class="wslabel flex items-center gap-2 text-[11px] uppercase tracking-[0.5px] text-muted-foreground">
     <span>Workspace</span>
     <Select.Root type="single" value={selValue} onValueChange={onSel} {items}>
       <Select.Trigger aria-label="Workspace" class="min-w-[140px]"><Select.Value /></Select.Trigger>

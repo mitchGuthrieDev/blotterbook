@@ -128,34 +128,34 @@ export function reportHtmlDoc(rep: ReturnType<typeof buildReport>, labels: Omit<
   const reportCss = `
   ${tokenBlock}
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:13px;line-height:1.5;
+  body{margin:0;background:var(--background);color:var(--foreground);font-family:var(--font-sans);font-size:13px;line-height:1.5;
     -webkit-print-color-adjust:exact;print-color-adjust:exact}
   .sheet{max-width:820px;margin:0 auto;padding:34px 38px}
   .rtop{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;
-    border-bottom:1px solid var(--line);padding-bottom:16px}
+    border-bottom:1px solid var(--border);padding-bottom:16px}
   .brandline{font-size:22px;font-weight:700;display:flex;align-items:center;gap:9px;letter-spacing:.01em}
-  .brandline .dot{width:11px;height:11px;border-radius:3px;background:linear-gradient(135deg,var(--accent),var(--take))}
-  .rsub{font-family:var(--mono);color:var(--dim);font-size:11.5px;margin-top:5px;letter-spacing:.02em}
-  .rmeta{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right;line-height:1.7}
-  .rmeta b{color:var(--txt);font-weight:600}
-  h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+  .brandline .dot{width:11px;height:11px;border-radius:3px;background:linear-gradient(135deg,var(--primary),var(--chart-3))}
+  .rsub{font-family:var(--font-mono);color:var(--muted-foreground);font-size:11.5px;margin-top:5px;letter-spacing:.02em}
+  .rmeta{font-family:var(--font-mono);font-size:11px;color:var(--muted-foreground);text-align:right;line-height:1.7}
+  .rmeta b{color:var(--foreground);font-weight:600}
+  h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-foreground);
     margin:26px 0 10px;font-weight:700}
   .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
-  .rtile{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:11px 12px}
-  .rtile .rk{font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
-  .rtile .rv{font-family:var(--mono);font-size:18px;font-weight:600;margin-top:5px;font-variant-numeric:tabular-nums}
-  .rtile .rv.neg{color:var(--red)}
+  .rtile{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:11px 12px}
+  .rtile .rk{font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted-foreground)}
+  .rtile .rv{font-family:var(--font-mono);font-size:18px;font-weight:600;margin-top:5px;font-variant-numeric:tabular-nums}
+  .rtile .rv.neg{color:var(--destructive)}
   table{width:100%;border-collapse:collapse;font-size:12.5px}
-  td,th{padding:6px 0;border-bottom:1px solid var(--line);text-align:left}
-  td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
-  thead th{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:600}
-  tr.tot td{font-weight:700;color:var(--txt);border-bottom:1px solid var(--line)}
-  tr.sub td{color:var(--dim);font-size:11.5px;border-bottom:1px dashed var(--line)}
+  td,th{padding:6px 0;border-bottom:1px solid var(--border);text-align:left}
+  td.num,th.num{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+  thead th{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);font-weight:600}
+  tr.tot td{font-weight:700;color:var(--foreground);border-bottom:1px solid var(--border)}
+  tr.sub td{color:var(--muted-foreground);font-size:11.5px;border-bottom:1px dashed var(--border)}
   tr.sub td:first-child{padding-left:14px}
-  .pos{color:var(--green)} .neg{color:var(--red)}
+  .pos{color:var(--chart-2)} .neg{color:var(--destructive)}
   .cols{display:grid;grid-template-columns:1fr 1fr;gap:34px}
-  .foot{margin-top:30px;padding-top:14px;border-top:1px solid var(--line);
-    font-size:10.5px;color:var(--faint);line-height:1.6}
+  .foot{margin-top:30px;padding-top:14px;border-top:1px solid var(--border);
+    font-size:10.5px;color:var(--muted-foreground);line-height:1.6}
   @media print{.sheet{padding:0 6mm}@page{margin:12mm}}`;
 
   const sheetHtml = `<div class="sheet">

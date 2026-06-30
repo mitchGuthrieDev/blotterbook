@@ -71,14 +71,14 @@
 <Panel {...panel} title="Advanced Statistics">
   <div class="advstats grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-x-6 gap-y-0.5">
     {#each rows as r (r.k)}
-      <div class="row flex items-baseline justify-between gap-3 border-b border-line py-[7px]">
-        <span class="text-xs text-dim">{r.k}</span>
+      <div class="row flex items-baseline justify-between gap-3 border-b border-border py-[7px]">
+        <span class="text-xs text-muted-foreground">{r.k}</span>
         <span
           class="font-mono text-[13px] font-bold whitespace-nowrap {r.tone === 'pos'
-            ? 'text-green'
+            ? 'text-chart-2'
             : r.tone === 'neg'
-              ? 'text-red'
-              : 'text-txt'}">{r.v}</span>
+              ? 'text-destructive'
+              : 'text-foreground'}">{r.v}</span>
       </div>
     {/each}
   </div>

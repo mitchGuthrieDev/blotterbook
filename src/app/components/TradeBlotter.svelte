@@ -74,14 +74,14 @@
 <Panel {...panel} title="Trade Blotter">
   {#snippet actions()}
     {#if trades.length}
-      <span class="font-mono text-[12px] text-dim">{trades.length} trade{trades.length === 1 ? '' : 's'} · <span class={net > 0 ? 'text-green' : net < 0 ? 'text-red' : ''}>{usd(net)}</span> · <span class="text-faint">−{money(totalComm)} comm</span></span>
+      <span class="font-mono text-[12px] text-muted-foreground">{trades.length} trade{trades.length === 1 ? '' : 's'} · <span class={net > 0 ? 'text-chart-2' : net < 0 ? 'text-destructive' : ''}>{usd(net)}</span> · <span class="text-muted-foreground">−{money(totalComm)} comm</span></span>
     {/if}
   {/snippet}
 
   {#if trades.length}
     <div class="max-h-[460px] overflow-auto">
       <table
-        class="bltab w-full border-collapse text-[12px] [&_td]:whitespace-nowrap [&_td]:border-b [&_td]:border-line [&_td]:px-2 [&_td]:py-1 [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-line [&_th]:bg-panel [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold [&_th]:text-faint"
+        class="bltab w-full border-collapse text-[12px] [&_td]:whitespace-nowrap [&_td]:border-b [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-border [&_th]:bg-card [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold [&_th]:text-muted-foreground"
       >
         <thead>
           <tr>
@@ -99,16 +99,16 @@
         <tbody>
           {#each visible as t (store.tradeId(t))}
             <tr>
-              <td class="font-mono text-dim">{t.date}<span class="text-faint"> {hm(t)}</span></td>
+              <td class="font-mono text-muted-foreground">{t.date}<span class="text-muted-foreground"> {hm(t)}</span></td>
               <td>{t.root || t.symbol}</td>
-              <td class="text-dim">{t.symbol}</td>
+              <td class="text-muted-foreground">{t.symbol}</td>
               <td class="capitalize">{t.side || '—'}</td>
               <td class="text-right font-mono">{t.qty || 1}</td>
-              {#if STAGING_PAGE}<td class="text-dim">{brokerLabel}</td>{/if}
-              <td class="text-right font-mono text-dim">−{money(commOf(t))}</td>
+              {#if STAGING_PAGE}<td class="text-muted-foreground">{brokerLabel}</td>{/if}
+              <td class="text-right font-mono text-muted-foreground">−{money(commOf(t))}</td>
               <td class="w-full min-w-[160px] whitespace-normal">
                 <input
-                  class="note w-full rounded-[5px] border border-transparent bg-panel2 px-1.5 py-1 font-[inherit] text-[12px] text-txt not-disabled:hover:border-line focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:bg-transparent"
+                  class="note w-full rounded-[5px] border border-transparent bg-secondary px-1.5 py-1 font-[inherit] text-[12px] text-foreground not-disabled:hover:border-border focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:bg-transparent"
                   type="text"
                   value={noteOf(t)}
                   disabled={isDemo}
@@ -117,7 +117,7 @@
                   onchange={e => saveNote(t, (e.currentTarget as HTMLInputElement).value)}
                 />
               </td>
-              <td class="text-right font-mono {t.pnl > 0 ? 'text-green' : t.pnl < 0 ? 'text-red' : ''}">{usd(t.pnl)}</td>
+              <td class="text-right font-mono {t.pnl > 0 ? 'text-chart-2' : t.pnl < 0 ? 'text-destructive' : ''}">{usd(t.pnl)}</td>
             </tr>
           {/each}
         </tbody>
@@ -125,7 +125,7 @@
     </div>
     {#if STAGING_PAGE}
       <!-- F32 (staging): page-size selector + prev/next pager. -->
-      <div class="blpager mt-2.5 flex flex-wrap items-center justify-between gap-3 text-[12px] text-dim">
+      <div class="blpager mt-2.5 flex flex-wrap items-center justify-between gap-3 text-[12px] text-muted-foreground">
         <div class="blpsize flex items-center gap-1.5">
           <span>Rows</span>
           <Select.Root type="single" value={pageSize === Infinity ? 'all' : String(pageSize)} onValueChange={setPageSize} items={PAGE_SIZE_ITEMS}>
@@ -136,7 +136,7 @@
           </Select.Root>
         </div>
         {#if pageCount > 1}
-          <div class="blnav flex items-center gap-3 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border [&_button]:border-line [&_button]:bg-panel2 [&_button]:px-2.5 [&_button]:py-[5px] [&_button]:font-[inherit] [&_button]:text-[12px] [&_button]:text-txt [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-40">
+          <div class="blnav flex items-center gap-3 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border [&_button]:border-border [&_button]:bg-secondary [&_button]:px-2.5 [&_button]:py-[5px] [&_button]:font-[inherit] [&_button]:text-[12px] [&_button]:text-foreground [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-40">
             <button type="button" disabled={page === 0} onclick={() => (page -= 1)}>‹ Prev</button>
             <span class="pginfo [font-variant-numeric:tabular-nums]">{page * pageSize + 1}–{Math.min(trades.length, (page + 1) * pageSize)} of {trades.length}</span>
             <button type="button" disabled={page >= pageCount - 1} onclick={() => (page += 1)}>Next ›</button>
@@ -145,6 +145,6 @@
       </div>
     {/if}
   {:else}
-    <p class="blnone m-0 text-[13px] text-dim">No trades to show{filtered ? ' with the active filters' : ''}.</p>
+    <p class="blnone m-0 text-[13px] text-muted-foreground">No trades to show{filtered ? ' with the active filters' : ''}.</p>
   {/if}
 </Panel>

@@ -67,14 +67,14 @@
 <Panel {...panel} title="Activity">
   <div class="terminal">
     <div
-      class="log max-h-40 overflow-auto rounded-[7px] border border-line bg-bg px-2.5 py-2 font-mono text-xs"
+      class="log max-h-40 overflow-auto rounded-[7px] border border-border bg-background px-2.5 py-2 font-mono text-xs"
       bind:this={box}
       role="log"
       aria-live="polite"
     >
       {#each lines as l (l.id)}
         <div class="flex gap-2.5 py-0.5">
-          <span class="text-faint">{l.ts}</span><span class="text-green">{l.msg}</span>
+          <span class="text-muted-foreground">{l.ts}</span><span class="text-chart-2">{l.msg}</span>
         </div>
       {/each}
     </div>

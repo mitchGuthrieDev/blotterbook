@@ -11,9 +11,9 @@
   let { summary = 'Assumptions & caveats', children }: Props = $props();
 </script>
 
-<details class="caveats mt-[14px] border-t border-line pt-[10px]">
+<details class="caveats mt-[14px] border-t border-border pt-[10px]">
   <summary
-    class="cursor-pointer text-[12px] font-bold uppercase tracking-[0.5px] text-faint"
+    class="cursor-pointer text-[12px] font-bold uppercase tracking-[0.5px] text-muted-foreground"
     >{summary}</summary
   >
   <ul class="mt-[10px] mb-0 pl-[18px]">{@render children()}</ul>
@@ -25,15 +25,15 @@
   .caveats :global(li) {
     font-size: 12px;
     line-height: 1.55;
-    color: var(--dim);
+    color: var(--muted-foreground);
     margin-bottom: 6px;
   }
   .caveats :global(b) {
-    color: var(--txt);
+    color: var(--foreground);
   }
   .caveats :global(em),
   .caveats :global(i) {
-    color: var(--txt);
+    color: var(--foreground);
     font-style: italic;
   }
 </style>

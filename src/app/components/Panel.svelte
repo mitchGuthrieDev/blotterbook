@@ -81,7 +81,7 @@
      the grip is aria-hidden and collapse/expand has a real keyboard button — panel content is fully
      reachable without dragging) -->
 <section
-  class="panel mt-4 rounded-[10px] border border-line bg-panel px-4 pt-3.5 pb-4"
+  class="panel mt-4 rounded-[10px] border border-border bg-card px-4 pt-3.5 pb-4"
   class:collapsed
   class:dragging
   class:opacity-[0.55]={dragging}
@@ -94,13 +94,13 @@
 >
   <div class="phead mb-3 flex flex-wrap items-center gap-x-2.5 gap-y-2" role="presentation" onclick={headClick}>
     <span
-      class="grip cursor-grab select-none text-[13px] leading-none tracking-[-2px] text-faint active:cursor-grabbing"
+      class="grip cursor-grab select-none text-[13px] leading-none tracking-[-2px] text-muted-foreground active:cursor-grabbing"
       aria-hidden="true"
       title="Drag to reorder"
       onmousedown={() => (armed = true)}
       onmouseup={() => (armed = false)}
     >⠿</span>
-    <h2 class="m-0 min-w-0 text-[13px] font-bold uppercase tracking-[0.5px] text-faint">{title}</h2>
+    <h2 class="m-0 min-w-0 text-[13px] font-bold uppercase tracking-[0.5px] text-muted-foreground">{title}</h2>
     {#if actions}<div class="pactions ml-auto flex min-w-0 flex-wrap items-center gap-2.5">{@render actions()}</div>{/if}
     {#if menu}
       <!-- A71 (staging): clickable header menu — per-module actions (move / hide). bits-ui (A128)
@@ -108,7 +108,7 @@
       <div class="pmenu relative" class:ml-auto={!actions} class:ml-0={actions}>
         <DropdownMenu.Root>
           <DropdownMenu.Trigger
-            class="pmenubtn cursor-pointer rounded-[5px] border-0 bg-transparent px-1.5 py-0.5 text-[15px] leading-none text-dim hover:bg-panel2 hover:text-txt"
+            class="pmenubtn cursor-pointer rounded-[5px] border-0 bg-transparent px-1.5 py-0.5 text-[15px] leading-none text-muted-foreground hover:bg-secondary hover:text-foreground"
             aria-label="{title} module menu"
             title="Module options">⋯</DropdownMenu.Trigger
           >
@@ -123,7 +123,7 @@
     {/if}
     <button
       type="button"
-      class="chev cursor-pointer border-0 bg-transparent px-1 py-0.5 text-[13px] leading-none text-dim hover:text-txt"
+      class="chev cursor-pointer border-0 bg-transparent px-1 py-0.5 text-[13px] leading-none text-muted-foreground hover:text-foreground"
       class:ml-auto={!actions && !menu}
       class:ml-0={actions || menu}
       aria-expanded={!collapsed}

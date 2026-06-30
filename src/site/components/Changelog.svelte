@@ -73,7 +73,7 @@
   <p class="blurb">
     Release notes for <b>Blotterbook</b> — what shipped in each version, newest first. Tracks the live production app and demo.
   </p>
-  <p class="font-mono text-[11.5px] text-faint mt-0 mb-1.5">
+  <p class="font-mono text-[11.5px] text-muted-foreground mt-0 mb-1.5">
     {live ? 'Release notes · prod track' : 'Showing the last saved snapshot'}
   </p>
 
@@ -83,21 +83,21 @@
         <div class="flex flex-wrap items-center gap-3 mb-[7px]">
           <span
             class="ver font-mono text-xs font-semibold rounded-[5px] border px-2 py-0.5 {r.beta
-              ? 'text-dim bg-panel border-line'
-              : 'text-primary bg-[rgba(106,160,255,0.12)] border-[rgba(106,160,255,0.28)]'}"
+              ? 'text-muted-foreground bg-card border-border'
+              : 'text-primary bg-primary/12 border-primary/28'}"
             >v{r.version}</span
           >
-          <span class="font-mono text-[12.5px] text-dim">{fmtDate(r.date)}</span>
+          <span class="font-mono text-[12.5px] text-muted-foreground">{fmtDate(r.date)}</span>
           {#if i === 0}<span
-              class="font-mono text-[10.5px] uppercase tracking-[0.08em] text-green bg-[rgba(63,185,80,0.12)] rounded-[5px] px-2 py-0.5"
+              class="font-mono text-[10.5px] uppercase tracking-[0.08em] text-chart-2 bg-chart-2/12 rounded-[5px] px-2 py-0.5"
               >Latest</span
             >{/if}
         </div>
         <h3 class="text-[16.5px] m-0 font-semibold tracking-[-0.01em] leading-[1.4]">{r.title}</h3>
-        {#if r.summary}<p class="text-dim text-[14.5px] leading-[1.6] mt-[7px] mb-0 max-w-[680px]">{r.summary}</p>{/if}
+        {#if r.summary}<p class="text-muted-foreground text-[14.5px] leading-[1.6] mt-[7px] mb-0 max-w-[680px]">{r.summary}</p>{/if}
         {#if r.highlights && r.highlights.length}
           <ul class="highlights mt-2.5 mb-0 pl-[18px] max-w-[680px]">
-            {#each r.highlights as h}<li class="text-dim text-sm leading-[1.55] mt-0 mb-[5px]">{h}</li>{/each}
+            {#each r.highlights as h}<li class="text-muted-foreground text-sm leading-[1.55] mt-0 mb-[5px]">{h}</li>{/each}
           </ul>
         {/if}
       </div>
@@ -125,7 +125,7 @@
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: var(--panel2);
+    background: var(--secondary);
     border: 2px solid var(--primary);
   }
   .entry.first::before {

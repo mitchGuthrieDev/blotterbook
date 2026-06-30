@@ -46,8 +46,8 @@
   --chart-4: #e3b341;
   --chart-5: #f04a4a;
   --radius: 0.625rem;
-  --font-sans: var(--sans);
-  --font-mono: var(--mono);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
 @theme inline {
@@ -83,24 +83,6 @@
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
-}
-
-/* ── legacy token utilities (transitional — removed as the bespoke scoped CSS migrates) ──────────── */
-@theme {
-  --color-bg: var(--bg);
-  --color-panel: var(--panel);
-  --color-panel2: var(--panel2);
-  --color-line: var(--line);
-  --color-hover-line: var(--hover-line);
-  --color-txt: var(--txt);
-  --color-dim: var(--dim);
-  --color-faint: var(--faint);
-  --color-green: var(--green);
-  --color-green-bg: var(--green-bg);
-  --color-red: var(--red);
-  --color-red-bg: var(--red-bg);
-  --color-take: var(--take);
-  --color-warn: var(--warn);
 }
 
 @layer base {

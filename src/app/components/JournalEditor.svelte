@@ -87,26 +87,26 @@
   }
 </script>
 
-<section class="journal mt-4 rounded-[10px] border border-line bg-panel px-4 pb-4 pt-3.5">
+<section class="journal mt-4 rounded-[10px] border border-border bg-card px-4 pb-4 pt-3.5">
   <div class="phead mb-2.5 flex items-center justify-between">
-    <h2 class="m-0 text-[13px] font-bold uppercase tracking-[0.5px] text-faint">Day note · {date}</h2>
-    <button type="button" class="cursor-pointer border-0 bg-transparent text-[20px] leading-none text-dim hover:text-txt" onclick={onclose} aria-label="Close day note">×</button>
+    <h2 class="m-0 text-[13px] font-bold uppercase tracking-[0.5px] text-muted-foreground">Day note · {date}</h2>
+    <button type="button" class="cursor-pointer border-0 bg-transparent text-[20px] leading-none text-muted-foreground hover:text-foreground" onclick={onclose} aria-label="Close day note">×</button>
   </div>
-  {#if isDemo}<p class="demonote m-0 mb-2 text-[12px] text-warn">Day-notes are read-only in the demo — nothing is saved.</p>{/if}
-  <textarea class="box-border w-full resize-y rounded-[7px] border border-line bg-panel2 p-2.5 font-sans text-[13px] text-txt focus:border-primary focus:outline-none" bind:value={text} rows="4" disabled={!ready || isDemo} placeholder={`What happened on ${date}? Setups, mistakes, market context…`}></textarea>
-  <input class="box-border mt-2 w-full rounded-[7px] border border-line bg-panel2 px-2.5 py-2 font-sans text-[13px] text-txt focus:border-primary focus:outline-none" type="text" bind:value={tagsStr} disabled={!ready || isDemo} placeholder="tags (comma separated)" />
+  {#if isDemo}<p class="demonote m-0 mb-2 text-[12px] text-chart-4">Day-notes are read-only in the demo — nothing is saved.</p>{/if}
+  <textarea class="box-border w-full resize-y rounded-[7px] border border-border bg-secondary p-2.5 font-sans text-[13px] text-foreground focus:border-primary focus:outline-none" bind:value={text} rows="4" disabled={!ready || isDemo} placeholder={`What happened on ${date}? Setups, mistakes, market context…`}></textarea>
+  <input class="box-border mt-2 w-full rounded-[7px] border border-border bg-secondary px-2.5 py-2 font-sans text-[13px] text-foreground focus:border-primary focus:outline-none" type="text" bind:value={tagsStr} disabled={!ready || isDemo} placeholder="tags (comma separated)" />
   <div class="mt-2.5 flex flex-wrap items-center gap-2">
     {#each shots as s, i (i)}
       <span class="shot relative inline-block">
-        <img class="block h-12 rounded-md border border-line" src={s} alt="screenshot {i + 1}" />
-        <button type="button" class="absolute -right-1.5 -top-1.5 h-[18px] w-[18px] cursor-pointer rounded-full border-0 bg-red text-[12px] leading-none text-white" aria-label="Remove screenshot" onclick={() => (shots = shots.filter((_, j) => j !== i))}>×</button>
+        <img class="block h-12 rounded-md border border-border" src={s} alt="screenshot {i + 1}" />
+        <button type="button" class="absolute -right-1.5 -top-1.5 h-[18px] w-[18px] cursor-pointer rounded-full border-0 bg-destructive text-[12px] leading-none text-white" aria-label="Remove screenshot" onclick={() => (shots = shots.filter((_, j) => j !== i))}>×</button>
       </span>
     {/each}
-    <button type="button" class="cursor-pointer rounded-md border border-dashed border-line bg-panel2 px-3 py-[7px] text-[12px] text-dim" onclick={() => shotInput.click()} disabled={isDemo}>+ screenshot</button>
+    <button type="button" class="cursor-pointer rounded-md border border-dashed border-border bg-secondary px-3 py-[7px] text-[12px] text-muted-foreground" onclick={() => shotInput.click()} disabled={isDemo}>+ screenshot</button>
     <input bind:this={shotInput} type="file" accept="image/*" hidden onchange={addShot} />
   </div>
   <div class="mt-2.5 flex items-center gap-3">
     <Button class="save px-4 py-2" disabled={saving || !ready || isDemo} onclick={save}>Save note</Button>
-    {#if savedMsg}<span class="text-[12px] text-green">{savedMsg}</span>{/if}
+    {#if savedMsg}<span class="text-[12px] text-chart-2">{savedMsg}</span>{/if}
   </div>
 </section>

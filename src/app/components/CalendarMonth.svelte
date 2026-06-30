@@ -86,12 +86,12 @@
        the collapse chevron reachable (A121). -->
   <div class="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
     <div class="nav flex flex-wrap items-center gap-2.5">
-      <button type="button" class="h-7 w-7 cursor-pointer rounded-md border border-line bg-panel2 text-[16px] leading-none text-txt hover:border-hover-line" aria-label="Previous month" title="Previous month" onclick={() => onnav(-1)}>‹</button>
+      <button type="button" class="h-7 w-7 cursor-pointer rounded-md border border-border bg-secondary text-[16px] leading-none text-foreground hover:border-ring" aria-label="Previous month" title="Previous month" onclick={() => onnav(-1)}>‹</button>
       <span class="label min-w-[9.5em] text-center font-bold">{MONTHS[month]} {year}</span>
-      <button type="button" class="h-7 w-7 cursor-pointer rounded-md border border-line bg-panel2 text-[16px] leading-none text-txt hover:border-hover-line" aria-label="Next month" title="Next month" onclick={() => onnav(1)}>›</button>
+      <button type="button" class="h-7 w-7 cursor-pointer rounded-md border border-border bg-secondary text-[16px] leading-none text-foreground hover:border-ring" aria-label="Next month" title="Next month" onclick={() => onnav(1)}>›</button>
       <Button variant="secondary" size="sm" class="today h-7 leading-none" title="Jump to the latest trade's month" onclick={() => onjump()}>Latest</Button>
     </div>
-    <span class="font-mono font-bold {monthNet < 0 ? 'text-red' : 'text-green'}">{usd(monthNet)}</span>
+    <span class="font-mono font-bold {monthNet < 0 ? 'text-destructive' : 'text-chart-2'}">{usd(monthNet)}</span>
   </div>
 
   <div class="calendar">
@@ -137,7 +137,7 @@
       {/each}
     </div>
   </div>
-  <p class="mt-3 text-[11px] leading-[1.45] text-dim">Days are grouped by the literal date in the Time column, not the CME session day.</p>
+  <p class="mt-3 text-[11px] leading-[1.45] text-muted-foreground">Days are grouped by the literal date in the Time column, not the CME session day.</p>
   {@render extra?.()}
 </Panel>
 
@@ -149,7 +149,7 @@
   }
   .dow {
     font-size: 11px;
-    color: var(--faint);
+    color: var(--muted-foreground);
     text-align: center;
     align-self: end;
     padding-bottom: 2px;
@@ -158,10 +158,10 @@
     text-align: left;
   }
   .wkcell {
-    border: 1px solid var(--line);
+    border: 1px solid var(--border);
     border-radius: 7px;
     padding: 5px 4px;
-    background: var(--panel2);
+    background: var(--secondary);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -172,27 +172,27 @@
     font-size: 9px;
     text-transform: uppercase;
     letter-spacing: 0.4px;
-    color: var(--faint);
+    color: var(--muted-foreground);
   }
   .wkpnl {
-    font-family: var(--mono);
+    font-family: var(--font-mono);
     font-size: 10px;
     font-weight: 700;
-    color: var(--txt);
+    color: var(--foreground);
   }
   .wkpnl.pos {
-    color: var(--green);
+    color: var(--chart-2);
   }
   .wkpnl.neg {
-    color: var(--red);
+    color: var(--destructive);
   }
   .wkdays {
     font-size: 9px;
-    color: var(--dim);
+    color: var(--muted-foreground);
   }
   .cell {
     min-height: 56px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--border);
     border-radius: 7px;
     padding: 5px 6px;
     display: flex;
@@ -201,7 +201,7 @@
     cursor: pointer;
   }
   .cell:hover {
-    border-color: var(--hover-line);
+    border-color: var(--ring);
   }
   .cell:focus-visible {
     outline: 2px solid var(--primary);
@@ -225,33 +225,33 @@
     vertical-align: middle;
   }
   .cell.pos {
-    background: var(--green-bg);
+    background: var(--chart-2);
     border-color: rgba(63, 185, 80, 0.4);
   }
   .cell.neg {
-    background: var(--red-bg);
+    background: var(--destructive);
     border-color: rgba(240, 74, 74, 0.4);
   }
   .dnum {
     font-size: 11px;
-    color: var(--dim);
+    color: var(--muted-foreground);
   }
   .dpnl {
-    font-family: var(--mono);
+    font-family: var(--font-mono);
     font-size: 12px;
     font-weight: 700;
     text-align: right;
   }
   .cell.pos .dpnl {
-    color: var(--green);
+    color: var(--chart-2);
   }
   .cell.neg .dpnl {
-    color: var(--red);
+    color: var(--destructive);
   }
   .dmeta {
-    font-family: var(--mono);
+    font-family: var(--font-mono);
     font-size: 9px;
-    color: var(--faint);
+    color: var(--muted-foreground);
     text-align: right;
   }
   /* A51/A123: the 8-col grid scrolls WITHIN the panel rather than clipping its cells or widening the
