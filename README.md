@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img alt="Minimal dependencies" src="https://img.shields.io/badge/dependencies-minimal%20%26%20pinned-3fb950?style=flat-square&labelColor=151a21">
+  <img alt="Pinned & audited dependencies" src="https://img.shields.io/badge/dependencies-pinned%20%26%20audited-3fb950?style=flat-square&labelColor=151a21">
   <img alt="Runs in browser" src="https://img.shields.io/badge/compute-browser%20only-d6dde6?style=flat-square&labelColor=151a21">
   <img alt="Local storage" src="https://img.shields.io/badge/storage-IndexedDB%20(local)-6aa0ff?style=flat-square&labelColor=151a21">
   <img alt="Hosting" src="https://img.shields.io/badge/hosting-Cloudflare%20Pages-e3b341?style=flat-square&labelColor=151a21">
@@ -45,8 +45,8 @@ parsed, computed, and stored locally. No accounts, no uploads, no tracking.
     <td><b>Multi-platform import.</b> TradingView is fully verified; Tradovate, Rithmic, Sierra Chart, TradeStation, MotiveWave, Webull, Interactive Brokers, and Schwab/thinkorswim are supported in beta.</td>
   </tr>
   <tr>
-    <td width="160"><img src="src/assets/why-deps.svg" alt="A small content-hashed bundle built from a few pinned dependencies, loading fast" width="150"></td>
-    <td><b>Lean and fast.</b> Built with Vite + Svelte on a minimal, pinned, audited dependency set — it ships a small, content-hashed bundle that loads fast.</td>
+    <td width="160"><img src="src/assets/why-deps.svg" alt="A small content-hashed bundle built from pinned, audited dependencies, loading fast" width="150"></td>
+    <td><b>Lean and fast.</b> Built with Vite + Svelte 5, Tailwind v4, and shadcn-svelte on a pinned, audited dependency set — it ships a small, content-hashed bundle that loads fast.</td>
   </tr>
 </table>
 
@@ -106,8 +106,8 @@ and the only planned paid feature is cross-device sync.
 ## Documentation
 
 - **[`docs/architecture.md`](docs/architecture.md)** — how Blotterbook works under the hood: data
-  flow, the platform adapters, the cost/tax model, the Vite build + Svelte SPA (ADR-001), and
-  versioning. Start here to contribute.
+  flow, the platform adapters, the cost/tax model, the Vite build + Svelte 5 SPA (ADR-001), the
+  Tailwind v4 + shadcn-svelte design system (ADR-002), and versioning. Start here to contribute.
 - **[`CLAUDE.md`](CLAUDE.md)** — quick operational reference: commands, the file-by-file map, and
   the conventions to follow when changing the code.
 - **[`functions/README.md`](functions/README.md)** — the Cloudflare Pages Functions backend
