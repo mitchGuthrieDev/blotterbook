@@ -126,11 +126,15 @@ So:
   `secondary`/`muted`/`accent`/`destructive`/`border`/`input`/`ring` + `chart-1..5` — and maps it via
   `@theme inline`. Components use the **semantic utilities**: `bg-background`/`bg-card`/`bg-secondary`,
   `text-foreground`/`text-muted-foreground`, `bg-primary`/`text-primary-foreground`, `border-border`,
-  `hover:bg-accent`. Note the naming: the brand blue is shadcn's **`primary`** (+ `ring`); shadcn's
-  **`accent`** is the subtle item-hover surface. Trading-domain hues with no shadcn equivalent live in
-  **`chart-1..5`**: chart-1 brand-blue, chart-2 P&L-up (green), chart-3 take-home (purple), chart-4
-  warning (amber), chart-5 P&L-down (red) — so `text-chart-2` = positive P&L and `text-destructive` =
-  negative/red. `tw-animate-css` supplies component animations.
+  `hover:bg-accent`. **The UI chrome is a greyscale ramp (UI redesign initiative):** `primary` is
+  near-white (the "action" treatment), `ring` is mid-grey — there is no brand blue in the chrome;
+  shadcn's **`accent`** is the subtle item-hover surface. **Color survives only in the data layer:**
+  `destructive` stays red (error / P&L loss) and the trading-domain **`chart-1..5`** are unchanged —
+  chart-1 series-blue, chart-2 P&L-up (green), chart-3 take-home (purple), chart-4 warning (amber),
+  chart-5 P&L-down (red) — so `text-chart-2` = positive P&L and `text-destructive`/`text-chart-5` =
+  negative. Corners are angular (`--radius` 4px). **Type is mono-forward:** self-hosted Geist Mono
+  (`@font-face`, variable woff2 in `src/assets/fonts/`, CSP font-src 'self') is the primary UI
+  typeface — both `--font-sans` and `--font-mono` resolve to it. `tw-animate-css` supplies animations.
 - **UI primitives = canonical shadcn-svelte at `$lib/components/ui/` (ADR-002).** `button`, `dialog`,
   `dropdown-menu`, `popover`, `select` — composed over **bits-ui v2** with `data-slot` attrs and `cn`
   from `$lib/utils`. Use these for dialogs/menus/popovers/selects instead of hand-rolling a11y; you
@@ -176,17 +180,19 @@ mock up a screen, **walk through these steps in order and say which step you're 
 straight to final code.
 
 1. **Token audit.** Tokens live in [`src/styles/tailwind.css`](src/styles/tailwind.css) (Tailwind v4,
-   CSS-based — there is no `tailwind.config.js`). Colors (semantic set + `chart-1..5`), radius
-   (`--radius` + `sm/md/lg/xl`), and fonts (`--font-sans`/`--font-mono`) are fully defined; spacing +
-   type scale are Tailwind defaults. **Known gap:** there are no semantic positive/negative/warning
-   names — `chart-2` = positive P&L (green), `chart-5`/`destructive` = negative (red), `chart-4` =
-   warning (amber). Use those tokens; never hardcode a raw palette color (`text-green-500`). Single
-   dark theme only (no light mode).
-2. **App shell.** All mockups sit inside the reusable frame
-   [`src/lib/components/shell/AppShell.svelte`](src/lib/components/shell/AppShell.svelte) (topbar +
-   centered content column + responsive gutters, Tailwind layout utilities, adapted from
-   `App.svelte`). It exposes `brand`/`meta`/`actions`/`sidebar`/`children` snippets + a `wide` prop;
-   the `sidebar` rail is off by default (the real app has none).
+   CSS-based — there is no `tailwind.config.js`). **Greyscale UI** (semantic set is a neutral ramp;
+   `primary` near-white, `ring` mid-grey), **angular** corners (`--radius` 4px + `sm/md/lg/xl`), and
+   **mono-forward** type (self-hosted Geist Mono; `--font-sans`/`--font-mono` both resolve to it);
+   spacing + type scale are Tailwind defaults. **Color lives only in the data layer:** `chart-2` =
+   positive P&L (green), `chart-5`/`destructive` = negative (red), `chart-4` = warning (amber),
+   `chart-1` series-blue. Use those tokens; never hardcode a raw palette color (`text-green-500`).
+   Single dark theme only (no light mode).
+2. **App shell.** All mockups sit inside the reusable sidebar frame
+   [`src/lib/components/shell/AppShell.svelte`](src/lib/components/shell/AppShell.svelte) — a persistent
+   left [`SidebarNav`](src/lib/components/shell/SidebarNav.svelte) (collapsible on desktop, slide-over
+   drawer on mobile) + a content column (slim topbar with the sidebar toggle + page `title` + `actions`
+   snippet, then scrollable `children`). Props: `brand`/`brandHref` (defaults `Blotterbook` → `/`),
+   data-driven `sections` (`NavSection[]`), `active`, `onnavigate`. Tailwind layout utilities only.
 3. **Component reference.** The live styleguide is **`/dev/components.html`** (source
    [`src/dev/Styleguide.svelte`](src/dev/Styleguide.svelte)) — every token + installed shadcn-svelte
    primitive with all variants/sizes. **Keep it updated:** when you `npx shadcn-svelte@latest add
@@ -272,8 +278,8 @@ conforms to the rules below; keep it that way.
       types.ts          shared TS interfaces (Trade/Fill/CostModel/Metrics/StoreLike/… — A61)
     components/ui/      canonical shadcn-svelte primitives (ADR-002): button, dialog, dropdown-menu,
                         popover, select — composed over bits-ui v2; added via `npx shadcn-svelte add`
-    components/shell/   AppShell.svelte — reusable app frame (topbar + content column, Tailwind
-                        utilities, adapted from App.svelte) every UI mockup sits inside (UI workflow)
+    components/shell/   reusable sidebar app frame (UI redesign): AppShell.svelte (rail + content
+                        column) + SidebarNav.svelte (data-driven nav rail) — every UI mockup sits inside
     utils.ts            cn() class composer (clsx + tailwind-merge) — `$lib/utils`
   app/                  the journal app — a Svelte 5 SPA (ADR-001; vanilla view layer removed in A33)
     app.html            Svelte mount, data-mode="app" (served at /app/ via _redirects rewrite)
@@ -293,6 +299,7 @@ conforms to the rules below; keep it that way.
     main.ts             entry: imports tailwind.css + mount(Styleguide)
     Styleguide.svelte   renders every design token + installed shadcn-svelte primitive (all variants/sizes)
   assets/               bundled chrome: favicon.svg, banner.svg, why-*.svg (Vite fingerprints these)
+    fonts/              self-hosted Geist Mono variable woff2 (mono-forward UI; @font-face in tailwind.css)
   styles/               tailwind.css — the single Tailwind entry AND the single source of design-token
                         values: shadcn-svelte semantic vars in :root + @theme inline mapping + chart-1..5 (ADR-002)
 /static/                Vite publicDir → copied verbatim to dist/ root (A30; retired copy-static.mjs)

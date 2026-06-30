@@ -2,13 +2,20 @@
 
    The design tokens are the canonical shadcn-svelte semantic set (background/foreground/card/popover/
    primary/secondary/muted/accent/destructive/border/input/ring + chart-1..5), defined in :root below
-   from Blotterbook's palette and mapped into Tailwind's theme via @theme inline. Components use the
-   semantic utilities (bg-background / text-foreground / bg-primary / border-border / hover:bg-accent …).
+   and mapped into Tailwind's theme via @theme inline. Components use the semantic utilities
+   (bg-background / text-foreground / bg-primary / border-border / hover:bg-accent …).
 
-   NOTE — our brand "accent" (the blue action color) is shadcn's `primary` (+ ring); shadcn's `accent`
-   is the subtle item-hover surface (our panel2). The trading-domain hues with no shadcn equivalent
-   live in chart-1..5: chart-1 brand-blue, chart-2 P&L-up green, chart-3 take-home purple, chart-4
-   amber/warning, chart-5 P&L-down red.
+   GREYSCALE OVERHAUL (UI redesign initiative): the UI chrome is a neutral greyscale ramp — there is
+   no brand blue in the chrome anymore. `primary` is now near-white (the white "action" treatment from
+   the reference), `ring` is a mid grey, and surfaces step background → card → secondary/accent in
+   zinc-like greys. The ONLY color kept is in the data layer: `destructive` stays red (error / P&L
+   loss) and chart-1..5 are UNCHANGED (graph series + P&L green/red) — chart-1 blue, chart-2 P&L-up
+   green, chart-3 take-home purple, chart-4 amber/warning, chart-5 P&L-down red. So `text-chart-2` =
+   positive P&L and `text-destructive`/`text-chart-5` = negative. Corners are angular (--radius 4px).
+
+   TYPOGRAPHY: mono-forward. Geist Mono (self-hosted variable woff2, @font-face below — CSP font-src
+   'self') is the primary UI typeface; BOTH --font-sans and --font-mono resolve to it, so every
+   existing `font-sans`/`font-mono` consumer goes mono with no component edits.
 
    This file is the SINGLE source of design-token values (the old tokens.css is gone). CSP
    (style-src 'self') is preserved — utilities are emitted as a linked stylesheet, never inline. */
@@ -18,35 +25,49 @@
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import 'tw-animate-css';
 
-/* ── shadcn-svelte semantic tokens (single dark theme — values from Blotterbook's palette) ───────── */
+/* Self-hosted Geist Mono (latin, variable weight 100–900). One woff2 covers every weight. Vite
+   fingerprints the relative url() at build; served same-origin so CSP font-src 'self' is satisfied. */
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../assets/fonts/geist-mono-latin.woff2') format('woff2');
+}
+
+/* ── shadcn-svelte semantic tokens (single dark theme — greyscale UI ramp, color kept only in data) ── */
 :root {
-  --background: #0d1014;
-  --foreground: #d6dde6;
-  --card: #151a21;
-  --card-foreground: #d6dde6;
-  --popover: #151a21;
-  --popover-foreground: #d6dde6;
-  --primary: #6aa0ff;
-  --primary-foreground: #0d1014;
-  --secondary: #1b212a;
-  --secondary-foreground: #d6dde6;
-  --muted: #1b212a;
-  --muted-foreground: #8a94a3;
-  --accent: #1b212a;
-  --accent-foreground: #d6dde6;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #131316;
+  --card-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
+  /* primary = the near-white "action" treatment (was brand blue) */
+  --primary: #fafafa;
+  --primary-foreground: #18181b;
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #8b8f98;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  /* destructive stays red — error + P&L loss */
   --destructive: #f04a4a;
   --destructive-foreground: #ffffff;
-  --border: #262d38;
-  --input: #262d38;
-  --ring: #6aa0ff;
+  --border: #232327;
+  --input: #232327;
+  --ring: #6b6b75;
+  /* chart-1..5 UNCHANGED — graph series + P&L green/red keep their color */
   --chart-1: #6aa0ff;
   --chart-2: #3fb950;
   --chart-3: #c98bff;
   --chart-4: #e3b341;
   --chart-5: #f04a4a;
-  --radius: 0.625rem;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace;
+  --radius: 0.25rem;
+  /* mono-forward: Geist Mono is the primary UI typeface; --font-sans intentionally resolves to it. */
+  --font-sans: 'Geist Mono', 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace;
+  --font-mono: 'Geist Mono', 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
 @theme inline {
@@ -98,5 +119,6 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
+    font-family: var(--font-sans);
   }
 }

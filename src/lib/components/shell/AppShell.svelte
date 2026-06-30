@@ -1,63 +1,108 @@
 <script lang="ts">
-  // Reusable app FRAME for UI mockups — adapted from the production dashboard chrome in
-  // src/app/App.svelte (topbar + centered content column + responsive gutters), rebuilt with
-  // Tailwind LAYOUT UTILITIES so it's the single frame every new screen mockup sits inside.
+  // Reusable SIDEBAR app frame for the UI redesign initiative — the consistent frame every screen
+  // mockup sits inside. Composes the persistent left <SidebarNav> + a content column (slim topbar with
+  // a sidebar toggle + page title + page actions, then scrollable content). Responsive: the rail is a
+  // static column on md+ (collapsible to an icon rail) and a slide-over drawer on mobile (Svelte
+  // transitions — workflow Step 5). Utility-only styling (CSP-clean); reads design tokens directly.
   //
-  // It deliberately mirrors the real app's measurements: the 1100px centered column, the
-  // flex/space-between topbar with a bottom border, the brand/meta/actions zones, and the
-  // 560px mobile gutter step. The real app has no sidebar, so the `sidebar` snippet is OFF by
-  // default; pass it only for mockups that need a left rail (it stacks above content on mobile).
-  //
-  // Styling is utility-only (no scoped <style>, no inline style="") so it stays CSP-clean and
-  // reads design-token values straight from src/styles/tailwind.css.
+  // Phase 1 builds this as a presentational frame: `active` + `onnavigate` drive the highlight and the
+  // navigate callback; wiring the seven screens to it is Phase 2 (client-side view switching).
   import type { Snippet } from 'svelte';
-  import { cn } from '$lib/utils';
+  import { fade, fly } from 'svelte/transition';
+  import SidebarNav, { type NavSection } from './SidebarNav.svelte';
 
   interface Props {
-    /** Wordmark / badges (topbar left). Defaults to the "Blotterbook" wordmark. */
-    brand?: Snippet;
-    /** Muted mono sub-line (topbar center) — e.g. a date range or surface label. */
-    meta?: Snippet;
-    /** Top-right controls (buttons, pills, menus…). */
+    brand?: string;
+    brandHref?: string;
+    sections: NavSection[];
+    active?: string;
+    onnavigate?: (key: string) => void;
+    /** Page title shown in the content topbar. */
+    title?: string;
+    /** Content-topbar right-side controls. */
     actions?: Snippet;
-    /** OPTIONAL left rail. Off by default to match the real topbar-only app. */
-    sidebar?: Snippet;
-    /** Drop the 1100px cap and run edge-to-edge, matching the staging surface (L8). */
-    wide?: boolean;
-    /** Extra classes for the outer column. */
-    class?: string;
     children: Snippet;
   }
-  let { brand, meta, actions, sidebar, wide = false, class: className, children }: Props = $props();
+  let { brand = 'Blotterbook', brandHref = '/', sections, active = '', onnavigate, title, actions, children }: Props =
+    $props();
+
+  let collapsed = $state(false); // desktop icon-rail
+  let mobileOpen = $state(false); // mobile drawer
 </script>
 
-<div
-  class={cn(
-    'mx-auto px-2.5 pt-3.5 pb-10 min-[560px]:px-4 min-[560px]:pt-5 min-[560px]:pb-12',
-    wide ? 'max-w-none' : 'max-w-[1100px]',
-    className
-  )}
->
-  <header
-    class="mb-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 border-b border-border pb-3.5"
+<div class="flex h-dvh overflow-hidden">
+  <!-- Desktop rail: static column, collapsible. -->
+  <aside
+    class={[
+      'hidden shrink-0 border-r border-border bg-card transition-[width] duration-200 md:block',
+      collapsed ? 'md:w-14' : 'md:w-60',
+    ]}
   >
-    <div class="text-xl font-bold tracking-[0.2px]">
-      {#if brand}{@render brand()}{:else}Blotterbook{/if}
-    </div>
-    {#if meta}
-      <div class="font-mono text-xs text-muted-foreground">{@render meta()}</div>
-    {/if}
-    {#if actions}
-      <div class="flex items-center gap-2.5">{@render actions()}</div>
-    {/if}
-  </header>
+    <SidebarNav {brand} {brandHref} {sections} {active} {onnavigate} {collapsed} />
+  </aside>
 
-  {#if sidebar}
-    <div class="flex flex-col gap-6 md:flex-row">
-      <aside class="shrink-0 md:w-60">{@render sidebar()}</aside>
-      <main class="min-w-0 flex-1">{@render children()}</main>
-    </div>
-  {:else}
-    <main>{@render children()}</main>
+  <!-- Mobile drawer + backdrop. -->
+  {#if mobileOpen}
+    <div
+      class="fixed inset-0 z-40 bg-black/60 md:hidden"
+      transition:fade={{ duration: 150 }}
+      onclick={() => (mobileOpen = false)}
+      role="presentation"
+    ></div>
+    <aside
+      class="fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-card md:hidden"
+      transition:fly={{ x: -260, duration: 200 }}
+    >
+      <SidebarNav
+        {brand}
+        {brandHref}
+        {sections}
+        {active}
+        onnavigate={k => {
+          onnavigate?.(k);
+          mobileOpen = false;
+        }}
+      />
+    </aside>
   {/if}
+
+  <!-- Content column. -->
+  <div class="flex min-w-0 flex-1 flex-col">
+    <header class="flex h-12 shrink-0 items-center gap-3 border-b border-border px-3 sm:px-4">
+      <!-- Mobile: open drawer. -->
+      <button
+        type="button"
+        class="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
+        aria-label="Open navigation"
+        onclick={() => (mobileOpen = true)}
+      >
+        <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 6h18M3 12h18M3 18h18" />
+        </svg>
+      </button>
+      <!-- Desktop: collapse rail. -->
+      <button
+        type="button"
+        class="hidden size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground md:grid"
+        aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+        aria-pressed={collapsed}
+        onclick={() => (collapsed = !collapsed)}
+      >
+        <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" />
+        </svg>
+      </button>
+      {#if title}
+        <div class="h-4 w-px bg-border"></div>
+        <h1 class="truncate text-sm font-medium text-foreground">{title}</h1>
+      {/if}
+      {#if actions}
+        <div class="ml-auto flex items-center gap-2">{@render actions()}</div>
+      {/if}
+    </header>
+
+    <main class="flex-1 overflow-y-auto">
+      <div class="p-4 sm:p-6">{@render children()}</div>
+    </main>
+  </div>
 </div>

@@ -1,42 +1,62 @@
 <script lang="ts">
-  // Live visual reference for the design system (Step 3 of the UI mockup workflow — see CLAUDE.md
-  // "UI mockup workflow"). Renders the design tokens + every installed shadcn-svelte primitive with
-  // its variants/sizes, framed by the reusable AppShell. KEEP THIS UPDATED: whenever a component is
-  // added via `npx shadcn-svelte@latest add <name>`, add a section here so the reference stays live.
+  // Live visual reference for the design system (UI mockup workflow, Step 3). Renders the design
+  // tokens + every installed shadcn-svelte primitive with its variants/sizes, framed by the reusable
+  // sidebar AppShell so it doubles as the redesign's shell preview. KEEP THIS UPDATED: when a
+  // component is added via `npx shadcn-svelte@latest add <name>`, add a section here.
   //
-  // Dev-only surface (/dev/components.html) — noindex, not linked from the product. Utility-only
-  // styling (CSP-clean); animation examples use Svelte's built-in transitions (workflow Step 5).
+  // Dev-only surface (/dev/components.html) — noindex. Utility-only styling (CSP-clean); animation
+  // examples use Svelte's built-in transitions (workflow Step 5).
   import { fade, fly, slide } from 'svelte/transition';
   import AppShell from '$lib/components/shell/AppShell.svelte';
+  import { type NavSection } from '$lib/components/shell/SidebarNav.svelte';
   import { Button, type ButtonVariant, type ButtonSize } from '$lib/components/ui/button';
   import * as Dialog from '$lib/components/ui/dialog';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import * as Popover from '$lib/components/ui/popover';
   import * as Select from '$lib/components/ui/select';
 
+  // ── App nav (the redesign's sidebar structure) ──────────────────────────────────────────────
+  const sections: NavSection[] = [
+    {
+      items: [
+        { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+        { key: 'calendar', label: 'Calendar', icon: 'calendar' },
+        { key: 'analytics', label: 'Analytics', icon: 'analytics' },
+        { key: 'blotter', label: 'Blotter', icon: 'blotter' },
+      ],
+    },
+    {
+      label: 'Data Management',
+      items: [
+        { key: 'csv', label: 'CSV Library', icon: 'csv' },
+        { key: 'trades', label: 'Trades', icon: 'trades' },
+        { key: 'reports', label: 'Reports', icon: 'reports' },
+      ],
+    },
+  ];
+  let activeView = $state('dashboard');
+
   // ── Token reference data ────────────────────────────────────────────────────────────────────
-  // Each swatch pins an explicit bg-* utility so Tailwind emits the class. `note` flags the
-  // trading-domain mapping that's easy to forget (the audit's gap #1).
   const semanticTokens: { name: string; bg: string; fg?: string; note?: string }[] = [
     { name: 'background', bg: 'bg-background', fg: 'text-foreground' },
     { name: 'foreground', bg: 'bg-foreground', fg: 'text-background' },
     { name: 'card', bg: 'bg-card', fg: 'text-card-foreground' },
     { name: 'popover', bg: 'bg-popover', fg: 'text-popover-foreground' },
-    { name: 'primary', bg: 'bg-primary', fg: 'text-primary-foreground', note: 'brand blue / action' },
+    { name: 'primary', bg: 'bg-primary', fg: 'text-primary-foreground', note: 'near-white action' },
     { name: 'secondary', bg: 'bg-secondary', fg: 'text-secondary-foreground' },
     { name: 'muted', bg: 'bg-muted', fg: 'text-muted-foreground' },
     { name: 'accent', bg: 'bg-accent', fg: 'text-accent-foreground', note: 'item-hover surface' },
-    { name: 'destructive', bg: 'bg-destructive', fg: 'text-white', note: 'error / negative' },
+    { name: 'destructive', bg: 'bg-destructive', fg: 'text-white', note: 'error / P&L loss (red kept)' },
     { name: 'border', bg: 'bg-border' },
     { name: 'input', bg: 'bg-input' },
-    { name: 'ring', bg: 'bg-ring', note: 'focus ring' },
+    { name: 'ring', bg: 'bg-ring', note: 'focus ring (grey)' },
   ];
   const chartTokens: { name: string; bg: string; note: string }[] = [
-    { name: 'chart-1', bg: 'bg-chart-1', note: 'brand blue (= primary)' },
+    { name: 'chart-1', bg: 'bg-chart-1', note: 'series blue' },
     { name: 'chart-2', bg: 'bg-chart-2', note: 'P&L up / positive (green)' },
     { name: 'chart-3', bg: 'bg-chart-3', note: 'take-home (purple)' },
     { name: 'chart-4', bg: 'bg-chart-4', note: 'warning (amber)' },
-    { name: 'chart-5', bg: 'bg-chart-5', note: 'P&L down / negative (= destructive)' },
+    { name: 'chart-5', bg: 'bg-chart-5', note: 'P&L down / negative (red)' },
   ];
   const radii: { name: string; cls: string }[] = [
     { name: 'rounded-sm', cls: 'rounded-sm' },
@@ -49,15 +69,22 @@
   const buttonVariants: ButtonVariant[] = ['default', 'secondary', 'outline', 'ghost', 'link', 'destructive'];
   const buttonSizes: Exclude<ButtonSize, 'icon'>[] = ['sm', 'default', 'lg'];
 
+  // KPI stat-card pattern (the reference's signature). `up` picks the only-color-in-data treatment.
+  const stats: { label: string; value: string; badge: string; up: boolean; note: string }[] = [
+    { label: 'Net P&L', value: '$1,250.00', badge: '+12.5%', up: true, note: 'Trending up this month' },
+    { label: 'Win rate', value: '58.3%', badge: '-2.1%', up: false, note: 'Slightly down this period' },
+    { label: 'Total trades', value: '1,234', badge: '+180', up: true, note: 'Across all sessions' },
+  ];
+
   // ── Interactive demo state ──────────────────────────────────────────────────────────────────
   let selectValue = $state('');
-  const fruits = [
+  const contracts = [
     { value: 'es', label: 'E-mini S&P (ES)' },
     { value: 'nq', label: 'E-mini Nasdaq (NQ)' },
     { value: 'cl', label: 'Crude Oil (CL)' },
     { value: 'gc', label: 'Gold (GC)' },
   ];
-  const selectLabel = $derived(fruits.find(f => f.value === selectValue)?.label ?? 'Pick a contract');
+  const selectLabel = $derived(contracts.find(c => c.value === selectValue)?.label ?? 'Pick a contract');
 
   let dialogOpen = $state(false);
   let showTransition = $state(true);
@@ -70,27 +97,40 @@
   <p class="mb-5 text-sm text-muted-foreground">{blurb}</p>
 {/snippet}
 
-<AppShell wide>
-  {#snippet brand()}
-    Blotterbook <span class="ml-1 align-middle text-xs font-semibold uppercase tracking-[0.6px] text-primary"
-      >Styleguide</span
-    >
-  {/snippet}
-  {#snippet meta()}/dev/components.html · live component reference{/snippet}
+<AppShell {sections} active={activeView} onnavigate={k => (activeView = k)} title="Styleguide">
   {#snippet actions()}
-    <a class="text-sm text-primary hover:underline" href="/app/">Open app →</a>
+    <a class="text-sm text-muted-foreground hover:text-foreground" href="/app/">Open app →</a>
   {/snippet}
 
   <p class="max-w-2xl text-sm text-muted-foreground">
-    Every design token and installed shadcn-svelte primitive, rendered with all variants and sizes.
-    Add a section here whenever you install a new component so this reference stays live.
+    Greyscale UI · Geist Mono · 4px corners. Every design token and installed shadcn-svelte primitive,
+    rendered with all variants and sizes. Add a section here whenever you install a new component so this
+    reference stays live.
   </p>
 
+  <!-- ── Stat cards ────────────────────────────────────────────────────────────────────────── -->
+  {@render section('Stat cards', 'KPI card pattern — color appears only in the data (P&L badge).')}
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {#each stats as s (s.label)}
+      <div class="rounded-md border border-border bg-card p-4">
+        <div class="flex items-start justify-between gap-2">
+          <span class="text-xs text-muted-foreground">{s.label}</span>
+          <span
+            class={`rounded border px-1.5 py-0.5 text-[11px] ${s.up ? 'border-chart-2/40 text-chart-2' : 'border-destructive/40 text-destructive'}`}
+            >{s.badge}</span
+          >
+        </div>
+        <div class="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{s.value}</div>
+        <div class="mt-2 text-xs text-muted-foreground">{s.note}</div>
+      </div>
+    {/each}
+  </div>
+
   <!-- ── Colors ────────────────────────────────────────────────────────────────────────────── -->
-  {@render section('Color tokens', 'Semantic shadcn-svelte set — use these names, not raw Tailwind palette colors.')}
+  {@render section('Color tokens', 'Greyscale semantic set — use these names, not raw Tailwind palette colors.')}
   <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
     {#each semanticTokens as t (t.name)}
-      <div class="overflow-hidden rounded-lg border border-border">
+      <div class="overflow-hidden rounded-md border border-border">
         <div class={`flex h-16 items-end p-2 ${t.bg} ${t.fg ?? 'text-foreground'}`}>
           <span class="text-xs font-medium">{t.name}</span>
         </div>
@@ -101,10 +141,10 @@
     {/each}
   </div>
 
-  {@render section('Chart / trading hues', 'No shadcn equivalent — chart-2 = positive P&L, chart-5/destructive = negative, chart-4 = warning.')}
+  {@render section('Chart / trading hues', 'The only color kept — chart-2 = positive P&L, chart-5/destructive = negative, chart-4 = warning.')}
   <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
     {#each chartTokens as t (t.name)}
-      <div class="overflow-hidden rounded-lg border border-border">
+      <div class="overflow-hidden rounded-md border border-border">
         <div class={`h-16 ${t.bg}`}></div>
         <div class="bg-card px-2 py-1 text-[11px]">
           <div class="font-medium text-foreground">{t.name}</div>
@@ -115,12 +155,12 @@
   </div>
 
   <!-- ── Radius ────────────────────────────────────────────────────────────────────────────── -->
-  {@render section('Radius', 'Derived from --radius (0.625rem).')}
+  {@render section('Radius', 'Angular — derived from --radius (0.25rem / 4px).')}
   <div class="flex flex-wrap gap-5">
     {#each radii as rdef (rdef.name)}
       <div class="flex flex-col items-center gap-2">
         <div class={`size-16 border border-border bg-secondary ${rdef.cls}`}></div>
-        <span class="font-mono text-[11px] text-muted-foreground">{rdef.name}</span>
+        <span class="text-[11px] text-muted-foreground">{rdef.name}</span>
       </div>
     {/each}
   </div>
@@ -130,7 +170,7 @@
   <div class="space-y-4">
     {#each buttonVariants as variant (variant)}
       <div class="flex flex-wrap items-center gap-3">
-        <span class="w-24 shrink-0 font-mono text-xs text-muted-foreground">{variant}</span>
+        <span class="w-24 shrink-0 text-xs text-muted-foreground">{variant}</span>
         {#each buttonSizes as size (size)}
           <Button {variant} {size}>{size}</Button>
         {/each}
@@ -147,7 +187,6 @@
   <!-- ── Overlays ──────────────────────────────────────────────────────────────────────────── -->
   {@render section('Overlays', 'Dialog, dropdown menu, popover, select — all portal to <body>.')}
   <div class="flex flex-wrap gap-3">
-    <!-- Dialog -->
     <Dialog.Root bind:open={dialogOpen}>
       <Dialog.Trigger>
         {#snippet child({ props })}
@@ -167,7 +206,6 @@
       </Dialog.Content>
     </Dialog.Root>
 
-    <!-- Dropdown menu -->
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
         {#snippet child({ props })}
@@ -184,7 +222,6 @@
       </DropdownMenu.Content>
     </DropdownMenu.Root>
 
-    <!-- Popover -->
     <Popover.Root>
       <Popover.Trigger>
         {#snippet child({ props })}
@@ -197,14 +234,13 @@
       </Popover.Content>
     </Popover.Root>
 
-    <!-- Select -->
     <Select.Root type="single" bind:value={selectValue}>
       <Select.Trigger class="w-[220px]">{selectLabel}</Select.Trigger>
       <Select.Content>
         <Select.Group>
           <Select.Label>Contracts</Select.Label>
-          {#each fruits as f (f.value)}
-            <Select.Item value={f.value} label={f.label}>{f.label}</Select.Item>
+          {#each contracts as c (c.value)}
+            <Select.Item value={c.value} label={c.label}>{c.label}</Select.Item>
           {/each}
         </Select.Group>
       </Select.Content>
@@ -222,11 +258,11 @@
   <div class="mt-3 h-24">
     {#if showTransition}
       {#if txKind === 'fade'}
-        <div transition:fade class="inline-block rounded-lg border border-border bg-card px-4 py-3 text-sm">fade</div>
+        <div transition:fade class="inline-block rounded-md border border-border bg-card px-4 py-3 text-sm">fade</div>
       {:else if txKind === 'fly'}
-        <div transition:fly={{ y: 16 }} class="inline-block rounded-lg border border-border bg-card px-4 py-3 text-sm">fly</div>
+        <div transition:fly={{ y: 16 }} class="inline-block rounded-md border border-border bg-card px-4 py-3 text-sm">fly</div>
       {:else}
-        <div transition:slide class="inline-block rounded-lg border border-border bg-card px-4 py-3 text-sm">slide</div>
+        <div transition:slide class="inline-block rounded-md border border-border bg-card px-4 py-3 text-sm">slide</div>
       {/if}
     {/if}
   </div>
