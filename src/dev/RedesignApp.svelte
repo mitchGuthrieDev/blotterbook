@@ -12,10 +12,17 @@
   import Calendar from './screens/Calendar.svelte';
   import Analytics from './screens/Analytics.svelte';
   import Blotter from './screens/Blotter.svelte';
+  import CsvLibrary from './screens/CsvLibrary.svelte';
   import Placeholder from './screens/Placeholder.svelte';
 
   // Screens are registered here as they're built; unregistered keys fall back to the Placeholder.
-  const SCREENS: Record<string, Component> = { dashboard: Dashboard, calendar: Calendar, analytics: Analytics, blotter: Blotter };
+  const SCREENS: Record<string, Component> = {
+    dashboard: Dashboard,
+    calendar: Calendar,
+    analytics: Analytics,
+    blotter: Blotter,
+    csv: CsvLibrary,
+  };
 
   const fromHash = (): string => {
     const h = typeof location !== 'undefined' ? location.hash.replace(/^#/, '') : '';

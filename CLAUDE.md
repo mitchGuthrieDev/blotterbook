@@ -314,8 +314,8 @@ conforms to the rules below; keep it that way.
     components.html  +  main.ts  +  Styleguide.svelte   the live component reference → /dev/components.html
     app.html  +  app-main.ts  +  RedesignApp.svelte     redesign preview harness (Phase 2) → /dev/app.html
     nav.ts              shared sidebar nav config (lucide icons) — used by the styleguide + harness
-    screens/            redesign screen mockups (Dashboard/Calendar/Analytics/Blotter.svelte +
-                        Placeholder.svelte; more as built)
+    screens/            redesign screen mockups (Dashboard/Calendar/Analytics/Blotter/CsvLibrary.svelte
+                        + Placeholder.svelte; more as built)
   assets/               bundled chrome: favicon.svg, banner.svg, why-*.svg (Vite fingerprints these)
     fonts/              self-hosted Geist Mono variable woff2 (mono-forward UI; @font-face in tailwind.css)
   styles/               tailwind.css — the single Tailwind entry AND the single source of design-token
