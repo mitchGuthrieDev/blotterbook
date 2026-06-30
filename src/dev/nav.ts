@@ -17,7 +17,7 @@ export const navSections: NavSection[] = [
     label: 'Data Management',
     items: [
       { key: 'csv', label: 'CSV Library', icon: Database },
-      { key: 'trades', label: 'Trades', icon: List },
+      { key: 'trades', label: 'Trade Editor', icon: List },
       { key: 'reports', label: 'Reports', icon: FileText },
     ],
   },

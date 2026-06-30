@@ -129,6 +129,9 @@
     appearance: none;
     background-color: transparent;
     background-image: none;
+    /* No preflight ships, so a UA <button> keeps a border (recolored by *{border-color}). Zero it;
+       a `border` utility (e.g. shadcn's outline Button) re-adds it from the higher utilities layer. */
+    border-width: 0;
   }
   /* Same preflight gap for anchors: a bare <a> gets the UA blue + underline. On the dev surfaces an
      <a> should inherit color and carry no underline (utilities opt back in where wanted). */

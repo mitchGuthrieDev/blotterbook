@@ -68,6 +68,6 @@ complementary — `/dev` settles the design, staging proves the real behavior be
 
 - **Phase 1 (foundation):** ✅ greyscale tokens, mono type, 4px radius (global); sidebar `AppShell` +
   `SidebarNav`; styleguide.
-- **Phase 2 (screens, in `/dev`):** ✅ Dashboard · Calendar · Analytics · Blotter · CSV Library —
-  ⬜ Trades · Reports.
+- **Phase 2 (screens, in `/dev`):** ✅ Dashboard · Calendar · Analytics · Blotter · CSV Library ·
+  Trade Editor — ⬜ Reports.
 - **Cutover:** not started (the live `/app/` is untouched beyond the global tokens).
