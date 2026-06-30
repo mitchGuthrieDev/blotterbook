@@ -8,7 +8,9 @@
     "src/site/**/*.svelte",
     "src/site/**/*.ts",
     "src/ui/**/*.svelte",
-    "src/ui/**/*.ts"
+    "src/ui/**/*.ts",
+    "src/lib/components/**/*.svelte",
+    "src/lib/components/**/*.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

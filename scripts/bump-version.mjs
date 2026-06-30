@@ -64,7 +64,9 @@ export function isProdShipping(f) {
   // A59/A30: every JS/TS/Svelte module under src/app/ (the SPA + glue, shared by all surfaces since
   // A33) and every module of the pure-logic core under src/lib/ ships to every surface.
   if (/^src\/app\/.*\.(?:js|ts|svelte)$/.test(f)) return true;
-  if (/^src\/lib\/.*\.ts$/.test(f)) return true;
+  // src/lib = the pure-logic core ($lib/core/*.ts) + the shadcn-svelte UI ($lib/components/ui/*.svelte)
+  // + cn ($lib/utils.ts); all ship in the app + site bundles.
+  if (/^src\/lib\/.*\.(?:ts|svelte)$/.test(f) && !/\.d\.ts$/.test(f)) return true;
   // A128: the shared design-system primitives ($ui — Button/Dialog/DropdownMenu/Popover/Select +
   // cn()) ship in the app + site bundles, and the design-token / Tailwind entry CSS ships to every
   // surface (tokens.css + tailwind.css). All bump prod+staging when changed.

@@ -40,6 +40,10 @@ ok(
 );
 ok('A128: an ambient .d.ts ships nothing (no bump)', !isProdShipping('src/vite-env.d.ts'));
 ok(
+  'canonical shadcn-svelte UI under /components is prod',
+  isProdShipping('src/lib/components/ui/dialog/dialog-content.svelte') && isProdShipping('src/lib/components/ui/button/index.ts')
+);
+ok(
   'site Svelte page is prod-only (A69 — marketing/info ships to prod, not staging)',
   isProdShipping('src/site/components/Home.svelte') === false &&
     classifySurfaces(['src/site/components/Home.svelte']).prod &&
