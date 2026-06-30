@@ -9,7 +9,7 @@
   import type { Metrics } from '../../lib/core.ts';
   import type { CostModel, ReportLabels } from '../../lib/types.ts';
   import { downloadBlob } from '../lib/files.ts';
-  import { modal } from '../lib/modal.ts';
+  import * as Dialog from '$ui/dialog';
 
   interface Props {
     metrics: Metrics;
@@ -121,8 +121,8 @@
   }
 </script>
 
-<div class="overlay" role="presentation" onclick={(e: MouseEvent) => e.target === e.currentTarget && onclose()}>
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Export performance report" tabindex="-1" use:modal={{ onclose }}>
+<Dialog.Root open onOpenChange={(o: boolean) => !o && onclose()}>
+  <Dialog.Content class="modal top-[5vh] flex max-h-[90vh] max-w-[880px] flex-col overflow-hidden" aria-label="Export performance report">
     <div class="bar">
       <strong>Performance report</strong>
       <div class="actions">
@@ -143,31 +143,10 @@
          should an escaping bug ever slip past report.ts's esc(). The report carries no scripts of its own;
          allow-modals keeps the parent-triggered print() dialog working. -->
     <iframe bind:this={iframeEl} class="preview" title="Performance report preview" sandbox="allow-same-origin allow-modals" srcdoc={built.html} onload={applyStyles}></iframe>
-  </div>
-</div>
+  </Dialog.Content>
+</Dialog.Root>
 
 <style>
-  .overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 5vh 16px;
-    z-index: 60;
-  }
-  .modal {
-    background: var(--bg);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    width: 100%;
-    max-width: 880px;
-    max-height: 90vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
   .bar {
     display: flex;
     align-items: center;
@@ -189,15 +168,15 @@
      so the Download/Email/Close buttons clip off the right edge. Let the bar + actions wrap so every
      control stays reachable; the modal itself is already width-capped and clips page scroll. */
   @media (max-width: 560px) {
-    .overlay .bar {
+    .bar {
       flex-wrap: wrap;
     }
-    .overlay .actions {
+    .actions {
       flex-wrap: wrap;
       width: 100%;
       justify-content: flex-start;
     }
-    .overlay .actions select {
+    .actions select {
       flex: 1 1 auto;
       min-width: 0;
     }

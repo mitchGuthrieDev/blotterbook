@@ -8,7 +8,7 @@
   import { usd, money, emit, PAGE_MODE } from '../../lib/core.ts';
   import type { Trade, TradeMeta, StoredJournal, StoredTradeMeta, SavedFilter, StoreLike } from '../../lib/types.ts';
   import { readImage, downloadBlob } from '../lib/files.ts';
-  import { modal } from '../lib/modal.ts';
+  import * as Dialog from '$ui/dialog';
 
   const isDemo = PAGE_MODE === 'demo'; // demo is a read-only preview — write controls disabled + guarded (B23)
   const isStaging = PAGE_MODE === 'staging';
@@ -203,12 +203,24 @@
   }
 </script>
 
-<div class="overlay" role="presentation" onclick={(e: MouseEvent) => e.target === e.currentTarget && onclose()}>
-  <!-- Escape cancels an open per-trade editor first, otherwise closes the modal (A42). -->
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Manage data" tabindex="-1" use:modal={{ onclose: () => (editing ? (editing = null) : onclose()) }}>
-    <div class="head">
-      <h2>Manage data</h2>
-      <button type="button" class="x" onclick={onclose} aria-label="Close">×</button>
+<!-- Escape cancels an open per-trade editor first, otherwise closes the modal (A42) — handled via
+     bits-ui's onEscapeKeydown (preventDefault keeps the dialog open while we clear the editor). -->
+<Dialog.Root open onOpenChange={(o: boolean) => !o && onclose()}>
+  <Dialog.Content
+    class="modal top-[4vh] flex max-h-[92vh] max-w-[960px] flex-col overflow-hidden"
+    aria-label="Manage data"
+    onEscapeKeydown={(e: KeyboardEvent) => {
+      if (editing) {
+        e.preventDefault();
+        editing = null;
+      }
+    }}
+  >
+    <div class="flex items-center justify-between border-b border-line px-4 py-3.5">
+      <h2 class="m-0 text-[15px]">Manage data</h2>
+      <Dialog.Close class="x cursor-pointer border-0 bg-transparent text-[22px] leading-none text-dim hover:text-txt" aria-label="Close"
+        >×</Dialog.Close
+      >
     </div>
 
     <div class="summary">
@@ -320,50 +332,10 @@
         </div>
       {/if}
     </div>
-  </div>
-</div>
+  </Dialog.Content>
+</Dialog.Root>
 
 <style>
-  .overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 4vh 16px;
-    z-index: 50;
-  }
-  .modal {
-    background: var(--bg);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    width: 100%;
-    max-width: 960px;
-    max-height: 92vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--line);
-  }
-  .head h2 {
-    margin: 0;
-    font-size: 15px;
-  }
-  .x {
-    background: transparent;
-    border: 0;
-    color: var(--dim);
-    font-size: 22px;
-    line-height: 1;
-    cursor: pointer;
-  }
   .summary {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
