@@ -7,11 +7,12 @@
   // (the KPI overview below reads live metrics).
   import { onMount, setContext } from 'svelte';
   import { Store } from '../lib/core/store.ts';
-  import { usd, money, num } from '../lib/core/core.ts';
+  import { usd, money, num, rateFor } from '../lib/core/core.ts';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import * as Card from '$lib/components/ui/card';
   import { createDashboard } from './lib/dashboard.svelte.ts';
   import { navSections, navLabel, navItems } from './lib/nav';
+  import Blotter, { type BlotterRow } from './screens/Blotter.svelte';
 
   const store = Store;
   setContext('bb:store', store);
@@ -31,6 +32,32 @@
     location.hash = key;
     active = key;
   }
+
+  // Map the real filtered trades → Blotter rows. Entry/exit prices aren't in the trade model (P&L
+  // events, not price bars), so they're left undefined → rendered "—"; hold comes from holdMs (fills
+  // exports only); fees from the broker rate (round-turn = rate × 2 × qty); tags/note from trademeta.
+  const blotterRows = $derived<BlotterRow[]>(
+    dash.filtered.map(t => {
+      const id = dash.tradeId(t);
+      const qty = t.qty ?? 1;
+      const meta = dash.tradeMeta.get(id);
+      const r = dash.setup.broker ? rateFor(dash.setup.broker, t.root) : null;
+      return {
+        id,
+        date: t.date,
+        time: (t.time || '').slice(11, 16),
+        sym: t.root,
+        side: t.side === 'short' ? 'Short' : 'Long',
+        qty,
+        holdMin: t.holdMs != null ? Math.round(t.holdMs / 60000) : undefined,
+        pnl: t.pnl,
+        fees: r ? +(r.rate * 2 * qty).toFixed(2) : undefined,
+        tags: meta?.tags ?? [],
+        note: !!(meta && meta.note),
+        session: dash.sessionOf(t) === 'rth' ? 'RTH' : 'ETH',
+      };
+    })
+  );
 
   // Live KPI overview from the real metrics — the proof that the new shell boots the real engine.
   const m = $derived(dash.metricsActive);
@@ -80,6 +107,8 @@
         </Card.Content>
       </Card.Root>
     </div>
+  {:else if active === 'blotter'}
+    <Blotter rows={blotterRows} />
   {:else}
     <div class="grid min-h-[60vh] place-items-center">
       <div class="flex max-w-md flex-col items-center gap-2 text-center">

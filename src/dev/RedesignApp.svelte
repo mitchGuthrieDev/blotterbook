@@ -11,7 +11,7 @@
   import Dashboard from './screens/Dashboard.svelte';
   import Calendar from './screens/Calendar.svelte';
   import Analytics from './screens/Analytics.svelte';
-  import Blotter from './screens/Blotter.svelte';
+  import Blotter from '../app/screens/Blotter.svelte';
   import CsvLibrary from './screens/CsvLibrary.svelte';
   import TradeEditor from './screens/TradeEditor.svelte';
   import Reports from './screens/Reports.svelte';

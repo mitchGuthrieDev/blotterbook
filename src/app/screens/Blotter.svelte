@@ -1,9 +1,30 @@
+<script lang="ts" module>
+  // A single blotter row. The wired staging app builds these from real trades; entry/exit prices,
+  // hold time and fees aren't on every platform's export, so they're optional (rendered as "—").
+  export type BlotterRow = {
+    id: string;
+    date: string;
+    time: string;
+    sym: string;
+    side: 'Long' | 'Short';
+    qty: number;
+    entry?: number;
+    exit?: number;
+    holdMin?: number;
+    pnl: number;
+    fees?: number;
+    tags: string[];
+    note: boolean;
+    session: 'RTH' | 'ETH';
+  };
+</script>
+
 <script lang="ts">
-  // Blotter surface mockup (UI redesign, Phase 2 — 4th screen). A full-width, feature-rich trade
-  // table built on the shadcn-svelte primitives (Table/Badge/Checkbox/Input/Card + Select/Popover/
-  // DropdownMenu/Button). Row click → a slide-over detail drawer. Features: click-to-sort headers,
-  // search + side filter, column-group toggle, group-by (day/symbol) with subtotals, bulk-select with
-  // an action bar, and a footer totals row. Representative static data; color only in the P&L.
+  // Blotter — a full-width, feature-rich trade table on the shadcn-svelte primitives (Table/Badge/
+  // Checkbox/Input/Card + Select/Popover/Button). Row click → a slide-over detail drawer; click-to-sort
+  // headers, search + side filter, column-group toggle, group-by (day/symbol) with subtotals,
+  // bulk-select, footer totals. Rows come from the `rows` prop (real trades on staging); the default
+  // is the /dev mock for the preview harness. Color only in the P&L.
   import { Search, ArrowUpDown, ChevronUp, Columns3, X, Tag, Trash2, Paperclip, ImagePlus } from '@lucide/svelte';
   import { cn } from '$lib/utils';
   import { Button } from '$lib/components/ui/button';
@@ -16,12 +37,7 @@
   import * as Popover from '$lib/components/ui/popover';
   import { fade, fly } from 'svelte/transition';
 
-  type Trade = {
-    id: string; date: string; time: string; sym: string; side: 'Long' | 'Short';
-    qty: number; entry: number; exit: number; holdMin: number; pnl: number; fees: number;
-    tags: string[]; note: boolean; session: 'RTH' | 'ETH';
-  };
-  const RAW: Trade[] = [
+  const MOCK: BlotterRow[] = [
     { id: 't1', date: '2026-06-24', time: '09:34', sym: 'ES', side: 'Long', qty: 2, entry: 5482.25, exit: 5486.0, holdMin: 12, pnl: 375, fees: 4.7, tags: ['breakout'], note: true, session: 'RTH' },
     { id: 't2', date: '2026-06-24', time: '10:18', sym: 'NQ', side: 'Short', qty: 1, entry: 19840.5, exit: 19852.0, holdMin: 7, pnl: -230, fees: 2.4, tags: ['fade'], note: false, session: 'RTH' },
     { id: 't3', date: '2026-06-24', time: '11:46', sym: 'ES', side: 'Long', qty: 3, entry: 5489.0, exit: 5492.75, holdMin: 21, pnl: 562, fees: 7.05, tags: ['trend', 'A+'], note: true, session: 'RTH' },
@@ -37,7 +53,8 @@
     { id: 't13', date: '2026-06-30', time: '09:33', sym: 'ES', side: 'Long', qty: 2, entry: 5510.0, exit: 5514.5, holdMin: 19, pnl: 450, fees: 4.7, tags: ['breakout', 'A+'], note: true, session: 'RTH' },
     { id: 't14', date: '2026-06-30', time: '10:41', sym: 'NQ', side: 'Long', qty: 1, entry: 19950.0, exit: 19944.0, holdMin: 8, pnl: -120, fees: 2.4, tags: [], note: false, session: 'RTH' },
   ];
-  const net = (t: Trade) => t.pnl - t.fees;
+  let { rows = MOCK }: { rows?: BlotterRow[] } = $props();
+  const net = (t: BlotterRow) => t.pnl - (t.fees ?? 0);
   const money = (n: number) => `${n >= 0 ? '+' : '-'}$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // ── Controls ─────────────────────────────────────────────────────────────────────────────────
@@ -56,7 +73,7 @@
   const colCount = $derived(1 + 5 + (cols.prices ? 3 : 0) + (cols.costs ? 2 : 0) + (cols.context ? 2 : 0));
 
   const filtered = $derived(
-    RAW.filter(t => {
+    rows.filter(t => {
       const q = search.trim().toUpperCase();
       if (q && !t.sym.includes(q) && !t.tags.some(g => g.toUpperCase().includes(q))) return false;
       if (sideFilter !== 'all' && t.side !== sideFilter) return false;
@@ -72,10 +89,10 @@
       return (a.pnl - b.pnl) * dir;
     })
   );
-  type Group = { key: string; label: string; trades: Trade[]; subtotal: number };
+  type Group = { key: string; label: string; trades: BlotterRow[]; subtotal: number };
   const groups = $derived.by((): Group[] => {
     if (groupBy === 'none') return [{ key: 'all', label: '', trades: sorted, subtotal: 0 }];
-    const map = new Map<string, Trade[]>();
+    const map = new Map<string, BlotterRow[]>();
     for (const t of sorted) {
       const k = groupBy === 'day' ? t.date : t.sym;
       (map.get(k) ?? map.set(k, []).get(k)!).push(t);
@@ -103,7 +120,7 @@
   function toggleAll(v: boolean) {
     selected = v ? new Set(filtered.map(t => t.id)) : new Set();
   }
-  const openTrade = $derived(openId ? RAW.find(t => t.id === openId) : undefined);
+  const openTrade = $derived(openId ? rows.find(t => t.id === openId) : undefined);
 </script>
 
 {#snippet sortHead(key: 'time' | 'sym' | 'qty' | 'pnl', label: string, cls: string)}
@@ -163,7 +180,7 @@
           </div>
         </Popover.Content>
       </Popover.Root>
-      <span class="ml-auto text-xs text-muted-foreground">{filtered.length} of {RAW.length} trades</span>
+      <span class="ml-auto text-xs text-muted-foreground">{filtered.length} of {rows.length} trades</span>
     </div>
 
     <!-- Bulk action bar -->
@@ -231,12 +248,12 @@
               <Table.Cell class="text-right tabular-nums">{t.qty}</Table.Cell>
               <Table.Cell class={cn('text-right font-semibold tabular-nums', t.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}>{money(t.pnl)}</Table.Cell>
               {#if cols.prices}
-                <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.entry}</Table.Cell>
-                <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.exit}</Table.Cell>
-                <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.holdMin}m</Table.Cell>
+                <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.entry ?? '—'}</Table.Cell>
+                <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.exit ?? '—'}</Table.Cell>
+                <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.holdMin != null ? `${t.holdMin}m` : '—'}</Table.Cell>
               {/if}
               {#if cols.costs}
-                <Table.Cell class="text-right tabular-nums text-muted-foreground">-${t.fees.toFixed(2)}</Table.Cell>
+                <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.fees != null ? `-$${t.fees.toFixed(2)}` : '—'}</Table.Cell>
                 <Table.Cell class={cn('text-right tabular-nums', net(t) >= 0 ? 'text-chart-2' : 'text-destructive')}>{money(net(t))}</Table.Cell>
               {/if}
               {#if cols.context}
@@ -289,11 +306,11 @@
         {/snippet}
         {@render field('Gross P&L', money(openTrade.pnl), openTrade.pnl >= 0 ? 'pos' : 'neg')}
         {@render field('Net P&L', money(net(openTrade)), net(openTrade) >= 0 ? 'pos' : 'neg')}
-        {@render field('Entry', String(openTrade.entry))}
-        {@render field('Exit', String(openTrade.exit))}
+        {@render field('Entry', openTrade.entry != null ? String(openTrade.entry) : '—')}
+        {@render field('Exit', openTrade.exit != null ? String(openTrade.exit) : '—')}
         {@render field('Qty', String(openTrade.qty))}
-        {@render field('Hold', `${openTrade.holdMin}m`)}
-        {@render field('Fees', `-$${openTrade.fees.toFixed(2)}`, 'neg')}
+        {@render field('Hold', openTrade.holdMin != null ? `${openTrade.holdMin}m` : '—')}
+        {@render field('Fees', openTrade.fees != null ? `-$${openTrade.fees.toFixed(2)}` : '—', 'neg')}
         {@render field('Session', openTrade.session)}
       </div>
       <div>
