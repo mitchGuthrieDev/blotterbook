@@ -50,11 +50,11 @@
 </script>
 
 <section class="landing mx-auto mt-[6vh] max-w-[640px]">
-  <h1>Blotterbook</h1>
+  <h1 class="m-0 mb-1.5 text-[28px]">Blotterbook</h1>
   <p class="mt-0 mb-[22px] text-[14px] leading-[1.5] text-dim">Set up your trading costs, then load a balance-history CSV (TradingView and others) to begin. Everything stays in your browser.</p>
 
   <div class="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3 rounded-[10px] border border-line bg-panel p-4">
-    <div class="field">
+    <div class="field flex flex-col gap-1 text-[11px] text-faint">
       <span>Broker</span>
       <Select.Root type="single" value={setup.broker} onValueChange={onBroker} items={brokerItems}>
         <Select.Trigger aria-label="Broker"><Select.Value placeholder="— Select broker —" /></Select.Trigger>
@@ -63,7 +63,7 @@
         </Select.Content>
       </Select.Root>
     </div>
-    <div class="field">
+    <div class="field flex flex-col gap-1 text-[11px] text-faint">
       <span>Data feed</span>
       <Select.Root type="single" bind:value={setup.feed} items={feedItems}>
         <Select.Trigger aria-label="Data feed"><Select.Value placeholder="— Select data feed —" /></Select.Trigger>
@@ -77,7 +77,7 @@
         </Select.Content>
       </Select.Root>
     </div>
-    <div class="field">
+    <div class="field flex flex-col gap-1 text-[11px] text-faint">
       <span>State</span>
       <Select.Root type="single" bind:value={setup.stateAbbr} items={stateItems}>
         <Select.Trigger aria-label="State"><Select.Value placeholder="— Select state —" /></Select.Trigger>
@@ -86,15 +86,15 @@
         </Select.Content>
       </Select.Root>
     </div>
-    <label>
+    <label class="flex flex-col gap-1 text-[11px] text-faint">
       <span>Platform fee ($/mo)</span>
-      <input type="number" min="0" step="1" bind:value={setup.platform} />
+      <input type="number" min="0" step="1" bind:value={setup.platform} class="rounded-md border border-line bg-panel2 p-2 text-[13px] font-sans text-txt focus:border-accent focus:outline-none" />
     </label>
   </div>
 
   <div class="mt-[18px] flex items-center gap-[14px]">
     <button type="button" class="cursor-pointer rounded-lg border-0 bg-accent px-[22px] py-[11px] text-[15px] font-bold text-bg" onclick={() => fileInput.click()}>Load CSV</button>
-    <div class="field">
+    <div class="field flex flex-col gap-1 text-[11px] text-faint">
       <span>Platform</span>
       <Select.Root
         type="single"
@@ -114,30 +114,3 @@
   {#if msg}<p class="mt-3 text-[13px] text-red" role="alert">{msg}</p>{/if}
 </section>
 
-<style>
-  h1 {
-    margin: 0 0 6px;
-    font-size: 28px;
-  }
-  label,
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 11px;
-    color: var(--faint);
-  }
-  input {
-    background: var(--panel2);
-    color: var(--txt);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 8px;
-    font-size: 13px;
-    font-family: var(--sans);
-  }
-  input:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
-</style>

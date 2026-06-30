@@ -25,8 +25,8 @@
   const items = $derived([{ value: DEFAULT, label: '— Default —' }, ...names.map(n => ({ value: n, label: n }))]);
 </script>
 
-<div class="wsbar">
-  <div class="wslabel">
+<div class="wsbar mt-4 flex items-center gap-2.5">
+  <div class="wslabel flex items-center gap-2 text-[11px] uppercase tracking-[0.5px] text-faint">
     <span>Workspace</span>
     <Select.Root type="single" value={selValue} onValueChange={onSel} {items}>
       <Select.Trigger aria-label="Workspace" class="min-w-[140px]"><Select.Value /></Select.Trigger>
@@ -44,20 +44,3 @@
   >
 </div>
 
-<style>
-  .wsbar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 16px;
-  }
-  .wslabel {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--faint);
-  }
-</style>
