@@ -241,6 +241,22 @@
   // ── Analytics ────────────────────────────────────────────────────────────────────────────────
   const analytics = $derived(buildAnalytics(dash.metricsActive, dash.metricsActive.trades));
 
+  // Dashboard modules (Break-even & Cost + Advanced Statistics) — reuse the cost waterfall + the
+  // Analytics advanced-stats grid so the dashboard cards match their full-screen counterparts.
+  const dashCostRows = $derived.by(() => {
+    const c = dash.cost;
+    const t = (n: number): 'pos' | 'neg' => (n >= 0 ? 'pos' : 'neg');
+    return [
+      { label: 'Gross P&L', value: usd(c.gross), tone: t(c.gross) },
+      { label: 'Commissions (all-in)', value: usd(-c.totalComm), tone: 'neg' as const },
+      { label: `Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, value: usd(-c.fixedPeriod), tone: 'neg' as const },
+      { label: 'Est. 1256 tax', value: usd(-c.tax), tone: 'neg' as const },
+      { label: 'Take-home', value: usd(c.afterTax), tone: t(c.afterTax), total: true },
+      { label: 'Break-even / trade', value: usd(c.bePer) },
+    ];
+  });
+  const dashAdvStats = $derived(analytics.statRows);
+
   // ── Blotter ──────────────────────────────────────────────────────────────────────────────────
   // Entry/exit prices aren't in the trade model (P&L events, not bars) → undefined → "—"; hold from
   // holdMs (fills exports only); fees from the broker rate (round-turn = rate × 2 × qty); tags/note
@@ -426,6 +442,8 @@
       {statDetail}
       {filterModel}
       onpickdate={(y, m) => dash.setCal(y, m)}
+      costRows={dashCostRows}
+      advStats={dashAdvStats}
       modules={dashModules}
       onmoduleschange={saveModules}
     />

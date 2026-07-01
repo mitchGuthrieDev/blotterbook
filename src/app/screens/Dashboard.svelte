@@ -70,6 +70,20 @@
     { time: '10:12', sym: 'NQ', side: 'Short', qty: 1, pnl: -60 },
     { time: '11:48', sym: 'ES', side: 'Long', qty: 3, pnl: 240 },
   ];
+  const MOCK_COST_ROWS = [
+    { label: 'Gross P&L', value: '+$86,107.00', tone: 'pos' as const },
+    { label: 'Commissions (all-in)', value: '-$4,210.00', tone: 'neg' as const },
+    { label: 'Subscriptions ($180/mo × 24)', value: '-$1,200.00', tone: 'neg' as const },
+    { label: 'Est. 1256 tax', value: '-$17,178.24', tone: 'neg' as const },
+    { label: 'Take-home', value: '+$62,046.00', tone: 'pos' as const, total: true },
+    { label: 'Break-even / trade', value: '$3.52' },
+  ];
+  const MOCK_ADV_STATS = [
+    { k: 'Payoff ratio', v: '2.18' }, { k: 'Sortino (daily)', v: '1.24' }, { k: 'Recovery factor', v: '12.4' },
+    { k: 'Profit concentration', v: '18%' }, { k: 'Max consec. wins', v: '9' }, { k: 'Max consec. losses', v: '4' },
+    { k: 'Avg win', v: '+$133.39', tone: 'pos' as const }, { k: 'Avg loss', v: '-$61.08', tone: 'neg' as const },
+    { k: 'Avg trades / day', v: '3.5' },
+  ];
   // A no-op filter model for the /dev preview.
   const MOCK_FILTERS: FilterModel = {
     root: '',
@@ -132,6 +146,9 @@
     filterModel?: FilterModel;
     /** Clicking a curve point jumps the calendar cursor to that date's month (parity with app/demo). */
     onpickdate?: (year: number, month: number) => void;
+    /** Break-even & Cost module rows (from costModel) and Advanced Statistics rows (from metrics). */
+    costRows?: { label: string; value: string; tone?: 'pos' | 'neg'; total?: boolean }[];
+    advStats?: { k: string; v: string; tone?: 'pos' | 'neg' }[];
     /** Visible dashboard modules in order (persisted on staging); defaults to all shown. */
     modules?: string[];
     onmoduleschange?: (order: string[]) => void;
@@ -143,6 +160,7 @@
     statDetail = key => MOCK_DETAIL(key),
     filterModel = MOCK_FILTERS,
     onpickdate,
+    costRows = MOCK_COST_ROWS, advStats = MOCK_ADV_STATS,
     modules, onmoduleschange,
   }: Props = $props();
 
@@ -150,6 +168,8 @@
   const MODULES: { key: string; label: string }[] = [
     { key: 'perf', label: 'Performance' },
     { key: 'cal', label: 'Trading Calendar' },
+    { key: 'cost', label: 'Break-even & Cost' },
+    { key: 'adv', label: 'Advanced Statistics' },
   ];
   const validKeys = (ks?: string[]) => (ks ?? MODULES.map(m => m.key)).filter(k => MODULES.some(m => m.key === k));
   // svelte-ignore state_referenced_locally — initial layout only; the app re-seeds via the prop below.
@@ -641,12 +661,35 @@
       {/if}
   {/snippet}
 
+  {#snippet costBody()}
+    <div class="overflow-hidden rounded-md border border-border">
+      {#each costRows as r, i (r.label)}
+        <div class={['flex items-center justify-between px-3 py-2 text-sm', i > 0 && 'border-t border-border', r.total && 'bg-secondary font-semibold']}>
+          <span class={r.total ? 'text-foreground' : 'text-muted-foreground'}>{r.label}</span>
+          <span class={['tabular-nums', r.tone === 'pos' ? 'text-chart-2' : r.tone === 'neg' ? 'text-destructive' : 'text-foreground']}>{r.value}</span>
+        </div>
+      {/each}
+    </div>
+    <p class="mt-2 text-[11px] text-muted-foreground">Costs from your broker/feed/platform setup; tax is an estimate — not advice.</p>
+  {/snippet}
+
+  {#snippet advBody()}
+    <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-6 gap-y-0">
+      {#each advStats as r (r.k)}
+        <div class="flex items-baseline justify-between gap-3 border-b border-border py-[7px]">
+          <span class="text-xs text-muted-foreground">{r.k}</span>
+          <span class={['text-[13px] font-bold tabular-nums whitespace-nowrap', r.tone === 'pos' ? 'text-chart-2' : r.tone === 'neg' ? 'text-destructive' : 'text-foreground']}>{r.v}</span>
+        </div>
+      {/each}
+    </div>
+  {/snippet}
+
   <!-- Modules — reorderable / hideable / re-addable (persisted on staging). -->
   {#each modOrder as key (key)}
     <Card.Root id="dashmod-{key}">
       {@render moduleHeader(key)}
       <Card.Content>
-        {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{/if}
+        {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{/if}
       </Card.Content>
     </Card.Root>
   {/each}

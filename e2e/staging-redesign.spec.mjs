@@ -248,7 +248,9 @@ test('staging redesign: the Filters popover narrows the dataset and clears', asy
 
 test('staging redesign: Performance chart overlays multiple series at once', async ({ page }) => {
   await bootDashboard(page);
-  const lines = () => page.locator('svg[aria-label="Cumulative P&L curve"] path[class*="stroke-"]').count();
+  const curve = page.locator('svg[aria-label*="P&L curve"]'); // substring: the label now also names the click affordance
+  await expect(curve.locator('path.stroke-chart-2')).toBeVisible(); // wait for the first line to draw (clientWidth measured)
+  const lines = () => curve.locator('path[class*="stroke-"]').count();
   expect(await lines()).toBe(1); // Gross by default
   await page.getByRole('button', { name: 'Net', exact: true }).click();
   await page.getByRole('button', { name: 'Take-home', exact: true }).click();
@@ -262,7 +264,7 @@ test('staging redesign: Dashboard modules hide/reorder and persist across reload
       [...document.querySelectorAll('span')].map(s => s.textContent.trim()).filter(t => t === 'Performance' || t === 'Trading Calendar')
     );
   expect(await order()).toEqual(['Performance', 'Trading Calendar']);
-  await page.locator('button[aria-label="Module menu"]').last().click(); // Trading Calendar's menu
+  await page.locator('#dashmod-cal button[aria-label="Module menu"]').click(); // Trading Calendar's own menu
   await page.getByRole('menuitem', { name: 'Move up' }).click();
   expect(await order()).toEqual(['Trading Calendar', 'Performance']);
   await page.reload({ waitUntil: 'networkidle' });
@@ -298,4 +300,37 @@ test('staging redesign: Trade Editor edits a core field and it persists (updateT
   await page.reload({ waitUntil: 'networkidle' });
   await gotoScreen(page, 'Trade Editor');
   await expect(page.locator('table tbody tr td', { hasText: 'ZZTEST' }).first()).toBeVisible({ timeout: 10_000 });
+});
+
+test('staging redesign: the header shows Beta + environment pills and the version', async ({ page }) => {
+  await bootDashboard(page);
+  const header = page.locator('header');
+  // Environment pill names the surface; Beta pill shows while prod major < 1; version reads from versions.json.
+  await expect(header.getByText('Staging', { exact: true })).toBeVisible();
+  await expect(header.getByText('Beta', { exact: true })).toBeVisible();
+  await expect(header.getByText(/^v\d+\.\d+\.\d+/)).toBeVisible();
+});
+
+test('staging redesign: the Break-even/Cost + Advanced Statistics modules render real data', async ({ page }) => {
+  await bootDashboard(page);
+  // Break-even & Cost waterfall (costModel): the take-home total + per-trade break-even rows render.
+  const cost = page.locator('#dashmod-cost');
+  await expect(cost.getByText('Break-even & Cost')).toBeVisible();
+  await expect(cost.getByText('Take-home')).toBeVisible();
+  await expect(cost.getByText('Break-even / trade')).toBeVisible();
+  await expect(cost.getByText(/\$[\d,]/).first()).toBeVisible(); // a real money figure
+  // Advanced Statistics grid (Analytics view-model): the payoff-ratio stat renders.
+  const adv = page.locator('#dashmod-adv');
+  await expect(adv.getByText('Advanced Statistics')).toBeVisible();
+  await expect(adv.getByText(/Payoff ratio/)).toBeVisible();
+});
+
+test('staging redesign: clicking the Performance chart jumps the Dashboard calendar to that day', async ({ page }) => {
+  await bootDashboard(page);
+  const svg = page.locator('svg[aria-label*="P&L curve"]');
+  const box = await svg.boundingBox();
+  // Click near the right edge of the curve (a late trading day) → the calendar cursor + selected day sync.
+  await svg.click({ position: { x: box.width * 0.85, y: box.height * 0.5 } });
+  // The calendar module opens the day-detail rail for the picked day (journal-note editor appears).
+  await expect(page.getByText('Journal note')).toBeVisible({ timeout: 4000 });
 });
