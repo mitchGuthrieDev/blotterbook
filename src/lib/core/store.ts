@@ -189,6 +189,21 @@ export const Store: StoreLike = {
     return done(store);
   },
 
+  // Edit a trade's CORE fields. The id is a content hash (tradeId), so an edit is a delete-old +
+  // add-new that migrates the per-trade metadata (tags/note/shots) to the new id. `meta` overrides the
+  // tags/note (the editor may change them in the same save); shots carry over from the old record.
+  // Returns the new id. Note: the new row goes through addTrades' dedupe (A114) — an edit whose fields
+  // collide with an existing trade merges into it rather than duplicating.
+  async updateTrade(oldId, next, meta) {
+    const old = await this.getTradeMeta(oldId);
+    await this.deleteTrade(oldId);
+    await this.deleteTradeMeta(oldId);
+    await this.addTrades([next]);
+    const id = tradeId(next);
+    await this.saveTradeMeta(id, { tags: meta?.tags ?? old.tags, note: meta?.note ?? old.note, shots: old.shots });
+    return { id };
+  },
+
   async getAllJournal() {
     const store = await tx(JOURNAL, 'readonly');
     const all = await reqP<StoredJournal[]>(store.getAll());

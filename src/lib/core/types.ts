@@ -277,6 +277,7 @@ export interface StoreLike {
   getAllTrades(): Promise<Trade[]>;
   tradeCount(): Promise<number>;
   deleteTrade(id: string): Promise<unknown>;
+  updateTrade(oldId: string, next: Trade, meta?: { tags?: string[]; note?: string }): Promise<{ id: string }>;
   saveJournal(date: string, rec: string | Annotation): Promise<unknown>;
   getJournal(date: string): Promise<Required<Annotation>>;
   journalDates(): Promise<Set<string>>;

@@ -292,9 +292,20 @@
       };
     })
   );
+  // Persist the Trade Editor's staged changes. editorRows reflects the PERSISTED state at save time
+  // (the component holds edits in its own draft), so it's the pre-edit snapshot to diff against: a row
+  // whose core fields changed goes through editTradeCore (rebuild + new id + migrate meta); a row with
+  // only tag/note changes goes through saveTradeMeta.
   async function persistEditorRows(changed: EditorRow[]) {
-    for (const r of changed) await dash.saveTradeMeta(r.id, r.tags, r.note);
+    const origById = new Map(editorRows.map(r => [r.id, r]));
+    for (const r of changed) {
+      const o = origById.get(r.id);
+      const coreChanged = !!o && (o.date !== r.date || o.time !== r.time || o.symbol !== r.symbol || o.side !== r.side || o.qty !== r.qty || o.pnl !== r.pnl);
+      if (coreChanged) await dash.editTradeCore(r);
+      else await dash.saveTradeMeta(r.id, r.tags, r.note);
+    }
   }
+  const EDITABLE_FIELDS = ['date', 'time', 'symbol', 'side', 'qty', 'pnl'];
 
   // ── Reports ──────────────────────────────────────────────────────────────────────────────────
   // The preview + exports are built from the real engine: slice trades to the chosen range, run
@@ -433,7 +444,7 @@
   {:else if active === 'blotter'}
     <Blotter rows={blotterRows} />
   {:else if active === 'trades'}
-    <TradeEditor rows={editorRows} coreEditable={false} onsave={persistEditorRows} ondelete={ids => dash.deleteTrades(ids)} />
+    <TradeEditor rows={editorRows} coreEditable={false} editableFields={EDITABLE_FIELDS} onsave={persistEditorRows} ondelete={ids => dash.deleteTrades(ids)} />
   {:else if active === 'reports'}
     <Reports
       defaultTitle="Performance report"

@@ -49,12 +49,18 @@
     rows?: EditorRow[];
     /** /dev mock edits every field inline; staging edits only tags/notes (imported trades are fixed). */
     coreEditable?: boolean;
+    /** When set, only these core fields are editable (staging: date/time/symbol/side/qty/pnl — entry/
+     *  exit/fees aren't in the trade model). Overrides `coreEditable` per-field when provided. */
+    editableFields?: string[];
     /** Persist the staged tag/note edits (staging passes the Store write-through). */
     onsave?: (rows: EditorRow[]) => void | Promise<void>;
     /** Persist a delete of the given trade ids. */
     ondelete?: (ids: string[]) => void | Promise<void>;
   }
-  let { rows: rowsProp = MOCK, coreEditable = true, onsave, ondelete }: Props = $props();
+  let { rows: rowsProp = MOCK, coreEditable = true, editableFields, onsave, ondelete }: Props = $props();
+  // A field is editable if it's in editableFields (when provided) or coreEditable covers everything.
+  const canEdit = (field: string) => (editableFields ? editableFields.includes(field) : coreEditable);
+  const anyCoreEditable = $derived(coreEditable || !!editableFields?.length);
 
   const clone = (r: EditorRow): EditorRow => structuredClone($state.snapshot(r));
   // svelte-ignore state_referenced_locally — initial seed only; the $effect below resyncs on change.
@@ -84,7 +90,7 @@
   let nextId = 100;
 
   const isEditing = (id: string, field: string) => editing?.id === id && editing.field === field;
-  const startEdit = (id: string, field: string) => coreEditable && (editing = { id, field });
+  const startEdit = (id: string, field: string) => canEdit(field) && (editing = { id, field });
   const stopEdit = () => (editing = null);
   function onCellKey(e: KeyboardEvent) {
     if (e.key === 'Enter' || e.key === 'Escape') (e.currentTarget as HTMLInputElement).blur();
@@ -100,7 +106,7 @@
     draft = draft.map(r => (r.id === id ? { ...r, [field]: Number.isNaN(v) ? 0 : v } : r));
   }
   function toggleSide(id: string) {
-    if (!coreEditable) return;
+    if (!canEdit('side')) return;
     draft = draft.map(r => (r.id === id ? { ...r, side: r.side === 'Long' ? 'Short' : 'Long' } : r));
   }
   function addTag(id: string, tag: string) {
@@ -190,7 +196,7 @@
 </script>
 
 {#snippet textCell(row: EditorRow, field: 'symbol' | 'date' | 'time', value: string, align: string)}
-  {#if coreEditable && isEditing(row.id, field)}
+  {#if canEdit(field) && isEditing(row.id, field)}
     <input
       use:focusSelect
       {value}
@@ -199,7 +205,7 @@
       onkeydown={onCellKey}
       class={cn('h-7 w-full rounded border border-ring bg-background px-1.5 text-sm outline-none', align)}
     />
-  {:else if coreEditable}
+  {:else if canEdit(field)}
     <button type="button" onclick={() => startEdit(row.id, field)} class={cn('block w-full rounded px-1.5 py-1 text-sm hover:bg-accent', align)}>
       {value || '—'}
     </button>
@@ -209,7 +215,7 @@
 {/snippet}
 
 {#snippet numCell(row: EditorRow, field: 'qty' | 'entry' | 'exit' | 'pnl' | 'fees', value: number, extra: string)}
-  {#if coreEditable && isEditing(row.id, field)}
+  {#if canEdit(field) && isEditing(row.id, field)}
     <input
       use:focusSelect
       type="number"
@@ -219,7 +225,7 @@
       onkeydown={onCellKey}
       class="h-7 w-full rounded border border-ring bg-background px-1.5 text-right text-sm outline-none"
     />
-  {:else if coreEditable}
+  {:else if canEdit(field)}
     <button type="button" onclick={() => startEdit(row.id, field)} class={cn('block w-full rounded px-1.5 py-1 text-right text-sm tabular-nums hover:bg-accent', extra)}>
       {numText(value)}
     </button>
@@ -234,6 +240,8 @@
     {#if coreEditable}
       <Button size="sm" onclick={addTrade}><Plus class="size-4" /> Add trade</Button>
       <span class="text-xs text-muted-foreground">Click any cell to edit. Changes are staged until you save.</span>
+    {:else if anyCoreEditable}
+      <span class="text-xs text-muted-foreground">Click a cell to edit <span class="text-foreground">date/time/symbol/side/qty/P&amp;L</span>, tags or notes. Entry/exit aren't stored. Changes are staged until you save.</span>
     {:else}
       <span class="text-xs text-muted-foreground">Imported trades are fixed — edit <span class="text-foreground">tags</span> and <span class="text-foreground">notes</span>, or delete rows. Changes are staged until you save.</span>
     {/if}
@@ -297,7 +305,7 @@
               <Table.Cell class="p-1 text-muted-foreground">{@render textCell(row, 'time', row.time, 'text-left')}</Table.Cell>
               <Table.Cell class="p-1 font-medium">{@render textCell(row, 'symbol', row.symbol, 'text-left')}</Table.Cell>
               <Table.Cell class="p-1">
-                {#if coreEditable}
+                {#if canEdit('side')}
                   <button type="button" onclick={() => toggleSide(row.id)} title="Toggle side">
                     <Badge variant="outline" class={row.side === 'Long' ? 'border-chart-2/40 text-chart-2' : 'border-destructive/40 text-destructive'}>{row.side}</Badge>
                   </button>

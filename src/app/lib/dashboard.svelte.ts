@@ -129,6 +129,37 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
     for (const id of ids) await store.deleteTrade(id);
     await reloadAll();
   }
+  // Edit a trade's core fields. The id is a content hash, so this rebuilds the trade from the original
+  // (preserving the fields the editor doesn't expose) and delegates to store.updateTrade (delete-old +
+  // add-new + migrate tags/note). entry/exit aren't in the model, so they're not editable upstream.
+  async function editTradeCore(r: {
+    id: string;
+    date: string;
+    time: string;
+    symbol: string;
+    side: string;
+    qty: number;
+    pnl: number;
+    tags: string[];
+    note: string;
+  }) {
+    const orig = allTrades.find(t => store.tradeId(t) === r.id);
+    if (!orig) return;
+    const hhmmss = /^\d\d:\d\d$/.test(r.time) ? `${r.time}:00` : r.time || '00:00:00';
+    const next: Trade = {
+      ...orig,
+      date: r.date,
+      time: `${r.date} ${hhmmss}`,
+      root: r.symbol,
+      symbol: r.symbol,
+      side: r.side === 'Short' ? 'short' : 'long',
+      qty: r.qty,
+      pnl: r.pnl,
+      dup: 0,
+    };
+    await store.updateTrade(r.id, next, { tags: r.tags, note: r.note });
+    await reloadAll();
+  }
   async function importTrades(trades: Trade[]) {
     const res = await store.addTrades(trades);
     await reloadAll();
@@ -232,6 +263,7 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
     saveNote,
     saveTradeMeta,
     deleteTrades,
+    editTradeCore,
     importTrades,
     purgeAll,
     sessionOf,

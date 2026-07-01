@@ -55,6 +55,18 @@ export function createDemoStore(): StoreLike {
     async deleteTrade(id) {
       trades.delete(id);
     },
+    async updateTrade(oldId, next, m) {
+      const old = trademeta.get(oldId);
+      trades.delete(oldId);
+      trademeta.delete(oldId);
+      const id = tradeId(next);
+      if (!trades.has(id)) trades.set(id, { id, ...next });
+      const tags = (m?.tags ?? old?.tags ?? []).filter(Boolean);
+      const note = (m?.note ?? old?.note ?? '').trim();
+      const shots = old?.shots ?? [];
+      if (tags.length || note || shots.length) trademeta.set(id, { id, tags, note, shots, updated: Date.now() });
+      return { id };
+    },
 
     async saveJournal(date, rec) {
       const r: Annotation = typeof rec === 'string' ? { text: rec } : rec || {};
