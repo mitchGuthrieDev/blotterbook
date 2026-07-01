@@ -71,7 +71,7 @@ grounds that "repo root = web root = deploy contract." A26 dissolved that by int
 *output* dir (`dist/`), and A30 then executed the reorg: a file's source path no longer mirrors its
 URL — Vite's `root` + per-entry input mapping + `publicDir` reproduce today's URLs exactly. The one
 remaining hard constraint is that **`functions/` stays pinned at the repo root** (Pages resolves it
-from there). See [`docs/structure-reorg-plan.md`](structure-reorg-plan.md) for the executed layout.
+from there). See [`docs/archive/structure-reorg-plan.md`](archive/structure-reorg-plan.md) for the executed layout.
 
 **The source tree (`src/` + `static/`).** Vite fingerprints the JS/CSS it bundles (output under
 `/assets/…`) and rewrites the HTML references; the verbatim-static set (`static/data/*.json`,

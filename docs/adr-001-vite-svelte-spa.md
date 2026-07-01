@@ -1,7 +1,7 @@
 # ADR-001 — Adopt a Vite build + Svelte SPA for the app surface
 
 **Status:** accepted 2026-06-27 · **supersedes** the Tier B *deferral* in
-[`build-step-decision.md`](build-step-decision.md) (R19) and resolves backlog **A24**.
+[`build-step-decision.md`](archive/build-step-decision.md) (R19) and resolves backlog **A24**.
 
 > This is the project's first Architecture Decision Record. Format: Context → Decision →
 > Consequences, followed by the phased migration plan and the backlog items it spawns. Later
