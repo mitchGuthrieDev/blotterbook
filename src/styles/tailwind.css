@@ -121,6 +121,18 @@
     color: var(--foreground);
     font-family: var(--font-sans);
   }
+  /* Safety net for the L11 class of bug: a modal (Dialog/Sheet/AlertDialog) locks the page by setting
+     an inline `pointer-events: none` on <body> while open, and clears it on close. If that teardown is
+     ever skipped (a controlled/pinned open state, a missed exit-transition callback, a nested-modal
+     ref-count race), the inline lock stays and the whole page is frozen until reload. bits-ui always
+     portals an `*-overlay` element while a modal is open, so key the lock to the overlay's presence:
+     when NO modal overlay is in the DOM, force the body interactive again — overriding any stale inline
+     `pointer-events: none`. While an overlay IS present the rule doesn't match, so real modals keep
+     their click-through guard. Non-modal popovers/menus/selects never lock the body, so they're
+     unaffected. Applies to every surface (app/demo/staging), so it also covers the current App.svelte. */
+  body:not(:has([data-slot$='overlay'])) {
+    pointer-events: auto !important;
+  }
   /* This build ships no Tailwind preflight, so native form controls keep their UA chrome (e.g. a
      light <button> background + embossed bevel). The redesign shell (data-mode="staging" after the
      Phase-3 cutover) and the /dev preview surfaces use many raw <button>s as styled controls —
