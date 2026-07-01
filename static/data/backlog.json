@@ -19,6 +19,18 @@
   ],
   "items": [
     {
+      "id": "F37",
+      "title": "Per-file CSV storage / provenance (redesign CSV Library)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Design decision pending, then build. The redesigned CSV Library (src/app/screens/CsvLibrary.svelte, staging) currently defers per-file storage: the Store keeps only the merged trade set (no file provenance), so the screen shows one derived \"active dataset\" row and the importer just parses -> addTrades. Decide how per-file history should work, then implement it so the Library can list each imported CSV with its own metadata (name/label, platform, row+trade counts, coverage range, imported date, size, overlap/dup count vs the existing set), an include/exclude toggle that adds or removes just that file's trades, rename, re-import, download-original, and per-file delete. Open design questions to settle FIRST (ask the user): (a) store the raw CSV text/blob per file, or just a file record + which trade ids it contributed?; (b) how to attribute already-merged trades to a file (a fileId stamped on each Trade at import — needs a Trade-shape + tradeId consideration since the id is a content hash), and how to handle a trade that appears in two files (overlap); (c) IndexedDB size budget for storing raw CSVs. Constraints: keep everything behind the Store interface (A4) — add a `files` object store + methods, don't touch indexedDB directly from components; demo stays non-mutating; the pure-logic core (adapters/compute) is unchanged. Done when: the CSV Library lists real per-file records with working include/rename/delete/re-import, imported trades carry file provenance, and the aggregate dashboard still reconciles.",
+      "doneNote": null
+    },
+    {
       "id": "A4",
       "title": "Keep the Store interface as the only persistence seam",
       "category": "ARCHITECTURE / DUPLICATION",
