@@ -1,1076 +1,625 @@
 <script lang="ts">
-  // App root: the journal SPA mounted on ALL three surfaces (app/demo/staging.html) since the A33
-  // cutover. Boots by REUSING the pure-logic core verbatim (A29): loadRefData + a Store + Adapters +
-  // compute(). The persistence backend is chosen by PAGE_MODE and provided to the children via
-  // context('bb:store'), so the same components work on every surface:
-  //   app      → real IndexedDB Store (blotterbook DB), no seed (real user data; landing flow is A32)
-  //   demo     → in-memory DemoStore (never persists), seeded
-  //   staging  → real IndexedDB Store (isolated blotterbookStaging DB), seeded
-  // Staging-only chrome (the "Staging" badge / proving-ground meta) is gated on `isStaging`; demo
-  // never persists (DemoStore) and every write path is additionally `isDemo`-guarded (A87).
+  // The Blotterbook app root (UI redesign, CH16 cutover — THE app on all surfaces). Mounts the sidebar
+  // AppShell + a hash router over the screens, booting the REAL engine via createDashboard. Mode-aware:
+  //   app     → real IndexedDB Store, NO seed (empty → first-run onboarding)
+  //   demo    → in-memory DemoStore (never persists), seeded, every write isDemo-guarded
+  //   staging → real IndexedDB Store isolated to blotterbookStaging, seeded
+  // Screens read real data via props (the same components the /dev harness previews with mock data).
   import { onMount, setContext } from 'svelte';
-  import { loadRefData, compute, costModel, emit, sessionOf, PAGE_MODE, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../lib/core/core.ts';
   import { Store } from '../lib/core/store.ts';
   import { createDemoStore } from '../lib/core/demostore.ts';
+  import { usd, money, num, ratio, rateFor, PAGE_MODE } from '../lib/core/core.ts';
+  import { Badge } from '$lib/components/ui/badge';
+  import AppShell from '$lib/components/shell/AppShell.svelte';
+  import { createDashboard } from './lib/dashboard.svelte.ts';
+  import { dailySeries } from '../lib/core/curveseries.ts';
+  import { navSections, navLabel, navItems } from './lib/nav';
+  import Dashboard, { type DashStat, type DayCell, type StatDetail, type FilterModel, type FilterPatch } from './screens/Dashboard.svelte';
+  import Calendar, { type CalDay, type DayTrade } from './screens/Calendar.svelte';
+  import Analytics from './screens/Analytics.svelte';
+  import { buildAnalytics } from './lib/analytics.ts';
+  import Blotter, { type BlotterRow } from './screens/Blotter.svelte';
+  import TradeEditor, { type EditorRow } from './screens/TradeEditor.svelte';
+  import Reports, { type ReportVM, type ReportRange, type ExportKind } from './screens/Reports.svelte';
+  import { buildReportVM } from './lib/reports.ts';
+  import { downloadBlob } from './lib/files.ts';
+  import CsvLibrary, { type Csv, type ImportPreview } from './screens/CsvLibrary.svelte';
+  import Onboarding from './parts/Onboarding.svelte';
+  import StatusBanner from './parts/StatusBanner.svelte';
+  import { loadFlags, APP_FLAGS, type AppFlags } from './lib/flags.ts';
   import { Adapters } from '../lib/core/adapters.ts';
-  import { demoCSV } from '../lib/core/sampledata.ts';
-  import { APP_FLAGS, loadFlags, type AppFlags } from './lib/flags.ts';
-  import type { Trade, FilterState, SavedFilter, SavedFilterDef, AppSetup, PanelBundle, Setup, StoredTradeMeta } from '../lib/core/types.ts';
+  import type { Trade } from '../lib/core/types.ts';
 
-  // Pick the backend by mode and share it with every child (they read getContext('bb:store')).
+  // Mode-aware persistence seam (parity with the legacy App.svelte):
+  //   app      → real IndexedDB Store (blotterbook DB), NO seed (real user data; empty → onboarding)
+  //   demo     → in-memory DemoStore (never persists), seeded, every write isDemo-guarded
+  //   staging  → real IndexedDB Store (isolated blotterbookStaging DB), seeded
   const isDemo = PAGE_MODE === 'demo';
   const isStaging = PAGE_MODE === 'staging';
   const store = isDemo ? createDemoStore() : Store;
   const SEEDED = isStaging || isDemo;
   setContext('bb:store', store);
-  // A85: the topbar meta tagline is per-surface — only staging shows the "proving ground" copy, and
-  // only staging shows the "Staging" badge. Prod app shows just the date range; demo flags the sample.
-  const metaLead = isStaging ? 'Svelte 5 proving ground · isolated local data' : isDemo ? 'Interactive demo · sample data' : '';
-  // A108: the dashboard panels (perf/cal/blotter/cost/adv/defs/term) are wired through the MODULE
-  // registry (./lib/modules.ts) and rendered dynamically — App no longer imports them individually.
-  import { MODULES, MODULE_BY_KEY, type DashCtx } from './lib/modules.ts';
-  import Overview from './components/Overview.svelte';
-  import FilterBar from './components/FilterBar.svelte';
-  // JournalEditor + DayTrades are the calendar module's `extra` snippet content (rendered by App).
-  import JournalEditor from './components/JournalEditor.svelte';
-  import DayTrades from './components/DayTrades.svelte';
-  import ManageData from './components/ManageData.svelte';
-  // Definitions also renders as the F27 staging FOOTER (separate from its registry panel entry).
-  import Definitions from './components/Definitions.svelte';
-  import StatCardModal from './components/StatCardModal.svelte';
-  import ExportReport from './components/ExportReport.svelte';
-  import WorkspaceBar from './components/WorkspaceBar.svelte';
-  import Landing from './components/Landing.svelte';
-  import * as Popover from '$lib/components/ui/popover';
-  import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+  const dash = createDashboard(store, { seed: SEEDED, isDemo });
 
-  let allTrades = $state<Trade[]>([]);
-  let loaded = $state(false);
-  let status = $state('Loading…');
-  let error = $state('');
-  let manageOpen = $state(false);
-  let landingMsg = $state('');
-  let importWarning = $state(''); // A113: dismissible banner when an import estimated PnL at $1/point
-  let online = $state(typeof navigator === 'undefined' ? true : navigator.onLine); // A38 session pill
-  let cardModalKey = $state<string | null>(null); // A35 stat-card detail modal
-  let exportOpen = $state(false); // A34 performance-report export
-  // A89: admin-managed feature flags, fetched at boot (falls back to APP_FLAGS defaults offline).
-  let flags = $state<AppFlags>({ ...APP_FLAGS });
-
-  // Day-notes journal: the selected calendar day + the set of dates carrying a saved note.
-  let selectedDate = $state<string | null>(null);
-  let journalDates = $state<Set<string>>(new Set());
-  // Per-trade metadata (id -> {tags,note,...}) for the tag filter + manage-data table.
-  let tradeMeta = $state<Map<string, StoredTradeMeta>>(new Map());
-  // Saved filter views ([{id,name,f}]), persisted to Store meta in the vanilla-compatible shape.
-  let savedFilters = $state<SavedFilter[]>([]);
-  // Cost setup (broker/feed/state/platform), lifted here (A32) so BOTH the cost panel and the
-  // curve overlays share it. Persisted to the 'setup' meta.
-  let setup = $state<AppSetup>({ broker: '', feed: '', stateAbbr: '', platform: 0 });
-
-  // Panel system (A36 — parity with vanilla ui.js/widgets.js). The dashboard's reorderable,
-  // collapsible panels; order + collapsed map persist through the Store.local seam under a
-  // staging-namespaced key (so staging layout never leaks into prod/demo). Workspace templates
-  // snapshot {order, collapsed} under WS_KEY.
-  // A108: DEFAULT_ORDER / MODULE_LABELS / GRID_KEYS are all DERIVED from the module registry now — a
-  // single source of truth (./lib/modules.ts) instead of three hand-synced structures. The registry's
-  // array order is the default order; per-module `gate` does the surface filtering (e.g. F27 keeps
-  // 'defs' off staging — it's a footer there); `grid` flags the F26 parallel-grid members.
-  const SURFACE = { isStaging, isDemo };
-  // F23 (CH16): Trade Blotter sits directly below the Trading Calendar by default on every surface
-  // (non-mutating on demo). F27 (staging): 'defs' is a page footer, gated out of the dashboard here.
-  const DEFAULT_ORDER = MODULES.filter(m => m.gate(SURFACE)).map(m => m.key);
-  // R12/A71: human labels for the module menus (the names otherwise live only inside each <Panel title>).
-  const MODULE_LABELS: Record<string, string> = Object.fromEntries(MODULES.map(m => [m.key, m.label]));
-  // F26 (staging): these modules render side-by-side in a reorderable grid instead of stacked full-width
-  // rows (drag, or the module menu's Move left/right, reorders within the grid). Off on prod/demo.
-  const GRID_KEYS = MODULES.filter(m => m.grid).map(m => m.key);
-  const isGridKey = (k: string | null): boolean => !!k && isStaging && GRID_KEYS.includes(k);
-  // F24 (staging): the donate button opens this Stripe page in a separate popup window so the user is
-  // never navigated away from the dashboard. PLACEHOLDER — swap in the real Stripe Payment Link once it
-  // exists (see R15 / F18); kept as one constant so there's a single spot to update.
-  const DONATE_URL = 'https://buy.stripe.com/test_PLACEHOLDER';
-  const LS_SUFFIX = PAGE_MODE === 'staging' ? '_staging' : '';
-  const LS_ORDER = 'tj_order' + LS_SUFFIX;
-  const LS_COLLAPSE = 'tj_collapsed' + LS_SUFFIX;
-  const LS_HIDDEN = 'tj_hidden' + LS_SUFFIX;
-  const WS_KEY = 'tj_ws_templates' + LS_SUFFIX;
-  const sanitizeOrder = (ord: unknown): string[] => {
-    if (!Array.isArray(ord)) return [...DEFAULT_ORDER];
-    const known = ord.filter(k => DEFAULT_ORDER.includes(k));
-    return [...known, ...DEFAULT_ORDER.filter(k => !known.includes(k))];
-  };
-  // A100: guard the collapse/hidden flag-map reads from Store.local the same way sanitizeOrder guards
-  // the order — corrupt or stale localStorage (a non-object, or keys for removed modules) must not
-  // poison panel state. Keeps only known module keys, normalizing each truthy flag to 1.
-  const sanitizeFlags = (v: unknown): Record<string, number> => {
-    const out: Record<string, number> = {};
-    if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
-    for (const [k, val] of Object.entries(v as Record<string, unknown>)) if (DEFAULT_ORDER.includes(k) && val) out[k] = 1;
-    return out;
-  };
-  // A100: the workspace-template map read, guarded — a non-object payload yields no templates.
-  const asObject = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
-  // Initialize synchronously from localStorage so the restored layout paints without a flash.
-  let panelOrder = $state<string[]>(sanitizeOrder(store.local.get(LS_ORDER, null)));
-  let collapsedPanels = $state<Record<string, number>>(sanitizeFlags(store.local.get(LS_COLLAPSE, {})));
-  // R12 (staging): modules removed from the dashboard; re-spawned from the "Add module" menu.
-  let hiddenPanels = $state<Record<string, number>>(sanitizeFlags(store.local.get(LS_HIDDEN, {})));
-  let draggingKey = $state<string | null>(null);
-  const visiblePanels = $derived(panelOrder.filter(k => !hiddenPanels[k]));
-  const hiddenList = $derived(panelOrder.filter(k => hiddenPanels[k]));
-  // F26 (staging): the dashboard render sequence. On prod/demo every visible module is a full-width
-  // row (unchanged). On staging the grid modules (cal/cost/adv) collapse into ONE grid block, anchored
-  // at the first grid module's slot; the others render full-width in place. visibleGrid is their order.
-  type RenderItem = { type: 'full'; key: string } | { type: 'grid'; keys: string[] };
-  const visibleGrid = $derived(visiblePanels.filter(k => GRID_KEYS.includes(k)));
-  const renderSeq = $derived.by((): RenderItem[] => {
-    if (!isStaging) return visiblePanels.map(k => ({ type: 'full', key: k }));
-    const seq: RenderItem[] = [];
-    let placed = false;
-    for (const k of visiblePanels) {
-      if (GRID_KEYS.includes(k)) {
-        if (!placed) {
-          seq.push({ type: 'grid', keys: visibleGrid });
-          placed = true;
-        }
-      } else {
-        seq.push({ type: 'full', key: k });
-      }
-    }
-    return seq;
-  });
-  let wsNames = $state<string[]>(Object.keys(asObject(store.local.get(WS_KEY, {}))));
-  let wsSelected = $state('');
-
-  const persistOrder = () => store.local.set(LS_ORDER, $state.snapshot(panelOrder));
-  const persistCollapsed = () => store.local.set(LS_COLLAPSE, $state.snapshot(collapsedPanels));
-  const persistHidden = () => store.local.set(LS_HIDDEN, $state.snapshot(hiddenPanels));
-
-  // R12/A71 (staging): move a module one slot among the VISIBLE panels, then persist the new order.
-  function movePanel(key: string, dir: -1 | 1) {
-    if (isGridKey(key)) {
-      moveGrid(key, dir);
-      return;
-    }
-    const vis = panelOrder.filter(k => !hiddenPanels[k]);
-    const vi = vis.indexOf(key);
-    const swapWith = vis[vi + dir];
-    if (!swapWith) return; // already at an end
-    const next = [...panelOrder];
-    const a = next.indexOf(key);
-    const b = next.indexOf(swapWith);
-    [next[a], next[b]] = [next[b], next[a]];
-    panelOrder = next;
-    persistOrder();
-  }
-  // F26 (staging): the visible grid modules in panelOrder + the slots they occupy. Reordering rewrites
-  // only those slots, so the grid block stays anchored and the full-width modules around it never move.
-  const gridSlots = (): { slots: number[]; seq: string[] } => {
-    const slots: number[] = [];
-    const seq: string[] = [];
-    panelOrder.forEach((k, i) => {
-      if (GRID_KEYS.includes(k) && !hiddenPanels[k]) {
-        slots.push(i);
-        seq.push(k);
-      }
-    });
-    return { slots, seq };
-  };
-  const writeGrid = (slots: number[], seq: string[]) => {
-    const next = [...panelOrder];
-    slots.forEach((slot, i) => (next[slot] = seq[i]));
-    panelOrder = next;
-  };
-  // F26 (staging): move a grid module one position left/right within the grid (the menu's keyboard
-  // fallback for the drag reorder), then persist.
-  function moveGrid(key: string, dir: -1 | 1) {
-    const { slots, seq } = gridSlots();
-    const si = seq.indexOf(key);
-    const j = si + dir;
-    if (si < 0 || j < 0 || j >= seq.length) return;
-    [seq[si], seq[j]] = [seq[j], seq[si]];
-    writeGrid(slots, seq);
-    persistOrder();
-  }
-  function hidePanel(key: string) {
-    hiddenPanels = { ...hiddenPanels, [key]: 1 };
-    persistHidden();
-  }
-  function showPanel(key: string) {
-    const next = { ...hiddenPanels };
-    delete next[key];
-    hiddenPanels = next;
-    persistHidden();
-  }
-
-  function togglePanel(key: string) {
-    const next = { ...collapsedPanels };
-    if (next[key]) delete next[key];
-    else next[key] = 1;
-    collapsedPanels = next;
-    persistCollapsed();
-  }
-  function reorderOver(e: DragEvent, overKey: string) {
-    if (!draggingKey || draggingKey === overKey) return;
-    // F26 (staging): grid modules reorder only among themselves (reorderGridOver) — never let one drop
-    // into the full-width stack, and never let a full-width module drop into the grid.
-    if (isGridKey(draggingKey)) return;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const after = e.clientY > rect.top + rect.height / 2;
-    const next = panelOrder.filter(k => k !== draggingKey);
-    const idx = next.indexOf(overKey);
-    if (idx < 0) return;
-    next.splice(idx + (after ? 1 : 0), 0, draggingKey);
-    panelOrder = next;
-  }
-  // F26 (staging): horizontal drag reorder WITHIN the grid. Uses clientX (columns), reorders only the
-  // visible grid modules, and writes back into their existing slots so the grid block stays anchored.
-  function reorderGridOver(e: DragEvent, overKey: string) {
-    if (!draggingKey || draggingKey === overKey) return;
-    if (!isGridKey(draggingKey) || !GRID_KEYS.includes(overKey)) return;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const after = e.clientX > rect.left + rect.width / 2;
-    const { slots, seq } = gridSlots();
-    const without = seq.filter(k => k !== draggingKey);
-    const oi = without.indexOf(overKey);
-    if (oi < 0) return;
-    without.splice(oi + (after ? 1 : 0), 0, draggingKey);
-    writeGrid(slots, without);
-  }
-  // The prop bundle each panel forwards to its <Panel> chrome.
-  const panelBundle = (key: string): PanelBundle => ({
-    pkey: key,
-    collapsed: !!collapsedPanels[key],
-    dragging: draggingKey === key,
-    ontoggle: () => togglePanel(key),
-    onreorderstart: () => (draggingKey = key),
-    onreorderend: () => {
-      draggingKey = null;
-      persistOrder();
-    },
-    onreorderover: e => reorderOver(e, key),
-    // R12/A71 (promoted to all surfaces, CH16): the per-module header menu and its move/hide actions.
-    menu: true,
-    isFirst: visiblePanels[0] === key,
-    isLast: visiblePanels[visiblePanels.length - 1] === key,
-    onmoveup: () => movePanel(key, -1),
-    onmovedown: () => movePanel(key, 1),
-    onhide: () => hidePanel(key),
-  });
-  // F26 (staging): the bundle for a module rendered inside the grid — same chrome, but reorder is
-  // horizontal (reorderGridOver), the move actions read Move left/right, and isFirst/isLast track the
-  // module's position WITHIN the grid (not the whole dashboard).
-  const gridPanelBundle = (key: string): PanelBundle => ({
-    pkey: key,
-    collapsed: !!collapsedPanels[key],
-    dragging: draggingKey === key,
-    ontoggle: () => togglePanel(key),
-    onreorderstart: () => (draggingKey = key),
-    onreorderend: () => {
-      draggingKey = null;
-      persistOrder();
-    },
-    onreorderover: e => reorderGridOver(e, key),
-    menu: true,
-    isFirst: visibleGrid[0] === key,
-    isLast: visibleGrid[visibleGrid.length - 1] === key,
-    onmoveup: () => movePanel(key, -1),
-    onmovedown: () => movePanel(key, 1),
-    onhide: () => hidePanel(key),
-    moveUpLabel: 'Move left',
-    moveDownLabel: 'Move right',
-  });
-
-  // Workspace templates (Store.local seam).
-  // R12: workspace templates also snapshot which modules are hidden (older snapshots → nothing hidden).
-  const readWs = (): Record<string, { order: string[]; collapsed: Record<string, number>; hidden?: Record<string, number> }> =>
-    asObject(store.local.get(WS_KEY, {})) as Record<string, { order: string[]; collapsed: Record<string, number>; hidden?: Record<string, number> }>;
-  function saveWorkspace() {
-    if (isDemo) return; // demo never persists new layouts (B23)
-    const name = (window.prompt('Name this workspace layout:') || '').trim();
-    if (!name) return;
-    const t = readWs();
-    t[name] = { order: $state.snapshot(panelOrder), collapsed: $state.snapshot(collapsedPanels), hidden: $state.snapshot(hiddenPanels) };
-    store.local.set(WS_KEY, t);
-    wsNames = Object.keys(t);
-    wsSelected = name;
-    emit('ws:saved', { name });
-  }
-  function selectWorkspace(name: string) {
-    wsSelected = name;
-    if (!name) {
-      // "— Default —" → drop the saved layout and restore the default arrangement.
-      store.local.remove(LS_ORDER);
-      store.local.remove(LS_COLLAPSE);
-      store.local.remove(LS_HIDDEN);
-      panelOrder = [...DEFAULT_ORDER];
-      collapsedPanels = {};
-      hiddenPanels = {};
-      emit('ws:reverted', {});
-      return;
-    }
-    const t = readWs()[name];
-    if (t) {
-      panelOrder = sanitizeOrder(t.order);
-      collapsedPanels = sanitizeFlags(t.collapsed);
-      hiddenPanels = sanitizeFlags(t.hidden);
-      persistOrder();
-      persistCollapsed();
-      persistHidden();
-      emit('ws:loaded', { name });
-    }
-  }
-
-  // Filters drive the whole dashboard (a shared reactive object). scope = all-time vs the
-  // calendar's current month. The cursor (calYear/calMonth) lives here so scope can read it.
-  let filters = $state<FilterState>({ scope: 'all', from: '', to: '', root: '', side: '', session: '', tag: '', dows: [] });
-  let calYear = $state(new Date().getFullYear());
-  let calMonth = $state(new Date().getMonth());
-
-  const inMonth = (t: Trade, y: number, m: number) => {
-    const d = new Date(t.date + 'T00:00:00');
-    return d.getFullYear() === y && d.getMonth() === m;
-  };
-  // sessionOf (RTH 09:30–16:00 vs ETH) is shared from core.js so the Svelte filter and the vanilla
-  // render.js filter use ONE definition (A29/A41).
-
-  function applyFilters(trades: Trade[], f: FilterState) {
-    return trades.filter(t => {
-      if (f.from && t.date < f.from) return false;
-      if (f.to && t.date > f.to) return false;
-      if (f.root && t.root !== f.root) return false;
-      if (f.side && t.side !== f.side) return false;
-      if (f.session && sessionOf(t) !== f.session) return false;
-      if (f.tag) {
-        const m = tradeMeta.get(store.tradeId(t));
-        if (!m || !(m.tags || []).includes(f.tag)) return false;
-      }
-      if (f.dows.length && !f.dows.includes(new Date(t.date + 'T00:00:00').getDay())) return false;
-      return true;
-    });
-  }
-
-  // metricsAll = filtered, all-time → feeds the curve + calendar (calendar colors ignore scope).
-  // metricsActive = metricsAll, or just the calendar month when scope='month' → feeds the cards,
-  // advanced stats, and cost panel. Mirrors the vanilla baseTrades()/activeMetrics() split.
-  const filtered = $derived(applyFilters(allTrades, filters));
-  const metricsAll = $derived(compute(filtered));
-  const metricsActive = $derived(
-    filters.scope === 'month' ? compute(filtered.filter(t => inMonth(t, calYear, calMonth))) : metricsAll
-  );
-  // F22 (promoted to all surfaces, CH16): the Break-even & Cost Budget panel reads as a stable,
-  // account-level budget — it always computes from the FULL unfiltered dataset (all-time), independent
-  // of the scope toggle and filter bar. Every other panel stays filter-driven (metricsActive).
-  const breakEvenMetrics = $derived(compute(allTrades));
-  const roots = $derived([...new Set(allTrades.map(t => t.root).filter(Boolean))].sort());
-  const tags = $derived([...new Set([...tradeMeta.values()].flatMap(m => m.tags || []))].sort());
-  // A50: the active-filtered trades for the selected day → the read-only intraday trade table.
-  const dayTrades = $derived(selectedDate ? filtered.filter(t => t.date === selectedDate) : []);
-  const filtersActive = $derived(
-    !!(filters.from || filters.to || filters.root || filters.side || filters.session || filters.tag || filters.dows.length)
-  );
-  // Cost/tax inputs derived from the setup (feed value is "name|cost"; rate from the STATES table).
-  const costInputs = $derived({
-    broker: setup.broker,
-    platform: setup.platform,
-    feedCost: setup.feed ? parseFloat(setup.feed.split('|')[1]) || 0 : 0,
-    stateRate: (STATES.find(s => s[0] === setup.stateAbbr) || [, 0])[1] || 0,
-  });
-  const dateRange = $derived(allTrades.length ? `${allTrades[0].date} → ${allTrades[allTrades.length - 1].date}` : '');
-  // Human-readable labels for the export report header (parity with export.js BROKERS/feedName/
-  // stateLabel/scopeLabel). feed value is "name|cost"; scope mirrors render.js scopeLabel().
-  // Full month names to match vanilla scopeLabel() ("January 2025"), used in the export-report header.
   const MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const reportLabels = $derived({
-    broker: (BROKERS[setup.broker] && BROKERS[setup.broker].name) || setup.broker || '—',
-    feed: setup.feed ? setup.feed.split('|')[0] : '—',
-    state: (STATES.find(s => s[0] === setup.stateAbbr) || [, , '—'])[2] || '—',
-    scope: filters.scope === 'all' ? 'all time' : `${MON[calMonth]} ${calYear}`,
-    stateRate: costInputs.stateRate,
-    platform: setup.platform || 0,
-  });
 
-  // Persist the cost setup whenever it changes (after the initial load).
-  $effect(() => {
-    if (!loaded || isDemo) return; // demo never persists (A87) — and its cost inputs are disabled
-    void [setup.broker, setup.feed, setup.stateAbbr, setup.platform];
-    store
-      .setMeta('setup', { broker: setup.broker, feed: setup.feed, state: setup.stateAbbr, platform: String(setup.platform) })
-      .catch((e: unknown) => console.warn('setup persist failed', e)); // A93: surface, don't throw into the effect
-  });
-
-  // A124: announce the boot/status events ONCE the dashboard (and the Activity Terminal) is mounted.
-  // This effect runs after the first render that sets loaded=true — i.e. after the terminal has
-  // subscribed to the bus — so the status lines actually land in the log (boot() can't emit them
-  // because it resolves before the terminal exists). Restores the live status log the terminal lost.
-  let bootAnnounced = false;
-  $effect(() => {
-    if (!loaded || bootAnnounced) return;
-    bootAnnounced = true;
-    emit('refdata:loaded', {});
-    emit('data:loaded', { count: allTrades.length });
-  });
-
-  // Seed the dataset once if the backend is empty (seeded surfaces only: staging + demo).
-  async function seedIfEmpty() {
-    if ((await store.tradeCount()) > 0) return;
-    const r = Adapters.parse(demoCSV(), 'tradingview');
-    if (r.ok && r.trades && r.trades.length) {
-      await store.addTrades(r.trades);
-      await store.setMeta('setup', { broker: DEMO_BROKER, feed: DEMO_FEED, state: DEMO_STATE, platform: '35' });
-    }
-  }
-
-  async function boot() {
-    await loadRefData();
-    if (!store.available()) throw new Error('Local storage is unavailable in this browser');
-    await store.init();
-    if (SEEDED) await seedIfEmpty();
-    const trades = await store.getAllTrades();
-    allTrades = trades;
-    journalDates = await store.journalDates();
-    tradeMeta = new Map((await store.allTradeMeta()).map(m => [m.id, m] as const));
-    savedFilters = ((await store.getMeta('savedFilters')) as SavedFilter[]) || [];
-    const su = ((await store.getMeta('setup')) as Partial<Setup>) || {};
-    setup = { broker: su.broker || '', feed: su.feed || '', stateAbbr: su.state || '', platform: Number(su.platform) || 0 };
-    const last = trades.length ? trades[trades.length - 1].date : null;
-    calYear = last ? +last.slice(0, 4) : new Date().getFullYear();
-    calMonth = last ? +last.slice(5, 7) - 1 : new Date().getMonth();
-    loaded = true;
-    status = '';
-    // A124: data:loaded / refdata:loaded are emitted from a post-load $effect below, NOT here — the
-    // Activity Terminal only subscribes once it mounts (which happens AFTER this boot resolves), so
-    // emitting here would fire before any subscriber exists and the terminal would miss the events.
-  }
-
-  async function refreshNotes() {
-    journalDates = await store.journalDates(); // reassign → reactive
-  }
-
-  // After manage-data changes the dataset (import / restore / erase / per-trade edit), reload
-  // everything the dashboard derives from.
-  async function reloadAll() {
-    allTrades = await store.getAllTrades();
-    journalDates = await store.journalDates();
-    tradeMeta = new Map((await store.allTradeMeta()).map(m => [m.id, m] as const));
-    savedFilters = ((await store.getMeta('savedFilters')) as SavedFilter[]) || []; // A49: a backup-restore can replace these
-  }
-
-  // App-mode landing: parse + persist a CSV, then the dashboard takes over (allTrades non-empty).
-  // platformId overrides auto-detect when the user picks a platform in the landing dropdown.
-  async function loadCSV(file: File, platformId?: string) {
-    landingMsg = '';
-    const r = Adapters.parse(await file.text(), platformId || undefined);
-    if (!r.ok || !r.trades) {
-      landingMsg = r.error || 'Could not parse that CSV.';
-      return;
-    }
-    try {
-      await store.addTrades(r.trades);
-      emit('data:imported', { added: r.trades.length });
-      await reloadAll();
-      // A113: warn (don't block) when PnL was estimated at $1/point for an unknown contract.
-      importWarning = r.estimatedRoots?.length
-        ? `Heads-up: Blotterbook has no contract size on file for ${r.estimatedRoots.join(', ')}, so their P&L was estimated at $1/point and may be inaccurate — double-check those symbols.`
-        : '';
-    } catch (e: unknown) {
-      // A93: a persist/reload failure must not leave the landing flow hung with no feedback.
-      console.error('CSV import failed', e);
-      landingMsg = 'Imported the file but could not save it locally — check your browser storage and try again.';
-    }
-  }
-
-  // F24 (staging): open the donation page so the dashboard stays put — the user isn't redirected away.
-  // A125: open in a new TAB (target _blank) rather than a popup window; noopener/noreferrer keep the
-  // opened page from reaching back into this window. Triggered on a direct click (popup-blocker-safe).
-  function openDonate() {
-    window.open(DONATE_URL, '_blank', 'noopener,noreferrer');
-  }
-
-  function navMonth(delta: number) {
-    let m = calMonth + delta;
-    let y = calYear;
-    if (m < 0) {
-      m = 11;
-      y--;
-    }
-    if (m > 11) {
-      m = 0;
-      y++;
-    }
-    calMonth = m;
-    calYear = y;
-  }
-
-  // A38: jump the calendar cursor to the most recent trade's month.
-  function jumpToLatest() {
-    const last = allTrades.length ? allTrades[allTrades.length - 1].date : null;
-    if (last) {
-      calYear = +last.slice(0, 4);
-      calMonth = +last.slice(5, 7) - 1;
-    }
-  }
-
-  // A108: the live dashboard context the module registry's prop-selectors read (see ./lib/modules.ts).
-  // Exposed via GETTERS so each selector stays fine-grained reactive — reading ctx.metricsAll inside a
-  // module's props() tracks only the underlying $derived, exactly like the old explicit `metrics={…}`.
-  const ctx: DashCtx = {
-    get metricsAll() {
-      return metricsAll;
-    },
-    get metricsActive() {
-      return metricsActive;
-    },
-    get breakEvenMetrics() {
-      return breakEvenMetrics;
-    },
-    get costInputs() {
-      return costInputs;
-    },
-    get journalDates() {
-      return journalDates;
-    },
-    get selectedDate() {
-      return selectedDate;
-    },
-    get calYear() {
-      return calYear;
-    },
-    get calMonth() {
-      return calMonth;
-    },
-    get filtered() {
-      return filtered;
-    },
-    get tradeMeta() {
-      return tradeMeta;
-    },
-    get filtersActive() {
-      return filtersActive;
-    },
-    get setup() {
-      return setup;
-    },
-    isDemo,
-    onselect: d => (selectedDate = selectedDate === d ? null : d),
-    navMonth,
-    jumpToLatest,
-    reloadAll,
+  const fromHash = (): string => {
+    const h = typeof location !== 'undefined' ? location.hash.replace(/^#/, '') : '';
+    return navItems.some(i => i.key === h) ? h : 'dashboard';
   };
-
-  function clearFilters() {
-    filters.from = '';
-    filters.to = '';
-    filters.root = '';
-    filters.side = '';
-    filters.session = '';
-    filters.tag = '';
-    filters.dows = [];
+  let active = $state(fromHash());
+  $effect(() => {
+    const onHash = () => (active = fromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  });
+  function navigate(key: string) {
+    location.hash = key;
+    active = key;
   }
 
-  // Saved filter views — persisted in the vanilla-compatible {id,name,f} shape (f.symbol holds the
-  // root value, matching render.js + the Store.importAll sanitizer's FILTER_FIELDS).
-  async function saveView(name: string) {
-    if (isDemo) return; // A87: demo never persists (DemoStore + guard), belt-and-suspenders
-    const f: SavedFilterDef = { from: filters.from, to: filters.to, symbol: filters.root, side: filters.side, session: filters.session, tag: filters.tag, dows: [...filters.dows] };
-    const id = Date.now().toString(36) + savedFilters.length;
-    savedFilters = [...savedFilters, { id, name: (name || '').trim() || `View ${savedFilters.length + 1}`, f }];
-    await store.setMeta('savedFilters', $state.snapshot(savedFilters)); // plain clone — IndexedDB can't clone a $state proxy
+  // ── Dashboard ────────────────────────────────────────────────────────────────────────────────
+  const dStats = $derived.by<DashStat[]>(() => {
+    const m = dash.metricsActive;
+    return [
+      { key: 'net', label: 'Net P&L', value: usd(m.net), up: m.net >= 0, note: `${m.wins}W · ${m.losses}L` },
+      { key: 'win', label: 'Win rate', value: `${m.winRate.toFixed(1)}%`, note: `${m.n} trades` },
+      { key: 'pf', label: 'Profit factor', value: ratio(m.pf), note: 'gross win ÷ loss' },
+      { key: 'exp', label: 'Expectancy', value: usd(m.expectancy), badge: 'per trade', up: m.expectancy >= 0, note: 'avg edge' },
+      { key: 'dd', label: 'Max drawdown', value: m.maxDD > 0 ? `-${money(m.maxDD)}` : '$0', badge: `${m.maxDDpct.toFixed(1)}%`, up: false, note: 'of peak' },
+      { key: 'sharpe', label: 'Sharpe (daily)', value: num(m.sharpe), note: `${m.active} trading days` },
+    ];
+  });
+  // Daily cumulative gross/net/take series for the Performance chart — same cost/tax-adjusted math as
+  // the cost panel (tEff/fixedMo from costModel), so the Net/Take-home overlays reconcile.
+  const dashSeries = $derived(
+    dailySeries(dash.metricsActive, { broker: String(dash.costInputs.broker ?? ''), tEff: dash.cost.tEff, fixedMo: dash.cost.fixedMo }).pts
+  );
+  // Live filter model for the dashboard Filters popover — reads the app's filter state; the setters
+  // mutate it in place so filtered/metrics/series/calendar all re-derive.
+  // Dashboard module layout, persisted to the Store.local seam (staging-namespaced) so hide/reorder/
+  // re-add survives a reload — parity with the app/demo workspace layout.
+  const MOD_KEY = isStaging ? 'bb:staging:dashModules' : 'bb:dashModules';
+  let dashModules = $state<string[] | undefined>((store.local.get(MOD_KEY) as string[] | null) ?? undefined);
+  function saveModules(order: string[]) {
+    dashModules = order;
+    store.local.set(MOD_KEY, order);
   }
-  function applyView(sf: SavedFilter) {
-    const f = sf.f || {};
-    filters.from = f.from || '';
-    filters.to = f.to || '';
-    filters.root = f.symbol || '';
-    filters.side = f.side || '';
-    filters.session = f.session || '';
-    filters.tag = f.tag || '';
-    filters.dows = Array.isArray(f.dows) ? [...f.dows] : [];
+  // Reset the layout to the default (all modules shown, default order).
+  function revertModules() {
+    dashModules = undefined;
+    store.local.remove(MOD_KEY);
   }
-  async function deleteView(id: string) {
-    if (isDemo) return; // A87
-    savedFilters = savedFilters.filter(s => s.id !== id);
-    await store.setMeta('savedFilters', $state.snapshot(savedFilters));
+
+  // Named workspace layout templates (R12 parity): save/apply/delete the module layout by name; revert
+  // clears the layout back to the default (all modules). Persisted to Store.local (per-surface key).
+  const WS_KEY = isStaging ? 'bb:staging:dashLayouts' : 'bb:dashLayouts';
+  let wsTemplates = $state<Record<string, string[]>>((store.local.get(WS_KEY, {}) as Record<string, string[]>) || {});
+  function persistWs() {
+    store.local.set(WS_KEY, $state.snapshot(wsTemplates));
   }
-  async function renameView(id: string, name: string) {
-    if (isDemo) return; // A87
-    savedFilters = savedFilters.map(s => (s.id === id ? { ...s, name } : s));
-    await store.setMeta('savedFilters', $state.snapshot(savedFilters));
+  const dashLayouts = $derived({
+    names: Object.keys(wsTemplates),
+    canSave: !dash.isDemo,
+    save: (name: string) => {
+      if (dash.isDemo) return;
+      wsTemplates = { ...wsTemplates, [name]: [...(dashModules ?? [])] };
+      persistWs();
+    },
+    apply: (name: string) => {
+      const order = wsTemplates[name];
+      if (order) saveModules([...order]);
+    },
+    remove: (name: string) => {
+      if (dash.isDemo) return;
+      const next = { ...wsTemplates };
+      delete next[name];
+      wsTemplates = next;
+      persistWs();
+    },
+    revert: () => revertModules(),
+  });
+
+  const filterModel = $derived<FilterModel>({
+    root: dash.filters.root,
+    side: dash.filters.side,
+    session: dash.filters.session,
+    from: dash.filters.from,
+    to: dash.filters.to,
+    dows: dash.filters.dows,
+    roots: dash.roots,
+    count: dash.filtered.length,
+    set: (patch: FilterPatch) => Object.assign(dash.filters, patch),
+    clear: () => dash.clearFilters(),
+    views: dash.savedFilters.map(v => ({ id: v.id, name: v.name })),
+    canSaveView: !dash.isDemo,
+    saveView: (name: string) => dash.saveView(name),
+    applyView: (id: string) => {
+      const sf = dash.savedFilters.find(s => s.id === id);
+      if (sf) dash.applyView(sf);
+    },
+    deleteView: (id: string) => dash.deleteView(id),
+    renameView: (id: string, name: string) => dash.renameView(id, name),
+  });
+
+  // KPI card drill-in content (parity with the app/demo stat-card modal), from metrics + cost.
+  function statDetail(key: string): StatDetail {
+    const m = dash.metricsActive;
+    const c = dash.cost;
+    const tone = (n: number): 'pos' | 'neg' => (n >= 0 ? 'pos' : 'neg');
+    const bar = (label: string, v: number, max: number, t: 'pos' | 'neg' | 'muted'): { label: string; value: string; pct: number; tone: 'pos' | 'neg' | 'muted' } => ({
+      label,
+      value: usd(v),
+      pct: max ? (Math.abs(v) / max) * 100 : 0,
+      tone: t,
+    });
+    switch (key) {
+      case 'net': {
+        const mx = Math.max(Math.abs(c.gross), Math.abs(c.netPreTax), Math.abs(c.afterTax), 1);
+        return {
+          title: 'Net P&L',
+          value: usd(m.net),
+          tone: tone(m.net),
+          desc: 'Realized P&L after commissions, subscriptions and estimated Section 1256 tax.',
+          bars: [bar('Gross', c.gross, mx, 'pos'), bar('Net (pre-tax)', c.netPreTax, mx, 'pos'), bar('Take-home', c.afterTax, mx, 'muted')],
+          rows: [
+            { label: 'Gross P&L', value: usd(c.gross), tone: tone(c.gross) },
+            { label: 'Commissions (all-in)', value: usd(-c.totalComm), tone: 'neg' },
+            { label: `Subscriptions (${c.months} mo)`, value: usd(-c.fixedPeriod), tone: 'neg' },
+            { label: 'Est. 1256 tax', value: usd(-c.tax), tone: 'neg' },
+            { label: 'Take-home', value: usd(c.afterTax), tone: tone(c.afterTax) },
+          ],
+        };
+      }
+      case 'win': {
+        const mx = Math.max(m.wins, m.losses, m.scratch, 1);
+        return {
+          title: 'Win rate',
+          value: `${m.winRate.toFixed(1)}%`,
+          desc: 'Share of trades closed for a profit.',
+          bars: [
+            { label: 'Wins', value: `${m.wins}`, pct: (m.wins / mx) * 100, tone: 'pos' },
+            { label: 'Losses', value: `${m.losses}`, pct: (m.losses / mx) * 100, tone: 'neg' },
+            { label: 'Scratch', value: `${m.scratch}`, pct: (m.scratch / mx) * 100, tone: 'muted' },
+          ],
+          rows: [
+            { label: 'Wins', value: `${m.wins}`, tone: 'pos' },
+            { label: 'Losses', value: `${m.losses}`, tone: 'neg' },
+            { label: 'Scratch (0)', value: `${m.scratch}` },
+            { label: 'Total trades', value: `${m.n}` },
+          ],
+        };
+      }
+      case 'pf': {
+        const mx = Math.max(m.gp, Math.abs(m.gl), 1);
+        return {
+          title: 'Profit factor',
+          value: ratio(m.pf),
+          desc: 'Gross profit ÷ gross loss — dollars won per dollar lost.',
+          bars: [bar('Gross profit', m.gp, mx, 'pos'), bar('Gross loss', m.gl, mx, 'neg')],
+          rows: [
+            { label: 'Gross profit', value: usd(m.gp), tone: 'pos' },
+            { label: 'Gross loss', value: usd(m.gl), tone: 'neg' },
+            { label: 'Profit factor', value: ratio(m.pf) },
+          ],
+        };
+      }
+      case 'exp':
+        return {
+          title: 'Expectancy',
+          value: usd(m.expectancy),
+          tone: tone(m.expectancy),
+          desc: 'Average P&L per trade — your statistical edge.',
+          rows: [
+            { label: 'Average win', value: usd(m.avgW), tone: 'pos' },
+            { label: 'Average loss', value: usd(m.avgL), tone: 'neg' },
+            { label: 'Payoff ratio', value: ratio(m.wl) },
+            { label: 'Per-trade std dev', value: money(m.tStd) },
+          ],
+        };
+      case 'dd':
+        return {
+          title: 'Max drawdown',
+          value: m.maxDD > 0 ? `-${money(m.maxDD)}` : '$0',
+          tone: 'neg',
+          desc: 'Largest peak-to-trough drop in realized equity.',
+          rows: [
+            { label: 'Max drawdown', value: m.maxDD > 0 ? usd(-m.maxDD) : '$0', tone: 'neg' },
+            { label: '% of peak', value: `${m.maxDDpct.toFixed(1)}%` },
+            { label: 'Duration', value: `${m.maxDDdur} trades` },
+            { label: 'Recovery factor', value: ratio(m.recovery) },
+          ],
+        };
+      case 'sharpe':
+        return {
+          title: 'Sharpe (daily)',
+          value: num(m.sharpe),
+          desc: 'Daily mean P&L ÷ daily P&L std dev (illustrative — not annualized).',
+          rows: [
+            { label: 'Avg daily P&L', value: usd(m.avgDaily), tone: tone(m.avgDaily) },
+            { label: 'Sortino (daily)', value: num(m.sortino) },
+            { label: 'Active days', value: `${m.active}` },
+            { label: 'Avg trades / day', value: m.avgTrades.toFixed(1) },
+          ],
+        };
+      default:
+        return { title: key, value: '—', desc: '', rows: [] };
+    }
   }
+  // The Trading Calendar module shows the cursor month from the all-time (filtered) days, independent
+  // of the scope toggle (mirrors the current app).
+  const calData = $derived.by(() => {
+    const y = dash.calYear,
+      mo = dash.calMonth;
+    const dayPnl: Record<number, DayCell> = {};
+    let net = 0;
+    for (const d of dash.metricsAll.days) {
+      const dt = new Date(d.date + 'T00:00:00');
+      if (dt.getFullYear() === y && dt.getMonth() === mo) {
+        dayPnl[dt.getDate()] = { pnl: d.pnl, tr: d.trades };
+        net += d.pnl;
+      }
+    }
+    return { dayPnl, net, firstDow: new Date(y, mo, 1).getDay(), daysInMonth: new Date(y, mo + 1, 0).getDate(), label: `${MON[mo]} ${y}` };
+  });
+
+  // ── Calendar ─────────────────────────────────────────────────────────────────────────────────
+  // The full Calendar screen reads per-day records (P&L / trades / wins + a note flag) for the cursor
+  // month and a date→P&L map for the year heatmap, both from the all-time (filtered) days.
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const dateOf = (day: number) => `${dash.calYear}-${pad2(dash.calMonth + 1)}-${pad2(day)}`;
+  const calMonthDays = $derived.by<Record<number, CalDay>>(() => {
+    const out: Record<number, CalDay> = {};
+    for (const d of dash.metricsAll.days) {
+      const dt = new Date(d.date + 'T00:00:00');
+      if (dt.getFullYear() === dash.calYear && dt.getMonth() === dash.calMonth) {
+        out[dt.getDate()] = { pnl: d.pnl, trades: d.trades, wins: d.wins, note: dash.journalDates.has(d.date) };
+      }
+    }
+    return out;
+  });
+  const calYearPnl = $derived.by<Record<string, number>>(() => {
+    const out: Record<string, number> = {};
+    for (const d of dash.metricsAll.days) if (+d.date.slice(0, 4) === dash.calYear) out[d.date] = d.pnl;
+    return out;
+  });
+  const calTradesForDay = (day: number): DayTrade[] =>
+    dash.tradesForDay(dateOf(day)).map(t => ({
+      time: (t.time || '').slice(11, 16),
+      sym: t.root,
+      side: t.side === 'short' ? 'Short' : 'Long',
+      qty: t.qty ?? 1,
+      pnl: t.pnl,
+    }));
+
+  // ── Analytics ────────────────────────────────────────────────────────────────────────────────
+  const analytics = $derived(buildAnalytics(dash.metricsActive, dash.metricsActive.trades));
+
+  // Dashboard modules (Break-even & Cost + Advanced Statistics) — reuse the cost waterfall + the
+  // Analytics advanced-stats grid so the dashboard cards match their full-screen counterparts.
+  const dashCostRows = $derived.by(() => {
+    const c = dash.cost;
+    const t = (n: number): 'pos' | 'neg' => (n >= 0 ? 'pos' : 'neg');
+    return [
+      { label: 'Gross P&L', value: usd(c.gross), tone: t(c.gross) },
+      { label: 'Commissions (all-in)', value: usd(-c.totalComm), tone: 'neg' as const },
+      { label: `Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, value: usd(-c.fixedPeriod), tone: 'neg' as const },
+      { label: 'Est. 1256 tax', value: usd(-c.tax), tone: 'neg' as const },
+      { label: 'Take-home', value: usd(c.afterTax), tone: t(c.afterTax), total: true },
+      { label: 'Break-even / trade', value: usd(c.bePer) },
+    ];
+  });
+  const dashAdvStats = $derived(analytics.statRows);
+
+  // ── Blotter ──────────────────────────────────────────────────────────────────────────────────
+  // Entry/exit prices aren't in the trade model (P&L events, not bars) → undefined → "—"; hold from
+  // holdMs (fills exports only); fees from the broker rate (round-turn = rate × 2 × qty); tags/note
+  // from trademeta; session from sessionOf().
+  const blotterRows = $derived<BlotterRow[]>(
+    dash.filtered.map(t => {
+      const id = dash.tradeId(t);
+      const qty = t.qty ?? 1;
+      const meta = dash.tradeMeta.get(id);
+      const r = dash.setup.broker ? rateFor(dash.setup.broker, t.root) : null;
+      return {
+        id,
+        date: t.date,
+        time: (t.time || '').slice(11, 16),
+        sym: t.root,
+        side: t.side === 'short' ? 'Short' : 'Long',
+        qty,
+        holdMin: t.holdMs != null ? Math.round(t.holdMs / 60000) : undefined,
+        pnl: t.pnl,
+        fees: r ? +(r.rate * 2 * qty).toFixed(2) : undefined,
+        tags: meta?.tags ?? [],
+        note: !!(meta && meta.note),
+        session: dash.sessionOf(t) === 'rth' ? 'RTH' : 'ETH',
+      };
+    })
+  );
+
+  // ── Trade Editor ─────────────────────────────────────────────────────────────────────────────
+  // Imported trades are immutable → the editor edits the metadata layer (tags + note). entry/exit
+  // aren't in the trade model (NaN → "—"); fees from the broker rate; core cells render read-only.
+  const editorRows = $derived<EditorRow[]>(
+    dash.filtered.map(t => {
+      const id = dash.tradeId(t);
+      const qty = t.qty ?? 1;
+      const meta = dash.tradeMeta.get(id);
+      const r = dash.setup.broker ? rateFor(dash.setup.broker, t.root) : null;
+      return {
+        id,
+        date: t.date,
+        time: (t.time || '').slice(11, 16),
+        symbol: t.root,
+        side: t.side === 'short' ? 'Short' : 'Long',
+        qty,
+        entry: NaN,
+        exit: NaN,
+        pnl: t.pnl,
+        fees: r ? +(r.rate * 2 * qty).toFixed(2) : NaN,
+        tags: meta?.tags ?? [],
+        note: meta?.note ?? '',
+        shots: meta?.shots ?? [],
+      };
+    })
+  );
+  // Persist the Trade Editor's staged changes. editorRows reflects the PERSISTED state at save time
+  // (the component holds edits in its own draft), so it's the pre-edit snapshot to diff against: a row
+  // whose core fields changed goes through editTradeCore (rebuild + new id + migrate meta); a row with
+  // only tag/note changes goes through saveTradeMeta.
+  async function persistEditorRows(changed: EditorRow[]) {
+    const origById = new Map(editorRows.map(r => [r.id, r]));
+    for (const r of changed) {
+      const o = origById.get(r.id);
+      const coreChanged = !!o && (o.date !== r.date || o.time !== r.time || o.symbol !== r.symbol || o.side !== r.side || o.qty !== r.qty || o.pnl !== r.pnl);
+      if (coreChanged) await dash.editTradeCore(r);
+      else await dash.saveTradeMeta(r.id, r.tags, r.note, r.shots);
+    }
+  }
+  const EDITABLE_FIELDS = ['date', 'time', 'symbol', 'side', 'qty', 'pnl'];
+
+  // ── Reports ──────────────────────────────────────────────────────────────────────────────────
+  // The preview + exports are built from the real engine: slice trades to the chosen range, run
+  // compute()+costModel(), and assemble via the shared report.ts builder. Reads dash live so the
+  // preview tracks data/setup changes through the component's derived.
+  const reportLabels = $derived({
+    broker: dash.brokerName(dash.setup.broker),
+    feed: dash.setup.feed || '—',
+    state: dash.setup.stateAbbr || '—',
+    stateRate: Number(dash.costInputs.stateRate) || 0,
+    platform: dash.setup.platform,
+  });
+  function buildReport(range: ReportRange, compare: boolean): ReportVM {
+    return buildReportVM(dash.allTrades, range, compare, dash.costInputs, reportLabels);
+  }
+  function onReportExport(kind: ExportKind, vm: ReportVM) {
+    if (kind === 'md') downloadBlob('blotterbook-report.md', new Blob([vm.md], { type: 'text/markdown' }));
+    else if (kind === 'copy') void navigator.clipboard?.writeText(vm.text);
+    else if (kind === 'email') location.href = vm.mailto;
+    else if (kind === 'pdf') window.print();
+    else if (kind === 'csv') {
+      const esc = (c: string) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c);
+      const rows = [['date', 'time', 'symbol', 'side', 'qty', 'pnl'], ...dash.allTrades.map(t => [t.date, t.time, t.root, t.side, String(t.qty ?? 1), String(t.pnl)])];
+      downloadBlob('blotterbook-trades.csv', new Blob([rows.map(r => r.map(esc).join(',')).join('\n')], { type: 'text/csv' }));
+    }
+  }
+
+  // ── CSV Library ──────────────────────────────────────────────────────────────────────────────
+  // No per-file provenance is stored (only the merged trade set), so file storage is deferred: the
+  // table shows one derived "active dataset" row, and the upload zone is a real Adapters→addTrades
+  // importer. The parsed trades are stashed between parse() and import() (one preview at a time).
+  const csvFiles = $derived<Csv[]>(
+    dash.allTrades.length
+      ? [
+          {
+            id: 'dataset',
+            name: 'Imported trades',
+            platform: 'Imported',
+            rows: dash.allTrades.length,
+            trades: dash.allTrades.length,
+            imported: '',
+            from: dash.allTrades[0].date,
+            to: dash.allTrades[dash.allTrades.length - 1].date,
+            status: 'ok',
+            sizeKb: 0,
+            overlap: 0,
+            included: true,
+          },
+        ]
+      : []
+  );
+  let pendingTrades: Trade[] = [];
+  function parseCsv(text: string, name: string): ImportPreview {
+    const r = Adapters.parse(text);
+    if (!r.ok || !r.trades) {
+      pendingTrades = [];
+      return { name, platform: '', rows: 0, tradeCount: 0, from: '', to: '', estimatedRoots: [], sample: [], error: r.ok ? 'No completed trades found.' : r.error };
+    }
+    const trades = r.trades;
+    pendingTrades = trades;
+    const rows = Math.max(0, text.trim().split(/\r?\n/).length - 1);
+    const sample = trades.slice(0, 3).map(t => ({ time: (t.time || '').slice(11, 16), sym: t.root, side: t.side === 'short' ? 'Short' : 'Long', qty: t.qty ?? 1, pnl: t.pnl, up: t.pnl >= 0 }));
+    return { name, platform: r.label ?? 'CSV', rows, tradeCount: trades.length, from: trades[0]?.date ?? '', to: trades[trades.length - 1]?.date ?? '', estimatedRoots: r.estimatedRoots ?? [], sample };
+  }
+  async function importPreview() {
+    if (pendingTrades.length) await dash.importTrades(pendingTrades);
+    pendingTrades = [];
+  }
+
+  // First-run onboarding (prod /app only): shown when the real Store is empty. Parses + imports a CSV
+  // directly (setup is already persisted via CostSetup → dash.saveSetup on each change).
+  const needsOnboarding = $derived(!isDemo && !isStaging && dash.loaded && !dash.allTrades.length);
+  async function onboardImport(file: File): Promise<string> {
+    const text = await file.text();
+    const r = Adapters.parse(text);
+    if (!r.ok || !r.trades || !r.trades.length) return r.ok ? 'No completed trades found in that CSV.' : r.error || 'Could not read that CSV.';
+    await dash.importTrades(r.trades);
+    return '';
+  }
+
+  // Data management (backup / restore / erase) — parity with the legacy ManageData. Neutral file name
+  // on prod/demo, staging-branded on staging. Restore/erase are demo-guarded in dash; erase confirms.
+  const BACKUP_NAME = isStaging ? 'blotterbook-staging-backup.json' : 'blotterbook-backup.json';
+  let restoreMsg = $state('');
+  async function doBackup() {
+    const data = await dash.exportBackup();
+    downloadBlob(BACKUP_NAME, new Blob([JSON.stringify(data)], { type: 'application/json' }));
+  }
+  async function doRestore(file: File) {
+    try {
+      const data = JSON.parse(await file.text()) as Record<string, unknown>;
+      const res = await dash.importBackup(data);
+      restoreMsg = `Restored ${res.added} trade${res.added === 1 ? '' : 's'} (${res.dup} duplicate).`;
+    } catch {
+      restoreMsg = 'That backup file could not be read.';
+    }
+  }
+  function doErase() {
+    const where = isStaging ? ' (staging)' : '';
+    if (typeof confirm === 'function' && !confirm(`Erase ALL trades, day-notes and per-trade tags/notes${where}? This cannot be undone.`)) return;
+    void dash.purgeAll();
+  }
+
+  // Header meta: the running version (staging track), the platform phase (Beta while prod is pre-1.0,
+  // mirroring platformLabel), and the environment. Fetched from the CH12 versions.json single source.
+  let versions = $state<{ prod?: string; staging?: string } | null>(null);
+  const appVersion = $derived(versions ? (PAGE_MODE === 'staging' ? versions.staging : versions.prod) : '');
+  const isBeta = $derived(!!versions?.prod && (parseInt(versions.prod.split('.')[0], 10) || 0) < 1);
+  // Environment pill: only the non-prod surfaces are badged (Staging | Demo); prod /app shows none.
+  const envLabel = isStaging ? 'Staging' : isDemo ? 'Demo' : '';
+
+  // Admin-managed flags (A89): the maintenance banner (betaRibbon is superseded by the version-based
+  // Beta pill in the header). Applied once resolved; dashboard renders on defaults first.
+  let flags = $state<AppFlags>({ ...APP_FLAGS });
+  // Import-quality notice (A113): close-event exports without per-contract quantity are billed as a
+  // single contract, so commissions can be understated — flag it when every trade lacks a real qty.
+  const importWarning = $derived(
+    dash.loaded && dash.allTrades.length && dash.allTrades.every(t => (t.qty ?? 1) === 1)
+      ? 'Some imports report P&L without per-contract quantity, so modeled commissions are billed as a single contract and may be understated.'
+      : ''
+  );
 
   onMount(() => {
-    boot().catch((e: unknown) => {
+    dash.boot().catch((e: unknown) => {
       console.error('app boot failed', e);
-      error = e instanceof Error ? e.message : String(e);
-      status = '';
+      dash.error = e instanceof Error ? e.message : String(e);
     });
-    // A89: apply admin flags once they resolve (non-blocking — the dashboard renders on defaults first).
-    loadFlags().then(f => (flags = f));
-    const on = () => (online = true);
-    const off = () => (online = false);
-    window.addEventListener('online', on);
-    window.addEventListener('offline', off);
-    return () => {
-      window.removeEventListener('online', on);
-      window.removeEventListener('offline', off);
-    };
+    fetch('/data/versions.json', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(v => (versions = v))
+      .catch(() => {});
+    loadFlags().then(f => (flags = f)).catch(() => {});
   });
 </script>
 
-<!-- The session pill (Popover) + Add-module menu (DropdownMenu) own their own open/close, outside-
-     click + Escape (bits-ui, A128). This window handler is now ONLY the calendar day-deselect (A121). -->
-<svelte:window
-  onclick={e => {
-    // A121 (staging): clicking off the calendar deselects the selected day. The calendar AND the
-    // performance graph both drive day selection (cross-link), so a click inside either panel keeps
-    // it; a click anywhere else clears it. (A same-day reclick already toggles off via onselect.)
-    if (isStaging && selectedDate) {
-      const t = e.target as HTMLElement;
-      if (!t.closest('.panel[data-key="cal"]') && !t.closest('.panel[data-key="perf"]')) selectedDate = null;
-    }
-  }}
-  onkeydown={e => {
-    if (e.key === 'Escape' && isStaging) selectedDate = null; // A121: Escape clears the selected day too
-  }}
-/>
+<AppShell sections={navSections} {active} onnavigate={navigate} title={navLabel(active)}>
+  {#snippet actions()}
+    <div class="flex items-center gap-2">
+      {#if isBeta}<Badge variant="outline" class="border-chart-4/40 text-chart-4">Beta</Badge>{/if}
+      {#if envLabel}<Badge variant="secondary">{envLabel}</Badge>{/if}
+      {#if appVersion}<span class="font-mono text-[11px] text-muted-foreground">v{appVersion}</span>{/if}
+      <span class="hidden font-mono text-xs text-muted-foreground md:inline">{dash.dateRange}</span>
+    </div>
+  {/snippet}
 
-<main id="sv-app">
-  {#if flags.maintenanceBanner}
-    <!-- A89: admin-toggled maintenance notice. Compute stays local, so this is informational only. -->
-    <div class="maintbanner" role="status">Scheduled maintenance is in progress — your local data is unaffected.</div>
-  {/if}
-  {#if importWarning}
-    <!-- A113: PnL estimated at $1/point for an unknown contract — warn the user, don't drop their data. -->
-    <div class="warnbanner" role="alert">
-      <span>{importWarning}</span>
-      <button type="button" class="warndismiss" aria-label="Dismiss warning" onclick={() => (importWarning = '')}>×</button>
-    </div>
-  {/if}
-  <header class="topbar">
-    <div class="brand">
-      <!-- F33 (staging): the wordmark links back to the homepage. Plain text on prod/demo until CH16. -->
-      {#if isStaging}<a class="brandlink" href="/">Blotterbook</a>{:else}Blotterbook{/if}
-      {#if isStaging}<span class="badge">Staging</span>{/if}{#if flags.betaRibbon}<span class="badge beta">Beta</span>{/if}
-    </div>
-    <div class="meta">
-      {metaLead}{#if dateRange}{metaLead ? ' · ' : ''}{dateRange}{/if}
-    </div>
-    <div class="topactions">
-      <div class="sesswrap">
-        <Popover.Root>
-          <!-- child snippet → the real <button> lives in App's template, so the scoped `.pill`
-               styling (and the class:off state) keep applying; bits-ui wires behavior via {props}. -->
-          <Popover.Trigger>
-            {#snippet child({ props })}
-              <button {...props} class="pill" class:off={!online} title={online ? 'Online' : 'Offline'}>{online ? 'online' : 'offline'}</button>
-            {/snippet}
-          </Popover.Trigger>
-          <Popover.Content class="sesspop w-[260px]" role="dialog" aria-label="Session status legend">
-            <p class="pophd">Session status</p>
-            <!-- Inner legend styling is utility-based (not `.sesspop X` scoped) so it applies across
-                 the bits-ui Popover.Content component boundary (A128). -->
-            <ul class="m-0 grid list-none gap-1.5 p-0 text-xs leading-[1.4] text-muted-foreground [&_b]:text-foreground">
-              <li><span class="sdot on"></span> <b>Online</b> — ref-data &amp; functions reachable.</li>
-              <li><span class="sdot off"></span> <b>Offline</b> — no network; the app keeps working on your local data.</li>
-              <li><span class="sdot deg"></span> <b>Degraded</b> — reserved for partial connectivity.</li>
-            </ul>
-            <p class="popnote">Compute always stays in your browser — status never gates your data.</p>
-          </Popover.Content>
-        </Popover.Root>
-      </div>
-      <!-- F21 (promoted to all surfaces, CH16): the Changelog link was journal-app noise; removed from
-           the dashboard top bar on every surface. (The marketing changelog still lives at /changelog.html.) -->
-      <a class="link" href="mailto:contact@blotterbook.com?subject=Blotterbook">Contact</a>
-      <!-- F24 (staging): support the project. Opens the Stripe donation page in a new tab (A125) so the
-           dashboard is never navigated away. -->
-      {#if isStaging}<button type="button" class="donatebtn" onclick={openDonate} title="Support Blotterbook — opens Stripe in a new tab">Donate</button>{/if}
-      {#if loaded && allTrades.length}<button type="button" class="exportbtn" onclick={() => (exportOpen = true)}>Export report</button>{/if}
-      {#if loaded}<button type="button" class="managebtn" onclick={() => (manageOpen = true)}>Manage data</button>{/if}
-    </div>
-  </header>
+  <StatusBanner maintenance={flags.maintenanceBanner} {importWarning} />
 
-  {#if error}
-    <p class="msg error" role="alert">Could not start the app: {error}</p>
-  {:else if loaded && PAGE_MODE === 'app' && !allTrades.length}
-    <Landing {setup} onload={loadCSV} msg={landingMsg} showBeta={flags.showBetaAdapters} />
-  {:else if loaded}
-    <FilterBar {filters} {roots} {tags} {savedFilters} count={metricsActive.n} onclear={clearFilters} onsave={saveView} onapply={applyView} ondelete={deleteView} />
-    <Overview metrics={metricsActive} tradeCount={metricsActive.n} oncard={k => (cardModalKey = k)} />
-    <div class="wsrow">
-      <WorkspaceBar names={wsNames} value={wsSelected} onsave={saveWorkspace} onselect={selectWorkspace} saveDisabled={isDemo} />
-      {#if hiddenList.length}
-        <!-- R12 (promoted, CH16): re-spawn a hidden module onto the dashboard. -->
-        <div class="addmod">
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger>
-              {#snippet child({ props })}
-                <button {...props} type="button" class="addmodbtn">+ Add module</button>
-              {/snippet}
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content class="addmenu min-w-[200px]" align="start" aria-label="Add a hidden module">
-              {#each hiddenList as key (key)}
-                <DropdownMenu.Item onSelect={() => showPanel(key)}>{MODULE_LABELS[key] || key}</DropdownMenu.Item>
-              {/each}
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
-        </div>
-      {/if}
-    </div>
-    <!-- A108: one module's chrome+content, keyed. App iterates the registry and renders each module's
-         declared component with its selector props (the `panel` bundle differs between the full-width
-         and F26-grid contexts, so it's passed per-render). The calendar is the one module with a child
-         snippet (its `extra` day-trades + journal editor), so it's the single special-case below. -->
-    {#snippet moduleBlock(key: string, panel: PanelBundle)}
-      {@const def = MODULE_BY_KEY[key]}
-      {#if def}
-        {@const Comp = def.component}
-        {#if key === 'cal'}
-          <Comp {panel} {...def.props(ctx)}>
-            {#snippet extra()}
-              {#if selectedDate}
-                <DayTrades date={selectedDate} trades={dayTrades} filtered={filtersActive} />
-                <JournalEditor date={selectedDate} onsaved={refreshNotes} onclose={() => (selectedDate = null)} />
-              {/if}
-            {/snippet}
-          </Comp>
-        {:else}
-          <Comp {panel} {...def.props(ctx)} />
-        {/if}
-      {/if}
-    {/snippet}
-    <div class="dash" role="region" aria-label="Dashboard panels">
-      {#each renderSeq as item (item.type === 'grid' ? 'bb-grid' : item.key)}
-        {#if item.type === 'grid'}
-          <!-- F26 (staging): the grid modules lined up parallel; drag (or the menu's Move left/right)
-               reorders them within the grid. -->
-          <div class="modgrid" role="group" aria-label="Module grid">
-            {#each item.keys as key (key)}
-              {@render moduleBlock(key, gridPanelBundle(key))}
-            {/each}
-          </div>
-        {:else}
-          {@render moduleBlock(item.key, panelBundle(item.key))}
-        {/if}
-      {/each}
-    </div>
-    {#if isStaging}
-      <!-- F27 (staging): the Definitions & Caveats module is relegated to a page footer. -->
-      <Definitions footer />
-    {/if}
+  {#if dash.error}
+    <p class="text-sm text-destructive" role="alert">Could not start the app: {dash.error}</p>
+  {:else if !dash.loaded}
+    <p class="text-sm text-muted-foreground">Loading…</p>
+  {:else if needsOnboarding}
+    <Onboarding setup={dash.setup} onsetupsave={s => dash.saveSetup(s)} onimport={onboardImport} />
+  {:else if active === 'dashboard'}
+    <Dashboard
+      stats={dStats}
+      series={dashSeries}
+      dateRange={dash.dateRange}
+      monthLabel={calData.label}
+      monthNet={calData.net}
+      dayPnl={calData.dayPnl}
+      firstDow={calData.firstDow}
+      daysInMonth={calData.daysInMonth}
+      onscope={dash.setScope}
+      dayTrades={calTradesForDay}
+      getNote={day => dash.noteFor(dateOf(day))}
+      onsavenote={(day, text) => dash.saveNote(dateOf(day), text)}
+      {statDetail}
+      {filterModel}
+      onpickdate={(y, m) => dash.setCal(y, m)}
+      costRows={dashCostRows}
+      advStats={dashAdvStats}
+      setup={dash.setup}
+      onsetupsave={s => dash.saveSetup(s)}
+      costDisabled={dash.isDemo}
+      modules={dashModules}
+      onmoduleschange={saveModules}
+      layouts={dashLayouts}
+    />
+  {:else if active === 'calendar'}
+    <Calendar
+      monthDays={calMonthDays}
+      year={dash.calYear}
+      month={dash.calMonth}
+      monthLabel={calData.label}
+      yearPnl={calYearPnl}
+      onprev={() => dash.navMonth(-1)}
+      onnext={() => dash.navMonth(1)}
+      onlatest={() => dash.jumpToLatest()}
+      tradesForDay={calTradesForDay}
+      getJournal={day => dash.journalFor(dateOf(day))}
+      onsavenote={(day, text, tags, shots) => dash.saveNote(dateOf(day), text, tags, shots)}
+    />
+  {:else if active === 'analytics'}
+    <Analytics
+      kpis={analytics.kpis}
+      dist={analytics.dist}
+      wins={analytics.wins}
+      losses={analytics.losses}
+      curve={dash.metricsActive.curve}
+      maxDD={dash.metricsActive.maxDD}
+      maxDDpct={dash.metricsActive.maxDDpct}
+      long={analytics.long}
+      short={analytics.short}
+      hours={analytics.hours}
+      wdays={analytics.wdays}
+      symbols={analytics.symbols}
+      statRows={analytics.statRows}
+    />
+  {:else if active === 'blotter'}
+    <Blotter rows={blotterRows} />
+  {:else if active === 'trades'}
+    <TradeEditor rows={editorRows} coreEditable={false} editableFields={EDITABLE_FIELDS} onsave={persistEditorRows} ondelete={ids => dash.deleteTrades(ids)} />
+  {:else if active === 'reports'}
+    <Reports
+      defaultTitle="Performance report"
+      defaultAccount={dash.brokerName(dash.setup.broker)}
+      calYear={dash.calYear}
+      calMonth={dash.calMonth}
+      build={buildReport}
+      onexport={onReportExport}
+    />
+  {:else if active === 'csv'}
+    <CsvLibrary
+      files={csvFiles}
+      perFileActions={false}
+      blotterHref="#blotter"
+      parse={parseCsv}
+      onimport={importPreview}
+      ondelete={() => dash.purgeAll()}
+      onbackup={doBackup}
+      onrestore={doRestore}
+      onerase={doErase}
+      dataDisabled={dash.isDemo}
+      {restoreMsg}
+    />
   {:else}
-    <p class="msg">{status}</p>
+    <div class="grid min-h-[60vh] place-items-center">
+      <div class="flex max-w-md flex-col items-center gap-2 text-center">
+        <h2 class="text-lg font-semibold text-foreground">{navLabel(active)}</h2>
+        <p class="text-sm text-muted-foreground">Being wired to your real data — coming online shortly. The boot + engine are real; this screen's layout is mocked in the <code>/dev</code> preview.</p>
+      </div>
+    </div>
   {/if}
-
-  {#if cardModalKey}
-    <StatCardModal cardKey={cardModalKey} metrics={metricsActive} cost={costModel(metricsActive, costInputs)} onclose={() => (cardModalKey = null)} />
-  {/if}
-
-  {#if exportOpen}
-    <ExportReport
-      metrics={metricsActive}
-      cost={costModel(metricsActive, costInputs)}
-      labels={reportLabels}
-      onclose={() => (exportOpen = false)}
-    />
-  {/if}
-
-  {#if manageOpen}
-    <ManageData
-      onclose={() => (manageOpen = false)}
-      onchanged={reloadAll}
-      onopenday={d => {
-        selectedDate = d;
-        manageOpen = false;
-      }}
-      {savedFilters}
-      onapplyview={sf => {
-        applyView(sf);
-        manageOpen = false;
-      }}
-      onrenameview={renameView}
-      ondeleteview={deleteView}
-    />
-  {/if}
-</main>
-
-<style>
-  /* A51: no horizontal page scroll on mobile (parity with vanilla app.css). Pin on BOTH html and
-     body so the viewport scroller can't scroll sideways regardless of overflow propagation. */
-  :global(html),
-  :global(body) {
-    max-width: 100%;
-    overflow-x: hidden;
-  }
-  :global(body) {
-    margin: 0;
-    background: var(--background);
-    color: var(--foreground);
-    font-family: var(--font-sans);
-  }
-  #sv-app {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 20px 16px 48px;
-  }
-  /* L8 (staging): use the full viewport width — drop the 1100px centered column so the modules span
-     edge-to-edge (within the page gutters) instead of leaving wide empty margins. Prod/demo keep the
-     centered column until promoted (CH16). */
-  :global(body[data-mode='staging']) #sv-app {
-    max-width: none;
-    padding-left: 24px;
-    padding-right: 24px;
-  }
-  @media (max-width: 560px) {
-    #sv-app {
-      padding: 14px 10px 40px;
-    }
-    :global(body[data-mode='staging']) #sv-app {
-      padding-left: 10px;
-      padding-right: 10px;
-    }
-  }
-  .topbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 8px 16px;
-    padding-bottom: 14px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 20px;
-  }
-  .brand {
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: 0.2px;
-  }
-  /* F33 (staging): the wordmark home-link inherits the brand styling (no underline). */
-  .brandlink {
-    color: inherit;
-    text-decoration: none;
-  }
-  .brandlink:hover {
-    color: var(--primary);
-  }
-  .brandlink:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
-    border-radius: 3px;
-  }
-  .badge {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: var(--chart-4);
-    border: 1px solid var(--chart-4);
-    border-radius: 5px;
-    padding: 2px 6px;
-    vertical-align: middle;
-  }
-  /* A89: the betaRibbon flag badge — accent-toned so it reads distinctly from the staging badge. */
-  .badge.beta {
-    color: var(--primary);
-    border-color: var(--primary);
-    margin-left: 6px;
-  }
-  /* A89: admin maintenanceBanner flag. */
-  .maintbanner {
-    background: var(--secondary);
-    border: 1px solid var(--chart-4);
-    border-left: 3px solid var(--chart-4);
-    color: var(--foreground);
-    border-radius: 8px;
-    padding: 9px 14px;
-    margin-bottom: 16px;
-    font-size: 13px;
-  }
-  .warnbanner {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    background: var(--secondary);
-    border: 1px solid var(--chart-4);
-    border-left: 3px solid var(--chart-4);
-    color: var(--foreground);
-    border-radius: 8px;
-    padding: 9px 14px;
-    margin-bottom: 16px;
-    font-size: 13px;
-  }
-  .warndismiss {
-    margin-left: auto;
-    flex: none;
-    background: none;
-    border: none;
-    color: var(--muted-foreground);
-    font-size: 18px;
-    line-height: 1;
-    cursor: pointer;
-    padding: 0 2px;
-  }
-  .warndismiss:hover {
-    color: var(--foreground);
-  }
-  .meta {
-    font-size: 12px;
-    color: var(--muted-foreground);
-    font-family: var(--font-mono);
-  }
-  .topactions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .sesswrap {
-    position: relative;
-  }
-  .pill {
-    font-size: 11px;
-    font-family: var(--font-mono);
-    color: var(--chart-2);
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 3px 9px;
-    cursor: pointer;
-  }
-  .pill::before {
-    content: '';
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--chart-2);
-    margin-right: 5px;
-    vertical-align: middle;
-  }
-  .pill.off {
-    color: var(--muted-foreground);
-  }
-  .pill.off::before {
-    background: var(--muted-foreground);
-  }
-  /* A128: card chrome + positioning now come from the Popover primitive (bits-ui Floating UI keeps it
-     on-screen — replacing the old A127 mobile-anchoring hack). Only the legend's inner styles remain. */
-  .pophd {
-    margin: 0 0 6px;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--muted-foreground);
-    font-weight: 700;
-  }
-  .sdot {
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    margin-right: 4px;
-    vertical-align: middle;
-  }
-  .sdot.on {
-    background: var(--chart-2);
-  }
-  .sdot.off {
-    background: var(--muted-foreground);
-  }
-  .sdot.deg {
-    background: var(--chart-4);
-  }
-  .popnote {
-    margin: 8px 0 0;
-    font-size: 11px;
-    color: var(--muted-foreground);
-    line-height: 1.4;
-  }
-  .link {
-    font-size: 13px;
-    color: var(--primary);
-    text-decoration: none;
-  }
-  .link:hover {
-    text-decoration: underline;
-  }
-  .managebtn,
-  .exportbtn {
-    background: var(--secondary);
-    color: var(--foreground);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 7px 14px;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .managebtn:hover,
-  .exportbtn:hover {
-    border-color: var(--ring);
-  }
-  /* F24 (staging): the Donate button — accent-toned so it reads as the primary "support" call. */
-  .donatebtn {
-    background: var(--primary);
-    color: var(--background);
-    border: 1px solid var(--primary);
-    border-radius: 6px;
-    padding: 7px 14px;
-    font: inherit;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .donatebtn:hover {
-    filter: brightness(1.08);
-  }
-  .donatebtn:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
-  }
-  /* F26 (staging): the grid modules lined up parallel. auto-fit fits as many ≥360px columns as the
-     (now full-width — L8) row allows, dropping to a single column on narrow/mobile. */
-  .modgrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-    gap: 0 16px;
-    /* L10 (staging): stretch all three columns to a common (tallest) height so the bottoms align and
-       the negative space below the shorter modules is reclaimed into the module itself. */
-    align-items: stretch;
-  }
-  /* min-width:0 lets a column shrink below its content's intrinsic width (no grid blowout). The panels
-     reach a common height via the grid's align-items:stretch alone — do NOT also set height:100% here:
-     the panel's own margin-top would then push its 100%-tall box past the cell bottom and overlap the
-     full-width module below it (the Trade Blotter). */
-  .modgrid > :global(.panel) {
-    min-width: 0;
-  }
-  /* R12 (staging): the "Add module" control sits beside the workspace bar. */
-  .wsrow {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .addmod {
-    position: relative;
-  }
-  .addmodbtn {
-    background: var(--secondary);
-    color: var(--foreground);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 12px;
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-  }
-  .addmodbtn:hover {
-    border-color: var(--ring);
-  }
-  .msg {
-    color: var(--muted-foreground);
-    padding: 24px 4px;
-  }
-  .error {
-    color: var(--destructive);
-  }
-</style>
+</AppShell>

@@ -1,6 +1,5 @@
-// Canonical sidebar nav config for the redesign (UI initiative). Used by the live staging app
-// (StagingApp) and re-exported by the /dev preview harness + styleguide. Icons are @lucide/svelte
-// components.
+// Canonical sidebar nav config for the redesign (UI initiative). Used by the live app (App.svelte)
+// and re-exported by the /dev preview harness + styleguide. Icons are @lucide/svelte components.
 import { LayoutDashboard, CalendarDays, ChartLine, Table2, Database, List, FileText } from '@lucide/svelte';
 import type { NavSection } from '$lib/components/shell/SidebarNav.svelte';
 

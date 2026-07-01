@@ -26,7 +26,6 @@ export function minMax(arr: number[]) {
 // The `typeof document` guard keeps the pure-logic core importable under Node (A29 — the core is
 // framework-agnostic + node-tested; see scripts/test-curveandreport.mjs): off-DOM, PAGE_MODE is ''.
 export const PAGE_MODE = (typeof document !== 'undefined' && document.body && document.body.dataset.mode) || '';
-export const STAGING_PAGE = PAGE_MODE === 'staging';
 
 /* ------------------------------------------------------------------
    Orientation — how the pieces fit together (read this first)
@@ -42,7 +41,7 @@ export const STAGING_PAGE = PAGE_MODE === 'staging';
        store     IndexedDB persistence (+ Store.local)  demostore  in-memory Store for demo
        curveseries  daily gross/net/take series         sampledata  demo CSV
        format    esc/platformLabel + version badge      types  shared interfaces
-     src/app/  the journal SPA — App.svelte + components/ + lib/ (modal/actions/files/flags)
+     src/app/  the journal SPA — App.svelte (sidebar shell) + screens/ + parts/ + lib/ (modal/actions/files/flags)
      src/site/ marketing/info — Svelte SSG (components prerendered by vite-ssg.mjs)
 
    Cross-component state is Svelte runes ($state/$derived) inside the components, NOT a shared
@@ -50,11 +49,11 @@ export const STAGING_PAGE = PAGE_MODE === 'staging';
    app/staging, in-memory DemoStore for demo). Persistence is ALWAYS via the Store seam — never
    call indexedDB directly from a component.
 
-   Mode flags (derived from document.body[data-mode] above):
-     STAGING_PAGE   marks the staging sandbox. Its former feature set was promoted to all surfaces
-                    (CH16); this flag now gates only the staging ENVIRONMENT — the isolated DB, the
-                    one-time sample seeding, and the "open on the initial state" landing flow.
-     PAGE_MODE === 'demo'   selects the in-memory DemoStore; the demo suppresses ALL persistence.
+   Mode flag (derived from document.body[data-mode] above):
+     PAGE_MODE === 'staging'  the staging sandbox — isolated DB + one-time sample seeding (App.svelte
+                    derives an isStaging local from PAGE_MODE; the old STAGING_PAGE export is retired
+                    now that the CH16 cutover ships one app on every surface).
+     PAGE_MODE === 'demo'     selects the in-memory DemoStore; the demo suppresses ALL persistence.
    ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------
