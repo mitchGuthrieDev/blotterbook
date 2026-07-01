@@ -76,4 +76,11 @@ export default [
     files: ['e2e/**/*.mjs'],
     languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.node, ...globals.browser } },
   },
+
+  // check-mermaid.mjs drives a Playwright chromium page; its page.evaluate() callbacks reference
+  // browser globals (window/mermaid), same as the e2e specs — allow both here too.
+  {
+    files: ['scripts/check-mermaid.mjs'],
+    languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.node, ...globals.browser } },
+  },
 ];

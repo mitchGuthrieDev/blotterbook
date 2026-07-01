@@ -77,6 +77,9 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
+      - name: Validate Mermaid diagrams (docs drift gate)
+        run: npm run check-mermaid   # parses every ```mermaid block under docs/ (reuses the Playwright chromium)
+
       - name: Render / e2e tests (boot every surface, zero console errors)
         run: npm run test:e2e
 
