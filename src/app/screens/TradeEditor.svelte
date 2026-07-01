@@ -123,6 +123,18 @@
   const dirtyCount = $derived(draft.filter(isDirty).length);
   const netPnl = $derived(draft.reduce((s, r) => s + r.pnl, 0));
 
+  // Pagination — the editor can hold thousands of rows; page them (50/page default) like prod.
+  const PAGE_SIZES = [25, 50, 100, Infinity];
+  let pageSize = $state<number>(50);
+  let page = $state(0);
+  const totalPages = $derived(Math.max(1, Math.ceil(draft.length / pageSize)));
+  $effect(() => {
+    if (page > totalPages - 1) page = totalPages - 1; // clamp when rows shrink / page size grows
+  });
+  const pagedRows = $derived(pageSize === Infinity ? draft : draft.slice(page * pageSize, page * pageSize + pageSize));
+  const pageStart = $derived(draft.length ? page * pageSize + 1 : 0);
+  const pageEnd = $derived(pageSize === Infinity ? draft.length : Math.min(draft.length, (page + 1) * pageSize));
+
   async function saveAll() {
     if (onsave) {
       saving = true;
@@ -272,7 +284,7 @@
           </Table.Row>
         </Table.Header>
         <Table.Body>
-          {#each draft as row (row.id)}
+          {#each pagedRows as row (row.id)}
             {@const dirty = isDirty(row)}
             <Table.Row class={cn(dirty && 'bg-primary/5')} data-state={selected.has(row.id) ? 'selected' : undefined}>
               <Table.Cell class="pl-3">
@@ -342,6 +354,22 @@
           {/each}
         </Table.Body>
       </Table.Root>
+      {#if draft.length}
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border px-3 py-2 text-xs text-muted-foreground">
+          <span class="tabular-nums">{pageStart.toLocaleString()}–{pageEnd.toLocaleString()} of {draft.length.toLocaleString()}</span>
+          <div class="ml-auto flex items-center gap-1.5">
+            <span class="mr-1">Rows:</span>
+            {#each PAGE_SIZES as sz (sz)}
+              <button type="button" onclick={() => (pageSize = sz)} class={['rounded px-1.5 py-0.5 transition-colors', pageSize === sz ? 'bg-secondary text-foreground' : 'hover:text-foreground']}>
+                {sz === Infinity ? 'All' : sz}
+              </button>
+            {/each}
+            <Button variant="outline" size="sm" class="ml-1 h-7" disabled={page === 0} onclick={() => (page = Math.max(0, page - 1))}>Prev</Button>
+            <span class="tabular-nums">{page + 1}/{totalPages}</span>
+            <Button variant="outline" size="sm" class="h-7" disabled={page >= totalPages - 1} onclick={() => (page = Math.min(totalPages - 1, page + 1))}>Next</Button>
+          </div>
+        </div>
+      {/if}
     </Card.Content>
   </Card.Root>
 

@@ -89,11 +89,23 @@
       return (a.pnl - b.pnl) * dir;
     })
   );
+  // Pagination — the blotter can list thousands of trades; page them (50/page default) like prod.
+  const PAGE_SIZES = [25, 50, 100, Infinity];
+  let pageSize = $state<number>(50);
+  let page = $state(0);
+  const totalPages = $derived(Math.max(1, Math.ceil(sorted.length / pageSize)));
+  $effect(() => {
+    if (page > totalPages - 1) page = totalPages - 1; // clamp when the filter/sort shrinks the list
+  });
+  const pagedSorted = $derived(pageSize === Infinity ? sorted : sorted.slice(page * pageSize, page * pageSize + pageSize));
+  const pageStart = $derived(sorted.length ? page * pageSize + 1 : 0);
+  const pageEnd = $derived(pageSize === Infinity ? sorted.length : Math.min(sorted.length, (page + 1) * pageSize));
+
   type Group = { key: string; label: string; trades: BlotterRow[]; subtotal: number };
   const groups = $derived.by((): Group[] => {
-    if (groupBy === 'none') return [{ key: 'all', label: '', trades: sorted, subtotal: 0 }];
+    if (groupBy === 'none') return [{ key: 'all', label: '', trades: pagedSorted, subtotal: 0 }];
     const map = new Map<string, BlotterRow[]>();
-    for (const t of sorted) {
+    for (const t of pagedSorted) {
       const k = groupBy === 'day' ? t.date : t.sym;
       (map.get(k) ?? map.set(k, []).get(k)!).push(t);
     }
@@ -271,9 +283,20 @@
       <Table.Footer>
         <Table.Row class="hover:bg-transparent">
           <Table.Cell colspan={colCount} class="pl-3">
-            <span class="flex items-center justify-between">
-              <span class="text-xs text-muted-foreground">{filtered.length} trades</span>
-              <span class={cn('text-sm font-semibold tabular-nums', totalPnl >= 0 ? 'text-chart-2' : 'text-destructive')}>Net {money(totalPnl)}</span>
+            <span class="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span class="text-xs tabular-nums text-muted-foreground">{pageStart.toLocaleString()}–{pageEnd.toLocaleString()} of {filtered.length.toLocaleString()}</span>
+              <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span class="mr-1">Rows:</span>
+                {#each PAGE_SIZES as sz (sz)}
+                  <button type="button" onclick={() => (pageSize = sz)} class={cn('rounded px-1.5 py-0.5 transition-colors', pageSize === sz ? 'bg-secondary text-foreground' : 'hover:text-foreground')}>
+                    {sz === Infinity ? 'All' : sz}
+                  </button>
+                {/each}
+                <Button variant="outline" size="sm" class="ml-1 h-7" disabled={page === 0} onclick={() => (page = Math.max(0, page - 1))}>Prev</Button>
+                <span class="tabular-nums">{page + 1}/{totalPages}</span>
+                <Button variant="outline" size="sm" class="h-7" disabled={page >= totalPages - 1} onclick={() => (page = Math.min(totalPages - 1, page + 1))}>Next</Button>
+              </span>
+              <span class={cn('ml-auto text-sm font-semibold tabular-nums', totalPnl >= 0 ? 'text-chart-2' : 'text-destructive')}>Net {money(totalPnl)}</span>
             </span>
           </Table.Cell>
         </Table.Row>
