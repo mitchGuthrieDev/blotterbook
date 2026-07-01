@@ -3329,6 +3329,39 @@
       "completedDate": "2026-07-01",
       "partial": false,
       "doneNote": "DONE (2026-07-01) — Every tag input autocompletes from the existing canonical vocabulary via a shared part (src/app/parts/TagInput.svelte): an Input + native <datalist>, dependency-free, keyboard-navigable, CSP-safe; suggestions prefix-match on the cleanTag form and picking one commits through the SAME onadd→cleanTag path as typing, so the round-trip stays canonical. Wired at all five entry points: Trade Editor row popover (fresh draft per open) + bulk tag, Blotter drawer + bulk tag (vocabulary = dash.tags), Calendar day rail (new dash.journalTags — the day-tag vocabulary kept separate per the two-scope model)."
+    },
+    {
+      "id": "A95",
+      "title": "(optional) Root tidy: relocate vite-ssg.mjs + drop dead tsconfig allowJs",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "Both applied. (1) Moved vite-ssg.mjs → scripts/vite-ssg.mjs (git mv); the move needed 3 code edits, not the optimistically-assumed one — vite.config.mjs import path, the plugin's projectRoot (now resolve(import.meta.dirname,'..') to stay repo-root), and its svelte.config import (../). Updated every deploy-contract/doc reference: CLAUDE.md (repo-layout tree + 2 md links + 2 inline mentions) and docs/architecture.md (lockstep table + SSG md link). Build + all 28 e2e (incl. ssg.spec) green, confirming SSR still resolves. (2) Removed the dead allowJs:true/checkJs:false from tsconfig.json and rewrote the stale A69-'transition' comment; npm run typecheck (tsc core + functions + svelte-check) passes with 0 errors."
+    },
+    {
+      "id": "A96",
+      "title": "Vite/CI build hygiene: explicit build.target, size budget, de-dup CI build",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-06-29",
+      "partial": false,
+      "doneNote": "All four shipped, zero new deps (A28). (1) vite.config build.target:'es2022' matching tsconfig — no plugin-legacy. (2) scripts/check-bundle-size.mjs (npm run size-budget): zero-dep script sums the JS the built /app/ shell loads and fails over a 200 KiB ceiling (baseline ~166.6 KiB → ~33 KiB headroom); wired into CI right after the build. (3) De-dup'd via option (b): the Playwright webServer now serves the already-built dist/ in CI (process.env.CI ? serve-only : build+serve) so CI builds once (its own step, which also feeds the size budget) while local `npm run test:e2e` stays one command. (4) Added a concurrency group (cancel-in-progress on non-main refs) and an actions/cache for ~/.cache/ms-playwright keyed on the resolved @playwright/test version (install-deps-only on cache hit). Verified: build, size-budget, full npm test, and all 28 e2e (via the CI serve-only path) green."
+    },
+    {
+      "id": "A109",
+      "title": "Create architecture diagrams for /docs",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01, backlog-review archival) — Satisfied by PR #91: docs/architecture-diagrams/ ships 10+ Mermaid diagrams (build-and-deploy, repo-layout-url-contract, app-shell-and-routing, boot-and-lifecycle, csv-import-adapters, compute-costmodel-render, storage/mode separation, core-reuse-map, cloudflare-functions, ci-pipeline) with a CI drift gate (check-mermaid.mjs, 12 diagrams validated). The pass-4 R1 audit already recommended archiving this; done in the 2026-07-01 backlog review."
     }
   ]
 }
