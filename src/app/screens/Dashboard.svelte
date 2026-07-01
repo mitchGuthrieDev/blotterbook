@@ -11,8 +11,10 @@
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import * as Card from '$lib/components/ui/card';
+  import { X } from '@lucide/svelte';
   import { usd, usdWhole, axMoney, niceTicks, linePath } from '../../lib/core/core.ts';
   import type { DailyPoint } from '../../lib/core/curveseries.ts';
+  import { type DayTrade } from './Calendar.svelte';
 
   const MOCK_STATS: DashStat[] = [
     { label: 'Net P&L', value: '+$79,467.75', badge: '+12.5%', up: true, note: '892W · 647L' },
@@ -29,6 +31,11 @@
     18: { pnl: 438, tr: 5 }, 22: { pnl: 93, tr: 5 }, 23: { pnl: 319, tr: 4 }, 24: { pnl: 380, tr: 5 },
     25: { pnl: 448, tr: 4 }, 26: { pnl: -270, tr: 5 }, 30: { pnl: 430, tr: 5 },
   };
+  const MOCK_DAY_TRADES: DayTrade[] = [
+    { time: '09:34', sym: 'ES', side: 'Long', qty: 2, pnl: 180 },
+    { time: '10:12', sym: 'NQ', side: 'Short', qty: 1, pnl: -60 },
+    { time: '11:48', sym: 'ES', side: 'Long', qty: 3, pnl: 240 },
+  ];
   // A representative daily gross/net/take series for the /dev preview.
   const MOCK_SERIES: DailyPoint[] = [0, 800, 1600, 2100, 3000, 3500, 4300, 5200, 6000, 7200, 8100, 9400].map((g, i) => ({
     date: `2026-06-${String(i + 2).padStart(2, '0')}`,
@@ -47,10 +54,15 @@
     firstDow?: number;
     daysInMonth?: number;
     onscope?: (s: 'all' | 'month') => void;
+    /** Click-a-day drill-in (parity with app/demo): the day's trades + its persistent journal note. */
+    dayTrades?: (day: number) => DayTrade[];
+    getNote?: (day: number) => string;
+    onsavenote?: (day: number, text: string) => void;
   }
   let {
     stats = MOCK_STATS, series = MOCK_SERIES, dateRange = '2024-07-01 → 2026-06-30',
     monthLabel = 'June 2026', monthNet = 4016.5, dayPnl = MOCK_PNL, firstDow = 1, daysInMonth = 30, onscope,
+    dayTrades = () => MOCK_DAY_TRADES, getNote = () => '', onsavenote,
   }: Props = $props();
 
   let scope = $state<'all' | 'month'>('all');
@@ -63,6 +75,17 @@
     while (c.length % 7 !== 0) c.push(null);
     return c;
   });
+
+  // ── Calendar day drill-in ────────────────────────────────────────────────────────────────────
+  let selectedDay = $state<number | null>(null);
+  let note = $state('');
+  // Load the day's note whenever the selection (or the underlying journal) changes.
+  $effect(() => {
+    note = selectedDay ? getNote(selectedDay) : '';
+  });
+  const selTrades = $derived(selectedDay ? dayTrades(selectedDay) : []);
+  const pickDay = (day: number) => (selectedDay = selectedDay === day ? null : day);
+  const monthWord = $derived(monthLabel.split(' ')[0]);
 
   // ── Performance curve ──────────────────────────────────────────────────────────────────────────
   // The Gross/Net/Take-home toggle switches the primary cumulative series (parity with app/demo — the
@@ -262,27 +285,75 @@
           {:else}
             {@const t = dayPnl[day]}
             {@const up = t && t.pnl >= 0}
-            <div
+            <button
+              type="button"
+              onclick={() => t && pickDay(day)}
+              disabled={!t}
               class={[
-                'min-h-16 rounded border p-1.5',
+                'min-h-16 rounded border p-1.5 text-left transition-colors',
                 t
                   ? up
                     ? 'border-chart-2/30 bg-chart-2/10'
                     : 'border-destructive/30 bg-destructive/10'
-                  : 'border-border',
+                  : 'cursor-default border-border',
+                selectedDay === day && 'ring-2 ring-primary',
               ]}
             >
-              <div class="text-[11px] text-muted-foreground">{day}</div>
+              <span class="flex items-center gap-1 text-[11px] text-muted-foreground">
+                {day}{#if getNote(day)}<span class="size-1.5 rounded-full bg-primary" title="Has a note"></span>{/if}
+              </span>
               {#if t}
                 <div class={['mt-1 text-right text-xs font-medium tabular-nums', up ? 'text-chart-2' : 'text-destructive']}>
                   {money(t.pnl)}
                 </div>
                 <div class="text-right text-[10px] text-muted-foreground">{t.tr} tr</div>
               {/if}
-            </div>
+            </button>
           {/if}
         {/each}
       </div>
+
+      <!-- Selected-day detail: the day's trades + its journal note (parity with app/demo). -->
+      {#if selectedDay && dayPnl[selectedDay]}
+        {@const t = dayPnl[selectedDay]}
+        <div class="mt-4 rounded-md border border-border bg-background p-4">
+          <div class="mb-3 flex items-center justify-between">
+            <span class="text-sm font-semibold text-foreground">
+              {monthWord} {selectedDay}
+              <span class={['ml-2 tabular-nums', t.pnl >= 0 ? 'text-chart-2' : 'text-destructive']}>{money(t.pnl)}</span>
+              <span class="ml-2 text-xs font-normal text-muted-foreground">{t.tr} {t.tr === 1 ? 'trade' : 'trades'}</span>
+            </span>
+            <button type="button" class="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Close day detail" onclick={() => (selectedDay = null)}>
+              <X class="size-4" />
+            </button>
+          </div>
+          <div class="grid gap-4 lg:grid-cols-2">
+            <div class="overflow-hidden rounded-md border border-border">
+              {#each selTrades as tr, i (i)}
+                <div class={['flex items-center gap-2 px-2.5 py-1.5 text-xs', i > 0 && 'border-t border-border']}>
+                  <span class="tabular-nums text-muted-foreground">{tr.time || '—'}</span>
+                  <span class="font-medium">{tr.sym}</span>
+                  <Badge variant="outline" class={tr.side === 'Long' ? 'border-chart-2/40 text-chart-2' : 'border-destructive/40 text-destructive'}>{tr.side}</Badge>
+                  <span class="text-muted-foreground">×{tr.qty}</span>
+                  <span class={['ml-auto font-semibold tabular-nums', tr.pnl >= 0 ? 'text-chart-2' : 'text-destructive']}>{money(tr.pnl)}</span>
+                </div>
+              {:else}
+                <div class="px-2.5 py-3 text-center text-xs text-muted-foreground">No intraday trades recorded.</div>
+              {/each}
+            </div>
+            <div>
+              <div class="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Journal note</div>
+              <textarea
+                class="h-24 w-full resize-none rounded-md border border-border bg-card p-2 text-xs leading-relaxed text-foreground outline-none focus-visible:border-ring"
+                bind:value={note}
+              ></textarea>
+              <div class="mt-1.5 flex justify-end">
+                <Button size="sm" onclick={() => selectedDay && onsavenote?.(selectedDay, note)}>Save note</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      {/if}
     </Card.Content>
   </Card.Root>
 

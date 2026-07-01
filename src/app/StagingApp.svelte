@@ -264,6 +264,9 @@
       firstDow={calData.firstDow}
       daysInMonth={calData.daysInMonth}
       onscope={dash.setScope}
+      dayTrades={calTradesForDay}
+      getNote={day => dash.noteFor(dateOf(day))}
+      onsavenote={(day, text) => dash.saveNote(dateOf(day), text)}
     />
   {:else if active === 'calendar'}
     <Calendar
