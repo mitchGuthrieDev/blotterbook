@@ -10,9 +10,37 @@ build/UI platform decisions. These diagrams are the pictures that go with that t
 
 ## Diagrams
 
+### Runtime / data flow
+
 | Diagram | What it shows |
 | --- | --- |
+| [`boot-and-lifecycle.md`](boot-and-lifecycle.md) | Startup sequence: `mount(App)` → `loadRefData` → `Store.init` → seed → restore → onboarding gate |
+| [`app-shell-and-routing.md`](app-shell-and-routing.md) | `AppShell` + hash router → screens/parts, and the `createDashboard` state → props → callbacks flow |
 | [`storage-and-mode-separation.md`](storage-and-mode-separation.md) | How prod/demo/staging select a `Store` at boot and how their IndexedDB / in-memory data is isolated |
+| [`csv-import-adapters.md`](csv-import-adapters.md) | CSV `detect` → adapter `parse`/`pairFills` → normalized trade → `Store.addTrades` dedupe |
+| [`compute-costmodel-render.md`](compute-costmodel-render.md) | Trades → filters → `compute` (metrics) → `costModel` → curve/report → reactive screens |
+| [`core-reuse-map.md`](core-reuse-map.md) | How `src/lib/core/*` is reused verbatim by the app + info site, and the `Store` seam |
+
+### Backend / edge
+
+| Diagram | What it shows |
+| --- | --- |
+| [`cloudflare-functions.md`](cloudflare-functions.md) | Edge API surface, the staging gate middleware, and the Stripe/accounts scaffold |
+
+### Build / deploy / CI
+
+| Diagram | What it shows |
+| --- | --- |
+| [`build-and-deploy.md`](build-and-deploy.md) | `build-manifest` → Vite multi-page build (+ SSG prerender) → `dist/` → Cloudflare Pages |
+| [`repo-layout-url-contract.md`](repo-layout-url-contract.md) | `src/` root + `static/` publicDir → `dist/` URL mapping (the 1:1 deploy contract) |
+| [`ci-pipeline.md`](ci-pipeline.md) | Ordered `ci.yml` gates ending in the manifest drift gate |
+| [`versioning-two-track.md`](versioning-two-track.md) | Commit-type + changed-path classification → two-track prod/staging version bump |
+
+### Cross-cutting
+
+| Diagram | What it shows |
+| --- | --- |
+| [`security-trust-boundaries.md`](security-trust-boundaries.md) | Sanitization boundaries + the CSP / demo / staging / admin / local-compute invariants |
 
 ## Conventions
 
