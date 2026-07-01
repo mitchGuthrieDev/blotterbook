@@ -3384,6 +3384,17 @@
       "completedDate": "2026-07-01",
       "partial": false,
       "doneNote": "DONE (2026-07-01) — Shipped as a mailto affordance (decision: zero backend — A28-clean, no spam/rate-limit surface, no KV writes per A17; the local-compute constraint holds BY CONSTRUCTION since nothing sends automatically and nothing is auto-attached). A 'Send feedback' icon button in the topbar actions area opens a Dialog (new part src/app/parts/FeedbackDialog.svelte): a textarea + an 'Open email draft' anchor that builds mailto:contact@blotterbook.com with the app version + surface in the subject (triage; not PII) and ONLY the typed text as the body; copy states nothing is sent automatically and trades/journal are never included. Works on every surface incl. demo (no persistence, no store writes). e2e (demo) asserts the href targets contact@, contains exactly the typed text, and nothing bulk-attached (length bound)."
+    },
+    {
+      "id": "A66",
+      "title": "CRITICAL: exhaustive audit of all data calculations",
+      "category": "REVIEW / AUDIT",
+      "priority": "P1",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Exhaustive read-only calc audit delivered: docs/calc-audit-2026-07-01.md. Four parallel auditors (adapters/compute/cost+tax/series+report+view-models), every claim reproduced by EXECUTING the real modules under node; the coordinator independently re-ran both P1s and the top P2s before filing. Verdict: the load-bearing math is sound (pairFills FIFO/apportionment, commission+tax arithmetic, gap-month accrual reconciling with dailySeries to 1e-9, drawdown/Sharpe/Sortino/streaks on normal data) — the failures are at the edges: 2 P1s (semicolon CSVs import pnl=2026 silently; DST spring-forward adds a day to the Reports prior-period window), 11 P2s (date-order poisoning, IBKR midnight times, NaN holdMs/FIFO corruption, concPct float-dust '5.4e17%', inception maxDDpct 0.0%, unsurfaced fallback-rate marker + 16-root fee table, tierOf misclassifying SIL/2YY/10Y/30Y/MWE, gross-vs-net Profit factor between preview and export, negative-qty commission credits, unsorted-input negative months), ~20 P3s. Per the charter NO code was changed — fixes filed as A168 (P1 adapters), A169 (P1 DST), A170 (metric degenerates), A171 (tier/fee integrity), A172 (one basis per label), A173 (qty/order hardening), A174 (view-model polish), A175 (the compute/formatting test suites that pin every audited path)."
     }
   ]
 }

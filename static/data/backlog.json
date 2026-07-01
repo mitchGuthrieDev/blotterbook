@@ -237,18 +237,6 @@
       "doneNote": null
     },
     {
-      "id": "A66",
-      "title": "CRITICAL: exhaustive audit of all data calculations",
-      "category": "REVIEW / AUDIT",
-      "priority": "P1",
-      "effort": "large",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "P1 - CRITICAL. Exhaustive correctness audit of EVERY calculation Blotterbook performs on imported data - this is the platform's core value and must be air-tight. Scope (pure-logic core, A29): src/lib/core/adapters.ts (CSV parse, fills pairing via pairFills(), normalization, symbol/root, side, qty, holdMs, date/timezone handling); src/lib/core/core.ts compute() (PnL, win rate, profit factor, expectancy, equity curve + drawdown, streaks, day/session bucketing, averages); src/lib/core/core.ts costModel() (per-broker commission tiers, exchange/clearing/NFA fees, micros, data-feed + platform subscriptions, Section-1256 tax via state-tax.json, blended rate, take-home); src/lib/core/curveseries.ts (gross/net/take series); src/lib/core/report.ts. Verify against hand-worked examples and edge cases: empty/partial fills, same-symbol reversals, multi-contract, fractional/large qty, missing fields, DST/year boundaries (note isoWeek tweak A58), float-accumulation rounding, negative/zero PnL, micros vs minis, per-state tax. Confirm the node fixtures (test-adapters/test-tax) are sufficient and add cases for gaps. READ-ONLY audit: file a fix item for each discrepancy, don't fix inline. Done when: a thorough, prioritized written audit covering every calc path is delivered with fix items filed.",
-      "doneNote": null
-    },
-    {
       "id": "A80",
       "title": "Discuss/explore: deeper Svelte 5 runes + reactivity adoption",
       "category": "REVIEW / AUDIT",
@@ -462,6 +450,102 @@
       "completedDate": null,
       "partial": false,
       "prompt": "DISCUSSION/BRAINSTORM. Propose additional dashboards or dashboard modules that would add value for futures traders, grounded in the metrics the pure-logic core already computes (compute()/costModel()/curveseries — e.g. drawdown, expectancy, streaks, session/day-of-week splits, cost/tax breakdown, per-symbol stats) plus any that need new (cheap, local) computation. For each idea: what it shows, which existing metrics it uses, rough effort, and whether it's a new dashboard vs a module in the existing grid. Prioritize a shortlist. Done when: a written, prioritized list of candidate dashboards/modules is delivered; adopted ones spun off as their own items.",
+      "doneNote": null
+    },
+    {
+      "id": "A168",
+      "title": "P1: adapter input-tolerance hardening (semicolon CSVs import pnl=2026 silently; date/time edge corruption)",
+      "category": "FIXES",
+      "priority": "P1",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the A66 calc audit (docs/calc-audit-2026-07-01.md, P1 #1 + P2 #3-6 — every case reproduced under node). Fix, in src/lib/core/adapters.ts: (1) parseCSV delimiter auto-detect must include ';' (count semicolons alongside commas/tabs) AND toTrades must hard-error when the resolved Time and PnL column indexes coincide — today an EU-Excel semicolon re-save imports 'ok' with pnl = 2026 (the year) on every row; (2) detectDateOrder must scan ONLY the resolved time column's values, not the whole file text (one 'd/m/yyyy'-looking fragment in any note cell currently re-dates the entire import); (3) normTime's ISO branch must accept the comma separator IBKR uses ('YYYY-MM-DD, HH:MM:SS' currently loses its time -> all fills at midnight); (4) pairFills must skip fills whose time failed to normalize (today a garbage timestamp corrupts FIFO string-sort ordering and silently deletes that round trip's P&L, or escapes as holdMs:NaN -> 'NaNm' in the Blotter) and only set entryTime/holdMs when both timestamps parse — count skipped fills into an import warning; (5) the parse() date gate must range-check (2026-31-31 currently passes /^\\d{4}-\\d{2}-\\d{2}/); (6) rootSym should strip known service/exchange suffixes (ESM25-CME, MESM25.CME, F.US.MESM25) before the month-code strip so point values and commission tiers resolve. Add the adapter fixtures from the audit's list (semicolon file must not parse, date-order poisoning, IBKR comma datetime, blank/garbage fill time, suffixed symbols, impossible date). Done when: each repro from the audit produces either a correct parse or a hard error (never silent garbage), and the new fixtures are green.",
+      "doneNote": null
+    },
+    {
+      "id": "A169",
+      "title": "P1: DST-safe prior-period bounds in Reports compare",
+      "category": "FIXES",
+      "priority": "P1",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the A66 calc audit (P1 #2 — reproduced under TZ=America/New_York, correct under UTC). priorBounds (src/app/lib/reports.ts:45-53) computes the prior window's start via epoch-millisecond arithmetic on local midnights; across DST spring-forward the 23-hour day makes the start land one calendar day early, so 'Compare to prior period' silently includes an extra day (repro: April 2026 month scope -> prior includes Mar 1; prior Net +$1,000 instead of +$1). Fix with calendar arithmetic (setDate is DST-safe): pb = day before `from`; pa = pb minus (days-1) via setDate — no epoch math. Add TZ-pinned fixtures (a node suite that sets process.env.TZ='America/New_York' before importing): April month-scope prior excludes the boundary day; a custom range crossing the second Sunday of March; fall-back November control; UTC control. Done when: the prior window is exactly equal-length in all four fixtures.",
+      "doneNote": null
+    },
+    {
+      "id": "A170",
+      "title": "P2: metric degenerate-value fixes (concPct float dust, inception maxDDpct, pf/tone conventions)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the A66 calc audit (P2 #7-8 + the metrics-convention P3 batch; all reproduced). In src/lib/core/core.ts compute(): (1) concPct must gate on a cent-rounded net — [+0.1,+0.2,-0.3] currently yields net 5.6e-17 and renders '540431955284459600%' in Analytics/Reports; (2) maxDDpct must return null (render '—') when the drawdown peak is ≤ 0 — an inception drawdown (equity never positive) currently shows '-$100.00 · 0.0% of peak'; (3) maxDDdur is off by one for inception drawdowns — derive it from the already-tracked curve indexes (ddTroughCurveIdx - ddPeakCurveIdx); (4) align compute()'s pf/wl empty/no-loss convention with costModel's guard (an untraded month scope currently shows PF '∞'; costModel shows 0 for the same case — pick ONE convention, document it in the Definitions part); (5) decide the Sortino no-losing-days convention (currently '—' beside a valid Sharpe; PF shows '∞' for the analogous case); (6) core tone() should return undefined at exactly 0 so a $0.00 KPI isn't green (cls() already does this — reuse or mirror; check Analytics/Reports/Calendar call sites); (7) clamp |v| < $0.005 to 0 in usd()/usdWhole() so float residue can't render a red '-$0.00'; fix usdWhole(±0.4)/(−0) sign quirks; (8) either bucket unknown-side trades explicitly or footnote the Long/Short split when long.n+short.n < n; (9) wire the dead ddPeakIdx/ddTroughIdx exports to the drawdown card marker (their documented purpose) or delete them. Done when: each audit repro yields the decided value, conventions are documented in Definitions, and the A175 compute suite pins them.",
+      "doneNote": null
+    },
+    {
+      "id": "A171",
+      "title": "P2: commission-tier integrity — exchange-fees coverage, explicit micro list, resurface the fallback asterisk",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the A66 calc audit (P2 #9-10 + data plausibility; verified against the live tables). (1) static/data/exchange-fees.json covers only 16 roots — RESEARCH and add the CBOT treasuries (ZN/ZB/ZF/ZT/TN), grains (ZC/ZS/ZW), remaining FX (6J/6B/6A/6S), SIL, the Micro Treasury Yields (2YY/5YY/10Y/30Y), and MBT/MET, with correct micro-set membership (then run build-manifest.mjs); (2) replace or backstop tierOf()'s M-prefix heuristic with the explicit micro list — today SIL/2YY/10Y/30Y price as STANDARD (~3x commission overcharge) and MWE (full-size MGEX wheat) as MICRO (undercharge); (3) resurface the known:false fallback marker lost in the CH16 cutover — an asterisk/footnote on estimated rates in the dashboard Break-even module's per-symbol rows and the report commissions table (bySym.known and report commRows already carry the flag; the UI drops it); (4) RESEARCH Tradovate's standard-contract commission — brokers.json has micro == std == 0.35/side while published plans price standard well above micro; correct the tier. Done when: the audited roots price at their real tier, estimated rates are visibly marked, and rateFor/tierOf fixtures (A175) pin the table.",
+      "doneNote": null
+    },
+    {
+      "id": "A172",
+      "title": "P2: one basis per label — reconcile gross vs net-of-costs across preview/export/KPIs",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the A66 calc audit (P2 #11 + labeling P3s; corroborated by two auditors). 'Profit factor' and 'Net P&L' each mean two different numbers one click apart: the Reports preview KPI strip uses gross m.pf/m.net while the exported Markdown headline uses commission-adjusted c.pf/c.netPreTax (repro: PF 2.20 on screen, 1.38 in the download of the same report) — contradicting the A156 preview↔download contract. Decide one basis per label and make preview + export agree (qualify any net-of-costs row explicitly, e.g. 'Profit factor (net of commissions)'); rename the KPI 'Net P&L' or feed it netPreTax (note reports.ts calls the same m.net 'Gross P&L' in its own cost table). Also: (a) fix statDetail('net')'s description (App.svelte ~:254 — says 'after commissions, subscriptions and estimated tax' over a BEFORE-costs value); (b) the 'Net §1256 gain (pre-tax)' row taxes net-of-subscriptions — either rename the row (plain 'Net P&L (pre-tax)') or document the modeling choice in Definitions/legal copy (subscriptions don't reduce a §1256 gain for a non-TTS filer; the estimate understates tax by fixedPeriod × tEff). Add a preview↔export parity fixture (assert the KPI strings appear verbatim in vm.md). Done when: no label maps to two bases anywhere in the Reports flow and the parity fixture is green.",
+      "doneNote": null
+    },
+    {
+      "id": "A173",
+      "title": "P2: qty + input-order hardening (negative qty = commission credit; spanMonths clamp)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the A66 calc audit (P2 #12-13; reproduced). (1) The Trade Editor accepts negative qty — {pnl:100, qty:-2} yields totalComm -$2.40, netPreTax ABOVE gross, contracts -2 (a commission credit); explicit qty 0 silently bills as 1 contract. Clamp in the editor path (setNum in TradeEditor.svelte + editTradeCore in dashboard.svelte.ts): qty = max(1, round(|v|)) — adapters already Math.abs. (2) compute() trusts input order for firstDate/lastDate; reversed input gives spanMonths = -1 -> a NEGATIVE subscription charge that inflates net and then gets taxed. Unreachable via live paths (Store/DemoStore sort) but compute/spanMonths are exported pure API: clamp spanMonths to >= (both dates present ? 1 : 0) or derive first/last by min/max in compute. Add fixtures for both (negative-qty rejection at the editor seam; spanMonths reversed/'—'/same-month/cross-year units). Done when: no path can produce negative commissions or negative subscription months.",
+      "doneNote": null
+    },
+    {
+      "id": "A174",
+      "title": "P3: view-model polish — histogram zero bucket, weekday gaps, axMoney tiers, prior-month semantics",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the A66 calc audit (view-model P3 batch; all reproduced). (1) analytics.ts histogram: a $0 trade lands in the green '0..50' bucket while the W/L bar beside it excludes scratches — give 0 a neutral treatment or fold into the scratch story; fix edge labels ('>200' is really >=200; '<-200' excludes exactly -200); (2) the same screen shows two win-rate denominators (KPI wins/n vs bar wins/(wins+losses)) — footnote or unify; (3) Calendar 'By weekday' (DOW_LBL Mon..Fri) silently drops Sunday/Saturday Globex sessions that ARE in monthNet — include weekend buckets when nonzero (Analytics' dowBuckets version already handles all 7); (4) axMoney: test the threshold on the ROUNDED value (999.5 currently renders '$1000' beside '$1.0k') and add an M tier (1.5e6 renders '$1500k'); (5) label or snap the Reports month-scope prior period (currently an equal-length rolling window — 'March 2026' compares against Jan 29–Feb 28 — either snap to the prior calendar month for scope:'month' or label the window); (6) adapters num() polish: handle trailing '-' and Unicode minus U+2212 (both currently drop the sign — flip risk), reject/accept scientific notation ('1e3' -> 13 today), extend the B24 comment to the EU dot-thousands ambiguity ('1.234'); (7) per-lot realized apportionment: allocate the last cent largest-remainder so lots sum exactly to the broker figure; (8) sniff over-match: word-boundary header matching so 'Transaction' can't claim TradingView's 'action'; (9) surface an import notice for dangling open fills (silently ignored today) and document the one-trade-per-matched-lot counting. Done when: each repro renders the decided value and A175 pins them.",
+      "doneNote": null
+    },
+    {
+      "id": "A175",
+      "title": "P2: compute()/formatting test suites — pin every audited calc path",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the A66 calc audit (fixture-gap consolidation across all four auditors — compute() currently has NO dedicated suite). Add scripts/test-compute.mjs (wire into npm test + CI): the hand-worked 6-trade definitional set (wins/losses/scratch, net/gp/gl/pf/avgW/avgL/wl/winRate/expectancy/tStd), Sharpe + Sortino numeric values, drawdown pack (maxDD/maxDDpct/maxDDdur/ddPeakIdx/ddTroughIdx incl. inception-peak and never-drawn-down), streak counts AND dollars with a scratch break, concPct (incl. the float-dust gate once A170 lands), sessionOf boundary times (09:29:59/09:30:00/15:59:59/16:00:00), dowBuckets/bestDow/worstDow, long/short split with an unknown side, empty/one-trade degradation. Add a formatting suite (usd/money/usdWhole signs + -0/residue, axMoney thresholds, ratio/num ∞/NaN, fmtDur) and dailySeries MID-series assertions (per-day subscription accrual + tax-on-cumulative points; year-wrap gap accrual). Plus the suite-specific fixtures named in A168 (adapters), A169 (TZ-pinned priorBounds), A171 (tierOf/rateFor table), A172 (preview↔export parity), A173 (spanMonths units). Consider extracting inMonth/applyFilters from dashboard.svelte.ts into the core so the filter math becomes node-testable. Done when: every calc path the audit hand-verified is pinned by a fixture and the P1/P2 repros are regression tests.",
       "doneNote": null
     }
   ],
