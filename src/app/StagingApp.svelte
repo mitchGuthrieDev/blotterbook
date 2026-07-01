@@ -425,6 +425,7 @@
       onsavenote={(day, text) => dash.saveNote(dateOf(day), text)}
       {statDetail}
       {filterModel}
+      onpickdate={(y, m) => dash.setCal(y, m)}
       modules={dashModules}
       onmoduleschange={saveModules}
     />

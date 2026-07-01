@@ -130,6 +130,8 @@
     statDetail?: (key: string) => StatDetail;
     /** Live filter model for the Filters popover (bound to the app's filter state on staging). */
     filterModel?: FilterModel;
+    /** Clicking a curve point jumps the calendar cursor to that date's month (parity with app/demo). */
+    onpickdate?: (year: number, month: number) => void;
     /** Visible dashboard modules in order (persisted on staging); defaults to all shown. */
     modules?: string[];
     onmoduleschange?: (order: string[]) => void;
@@ -140,6 +142,7 @@
     dayTrades = () => MOCK_DAY_TRADES, getNote = () => '', onsavenote,
     statDetail = key => MOCK_DETAIL(key),
     filterModel = MOCK_FILTERS,
+    onpickdate,
     modules, onmoduleschange,
   }: Props = $props();
 
@@ -302,20 +305,38 @@
       : ''
   );
 
-  function idxFromX(e: PointerEvent) {
+  function idxFromX(e: MouseEvent) {
     const v = view;
     if (!v) return null;
     const rect = (e.currentTarget as Element).getBoundingClientRect();
     const vbx = ((e.clientX - rect.left) / rect.width) * W;
     return Math.max(1, Math.min(v.len - 1, Math.round(((vbx - PAD.l) / (W - PAD.l - PAD.r)) * (v.len - 1))));
   }
-  const moveCursor = (e: PointerEvent) => (cursor = idxFromX(e));
+  const moveCursor = (e: MouseEvent) => (cursor = idxFromX(e));
   function onCurveKey(e: KeyboardEvent) {
-    if (!view || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+    if (!view) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      pickCurveDate(cursor); // jump the calendar to the cursor's day
+      return;
+    }
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
     const base = cursor == null ? view.len - 1 : cursor;
     cursor = Math.max(1, Math.min(view.len - 1, base + (e.key === 'ArrowRight' ? 1 : -1)));
   }
+  // Clicking (or pressing Enter on) a curve point jumps the Trading Calendar to that day.
+  function pickCurveDate(idx: number | null) {
+    if (!view || idx == null) return;
+    const date = view.pts[idx]?.date;
+    if (!date) return;
+    const [y, m, d] = date.split('-').map(Number);
+    onpickdate?.(y, m - 1); // move the calendar cursor to that date's month
+    selectedDay = d; // select the day so its detail opens
+    // If the calendar module is visible, scroll it into view.
+    requestAnimationFrame(() => document.getElementById('dashmod-cal')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  }
+  const onCurveClick = (e: MouseEvent) => pickCurveDate(idxFromX(e));
 </script>
 
 {#snippet moduleHeader(key: string)}
@@ -487,12 +508,13 @@
           <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
           <svg
             viewBox="0 0 {W} {VH}"
-            class="h-64 w-full touch-none outline-none"
+            class="h-64 w-full cursor-pointer touch-none outline-none"
             role="img"
-            aria-label="Cumulative P&L curve"
+            aria-label="Cumulative P&L curve — click a point to open that day in the calendar"
             tabindex="0"
             onpointermove={moveCursor}
             onpointerleave={() => (cursor = null)}
+            onclick={onCurveClick}
             onkeydown={onCurveKey}
           >
             <defs>
@@ -621,7 +643,7 @@
 
   <!-- Modules — reorderable / hideable / re-addable (persisted on staging). -->
   {#each modOrder as key (key)}
-    <Card.Root>
+    <Card.Root id="dashmod-{key}">
       {@render moduleHeader(key)}
       <Card.Content>
         {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{/if}
