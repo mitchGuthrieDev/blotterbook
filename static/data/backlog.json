@@ -475,6 +475,42 @@
       "partial": false,
       "prompt": "OPTIONAL optimization from the 2026-07-01 R1 audit (CI is already correct + de-duped per A96). Two low-risk wins: (1) split the cheap gates (lint + typecheck + format:check) into a separate GitHub Actions job that runs in PARALLEL with the build+e2e job, to cut wall-clock feedback time (the e2e build is the long pole). Keep the npm/Playwright caches. (2) Add a single top-level `npm run ci` script that chains `test` + `build` + `size-budget` + `check-deploy` + `test:e2e` so CI and local stay in lockstep (CI currently open-codes the sequence). Neither is a correctness bug; ship only if the CI latency/lockstep is worth it. Done when: applied (or explicitly declined with a note).",
       "doneNote": null
+    },
+    {
+      "id": "A129",
+      "title": "Centralize duplicated helpers (pad2/fmtDate/tone/month-names) into core",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From R1 (2026-07-01 pass). Several small helpers are duplicated across the app glue instead of single-sourced from the pure-logic core (src/lib/core/core.ts), which is a drift risk (same class as the money()/usd() drift fixed in a prior pass). Concretely: (1) `pad2` is redefined locally at src/app/App.svelte:281 even though core.ts:7 already exports it and App.svelte:11 simply doesn't import it; (2) `iso` at src/app/lib/reports.ts:31 re-implements core.ts:8's `fmtDate` (YYYY-MM-DD from a Date); (3) `tone = (n) => n>=0?'pos':'neg'` is copy-pasted in src/app/App.svelte:156, src/app/lib/analytics.ts:27, and src/app/lib/reports.ts:30; (4) the full month-names array `MON` is duplicated in src/app/App.svelte:44 and src/app/lib/reports.ts:29. Fix: export `tone` and `MONTH_NAMES` from core.ts (co-located with pad2/fmtDate), then import `pad2`/`fmtDate`/`tone`/`MONTH_NAMES` at every site and delete the local copies. Keep behavior identical (reports.ts's `iso` uses padStart — same output as pad2). Verify with `npm run typecheck` + `npm run test:unit`; no visual change. Done when: no helper is defined in more than one place and all four are sourced from core.",
+      "doneNote": null
+    },
+    {
+      "id": "A130",
+      "title": "Canonicalize live-entered journal tags (lowercase/strip) to match the restore path",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From R1 (2026-07-01 pass). Journal tags entered live are not canonicalized the way restored tags are, so they can silently fail to match the tag filter/chips. src/app/screens/Calendar.svelte:61 `addTag()` only `.trim()`s and dedupes case-sensitively, and the live save path src/lib/core/store.ts saveJournal (~line 166) only `.filter(Boolean)`s the tags — whereas backup restore runs `cleanTag` (lowercase + strip `[<>&\"']` + dedupe) at store.ts:277. Net effect: an uppercase live tag like `Scalp` won't match the lowercased tag filter or restored `scalp` tags. Low security risk (Svelte auto-escapes tags on render), but a real canonical-form inconsistency. Also: the comment at store.ts:275 attributes the lowercase+dedupe to a function called `annCapture` that no longer exists anywhere in the repo (stale/doc-rot). Fix: apply the same canonicalization (lowercase + strip markup + dedupe) on the live tag entry/save path (Calendar.addTag and/or store.saveJournal — pick the single seam, ideally reuse the cleanTag logic from store.ts so there's one definition), and correct or remove the stale `annCapture` comment. Add/adjust a node fixture if store-level. Done when: a live-entered uppercase/markup tag is stored in the same canonical form as a restored one, and the annCapture comment is fixed.",
+      "doneNote": null
+    },
+    {
+      "id": "A131",
+      "title": "Remove the unused minMax export from core.ts",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From R1 (2026-07-01 pass). `export function minMax(arr)` at src/lib/core/core.ts:12 is exported but imported nowhere in src/ or the test suites (dead code) — verified by a repo-wide grep. (Note: `dowBuckets`, which a scan flagged alongside it, is NOT dead — it's used inside compute() at core.ts:222; leave it.) Fix: delete `minMax`, or if it's meant as an intentional public-API/future seam, annotate it as such with a comment so the next audit doesn't re-flag it. Verify `npm run typecheck` + `npm run test:unit` stay green. Done when: core.ts has no unexplained unused export.",
+      "doneNote": null
     }
   ],
   "howToDrive": [
