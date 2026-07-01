@@ -7,7 +7,8 @@
   // "being wired" state.
   import { onMount, setContext } from 'svelte';
   import { Store } from '../lib/core/store.ts';
-  import { usd, money, num, ratio, rateFor } from '../lib/core/core.ts';
+  import { usd, money, num, ratio, rateFor, PAGE_MODE } from '../lib/core/core.ts';
+  import { Badge } from '$lib/components/ui/badge';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import { createDashboard } from './lib/dashboard.svelte.ts';
   import { dailySeries } from '../lib/core/curveseries.ts';
@@ -375,17 +376,33 @@
     pendingTrades = [];
   }
 
+  // Header meta: the running version (staging track), the platform phase (Beta while prod is pre-1.0,
+  // mirroring platformLabel), and the environment. Fetched from the CH12 versions.json single source.
+  let versions = $state<{ prod?: string; staging?: string } | null>(null);
+  const appVersion = $derived(versions ? (PAGE_MODE === 'staging' ? versions.staging : versions.prod) : '');
+  const isBeta = $derived(!!versions?.prod && (parseInt(versions.prod.split('.')[0], 10) || 0) < 1);
+  const envLabel = PAGE_MODE.charAt(0).toUpperCase() + PAGE_MODE.slice(1); // Staging | Demo | App
+
   onMount(() => {
     dash.boot().catch((e: unknown) => {
       console.error('staging app boot failed', e);
       dash.error = e instanceof Error ? e.message : String(e);
     });
+    fetch('/data/versions.json', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(v => (versions = v))
+      .catch(() => {});
   });
 </script>
 
 <AppShell sections={navSections} {active} onnavigate={navigate} title={navLabel(active)}>
   {#snippet actions()}
-    <span class="font-mono text-xs text-muted-foreground">staging · {dash.dateRange}</span>
+    <div class="flex items-center gap-2">
+      {#if isBeta}<Badge variant="outline" class="border-chart-4/40 text-chart-4">Beta</Badge>{/if}
+      <Badge variant="secondary">{envLabel}</Badge>
+      {#if appVersion}<span class="font-mono text-[11px] text-muted-foreground">v{appVersion}</span>{/if}
+      <span class="hidden font-mono text-xs text-muted-foreground md:inline">{dash.dateRange}</span>
+    </div>
   {/snippet}
 
   {#if dash.error}
