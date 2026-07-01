@@ -41,6 +41,8 @@
   import * as Card from '$lib/components/ui/card';
   import * as Popover from '$lib/components/ui/popover';
   import * as Select from '$lib/components/ui/select';
+  import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+  import { ChevronUp, ChevronDown, EyeOff } from '@lucide/svelte';
   import { X } from '@lucide/svelte';
   import * as Dialog from '$lib/components/ui/dialog';
   import { styleProps } from '../lib/actions.ts';
@@ -128,6 +130,9 @@
     statDetail?: (key: string) => StatDetail;
     /** Live filter model for the Filters popover (bound to the app's filter state on staging). */
     filterModel?: FilterModel;
+    /** Visible dashboard modules in order (persisted on staging); defaults to all shown. */
+    modules?: string[];
+    onmoduleschange?: (order: string[]) => void;
   }
   let {
     stats = MOCK_STATS, series = MOCK_SERIES, dateRange = '2024-07-01 → 2026-06-30',
@@ -135,7 +140,43 @@
     dayTrades = () => MOCK_DAY_TRADES, getNote = () => '', onsavenote,
     statDetail = key => MOCK_DETAIL(key),
     filterModel = MOCK_FILTERS,
+    modules, onmoduleschange,
   }: Props = $props();
+
+  // ── Module layout (hide / reorder / re-add — parity with app/demo, persisted on staging) ────────
+  const MODULES: { key: string; label: string }[] = [
+    { key: 'perf', label: 'Performance' },
+    { key: 'cal', label: 'Trading Calendar' },
+  ];
+  const validKeys = (ks?: string[]) => (ks ?? MODULES.map(m => m.key)).filter(k => MODULES.some(m => m.key === k));
+  // svelte-ignore state_referenced_locally — initial layout only; the app re-seeds via the prop below.
+  let modOrder = $state<string[]>(validKeys(modules));
+  // svelte-ignore state_referenced_locally
+  let lastModKey = modules ? modules.join(',') : '';
+  $effect(() => {
+    // Re-seed from the prop when the app supplies a persisted layout (e.g. on first load after boot).
+    const key = (modules ?? []).join(',');
+    if (key !== lastModKey) {
+      lastModKey = key;
+      modOrder = validKeys(modules);
+    }
+  });
+  const hiddenModules = $derived(MODULES.filter(m => !modOrder.includes(m.key)));
+  const moduleLabel = (key: string) => MODULES.find(m => m.key === key)?.label ?? key;
+  function commitModules(order: string[]) {
+    modOrder = order;
+    onmoduleschange?.(order);
+  }
+  function moveModule(key: string, dir: -1 | 1) {
+    const i = modOrder.indexOf(key),
+      j = i + dir;
+    if (i < 0 || j < 0 || j >= modOrder.length) return;
+    const next = [...modOrder];
+    [next[i], next[j]] = [next[j], next[i]];
+    commitModules(next);
+  }
+  const hideModule = (key: string) => commitModules(modOrder.filter(k => k !== key));
+  const addModule = (key: string) => commitModules([...modOrder, key]);
 
   // ── Filters ──────────────────────────────────────────────────────────────────────────────────
   const DOW_OPTS = [
@@ -277,13 +318,25 @@
   }
 </script>
 
-{#snippet moduleHeader(title: string)}
+{#snippet moduleHeader(key: string)}
   <div class="flex items-center gap-2 border-b border-border px-4 py-2.5">
-    <GripVertical class="size-4 cursor-grab text-muted-foreground" />
-    <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</span>
-    <button type="button" class="ml-auto grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Module menu">
-      <MoreHorizontal class="size-4" />
-    </button>
+    <GripVertical class="size-4 text-muted-foreground" />
+    <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{moduleLabel(key)}</span>
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger>
+        {#snippet child({ props })}
+          <button {...props} type="button" class="ml-auto grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Module menu">
+            <MoreHorizontal class="size-4" />
+          </button>
+        {/snippet}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Content align="end" class="min-w-[150px]">
+        <DropdownMenu.Item disabled={modOrder.indexOf(key) === 0} onSelect={() => moveModule(key, -1)}><ChevronUp class="size-4" /> Move up</DropdownMenu.Item>
+        <DropdownMenu.Item disabled={modOrder.indexOf(key) === modOrder.length - 1} onSelect={() => moveModule(key, 1)}><ChevronDown class="size-4" /> Move down</DropdownMenu.Item>
+        <DropdownMenu.Separator />
+        <DropdownMenu.Item onSelect={() => hideModule(key)}><EyeOff class="size-4" /> Hide module</DropdownMenu.Item>
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
   </div>
 {/snippet}
 
@@ -423,10 +476,7 @@
     {/each}
   </div>
 
-  <!-- Performance module -->
-  <Card.Root>
-    {@render moduleHeader('Performance')}
-    <Card.Content>
+  {#snippet perfBody()}
       <div class="mb-3 flex w-fit items-center gap-0.5 rounded-md border border-border p-0.5">
         {#each SERIES as s (s.key)}
           {@render seg(enabled[s.key], s.label, () => toggleSeries(s.key))}
@@ -481,13 +531,9 @@
           <p class="grid h-64 place-items-center text-sm text-muted-foreground">No trades in the selected range.</p>
         {/if}
       </div>
-    </Card.Content>
-  </Card.Root>
+  {/snippet}
 
-  <!-- Trading calendar module -->
-  <Card.Root>
-    {@render moduleHeader('Trading Calendar')}
-    <Card.Content>
+  {#snippet calBody()}
       <div class="mb-3 flex items-center justify-between">
         <span class="text-sm font-medium text-foreground">{monthLabel}</span>
         <span class={['text-sm tabular-nums', monthNet >= 0 ? 'text-chart-2' : 'text-destructive']}>{money(monthNet)}</span>
@@ -571,16 +617,39 @@
           </div>
         </div>
       {/if}
-    </Card.Content>
-  </Card.Root>
+  {/snippet}
 
-  <!-- Add-module affordance -->
-  <button
-    type="button"
-    class="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-  >
-    <Plus class="size-4" /> Add module
-  </button>
+  <!-- Modules — reorderable / hideable / re-addable (persisted on staging). -->
+  {#each modOrder as key (key)}
+    <Card.Root>
+      {@render moduleHeader(key)}
+      <Card.Content>
+        {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{/if}
+      </Card.Content>
+    </Card.Root>
+  {/each}
+
+  <!-- Add-module affordance — offers the hidden modules. -->
+  {#if hiddenModules.length}
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger>
+        {#snippet child({ props })}
+          <button
+            {...props}
+            type="button"
+            class="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <Plus class="size-4" /> Add module
+          </button>
+        {/snippet}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Content align="start" class="min-w-[180px]">
+        {#each hiddenModules as m (m.key)}
+          <DropdownMenu.Item onSelect={() => addModule(m.key)}><Plus class="size-4" /> {m.label}</DropdownMenu.Item>
+        {/each}
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
+  {/if}
 </div>
 
 <!-- KPI card drill-in dialog -->

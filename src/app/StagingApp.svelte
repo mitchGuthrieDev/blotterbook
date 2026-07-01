@@ -65,6 +65,15 @@
   );
   // Live filter model for the dashboard Filters popover — reads the app's filter state; the setters
   // mutate it in place so filtered/metrics/series/calendar all re-derive.
+  // Dashboard module layout, persisted to the Store.local seam (staging-namespaced) so hide/reorder/
+  // re-add survives a reload — parity with the app/demo workspace layout.
+  const MOD_KEY = 'bb:staging:dashModules';
+  let dashModules = $state<string[] | undefined>((store.local.get(MOD_KEY) as string[] | null) ?? undefined);
+  function saveModules(order: string[]) {
+    dashModules = order;
+    store.local.set(MOD_KEY, order);
+  }
+
   const filterModel = $derived<FilterModel>({
     root: dash.filters.root,
     side: dash.filters.side,
@@ -388,6 +397,8 @@
       onsavenote={(day, text) => dash.saveNote(dateOf(day), text)}
       {statDetail}
       {filterModel}
+      modules={dashModules}
+      onmoduleschange={saveModules}
     />
   {:else if active === 'calendar'}
     <Calendar
