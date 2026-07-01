@@ -297,6 +297,9 @@
                 </div>
               {/each}
             </div>
+            {#if vm.commNote}
+              <p class="mt-1.5 text-[11px] text-muted-foreground">{vm.commNote}</p>
+            {/if}
           {/if}
 
           {#if sections.tax}

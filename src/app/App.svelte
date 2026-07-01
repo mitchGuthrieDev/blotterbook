@@ -8,7 +8,20 @@
   import { onMount, setContext } from 'svelte';
   import { Store } from '../lib/core/store.ts';
   import { createDemoStore } from '../lib/core/demostore.ts';
-  import { usd, money, num, ratio, rateFor, roundTurn, emit, PAGE_MODE, pad2, tone, MONTH_NAMES } from '../lib/core/core.ts';
+  import {
+    usd,
+    money,
+    num,
+    ratio,
+    rateFor,
+    roundTurn,
+    estimatedCommRoots,
+    emit,
+    PAGE_MODE,
+    pad2,
+    tone,
+    MONTH_NAMES,
+  } from '../lib/core/core.ts';
   import { isBetaPhase } from '../lib/core/format.ts';
   import { Badge } from '$lib/components/ui/badge';
   import AppShell from '$lib/components/shell/AppShell.svelte';
@@ -94,9 +107,11 @@
         key: 'dd',
         label: 'Max drawdown',
         value: m.maxDD > 0 ? `-${money(m.maxDD)}` : '$0',
-        badge: `${m.maxDDpct.toFixed(1)}%`,
+        // A170: maxDDpct is null for an inception drawdown (no positive prior peak) — omit the badge
+        // rather than render a wrong-looking 0.0%.
+        badge: m.maxDDpct != null ? `${m.maxDDpct.toFixed(1)}%` : undefined,
         up: false,
-        note: 'of peak',
+        note: m.maxDDpct != null ? 'of peak' : 'from inception',
       },
       { key: 'sharpe', label: 'Sharpe (daily)', value: num(m.sharpe), note: `${m.active} trading days` },
     ];
@@ -254,7 +269,9 @@
           title: 'Net P&L',
           value: usd(m.net),
           tone: tone(m.net),
-          desc: 'Realized P&L after commissions, subscriptions and estimated Section 1256 tax.',
+          // A172: this figure is the imported realized P&L BEFORE modeled costs — the waterfall
+          // below applies commissions, subscriptions and the estimated §1256 tax to it.
+          desc: 'Realized P&L as imported — before modeled costs. The waterfall below applies commissions, subscriptions and estimated Section 1256 tax.',
           bars: [bar('Gross', c.gross, mx, 'pos'), bar('Net (pre-tax)', c.netPreTax, mx, 'pos'), bar('Take-home', c.afterTax, mx, 'muted')],
           rows: [
             { label: 'Gross P&L', value: usd(c.gross), tone: tone(c.gross) },
@@ -319,7 +336,16 @@
           desc: 'Largest peak-to-trough drop in realized equity.',
           rows: [
             { label: 'Max drawdown', value: m.maxDD > 0 ? usd(-m.maxDD) : '$0', tone: 'neg' },
-            { label: '% of peak', value: `${m.maxDDpct.toFixed(1)}%` },
+            { label: '% of peak', value: m.maxDDpct != null ? `${m.maxDDpct.toFixed(1)}%` : '—' },
+            // A170: ddPeakIdx/ddTroughIdx are curve indices (curve[k] = equity after trade k;
+            // index 0 is the pre-trade origin) — surface the span the duration is counted over.
+            {
+              label: 'Peak → trough',
+              value:
+                m.ddPeakIdx != null && m.ddTroughIdx != null
+                  ? `${m.ddPeakIdx === 0 ? 'inception' : `trade ${m.ddPeakIdx}`} → trade ${m.ddTroughIdx}`
+                  : '—',
+            },
             { label: 'Duration', value: `${m.maxDDdur} trades` },
             { label: 'Recovery factor', value: ratio(m.recovery) },
           ],
@@ -406,11 +432,14 @@
 
   // Dashboard modules (Break-even & Cost + Advanced Statistics) — reuse the cost waterfall + the
   // Analytics advanced-stats grid so the dashboard cards match their full-screen counterparts.
+  // A171: roots priced off the fallback per-side rate get an asterisk + footnote so estimated
+  // commissions are distinguishable from fee-table rates.
+  const dashEstRoots = $derived(estimatedCommRoots(dash.cost));
   const dashCostRows = $derived.by(() => {
     const c = dash.cost;
     return [
       { label: 'Gross P&L', value: usd(c.gross), tone: tone(c.gross) },
-      { label: 'Commissions (all-in)', value: usd(-c.totalComm), tone: 'neg' as const },
+      { label: `Commissions (all-in)${dashEstRoots.length ? ' *' : ''}`, value: usd(-c.totalComm), tone: 'neg' as const },
       { label: `Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, value: usd(-c.fixedPeriod), tone: 'neg' as const },
       { label: 'Est. 1256 tax', value: usd(-c.tax), tone: 'neg' as const },
       { label: 'Take-home', value: usd(c.afterTax), tone: tone(c.afterTax), total: true },
@@ -559,6 +588,8 @@
         from: '',
         to: '',
         estimatedRoots: [],
+        skippedFills: 0,
+        openLots: 0,
         sample: [],
         error: r.ok ? 'No completed trades found.' : r.error,
       };
@@ -582,6 +613,8 @@
       from: trades[0]?.date ?? '',
       to: trades[trades.length - 1]?.date ?? '',
       estimatedRoots: r.estimatedRoots ?? [],
+      skippedFills: r.skippedFills ?? 0,
+      openLots: r.openLots ?? 0,
       sample,
     };
   }
@@ -719,6 +752,7 @@
           {filterModel}
           onpickdate={(y, m) => dash.setCal(y, m)}
           costRows={dashCostRows}
+          estRoots={dashEstRoots}
           advStats={dashAdvStats}
           setup={dash.setup}
           onsetupsave={s => dash.saveSetup(s)}
@@ -751,11 +785,13 @@
             dist={analytics.dist}
             wins={analytics.wins}
             losses={analytics.losses}
+            scratch={analytics.scratch}
             curve={dash.metricsActive.curve}
             maxDD={dash.metricsActive.maxDD}
             maxDDpct={dash.metricsActive.maxDDpct}
             long={analytics.long}
             short={analytics.short}
+            unknownSide={analytics.unknownSide}
             hours={analytics.hours}
             wdays={analytics.wdays}
             symbols={analytics.symbols}

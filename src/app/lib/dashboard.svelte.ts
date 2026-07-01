@@ -188,7 +188,9 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
       root: Adapters.rootSym(r.symbol),
       symbol: r.symbol,
       side: r.side === 'Short' ? 'short' : 'long',
-      qty: r.qty,
+      // A173: qty is a contract count — clamp to a positive integer at the persistence seam too
+      // (a negative qty turns commissions into a credit in costModel).
+      qty: Math.max(1, Math.round(Math.abs(Number(r.qty) || 1))),
       pnl: r.pnl,
       dup: 0,
     };

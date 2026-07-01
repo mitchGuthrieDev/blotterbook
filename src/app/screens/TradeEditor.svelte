@@ -107,7 +107,11 @@
     draft = draft.map(r => (r.id === id ? { ...r, [field]: v } : r));
   }
   function setNum(id: string, field: 'qty' | 'entry' | 'exit' | 'pnl' | 'fees', v: number) {
-    draft = draft.map(r => (r.id === id ? { ...r, [field]: Number.isNaN(v) ? 0 : v } : r));
+    let val = Number.isNaN(v) ? 0 : v;
+    // A173: qty is a contract COUNT — a negative qty flips commissions into a credit downstream
+    // and 0 silently bills as 1. Clamp to a positive integer at the input seam (adapters Math.abs too).
+    if (field === 'qty') val = Math.max(1, Math.round(Math.abs(val)) || 1);
+    draft = draft.map(r => (r.id === id ? { ...r, [field]: val } : r));
   }
   function toggleSide(id: string) {
     if (!canEdit('side')) return;

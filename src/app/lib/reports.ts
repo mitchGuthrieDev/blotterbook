@@ -3,9 +3,21 @@
 // (KPIs with optional prior-period comparison, equity curve, calendar, cost / tax / advanced tables)
 // plus the export payloads (Markdown / text / mailto) via the shared report.ts builder (A34). Pure: no
 // runes, no DOM — the staging shell calls it from a $derived and the /dev preview falls back to mocks.
-import { compute, costModel, usd, money, num, ratio, fmtDate, tone, MONTH_NAMES, type Metrics } from '../../lib/core/core.ts';
+import {
+  compute,
+  costModel,
+  estimatedCommRoots,
+  usd,
+  money,
+  num,
+  ratio,
+  fmtDate,
+  tone,
+  MONTH_NAMES,
+  type Metrics,
+} from '../../lib/core/core.ts';
 import { buildReport } from '../../lib/core/report.ts';
-import type { Trade, CostInputs, ReportLabels, ReportSections } from '../../lib/core/types.ts';
+import type { Trade, CostInputs, CostModel, ReportLabels, ReportSections } from '../../lib/core/types.ts';
 
 export type { ReportSections };
 /** The user-configured export meta (A156) — threads into the text/Markdown/mailto payloads. */
@@ -19,6 +31,8 @@ export type ReportVM = {
   calDaysInMonth: number;
   calMonthLabel: string;
   costRows: [string, string, boolean][];
+  /** Fallback-rate footnote for the cost table — set when any root prices off the estimated rate (A171). */
+  commNote: string | null;
   taxRows: [string, string, boolean][];
   advRows: [string, string][];
   rangeLabel: string;
@@ -42,13 +56,18 @@ function bounds(r: ReportRange): { from: string; to: string; label: string } {
 const inRange = (t: Trade, from: string, to: string) => (!from || t.date >= from) && (!to || t.date <= to);
 
 // The equal-length window immediately before [from,to]; null for open-ended ranges.
+// A169: CALENDAR arithmetic (setDate is DST-safe), not epoch math — subtracting 86400000ms across
+// the 23-hour spring-forward day landed the window start at 23:00 of the previous day, silently
+// extending the prior period by one day for US-timezone users.
 function priorBounds(from: string, to: string): { from: string; to: string } | null {
   if (!from || !to) return null;
   const a = new Date(from + 'T00:00:00'),
     b = new Date(to + 'T00:00:00');
-  const days = Math.round((b.getTime() - a.getTime()) / 86400000) + 1;
-  const pb = new Date(a.getTime() - 86400000);
-  const pa = new Date(pb.getTime() - (days - 1) * 86400000);
+  const days = Math.round((b.getTime() - a.getTime()) / 86400000) + 1; // Math.round absorbs the ±1h
+  const pb = new Date(a);
+  pb.setDate(pb.getDate() - 1); // day before `from`
+  const pa = new Date(pb);
+  pa.setDate(pa.getDate() - (days - 1));
   return { from: fmtDate(pa), to: fmtDate(pb) };
 }
 
@@ -65,15 +84,28 @@ export function buildReportVM(
   const m = compute(slice);
   const c = costModel(m, costInputs);
 
-  // Prior-period comparison.
-  const pb = compare ? priorBounds(from || m.firstDate, to || m.lastDate) : null;
+  // Prior-period comparison. A172: the cost-adjusted KPIs compare like-for-like, so the prior
+  // window runs through costModel too (same setup inputs; months accrue over the prior span).
+  // A174: a month scope compares against the previous CALENDAR month ("March 2026" vs February),
+  // not a rolling equal-length window that would start Jan 29.
+  const pb = compare
+    ? range.scope === 'month'
+      ? { from: fmtDate(new Date(range.calYear, range.calMonth - 1, 1)), to: fmtDate(new Date(range.calYear, range.calMonth, 0)) }
+      : priorBounds(from || m.firstDate, to || m.lastDate)
+    : null;
   const mp: Metrics | null = pb ? compute(allTrades.filter(t => inRange(t, pb.from, pb.to))) : null;
+  const cp: CostModel | null = mp && mp.n ? costModel(mp, costInputs) : null;
   const prior = (fn: (x: Metrics) => string) => (mp && mp.n ? fn(mp) : undefined);
+  const priorC = (fn: (x: CostModel) => string) => (cp ? fn(cp) : undefined);
 
+  // A172: one basis per label — the preview KPI strip shows the SAME numbers as the export headline
+  // (net-of-costs netPreTax, commission-adjusted PF), with the basis in the label. Gross P&L lives
+  // in the cost table below; the dashboard's gross 'Net P&L'/'Profit factor' cards are a different
+  // surface with their own disclosed basis.
   const kpis: ReportKpi[] = [
-    { label: 'Net P&L', value: usd(m.net), prior: prior(x => usd(x.net)), tone: tone(m.net) },
+    { label: 'Net P&L (pre-tax)', value: usd(c.netPreTax), prior: priorC(x => usd(x.netPreTax)), tone: tone(c.netPreTax) },
     { label: 'Win rate', value: `${m.winRate.toFixed(1)}%`, prior: prior(x => `${x.winRate.toFixed(1)}%`) },
-    { label: 'Profit factor', value: ratio(m.pf), prior: prior(x => ratio(x.pf)) },
+    { label: 'Profit factor (net of comm.)', value: ratio(c.pf), prior: priorC(x => ratio(x.pf)) },
     { label: 'Expectancy', value: usd(m.expectancy), prior: prior(x => usd(x.expectancy)), tone: tone(m.expectancy) },
     { label: 'Trades', value: `${m.n}`, prior: prior(x => `${x.n}`) },
     {
@@ -95,14 +127,17 @@ export function buildReportVM(
   }
 
   const totalCost = c.totalComm + c.fixedPeriod;
+  const estRoots = estimatedCommRoots(c);
   const costRows: [string, string, boolean][] = [
     ['Gross P&L', usd(c.gross), false],
-    ['Commissions (all-in)', usd(-c.totalComm), false],
+    [`Commissions (all-in)${estRoots.length ? ' *' : ''}`, usd(-c.totalComm), false],
     [`Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, usd(-c.fixedPeriod), false],
     ['Total costs', usd(-totalCost), true],
   ];
+  // A172: 'Net P&L (pre-tax)', not 'Net §1256 gain' — the base is net of subscriptions, which don't
+  // reduce a §1256 gain for a non-TTS filer (the modeling choice is documented in Definitions).
   const taxRows: [string, string, boolean][] = [
-    ['Net §1256 gain (pre-tax)', usd(c.netPreTax), false],
+    ['Net P&L (pre-tax)', usd(c.netPreTax), false],
     ['Blended 1256 rate', `${(c.tEff * 100).toFixed(1)}%`, false],
     ['Est. 1256 tax (profit only)', usd(-c.tax), false],
     ['Est. take-home', usd(c.afterTax), true],
@@ -132,6 +167,7 @@ export function buildReportVM(
     calDaysInMonth: new Date(cy, cm + 1, 0).getDate(),
     calMonthLabel: `${MONTH_NAMES[cm]} ${cy}`,
     costRows,
+    commNote: estRoots.length ? `* Commission rate estimated for ${estRoots.join(', ')} — root not in the fee table.` : null,
     taxRows,
     advRows,
     rangeLabel: label,

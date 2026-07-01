@@ -32,8 +32,10 @@ export function minMax(arr: number[]) {
   }
   return { lo, hi };
 }
-// Positive/negative P&L classifier — shared by the dashboard/analytics/reports view-models for coloring.
-export const tone = (n: number): 'pos' | 'neg' => (n >= 0 ? 'pos' : 'neg');
+// Positive/negative P&L classifier — shared by the dashboard/analytics/reports view-models for
+// coloring. A170: exactly-zero (within a cent — float residue) is NEITHER: undefined renders the
+// neutral treatment, so a $0.00 KPI isn't green (mirrors cls()'s '' at 0).
+export const tone = (n: number): 'pos' | 'neg' | undefined => (Math.abs(n) < 0.005 ? undefined : n > 0 ? 'pos' : 'neg');
 // Full month names, index 0 = January — shared by the App dashboard + the reports view-model.
 export const MONTH_NAMES = [
   'January',
@@ -124,10 +126,12 @@ export function compute(tr: Trade[]) {
   const net = pnls.reduce((a, b) => a + b, 0);
   const gp = wins.reduce((a, b) => a + b, 0),
     gl = losses.reduce((a, b) => a + b, 0);
-  const pf = gl !== 0 ? gp / Math.abs(gl) : Infinity;
+  // A170: align the degenerate convention with costModel's guard — no losses AND no wins (empty or
+  // all-scratch, e.g. an untraded month scope) is undefined ('—' via ratio()), not '∞'.
+  const pf = gl !== 0 ? gp / Math.abs(gl) : gp > 0 ? Infinity : NaN;
   const avgW = wins.length ? gp / wins.length : 0;
   const avgL = losses.length ? gl / losses.length : 0;
-  const wl = losses.length ? avgW / Math.abs(avgL) : Infinity;
+  const wl = losses.length ? avgW / Math.abs(avgL) : wins.length ? Infinity : NaN;
   // equity curve + REALIZED max drawdown: walk closed-trade PnL, track running peak and the largest peak-to-trough drop
   // Track best/worst here (running, not Math.max(...pnls) — spreading a large array as
   // args overflows the call stack on big fills exports, blanking the whole dashboard).
@@ -170,15 +174,22 @@ export function compute(tr: Trade[]) {
     if (p > best) best = p;
     if (p < worst) worst = p;
   });
-  const maxDDpct = ddPeakVal > 0 ? (maxDD / ddPeakVal) * 100 : 0; // peak-relative; 0 if peak never went positive
-  const maxDDdur = maxDD > 0 ? ddEnd - ddStart : 0; // trades from peak to trough
+  // A170: when a real drawdown has NO positive prior peak (equity never above 0 — an inception
+  // drawdown), the peak-relative % is undefined → null ('—'), not a wrong-looking 0.0%.
+  const maxDDpct = ddPeakVal > 0 ? (maxDD / ddPeakVal) * 100 : maxDD > 0 ? null : 0;
+  // A170: duration from the CURVE indices (curve[0] is the pre-trade origin), which count the
+  // inception case correctly — ddEnd−ddStart was off by one there (peakIdx starts at trade 0).
+  const maxDDdur = maxDD > 0 ? ddTroughCurveIdx - ddPeakCurveIdx : 0;
   // F15: profit concentration — % of total NET profit delivered by the 5 biggest winners. A high
   // figure (or >100%, meaning the rest nets negative) flags reliance on a handful of outlier trades.
   const top5Win = [...wins]
     .sort((a, b) => b - a)
     .slice(0, 5)
     .reduce((a, b) => a + b, 0);
-  const concPct = net > 0 ? (top5Win / net) * 100 : null; // null when there's no net profit to concentrate
+  // A170: gate on the CENT-ROUNDED net — raw float dust (e.g. +0.1+0.2−0.3 → 5.6e-17) used to
+  // pass `> 0` and render an astronomical percentage.
+  const netC = Math.round(net * 100) / 100;
+  const concPct = netC > 0 ? (top5Win / netC) * 100 : null; // null when there's no net profit to concentrate
   const dayMap = new Map<string, number[]>();
   for (const t of tr) {
     let arr = dayMap.get(t.date);
@@ -232,7 +243,9 @@ export function compute(tr: Trade[]) {
   // F15: Sortino — same daily mean over the DOWNSIDE deviation only (population RMS of negative days,
   // target 0). Penalizes losing-day volatility, not the upside swings Sharpe also punishes.
   const downside = Math.sqrt(dv.reduce((a, b) => a + Math.min(0, b) ** 2, 0) / (dv.length || 1));
-  const sortino = downside > 0 ? mean / downside : NaN;
+  // A170: no losing days + positive mean → ∞ (matching the pf convention) instead of a blank
+  // beside a valid Sharpe; no data / zero mean stays undefined ('—').
+  const sortino = downside > 0 ? mean / downside : mean > 0 ? Infinity : NaN;
   const months = new Set(tr.map(t => t.date.slice(0, 7))).size;
   // expectancy + per-trade dispersion
   const expectancy = n ? net / n : 0;
@@ -355,18 +368,23 @@ export function dowBuckets(trades: Trade[]) {
    ============================================================ */
 export const usd = (v: number, s = true) => {
   if (v === Infinity) return '∞';
+  if (Math.abs(v) < 0.005) v = 0; // A170: sub-cent float residue must not render a red "-$0.00"
   const sign = v < 0 ? '-' : s && v > 0 ? '+' : '';
   return sign + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 export const money = (v: number) => usd(v, false);
 // signed whole-dollar with thousands grouping: +$1,234 / -$56 / +$0. Compact money for tight UI slots
 // (calendar cells) where the full precision lives in a tooltip (A92 — shared so it can't drift).
-export const usdWhole = (v: number) => (v < 0 ? '-' : '+') + '$' + Math.abs(Math.round(v)).toLocaleString('en-US');
+// A170: sign taken from the ROUNDED value (usdWhole(-0.4) used to render '-$0').
+export const usdWhole = (v: number) => {
+  const r = Math.round(v);
+  return (r < 0 ? '-' : '+') + '$' + Math.abs(r).toLocaleString('en-US');
+};
 export const cls = (v: number) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
 // Ratio/number formatters shared by the Svelte overview / advanced-stats / stat-card modal so the
 // "∞ / —" handling can't drift between them.
 export const ratio = (v: number) => (v === Infinity ? '∞' : Number.isFinite(v) ? v.toFixed(2) : '—');
-export const num = (v: number) => (Number.isFinite(v) ? v.toFixed(2) : '—');
+export const num = (v: number) => (v === Infinity ? '∞' : Number.isFinite(v) ? v.toFixed(2) : '—'); // A170: ∞ renders ∞, like ratio()
 // Compact duration (ms → "45s" / "12m" / "3h 20m" / "2d 4h"), shared by the vanilla advanced-stats
 // hold-time row and the Svelte port (A29/A47) so the two read identically.
 export function fmtDur(ms: number) {
@@ -394,12 +412,15 @@ export function niceTicks(min: number, max: number, count: number) {
   for (let v = lo; v <= hi + step * 1e-6; v += step) ticks.push(+v.toFixed(6));
   return ticks;
 }
-/* compact money for axis labels: $1.2k / $850 / -$3.4k */
+/* compact money for axis labels: $1.2k / $850 / -$3.4k / $1.5M.
+   A174: tier off the ROUNDED value (999.5 used to render "$1000" beside "$1.0k") + an M tier
+   (1.5e6 used to render "$1500k"). */
 export function axMoney(v: number) {
-  const a = Math.abs(v),
+  const a = Math.round(Math.abs(v)),
     s = v < 0 ? '-' : '';
+  if (a >= 1e6) return s + '$' + (a / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M';
   if (a >= 1000) return s + '$' + (a / 1000).toFixed(a >= 10000 ? 0 : 1) + 'k';
-  return s + '$' + Math.round(a);
+  return s + '$' + a;
 }
 /* SVG polyline path ("M…L…L…") from a series of y-values, given index→x and value→y scales. Shared by
    the equity curve and the stat-card mini-charts (A92) so their geometry can't drift. */
@@ -450,6 +471,7 @@ export function monthCells(firstDow: number, daysInMonth: number): (number | nul
    Populated before any setup/render runs, so call-time access is safe. */
 export let EXCH: Record<string, number> = {}; // root -> exchange/clearing/NFA $ per side
 export let MICRO = new Set<string>(); // roots priced at the micro tier
+export let NOT_MICRO = new Set<string>(); // full-size roots the M-prefix heuristic would misprice (A171)
 export let EXCH_FALLBACK = { micro: 0.37, std: 1.5 };
 export let BROKERS: Record<string, Broker> = {}; // key -> {name, comm:{micro,std}}
 export let BROKER_ORDER: string[] = [];
@@ -458,7 +480,11 @@ export let STATES: StateRow[] = []; // [abbr, ratePct, name]
 export let TAXMODEL: TaxModel = { fedOrdinary: 24, ltcg: 15, ltcgWeight: 0.6, ordinaryWeight: 0.4 };
 
 export function tierOf(root: string): 'micro' | 'std' {
-  if (EXCH[root] != null) return MICRO.has(root) ? 'micro' : 'std';
+  // A171: the explicit micro list wins regardless of fee-table membership (SIL/2YY/10Y/30Y don't
+  // start with M); any other root with a known fee — or on the explicit notMicro list (MWE) — is
+  // standard. The M-prefix heuristic survives only as a last resort for unknown roots.
+  if (MICRO.has(root)) return 'micro';
+  if (EXCH[root] != null || NOT_MICRO.has(root)) return 'std';
   return root[0] === 'M' && root.length >= 3 ? 'micro' : 'std';
 }
 export function exchOf(root: string, tier: 'micro' | 'std') {
@@ -496,6 +522,7 @@ export async function loadRefData() {
 
   EXCH = exch.exchange || {};
   MICRO = new Set(exch.micro || []);
+  NOT_MICRO = new Set(exch.notMicro || []);
   EXCH_FALLBACK = exch.fallback || EXCH_FALLBACK;
 
   BROKERS = brokers.brokers || {};
@@ -555,7 +582,9 @@ export function spanMonths(first?: string, last?: string): number {
   if (!first || first === '—' || !last || last === '—') return 0;
   const [fy, fm] = first.slice(0, 7).split('-').map(Number);
   const [ly, lm] = last.slice(0, 7).split('-').map(Number);
-  return (ly - fy) * 12 + (lm - fm) + 1;
+  // A173: clamp — reversed inputs (last < first) used to return a NEGATIVE month count, turning
+  // the subscription accrual into a credit. Both dates present spans at least one month.
+  return Math.max(1, (ly - fy) * 12 + (lm - fm) + 1);
 }
 
 export function costModel(m: Metrics, inputs: CostInputs = {}): CostModel {
@@ -596,7 +625,9 @@ export function costModel(m: Metrics, inputs: CostInputs = {}): CostModel {
   const tEff = blendedRateFor(inputs.stateRate);
   const tax = netPreTax > 0 ? netPreTax * tEff : 0;
   const afterTax = netPreTax - tax;
-  const pf = gl !== 0 ? gp / Math.abs(gl) : gp > 0 ? Infinity : 0;
+  // A170: same degenerate convention as compute()'s pf — no wins and no losses is undefined
+  // (NaN → '—' via ratio()), not 0.00; the two PF figures must agree on the empty set.
+  const pf = gl !== 0 ? gp / Math.abs(gl) : gp > 0 ? Infinity : NaN;
   const contracts = trades.reduce((a, t) => a + (t.qty || 1), 0);
   return {
     broker,
@@ -620,3 +651,7 @@ export function costModel(m: Metrics, inputs: CostInputs = {}): CostModel {
     bySym: [...bySym.values()].sort((a, b) => b.total - a.total),
   };
 }
+
+// A171: roots whose commission uses the FALLBACK per-side rate (root not in the fee table) — the
+// UI marks these with an asterisk so estimated commissions aren't indistinguishable from table rates.
+export const estimatedCommRoots = (c: CostModel): string[] => c.bySym.filter(s => !s.known).map(s => s.root);

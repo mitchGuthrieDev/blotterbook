@@ -23,6 +23,10 @@
     from: string;
     to: string;
     estimatedRoots: string[];
+    /** Fills skipped for an unparseable timestamp (A168) / lots left open at end-of-file (A174) —
+     *  import-quality notices from ParseResult; 0 = nothing to report. */
+    skippedFills: number;
+    openLots: number;
     sample: { time: string; sym: string; side: string; qty: number; pnl: number; up: boolean }[];
     error?: string;
   };
@@ -514,6 +518,21 @@
               >{preview.estimatedRoots.length} symbol{preview.estimatedRoots.length === 1 ? '' : 's'} ({preview.estimatedRoots.join(', ')})
               have no contract size on file — their P&L was estimated at $1/point. Double-check before importing.</span
             >
+          </div>
+        {/if}
+        {#if preview.skippedFills > 0 || preview.openLots > 0}
+          <div class="flex items-start gap-2 rounded-md border border-chart-4/40 bg-chart-4/10 px-3 py-2 text-xs text-muted-foreground">
+            <TriangleAlert class="size-4 shrink-0 text-chart-4" />
+            <span>
+              {#if preview.skippedFills > 0}
+                {preview.skippedFills} fill{preview.skippedFills === 1 ? '' : 's'} skipped (unreadable timestamp) — the affected round trips are
+                missing from the import.
+              {/if}
+              {#if preview.openLots > 0}
+                {preview.openLots} position{preview.openLots === 1 ? '' : 's'} still open at the end of the file (or the export was truncated)
+                — open lots aren't imported; re-export after they close.
+              {/if}
+            </span>
           </div>
         {/if}
       {/if}

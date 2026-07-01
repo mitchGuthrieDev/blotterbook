@@ -68,6 +68,10 @@ export interface ParseResult {
   error?: string;
   /** Roots whose PnL was estimated at $1/point (no known contract size) — surfaced as a warning (A113). */
   estimatedRoots?: string[];
+  /** Fills skipped for an unparseable timestamp (fills-based adapters) — import-quality notice (A168). */
+  skippedFills?: number;
+  /** Lots left open at end-of-file (truncated export / open position) — import-quality notice (A174). */
+  openLots?: number;
 }
 
 /** A platform CSV adapter (one per supported export format). */
@@ -249,6 +253,8 @@ export interface ExchangeFeesFile {
   schemaVersion?: number;
   exchange?: Record<string, number>;
   micro?: string[];
+  /** Full-size roots the M-prefix tier heuristic would misprice as micro (e.g. MWE) — A171. */
+  notMicro?: string[];
   fallback?: { micro: number; std: number };
 }
 

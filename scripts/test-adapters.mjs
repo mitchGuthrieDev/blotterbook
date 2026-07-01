@@ -259,5 +259,62 @@ ok('empty file', !A.parse('').ok);
 ok('garbage', !A.parse('foo,bar,baz\n1,2,3').ok);
 ok('explicit platform mismatch returns no trades', !A.parse(C.webull, 'tradingview').ok);
 
+console.log('\nA168 input-tolerance hardening:');
+// (1) Semicolon-delimited (EU-Excel re-save) parses CORRECTLY — used to import pnl = 2026 (the year).
+const semi = `Time;Action;Realized PnL (value)
+2026-06-02 10:00:00;Close long position for symbol MESM2025 at price 5310.00;50,00
+2026-06-03 11:00:00;Close short position for symbol MNQM2025 at price 18000.00;-20,00`;
+const rsemi = A.parse(semi);
+ok(
+  'semicolon CSV parses with the real PnL (50 / -20), not the year',
+  rsemi.ok && rsemi.trades.length === 2 && approx(rsemi.trades[0].pnl, 50) && approx(rsemi.trades[1].pnl, -20),
+  JSON.stringify((rsemi.trades || []).map(t => t.pnl))
+);
+// (2) A stray d/m-looking fragment inside a NOTE cell must not re-date the file (anchored detection).
+const poison = `Time,Action,Realized PnL (value)
+06/02/2026 10:00:00,"Close long position for symbol MESM2025 at price 5310.00 note 14/3/2026",50.00`;
+const rpoison = A.parse(poison);
+ok(
+  'date-order detection ignores non-date cells (06/02 stays Jun 2)',
+  rpoison.ok && rpoison.trades[0].date === '2026-06-02',
+  rpoison.trades && rpoison.trades[0].date
+);
+// (3) IBKR-style quoted "YYYY-MM-DD, HH:MM:SS" keeps its time.
+ok(
+  'ISO datetime with comma separator keeps the time',
+  A.normTime('2026-06-02, 09:31:00') === '2026-06-02 09:31:00',
+  A.normTime('2026-06-02, 09:31:00')
+);
+// (4) A fill with a garbage timestamp is SKIPPED (counted), not allowed to corrupt FIFO / vanish P&L.
+const badFill = `orderId,Account,B/S,Contract,Product,filledQty,Fill Time,Avg Fill Price
+1,DEMO,Buy,MESM2025,MES,1,20260602;093000,5300.00
+2,DEMO,Sell,MESM2025,MES,1,2026-06-02 09:45:00,5310.00`;
+const rbad = A.parse(badFill);
+ok(
+  'garbage-time fill is skipped and reported',
+  rbad.ok === false || (rbad.skippedFills === 1 && !(rbad.trades || []).some(t => isNaN(t.holdMs ?? 0))),
+  JSON.stringify({ ok: rbad.ok, skipped: rbad.skippedFills, n: (rbad.trades || []).length })
+);
+// (5) Suffixed / service-prefixed symbologies resolve to the real root.
+ok(
+  'rootSym strips venue suffixes + service prefixes',
+  A.rootSym('ESM25-CME') === 'ES' && A.rootSym('MESM25.CME') === 'MES' && A.rootSym('F.US.MESM25') === 'MES',
+  [A.rootSym('ESM25-CME'), A.rootSym('MESM25.CME'), A.rootSym('F.US.MESM25')].join('|')
+);
+// (6) Impossible calendar dates are rejected by the range-checked gate.
+const badDate = `Time,Action,Realized PnL (value)
+31/31/2026 10:00:00,"Close long position for symbol MESM2025 at price 5310.00",50.00`;
+ok('impossible date (month 31) yields no trades', !A.parse(badDate).ok);
+// (7) Dangling open lots are counted into the openLots notice.
+const dangling = `orderId,Account,B/S,Contract,Product,filledQty,Fill Time,Avg Fill Price
+1,DEMO,Buy,MESM2025,MES,2,2026-06-02 09:31:00,5300.00
+2,DEMO,Sell,MESM2025,MES,1,2026-06-02 09:45:00,5310.00`;
+const rdang = A.parse(dangling);
+ok(
+  'dangling open lot reported via openLots',
+  rdang.ok && rdang.openLots === 1 && rdang.trades.length === 1,
+  JSON.stringify({ open: rdang.openLots, n: (rdang.trades || []).length })
+);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

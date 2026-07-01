@@ -17,8 +17,13 @@ export interface AnalyticsVM {
   dist: DistBar[];
   wins: number;
   losses: number;
+  /** Scratch ($0) trades — excluded from the histogram and the W/L bar; footnoted (A174). */
+  scratch: number;
   long: { pnl: number; n: number };
   short: { pnl: number; n: number };
+  /** Trades with no side info (side neither long nor short) — excluded from the long/short split,
+   *  surfaced as a footnote so the split's total visibly reconciles with the trade count (A170). */
+  unknownSide: number;
   hours: SignedBar[];
   wdays: SignedBar[];
   symbols: SymbolRow[];
@@ -28,11 +33,15 @@ export interface AnalyticsVM {
 }
 
 // Symmetric per-trade P&L histogram. Edges in dollars; the outer buckets catch the tails.
+// A174: scratches (exactly $0) are EXCLUDED — a $0 trade is neither a green '0..50' win nor a red
+// loss (the W/L bar beside the chart excludes them too); the VM carries the count for a footnote.
+// Buckets are half-open [a, b): -200 lands in '-200..-100' and 200 in the top bucket ('≥200').
 const EDGES = [-200, -100, -50, 0, 50, 100, 200];
 function histogram(pnls: number[]): DistBar[] {
-  const labels = ['<-200', '-200..-100', '-100..-50', '-50..0', '0..50', '50..100', '100..200', '>200'];
+  const labels = ['<-200', '-200..-100', '-100..-50', '-50..0', '0..50', '50..100', '100..200', '≥200'];
   const counts = new Array(labels.length).fill(0);
   for (const p of pnls) {
+    if (p === 0) continue;
     let b = EDGES.findIndex(e => p < e);
     if (b === -1) b = EDGES.length; // ≥ last edge → top bucket
     counts[b]++;
@@ -140,8 +149,10 @@ export function buildAnalytics(m: Metrics, trades: Trade[], tagsFor: (t: Trade) 
     dist: histogram(m.pnls),
     wins: m.wins,
     losses: m.losses,
+    scratch: m.scratch,
     long: { pnl: m.long.pnl, n: m.long.n },
     short: { pnl: m.short.pnl, n: m.short.n },
+    unknownSide: m.n - m.long.n - m.short.n,
     hours,
     wdays,
     symbols,

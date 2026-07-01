@@ -24,11 +24,19 @@ import type { Trade, Fill, Row, Adapter, Detected, ParseResult } from './types.t
    ============================================================ */
 
 /* ---------- low-level CSV ---------- */
-// Quote-aware splitter; auto-detects comma vs tab (Sierra Chart uses tabs).
+// Quote-aware splitter; auto-detects comma vs tab vs semicolon (Sierra Chart uses tabs; an
+// EU-locale Excel re-save emits semicolons — A168: a ';' file used to collapse each line into one
+// cell and import with pnl = the year, silently).
 function parseCSV(text: string, delim?: string): Row[] {
   if (delim == null) {
     const firstLine = text.slice(0, text.indexOf('\n') < 0 ? text.length : text.indexOf('\n'));
-    delim = firstLine.split('\t').length > firstLine.split(',').length ? '\t' : ',';
+    const counts: Array<[string, number]> = [
+      ['\t', firstLine.split('\t').length],
+      [';', firstLine.split(';').length],
+      [',', firstLine.split(',').length],
+    ];
+    counts.sort((a, b) => b[1] - a[1]);
+    delim = counts[0][1] > 1 ? counts[0][0] : ',';
   }
   const rows: Row[] = [];
   let i = 0,
@@ -69,10 +77,14 @@ function parseCSV(text: string, delim?: string): Row[] {
 }
 
 /* ---------- helpers ---------- */
-// Futures root: MESM2025 → MES, M2KZ2025 → M2K, MES1! → MES, CME_MINI:ES1! → ES
+// Futures root: MESM2025 → MES, M2KZ2025 → M2K, MES1! → MES, CME_MINI:ES1! → ES,
+// F.US.MESM25 → MES, ESM25-CME / MESM25.CME → ES / MES (A168: service prefixes + venue suffixes
+// used to defeat the month-code strip → $1/pt fallback point value and a wrong commission tier).
 function rootSym(s: string) {
   if (!s) return '?';
   s = s.toUpperCase().trim().replace(/^.*:/, '').replace(/^\//, ''); // drop exchange prefix and thinkorswim "/" futures marker
+  s = s.replace(/^F\.[A-Z]{2}\./, ''); // CQG/Sierra service prefix (F.US.MESM25)
+  s = s.replace(/[-.](CME|CBOT|CBT|NYMEX|NYM|COMEX|CMX|GLOBEX|CEC|FUT)$/, ''); // venue suffixes
   s = s.replace(/[FGHJKMNQUVXZ]\d{1,4}$/, '').replace(/\d*!$/, '');
   s = s.replace(/[^A-Z0-9._-]/g, ''); // restrict to a safe symbol charset so a crafted CSV symbol can't inject HTML downstream
   return s || '?';
@@ -84,7 +96,15 @@ function num(x: unknown): number {
   let s = String(x).trim();
   if (!s) return NaN;
   const neg = /^\(.*\)$/.test(s); // accounting-style negatives
-  s = s.replace(/[()$\s]/g, ''); // strip parens, $, and any whitespace (incl. NBSP)
+  s = s.replace(/[()$\s]/g, '').replace(/−/g, '-'); // strip parens/$/whitespace; Unicode minus → ASCII (A174)
+  // A174: trailing-minus exports ("123.45-") — carry the sign to the front instead of silently
+  // dropping it (parseFloat stops at a trailing '-', flipping a loss into a gain).
+  if (/^[^-]+-$/.test(s)) s = '-' + s.slice(0, -1);
+  // A174: scientific notation parses as such — "1e3" used to read as 13 once the 'e' was stripped.
+  if (/^[-+]?\d+(?:\.\d+)?[eE][-+]?\d+$/.test(s)) {
+    const sci = Number(s);
+    return isNaN(sci) ? NaN : neg ? -Math.abs(sci) : sci;
+  }
   // Decide thousands vs decimal separators, supporting BOTH US (1,234.50) and EU (1.234,50):
   const hasDot = s.indexOf('.') >= 0,
     hasComma = s.indexOf(',') >= 0;
@@ -101,7 +121,10 @@ function num(x: unknown): number {
     const parts = s.split(',');
     s = parts.length === 2 && parts[1].length !== 3 ? parts[0] + '.' + parts[1] : s.replace(/,/g, '');
   } else if (hasDot) {
-    // only dots: if more than one, the last is the decimal point and the rest group thousands
+    // only dots: if more than one, the last is the decimal point and the rest group thousands.
+    // KNOWN LIMITATION (B24 mirror, A174): a lone dot with exactly 3 decimals ("1.234") is ambiguous
+    // with EU dot-thousands (= 1234) and is read as a US decimal by design — the exact inverse of the
+    // comma rule above, and the right call for the same reason (US exports dominate).
     const i = s.lastIndexOf('.');
     if (s.indexOf('.') !== i) s = s.slice(0, i).replace(/\./g, '') + '.' + s.slice(i + 1);
   }
@@ -115,18 +138,23 @@ function num(x: unknown): number {
 // (used by standalone normTime callers/tests). This prevents one file from mixing M/D/Y and D/M/Y
 // rows just because only some days happen to exceed 12.
 let DATE_ORDER: 'auto' | 'mdy' | 'dmy' = 'auto';
-function detectDateOrder(text: string): 'auto' | 'mdy' | 'dmy' {
-  const re = /\b(\d{1,2})\/(\d{1,2})\/\d{2,4}\b/g;
-  let m,
-    dayFirst = false,
+function detectDateOrder(rows: Row[]): 'auto' | 'mdy' | 'dmy' {
+  // A168: decide from cells that ARE dates (anchored full-cell match), not from any fragment
+  // anywhere in the raw text — a stray "14/3/2026" inside a note/description cell used to
+  // silently re-date the entire import.
+  const re = /^(\d{1,2})\/(\d{1,2})\/\d{2,4}(?:[ ,T].*)?$/;
+  let dayFirst = false,
     monthFirst = false;
-  while ((m = re.exec(text))) {
-    const a = +m[1],
-      b = +m[2];
-    if (a > 12 && b <= 12)
-      dayFirst = true; // field-1 can't be a month → D/M/Y
-    else if (b > 12 && a <= 12) monthFirst = true; // field-2 can't be a month → M/D/Y
-  }
+  for (const row of rows)
+    for (const cell of row) {
+      const m = re.exec(String(cell).trim().replace(/^"|"$/g, ''));
+      if (!m) continue;
+      const a = +m[1],
+        b = +m[2];
+      if (a > 12 && b <= 12)
+        dayFirst = true; // field-1 can't be a month → D/M/Y
+      else if (b > 12 && a <= 12) monthFirst = true; // field-2 can't be a month → M/D/Y
+    }
   // If a file shows both, it's genuinely inconsistent — leave it to the per-row heuristic.
   return dayFirst && !monthFirst ? 'dmy' : monthFirst && !dayFirst ? 'mdy' : 'auto';
 }
@@ -135,7 +163,9 @@ function detectDateOrder(text: string): 'auto' | 'mdy' | 'dmy' {
 function normTime(s: unknown): string {
   if (!s) return '';
   let str = String(s).trim().replace(/^"|"$/g, '');
-  let m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  // A168: the separator set includes ',' — IBKR quotes "YYYY-MM-DD, HH:MM:SS", which used to lose
+  // its time (every fill at midnight → hold time and session analytics silently wrong).
+  let m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T,]\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
   if (m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])} ${pad2(m[4] || 0)}:${pad2(m[5] || 0)}:${pad2(m[6] || 0)}`;
   m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i);
   if (m) {
@@ -243,6 +273,12 @@ function pointValue(root: string) {
      A closing fill realizes PnL against the oldest open lots. PnL uses the fill's
      own `realized` (apportioned by matched qty) when the export provides it, else
      (exitPrice − entryPrice) × qty × pointValue(root). Output carries hold time. */
+// Import-quality counters surfaced through ParseResult (A168/A174): fills skipped for an
+// unparseable timestamp, and lots left open (dangling) at end-of-file. Module-level because
+// pairFills is called from inside the adapters' toTrades; parse() resets + reads them.
+let SKIPPED_FILLS = 0;
+let OPEN_LOTS = 0;
+
 function pairFills(fills: Fill[]): Trade[] {
   const bySym = new Map<string, Fill[]>();
   // Timestamps are second-resolution, so same-second fills can't be ordered by time alone — FIFO
@@ -259,6 +295,14 @@ function pairFills(fills: Fill[]): Trade[] {
   }
   fills.forEach((f, i) => {
     if (!f || !f.symbol || !f.side || !(f.qty > 0) || isNaN(f.price)) return;
+    // A168: a fill whose timestamp didn't normalize would corrupt the FIFO string-sort (garbage
+    // sorts after ISO → a later sell processes first, books a phantom short, and that round
+    // trip's P&L silently vanishes at the date gate) or escape as holdMs: NaN. Skip it and count
+    // it into the import warning instead.
+    if (!/^\d{4}-\d{2}-\d{2}/.test(f.time || '')) {
+      SKIPPED_FILLS++;
+      return;
+    }
     f._seq = desc ? fills.length - i : i; // stable, execution-order tiebreak within a second
     let bucket = bySym.get(f.symbol);
     if (!bucket) bySym.set(f.symbol, (bucket = []));
@@ -293,11 +337,29 @@ function pairFills(fills: Fill[]): Trade[] {
       // books its own price-based PnL.
       const useRealized = f.realized != null && closeQty > 0;
       const sumPriced = plan.reduce((a, p) => a + p.priced, 0);
-      for (const p of plan) {
-        let pnl;
-        if (useRealized)
-          pnl = Math.abs(sumPriced) > 1e-9 ? (f.realized as number) * (p.priced / sumPriced) : (f.realized as number) * (p.m / closeQty);
-        else pnl = p.priced;
+      const raw = plan.map(p =>
+        useRealized
+          ? Math.abs(sumPriced) > 1e-9
+            ? (f.realized as number) * (p.priced / sumPriced)
+            : (f.realized as number) * (p.m / closeQty)
+          : p.priced
+      );
+      // A174: largest-remainder cent allocation — rounding each lot's share independently could
+      // drop/gain a cent vs the broker's realized figure; nudge the lots with the largest rounding
+      // error until the cent totals sum EXACTLY to round2(f.realized).
+      const cents = raw.map(v => Math.round(v * 100));
+      if (useRealized && plan.length) {
+        let resid = Math.round((f.realized as number) * 100) - cents.reduce((a, b) => a + b, 0);
+        while (resid !== 0) {
+          const order = raw.map((v, i) => ({ i, err: v * 100 - cents[i] })).sort((a, b) => (resid > 0 ? b.err - a.err : a.err - b.err));
+          for (let k = 0; resid !== 0 && k < order.length; k++) {
+            cents[order[k].i] += resid > 0 ? 1 : -1;
+            resid += resid > 0 ? -1 : 1;
+          }
+        }
+      }
+      for (let j = 0; j < plan.length; j++) {
+        const p = plan[j];
         const t: Trade = {
           time: f.time,
           date: f.time.slice(0, 10),
@@ -305,7 +367,7 @@ function pairFills(fills: Fill[]): Trade[] {
           root,
           side: p.long ? 'long' : 'short',
           qty: p.m,
-          pnl: round2(pnl),
+          pnl: cents[j] / 100,
           entryTime: p.lot.time,
           exitTime: f.time,
           holdMs: Math.max(0, tms(f.time) - tms(p.lot.time)),
@@ -318,6 +380,7 @@ function pairFills(fills: Fill[]): Trade[] {
       const remaining = f.qty - closeQty;
       if (remaining > 1e-9) open.push({ dir, qty: remaining, price: f.price, time: f.time });
     }
+    OPEN_LOTS += open.length; // A174: dangling opens (truncated export / still-open position) — surfaced as a notice
   }
   trades.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
   return trades;
@@ -326,7 +389,19 @@ function pairFills(fills: Fill[]): Trade[] {
 /* ---------- header utilities ---------- */
 const lc = (a: Row) => a.map(h => String(h).trim().toLowerCase());
 const finder = (head: string[]) => (name: string) => head.findIndex(h => h.includes(name));
-const hasAny = (head: string[], names: string[]) => names.some(n => head.some(h => h.includes(n)));
+// A174: sniffing matches on WORD BOUNDARIES — bare substring matching let a 'Transaction' column
+// claim TradingView's 'action'. A name matches a cell only where it isn't embedded in a longer
+// alphanumeric run ('date/time' still matches 'time'; 'datetime' does not). Column lookup (finder)
+// stays substring — adapters name their own columns and rely on prefix matches.
+function cellHas(h: string, n: string): boolean {
+  for (let i = h.indexOf(n); i >= 0; i = h.indexOf(n, i + 1)) {
+    const before = i > 0 ? h[i - 1] : '';
+    const after = i + n.length < h.length ? h[i + n.length] : '';
+    if (!/[a-z0-9]/.test(before || ' ') && !/[a-z0-9]/.test(after || ' ')) return true;
+  }
+  return false;
+}
+const hasAny = (head: string[], names: string[]) => names.some(n => head.some(h => cellHas(h, n)));
 // first row index whose lowercased cells contain every substring in `names`
 function headerRow(rows: Row[], names: string[]) {
   for (let i = 0; i < Math.min(rows.length, 40); i++) {
@@ -357,6 +432,9 @@ const tradingview: Adapter = {
       cP = ix('realized pnl (value)') >= 0 ? ix('realized pnl (value)') : ix('realized pnl'),
       cA = ix('action');
     if (cT < 0 || cP < 0) throw new Error('missing Time or Realized PnL column');
+    // A168 belt-and-braces: if Time and PnL resolve to the SAME cell the delimiter was wrong
+    // (a one-column file) — refuse rather than extract the year as the P&L.
+    if (cT === cP) throw new Error('Time and Realized PnL resolve to the same column — wrong delimiter?');
     const out = [];
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r];
@@ -736,7 +814,9 @@ function parse(text: string, platformId?: string): ParseResult {
     return { ok: false, error: 'Could not read the file as CSV.' };
   }
   if (rows.length < 2) return { ok: false, error: 'The file has no data rows.' };
-  DATE_ORDER = detectDateOrder(text); // decide M/D/Y vs D/M/Y once for the whole file (B26)
+  DATE_ORDER = detectDateOrder(rows); // decide M/D/Y vs D/M/Y once for the whole file (B26; A168: from date cells only)
+  SKIPPED_FILLS = 0;
+  OPEN_LOTS = 0;
 
   let adapter: Adapter | undefined,
     detected = detect(text);
@@ -760,7 +840,10 @@ function parse(text: string, platformId?: string): ParseResult {
     return { ok: false, error: `Could not parse this file as ${adapter.label}: ${(e as Error).message}.`, platform: adapter.id };
   }
 
-  trades = (trades || []).filter(t => t && t.time && !isNaN(t.pnl) && t.date && /^\d{4}-\d{2}-\d{2}/.test(t.date));
+  // A168: range-checked date gate — "2026-31-31" used to pass the shape-only regex.
+  trades = (trades || []).filter(
+    t => t && t.time && !isNaN(t.pnl) && t.date && /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])/.test(t.date)
+  );
   if (!trades.length)
     return { ok: false, error: `No completed trades found in this file for the ${adapter.label} format.`, platform: adapter.id };
   trades.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
@@ -789,6 +872,9 @@ function parse(text: string, platformId?: string): ParseResult {
     kind: adapter.kind,
     detected: detected ? detected.id : null,
     ...(estimatedRoots.length ? { estimatedRoots } : {}),
+    // A168/A174 import-quality notices (fills-based adapters only; 0/absent for close-event exports).
+    ...(SKIPPED_FILLS ? { skippedFills: SKIPPED_FILLS } : {}),
+    ...(OPEN_LOTS ? { openLots: OPEN_LOTS } : {}),
   };
 }
 

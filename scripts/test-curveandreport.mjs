@@ -232,5 +232,75 @@ ok('isoWeek: 2019-12-30 (Mon) is week 1 of 2020', isoWeek(new Date(2019, 11, 30)
   );
 }
 
+// ── A171: commission-tier integrity — explicit micro list, notMicro backstop, fallback flag ──
+{
+  const { tierOf, rateFor } = await import('../src/lib/core/core.ts');
+  // Non-M-prefixed micros must price micro now that the explicit list wins.
+  for (const r of ['SIL', '2YY', '10Y', '30Y']) ok(`tierOf(${r}) === micro (explicit list)`, tierOf(r) === 'micro', tierOf(r));
+  // Full-size roots newly covered by the fee table price standard with known rates.
+  for (const r of ['ZN', 'ZC', '6J']) {
+    ok(`tierOf(${r}) === std`, tierOf(r) === 'std', tierOf(r));
+    ok(`rateFor(AMP, ${r}).known`, rateFor('AMP', r).known === true);
+  }
+  // MWE (full-size MGEX wheat) must NOT fall for the M-prefix heuristic: std tier, estimated rate.
+  ok('tierOf(MWE) === std (notMicro backstop)', tierOf('MWE') === 'std', tierOf('MWE'));
+  ok('rateFor(AMP, MWE) is flagged estimated', rateFor('AMP', 'MWE').known === false);
+  // Unknown M-roots still fall back to the micro heuristic; unknown non-M roots to std.
+  ok('tierOf(MXX) === micro (heuristic survives for unknowns)', tierOf('MXX') === 'micro');
+  ok('tierOf(QQQ) === std (unknown non-M)', tierOf('QQQ') === 'std');
+  // The estimated-rate footnote is driven by bySym.known === false.
+  const { estimatedCommRoots } = await import('../src/lib/core/core.ts');
+  const m = compute([t('2026-01-05 10:00:00', 100, 'MWE'), t('2026-01-06 10:00:00', 50, 'MES')]);
+  const c = costModel(m, { broker: 'AMP' });
+  ok('estimatedCommRoots surfaces exactly the fallback-rate roots', JSON.stringify(estimatedCommRoots(c)) === '["MWE"]');
+}
+
+// ── A173: spanMonths clamp — reversed inputs can't produce a negative subscription accrual ──
+{
+  const { spanMonths } = await import('../src/lib/core/core.ts');
+  ok('spanMonths: missing dates → 0', spanMonths('—', '—') === 0 && spanMonths() === 0);
+  ok('spanMonths: same month → 1', spanMonths('2026-03-02', '2026-03-30') === 1);
+  ok('spanMonths: cross-year span counts calendar months', spanMonths('2025-11-15', '2026-02-01') === 4);
+  ok('spanMonths: REVERSED input clamps to 1 (was -1 → negative subscription charge)', spanMonths('2026-03-01', '2026-01-31') === 1);
+}
+
+// ── A172: preview↔export parity — the Reports KPI strip and the exported Markdown headline agree ──
+{
+  const { buildReportVM } = await import('../src/app/lib/reports.ts');
+  const trades = [
+    t('2026-01-05 10:00:00', 200, 'MES', 'long', 1),
+    t('2026-01-20 12:00:00', -50, 'NQ', 'short', 1),
+    t('2026-02-10 09:45:00', 120, 'MES', 'long', 2),
+  ];
+  const inputs = { broker: 'AMP', platform: 50, feedCost: 15, stateRate: 5 };
+  const vm = buildReportVM(trades, { scope: 'all', from: '', to: '', calYear: 2026, calMonth: 1 }, false, inputs, {
+    broker: 'AMP',
+    feed: 'Bundle',
+    state: 'Arkansas',
+    stateRate: 5,
+    platform: 50,
+  });
+  const m = compute(trades);
+  const c = costModel(m, inputs);
+  const kpi = label => (vm.kpis.find(k => k.label === label) || {}).value;
+  // One basis per label: the KPI strip shows the SAME numbers the export headline carries.
+  ok('parity: KPI Net P&L (pre-tax) === costModel.netPreTax', kpi('Net P&L (pre-tax)') === money(c.netPreTax).replace('$', '+$'));
+  ok('parity: KPI PF (net of comm.) === costModel.pf', kpi('Profit factor (net of comm.)') === c.pf.toFixed(2));
+  // And both labels appear with those values in the exported Markdown of the same VM.
+  ok('parity: md headline carries the same netPreTax', vm.md.includes(`| Net P&L (pre-tax) | ${money(c.netPreTax)} |`));
+  ok(
+    'parity: md headline carries the same commission-adjusted PF',
+    vm.md.includes(`| Profit factor (net of comm.) | ${c.pf.toFixed(2)} |`)
+  );
+  // The old gross-basis KPI labels are gone from the preview strip.
+  ok('parity: no bare gross "Net P&L" KPI remains', !vm.kpis.some(k => k.label === 'Net P&L'));
+  ok('parity: no bare gross "Profit factor" KPI remains', !vm.kpis.some(k => k.label === 'Profit factor'));
+  // A172: the tax table row is named for what it taxes (net P&L), not a §1256 gain.
+  ok(
+    'parity: tax table row renamed to Net P&L (pre-tax)',
+    vm.taxRows.some(r => r[0] === 'Net P&L (pre-tax)')
+  );
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

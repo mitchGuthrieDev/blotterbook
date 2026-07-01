@@ -17,7 +17,9 @@
       <dd class="mt-[3px] mb-0 text-[12px] leading-[1.55] text-muted-foreground">
         Each trade is one realized-P&amp;L event. Depending on the platform Blotterbook auto-detects, that's either one row per closed
         position (close-event exports like TradingView) or entry/exit fills paired into round-trips by a FIFO matcher (which also recovers
-        hold time). TradingView is verified; the other eight adapters are beta — verify the parsed numbers against your statement.
+        hold time). A fill that closes lots opened at different times books one trade per matched lot, so the trade count can exceed your
+        platform's order count; positions still open at the end of a fills export aren't imported. TradingView is verified; the other eight
+        adapters are beta — verify the parsed numbers against your statement.
       </dd>
     </dl>
 
@@ -46,9 +48,10 @@
       <dt class="mt-3 text-[12px] font-bold text-chart-4">Tax figures are not tax advice</dt>
       <dd class="mt-[3px] mb-0 text-[12px] leading-[1.55] text-muted-foreground">
         Take-home applies a simplified Section 1256 blended federal rate (60/40 long/short-term) plus your selected state's top marginal
-        rate to net-of-cost profit; losses are not carried and tax on a losing period is zero. This is a rough planning estimate, not tax
-        advice — consult a professional for your actual liability. Sharpe uses daily-P&amp;L dispersion and is not annualized; small
-        per-weekday samples are noisy.
+        rate to net-of-cost profit; losses are not carried and tax on a losing period is zero. Note the base is net of subscriptions as a
+        simplification — subscriptions don't actually reduce a §1256 gain for a non-trader-tax-status filer, so the estimate can understate
+        tax slightly. This is a rough planning estimate, not tax advice — consult a professional for your actual liability. Sharpe uses
+        daily-P&amp;L dispersion and is not annualized; small per-weekday samples are noisy.
       </dd>
     </dl>
   </div>

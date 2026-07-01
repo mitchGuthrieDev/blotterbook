@@ -161,12 +161,15 @@
     }
     return s;
   });
-  const DOW_LBL = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  // A174: all seven weekdays — Globex Sunday (and holiday-Saturday) sessions count in the month
+  // total, so a Mon–Fri-only list silently dropped them from the bars. Weekend rows render only
+  // when they actually carry P&L. DOW_LABEL is Sun-first, matching getDay().
   const dowPnl = $derived(
-    DOW_LBL.map((lbl, i) => ({
+    DOW_LABEL.map((lbl, i) => ({
       lbl,
-      pnl: traded.filter(t => new Date(year, month, t.day).getDay() === i + 1).reduce((s, t) => s + t.pnl, 0),
-    }))
+      i,
+      pnl: traded.filter(t => new Date(year, month, t.day).getDay() === i).reduce((s, t) => s + t.pnl, 0),
+    })).filter(d => (d.i >= 1 && d.i <= 5) || d.pnl !== 0)
   );
 
   // ── Selected day detail (real trades for the day). ───────────────────────────────────────────

@@ -94,6 +94,8 @@
     onpickdate?: (year: number, month: number) => void;
     /** Break-even & Cost module rows (from costModel) and Advanced Statistics rows (from metrics). */
     costRows: { label: string; value: string; tone?: 'pos' | 'neg'; total?: boolean }[];
+    /** Roots priced off the fallback per-side rate — rendered as the commissions asterisk footnote (A171). */
+    estRoots?: string[];
     advStats: { k: string; v: string; tone?: 'pos' | 'neg' }[];
     /** Cost setup (broker/feed/state/platform) that drives costModel; edited in the Break-even module. */
     setup: AppSetup;
@@ -131,6 +133,7 @@
     filterModel,
     onpickdate,
     costRows,
+    estRoots = [],
     advStats,
     setup,
     onsetupsave,
@@ -875,6 +878,11 @@
         </div>
       {/each}
     </div>
+    {#if estRoots.length}
+      <p class="mt-2 text-[11px] text-muted-foreground">
+        * Commission rate estimated for {estRoots.join(', ')} — root not in the fee table.
+      </p>
+    {/if}
     <p class="mt-2 text-[11px] text-muted-foreground">Costs from your broker/feed/platform setup; tax is an estimate — not advice.</p>
   {/snippet}
 

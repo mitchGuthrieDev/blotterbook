@@ -3,7 +3,7 @@
    compute() metrics + costModel result + setup labels — ONE source for the on-screen report, the
    Markdown download, and the email summary (so they can't drift, like the vanilla export.js).
    Depends only on core formatters. */
-import { money, cls, DOW_LABEL, fmtDate, pad2 } from './core.ts';
+import { money, cls, ratio, DOW_LABEL, fmtDate, pad2 } from './core.ts';
 import type { Metrics } from './core.ts';
 import type { CostModel, ReportLabels } from './types.ts';
 
@@ -20,14 +20,19 @@ export function buildReport(m: Metrics, c: CostModel, labels: ReportLabels) {
     ['Take-home (post-tax)', money(c.afterTax), cls(c.afterTax)],
     ['Gross P&L', money(c.gross), cls(c.gross)],
     ['Win rate', m.winRate.toFixed(1) + '%', ''],
-    ['Profit factor', c.pf === Infinity ? '∞' : c.pf.toFixed(2), ''],
+    // A172: the label carries the basis — this is the commission-adjusted PF (pfGP/pfGL), matching
+    // the Reports preview KPI; the dashboard's gross 'Profit factor' is a separately-labeled surface.
+    ['Profit factor (net of comm.)', ratio(c.pf), ''],
     ['Max drawdown', money(-m.maxDD), 'neg'],
     ['Trades', String(m.n), ''],
     ['Active days', String(m.active), ''],
   ];
+  // A171: mark commissions computed off the FALLBACK per-side rate (root not in the fee table).
+  const estRoots = (c.bySym || []).filter(r => !r.known).map(r => r.root);
+  const estNote = estRoots.length ? `* Commission rate estimated for ${estRoots.join(', ')} — root not in the fee table.` : '';
   const costRows = [
     ['Gross P&L', money(c.gross)],
-    ['Commissions (all-in)', money(-c.totalComm)],
+    [`Commissions (all-in)${estRoots.length ? ' *' : ''}`, money(-c.totalComm)],
     [`Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, money(-c.fixedPeriod)],
     ['Net P&L (pre-tax)', money(c.netPreTax)],
     ['State top rate', (labels.stateRate || 0).toFixed(2) + '%'],
@@ -70,8 +75,9 @@ export function buildReport(m: Metrics, c: CostModel, labels: ReportLabels) {
           .join('\n') + `\nTrades: ${m.n} · Active days: ${m.active}\n\n`
       : '') +
     (s.cost || s.tax
-      ? `Commissions: ${money(c.totalComm)} · Subscriptions: ${money(c.fixedPeriod)} · Est. 1256 tax: ${money(c.tax)}\n` +
-        `Break-even / trade: ${money(c.bePer)}\n\n`
+      ? `Commissions: ${money(c.totalComm)}${estRoots.length ? ' *' : ''} · Subscriptions: ${money(c.fixedPeriod)} · Est. 1256 tax: ${money(c.tax)}\n` +
+        `Break-even / trade: ${money(c.bePer)}\n\n` +
+        (estNote ? `${estNote}\n` : '')
       : '') +
     `Estimates only — not financial or tax advice.`;
 
@@ -84,7 +90,10 @@ export function buildReport(m: Metrics, c: CostModel, labels: ReportLabels) {
     `**Broker:** ${head}\n\n` +
     (s.kpis ? `## Summary\n\n| Metric | Value |\n|---|---|\n` + headline.map(([k, v]) => mdRow(k, v)).join('') + `\n` : '') +
     (s.cost || s.tax
-      ? `## Cost & tax breakdown\n\n| Line | Amount |\n|---|---|\n` + costRows.map(([l, v]) => mdRow(l, v)).join('') + `\n`
+      ? `## Cost & tax breakdown\n\n| Line | Amount |\n|---|---|\n` +
+        costRows.map(([l, v]) => mdRow(l, v)).join('') +
+        (estNote ? `\n${estNote}\n` : '') +
+        `\n`
       : '') +
     (s.advanced ? `## Key statistics\n\n| Metric | Value |\n|---|---|\n` + statsRows.map(([l, v]) => mdRow(l, v)).join('') + `\n` : '') +
     `_Estimates only — not financial or tax advice._\n`;

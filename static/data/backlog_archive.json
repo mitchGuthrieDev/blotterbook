@@ -3395,6 +3395,94 @@
       "completedDate": "2026-07-01",
       "partial": false,
       "doneNote": "DONE (2026-07-01) — Exhaustive read-only calc audit delivered: docs/calc-audit-2026-07-01.md. Four parallel auditors (adapters/compute/cost+tax/series+report+view-models), every claim reproduced by EXECUTING the real modules under node; the coordinator independently re-ran both P1s and the top P2s before filing. Verdict: the load-bearing math is sound (pairFills FIFO/apportionment, commission+tax arithmetic, gap-month accrual reconciling with dailySeries to 1e-9, drawdown/Sharpe/Sortino/streaks on normal data) — the failures are at the edges: 2 P1s (semicolon CSVs import pnl=2026 silently; DST spring-forward adds a day to the Reports prior-period window), 11 P2s (date-order poisoning, IBKR midnight times, NaN holdMs/FIFO corruption, concPct float-dust '5.4e17%', inception maxDDpct 0.0%, unsurfaced fallback-rate marker + 16-root fee table, tierOf misclassifying SIL/2YY/10Y/30Y/MWE, gross-vs-net Profit factor between preview and export, negative-qty commission credits, unsorted-input negative months), ~20 P3s. Per the charter NO code was changed — fixes filed as A168 (P1 adapters), A169 (P1 DST), A170 (metric degenerates), A171 (tier/fee integrity), A172 (one basis per label), A173 (qty/order hardening), A174 (view-model polish), A175 (the compute/formatting test suites that pin every audited path)."
+    },
+    {
+      "id": "A168",
+      "title": "P1: adapter input-tolerance hardening (semicolon CSVs import pnl=2026 silently; date/time edge corruption)",
+      "category": "FIXES",
+      "priority": "P1",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Adapter input tolerance hardened (calc-audit P1#1 + P2#3-6): parseCSV auto-detects ';' (EU Excel re-saves no longer import pnl=year — plus a TradingView belt-and-braces refusal when Time and PnL resolve to the same cell); detectDateOrder decides from anchored full-cell date matches only (a stray d/m fragment in a note can no longer re-date the file); normTime's ISO branch accepts IBKR's quoted 'YYYY-MM-DD, HH:MM:SS' (fills keep their time); garbage-timestamp fills are SKIPPED and counted (skippedFills) instead of corrupting FIFO order or emitting holdMs NaN; rootSym strips F.US. service prefixes and -CME/.CME-style venue suffixes; parse() rejects impossible calendar dates (2026-31-31); ParseResult carries skippedFills/openLots. 7 new fixtures in test-adapters (90 total)."
+    },
+    {
+      "id": "A169",
+      "title": "P1: DST-safe prior-period bounds in Reports compare",
+      "category": "FIXES",
+      "priority": "P1",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — priorBounds (src/app/lib/reports.ts) rewritten with calendar arithmetic (setDate — DST-safe) instead of epoch-millisecond subtraction across local midnights: the 23-hour spring-forward day no longer slides the prior window a day early for US-timezone users (calc-audit P1#2). Pinned under TZ=UTC / America/New_York / Australia/Lord_Howe in scripts/test-compute.mjs via child processes (A175)."
+    },
+    {
+      "id": "A170",
+      "title": "P2: metric degenerate-value fixes (concPct float dust, inception maxDDpct, pf/tone conventions)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Metric degenerate values fixed to one coherent convention (calc-audit P2#7-8 + P3 batch): concPct gates on the CENT-ROUNDED net (float dust no longer renders ~5.4e17%) and is null without net profit; maxDDpct is null for inception drawdowns (no positive prior peak) — UI shows '—'/'from inception' instead of a wrong 0.0%; maxDDdur counts curve indices (inception off-by-one fixed); pf/wl are NaN ('—') on empty/all-scratch sets and ∞ only with wins (costModel.pf now matches — one PF convention); sortino mirrors pf (∞ with positive mean and no downside); tone(0) is neutral (no green $0.00); usd() clamps sub-cent residue (no red -$0.00); usdWhole signs from the rounded value; num() renders ∞ like ratio(); ddPeakIdx/ddTroughIdx finally consumed (Peak → trough row in the drawdown stat modal); unknown-side trades footnoted on the Analytics long/short card (unknownSide in the VM). All pinned in scripts/test-compute.mjs."
+    },
+    {
+      "id": "A171",
+      "title": "P2: commission-tier integrity — exchange-fees coverage, explicit micro list, resurface the fallback asterisk",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": true,
+      "doneNote": "DONE (2026-07-01) — Commission-tier integrity (calc-audit P2#9-10): exchange-fees.json expanded 16→33 roots (CBOT treasuries ZT/ZF/ZN/ZB/TN, grains ZC/ZS/ZW, FX 6J/6B/6A/6S, SIL, micro yields 2YY/5YY/10Y/30Y, MBT/MET) with micro-set membership + a notMicro list; tierOf() checks the explicit micro list FIRST (SIL/2YY/10Y/30Y price micro), then known/notMicro roots as std (MWE no longer prices micro via the M-prefix heuristic, which survives only for unknown roots); the known:false fallback marker is resurfaced as an asterisk + footnote in the dashboard Break-even module, the Reports preview cost table (commNote), and the text/Markdown exports; TRADOVATE corrected to 0.39/1.29 per side (free-plan rates confirmed via tradovate.com pricing — std was wrongly equal to micro). Fee VALUES are snapshot estimates: ZN ($0.77+NFA) and 2YY ($0.32) corroborated against NinjaTrader's published table; grains/FX/crypto set from typical published broker fee tables (direct CME fee-schedule fetch was egress-blocked) — flag as partial-confidence data, refine when a real statement disagrees. tierOf/rateFor/estimatedCommRoots pinned in test-curveandreport."
+    },
+    {
+      "id": "A172",
+      "title": "P2: one basis per label — reconcile gross vs net-of-costs across preview/export/KPIs",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — One basis per label across the Reports flow (calc-audit P2#11): the preview KPI strip now shows the SAME numbers as the export headline — 'Net P&L (pre-tax)' = costModel.netPreTax and 'Profit factor (net of comm.)' = costModel.pf (export headline relabeled to match); the prior-period comparison runs through costModel too (like-for-like); statDetail('net')'s description corrected (the figure is BEFORE modeled costs); the tax table's 'Net §1256 gain (pre-tax)' renamed 'Net P&L (pre-tax)' and the net-of-subscriptions modeling choice documented in Definitions (understates tax for non-TTS filers). Preview↔export parity fixture asserts the KPI strings appear verbatim in vm.md (test-curveandreport). The dashboard's gross 'Net P&L'/'Profit factor' cards are separately-labeled surfaces with disclosed bases."
+    },
+    {
+      "id": "A173",
+      "title": "P2: qty + input-order hardening (negative qty = commission credit; spanMonths clamp)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Qty + input-order hardening (calc-audit P2#12-13): the Trade Editor clamps qty to a positive integer at BOTH seams (setNum in TradeEditor.svelte and editTradeCore in dashboard.svelte.ts) — negative qty can no longer turn commissions into a credit, qty 0 no longer silently bills as 1 unseen; spanMonths() clamps to ≥1 when both dates are present, so reversed input order can't produce a negative subscription accrual that inflates net. spanMonths units (missing/same-month/cross-year/reversed) pinned in test-curveandreport."
+    },
+    {
+      "id": "A174",
+      "title": "P3: view-model polish — histogram zero bucket, weekday gaps, axMoney tiers, prior-month semantics",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — View-model polish batch (calc-audit P3s, all 9): (1) Analytics histogram excludes $0 scratches (neither green nor red) with the count footnoted, labels fixed ('≥200'); (2) win-rate two-denominator footnote (W/L bar excludes scratches, the Win rate stat doesn't); (3) Calendar 'By weekday' includes Sunday/Saturday when they carry P&L (bars sum to the month total again); (4) axMoney tiers off the ROUNDED value (999.5 → $1.0k) + an M tier ($1.5M); (5) Reports month-scope prior snaps to the previous CALENDAR month; (6) adapters num(): trailing '-' and Unicode minus keep their sign, scientific notation parses correctly, B24 comment extended to the dot-thousands mirror; (7) per-lot realized apportionment allocates cents largest-remainder so lots sum EXACTLY to the broker figure; (8) sniffing matches header words on boundaries ('Transaction' can no longer claim 'action'); (9) CsvLibrary import preview surfaces skippedFills/openLots notices and Definitions documents one-trade-per-matched-lot counting + dangling opens. Pinned across test-compute/test-adapters."
+    },
+    {
+      "id": "A175",
+      "title": "P2: compute()/formatting test suites — pin every audited calc path",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — scripts/test-compute.mjs added (73 assertions) and wired into npm run test:unit + CI (8 node suites now; CLAUDE.md updated): the hand-worked 6-trade definitional set (counts/net/gp/gl/pf/avgW/avgL/wl/winRate/expectancy/tStd/curve/best/worst), Sharpe+Sortino numeric pins, the drawdown pack (maxDD/maxDDpct/maxDDdur/ddPeakIdx/ddTroughIdx incl. inception + never-drawn-down), streak counts AND dollars with a scratch break, concPct incl. the float-dust gate, sessionOf boundary times, dowBuckets, long/short/unknown split, empty/one-trade/all-scratch degradation, the formatting suite (usd/money/usdWhole/axMoney/ratio/num/fmtDur/tone), the Analytics histogram boundary pack, dailySeries MID-series assertions (day-level accrual + tax-on-cumulative + gap-month), and the A169 TZ-pinned priorBounds repro (self-spawning child processes under 3 timezones). A171/A172/A173 fixtures landed in test-curveandreport alongside. (inMonth/applyFilters extraction deferred — noted in the item as a 'consider'.)"
     }
   ]
 }

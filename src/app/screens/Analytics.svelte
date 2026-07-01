@@ -19,11 +19,16 @@
     dist: DistBar[];
     wins: number;
     losses: number;
+    /** Scratch ($0) trades — excluded from the histogram + W/L bar; footnoted (A174). */
+    scratch: number;
     curve: number[];
     maxDD: number;
-    maxDDpct: number;
+    /** Null when the drawdown has no positive prior peak (inception drawdown — A170). */
+    maxDDpct: number | null;
     long: { pnl: number; n: number };
     short: { pnl: number; n: number };
+    /** Trades excluded from the long/short split for lack of side info (A170). */
+    unknownSide: number;
     hours: SignedBar[];
     wdays: SignedBar[];
     symbols: SymbolRow[];
@@ -32,7 +37,25 @@
     untagged: TagRow | null;
     statRows: StatRow[];
   }
-  let { kpis, dist, wins, losses, curve, maxDD, maxDDpct, long, short, hours, wdays, symbols, byTag, untagged, statRows }: Props = $props();
+  let {
+    kpis,
+    dist,
+    wins,
+    losses,
+    scratch,
+    curve,
+    maxDD,
+    maxDDpct,
+    long,
+    short,
+    unknownSide,
+    hours,
+    wdays,
+    symbols,
+    byTag,
+    untagged,
+    statRows,
+  }: Props = $props();
 
   const winShare = $derived(wins + losses ? Math.round((wins / (wins + losses)) * 100) : 0);
   const longShare = $derived(long.n + short.n ? Math.round((long.n / (long.n + short.n)) * 100) : 0);
@@ -137,6 +160,12 @@
           <span class="tabular-nums text-chart-2">{wins}W</span>
           <span class="tabular-nums text-destructive">{losses}L</span>
         </div>
+        {#if scratch > 0}
+          <p class="mt-2 text-[11px] text-muted-foreground">
+            {scratch} scratch trade{scratch === 1 ? '' : 's'} ($0) excluded from the chart and the win/loss bar; the Win rate stat counts them
+            in its denominator.
+          </p>
+        {/if}
       </Card.Content>
     </Card.Root>
 
@@ -151,7 +180,7 @@
         </svg>
         <div class="mt-2 flex justify-between text-[11px] text-muted-foreground">
           <span>Max drawdown <span class="text-destructive">{maxDD > 0 ? `-${usdWhole(maxDD).slice(1)}` : '$0'}</span></span>
-          <span>{maxDDpct.toFixed(1)}% of peak</span>
+          <span>{maxDDpct != null ? `${maxDDpct.toFixed(1)}% of peak` : 'from inception (no prior peak)'}</span>
         </div>
       </Card.Content>
     </Card.Root>
@@ -181,6 +210,11 @@
         <div class="mt-1 flex justify-between text-[11px] text-muted-foreground">
           <span>{longShare}% long</span><span>{100 - longShare}% short</span>
         </div>
+        {#if unknownSide > 0}
+          <p class="mt-2 text-[11px] text-muted-foreground">
+            {unknownSide} trade{unknownSide === 1 ? '' : 's'} without side info excluded from this split.
+          </p>
+        {/if}
       </Card.Content>
     </Card.Root>
 

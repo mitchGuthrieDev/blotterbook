@@ -1,13 +1,19 @@
 {
   "schemaVersion": 1,
-  "_comment": "CME exchange + clearing + NFA fee per side, by futures root. Snapshot estimate (mid-2026). Edit values here, then run scripts/build-manifest.mjs to refresh the cache-busting hash.",
+  "_comment": "CME exchange + clearing + NFA fee per side, by futures root. Snapshot estimate (mid-2026). A171 expanded coverage: CBOT treasuries/grains, remaining FX majors, micro metals/yields/crypto. notMicro pins full-size roots whose ticker starts with M (MGEX wheat) so the tier heuristic can't misprice them. Edit values here, then run scripts/build-manifest.mjs to refresh the cache-busting hash.",
   "exchange": {
     "MES": 0.35, "MNQ": 0.35, "M2K": 0.35, "MYM": 0.35,
-    "MCL": 0.50, "MGC": 0.50,
+    "MCL": 0.50, "MGC": 0.50, "SIL": 0.50,
     "M6E": 0.24, "M6A": 0.24, "M6B": 0.24,
+    "MBT": 2.50, "MET": 0.75,
+    "2YY": 0.34, "5YY": 0.34, "10Y": 0.34, "30Y": 0.34,
     "ES": 1.45, "NQ": 1.45, "RTY": 1.45, "YM": 1.45,
-    "CL": 1.62, "GC": 1.67, "6E": 1.72
+    "CL": 1.62, "GC": 1.67,
+    "6E": 1.72, "6J": 1.72, "6B": 1.72, "6A": 1.72, "6S": 1.72,
+    "ZT": 0.72, "ZF": 0.72, "ZN": 0.82, "ZB": 0.82, "TN": 0.82,
+    "ZC": 2.05, "ZS": 2.05, "ZW": 2.05
   },
-  "micro": ["MES", "MNQ", "M2K", "MYM", "MCL", "MGC", "M6E", "M6A", "M6B"],
+  "micro": ["MES", "MNQ", "M2K", "MYM", "MCL", "MGC", "SIL", "M6E", "M6A", "M6B", "MBT", "MET", "2YY", "5YY", "10Y", "30Y"],
+  "notMicro": ["MWE"],
   "fallback": { "micro": 0.37, "std": 1.50 }
 }
