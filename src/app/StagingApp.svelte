@@ -7,6 +7,7 @@
   // "being wired" state.
   import { onMount, setContext } from 'svelte';
   import { Store } from '../lib/core/store.ts';
+  import { createDemoStore } from '../lib/core/demostore.ts';
   import { usd, money, num, ratio, rateFor, PAGE_MODE } from '../lib/core/core.ts';
   import { Badge } from '$lib/components/ui/badge';
   import AppShell from '$lib/components/shell/AppShell.svelte';
@@ -26,9 +27,16 @@
   import { Adapters } from '../lib/core/adapters.ts';
   import type { Trade } from '../lib/core/types.ts';
 
-  const store = Store;
+  // Mode-aware persistence seam (parity with the legacy App.svelte):
+  //   app      → real IndexedDB Store (blotterbook DB), NO seed (real user data; empty → onboarding)
+  //   demo     → in-memory DemoStore (never persists), seeded, every write isDemo-guarded
+  //   staging  → real IndexedDB Store (isolated blotterbookStaging DB), seeded
+  const isDemo = PAGE_MODE === 'demo';
+  const isStaging = PAGE_MODE === 'staging';
+  const store = isDemo ? createDemoStore() : Store;
+  const SEEDED = isStaging || isDemo;
   setContext('bb:store', store);
-  const dash = createDashboard(store, { seed: true }); // staging: isolated DB, seeded
+  const dash = createDashboard(store, { seed: SEEDED, isDemo });
 
   const MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -68,7 +76,7 @@
   // mutate it in place so filtered/metrics/series/calendar all re-derive.
   // Dashboard module layout, persisted to the Store.local seam (staging-namespaced) so hide/reorder/
   // re-add survives a reload — parity with the app/demo workspace layout.
-  const MOD_KEY = 'bb:staging:dashModules';
+  const MOD_KEY = isStaging ? 'bb:staging:dashModules' : 'bb:dashModules';
   let dashModules = $state<string[] | undefined>((store.local.get(MOD_KEY) as string[] | null) ?? undefined);
   function saveModules(order: string[]) {
     dashModules = order;
@@ -397,7 +405,8 @@
   let versions = $state<{ prod?: string; staging?: string } | null>(null);
   const appVersion = $derived(versions ? (PAGE_MODE === 'staging' ? versions.staging : versions.prod) : '');
   const isBeta = $derived(!!versions?.prod && (parseInt(versions.prod.split('.')[0], 10) || 0) < 1);
-  const envLabel = PAGE_MODE.charAt(0).toUpperCase() + PAGE_MODE.slice(1); // Staging | Demo | App
+  // Environment pill: only the non-prod surfaces are badged (Staging | Demo); prod /app shows none.
+  const envLabel = isStaging ? 'Staging' : isDemo ? 'Demo' : '';
 
   onMount(() => {
     dash.boot().catch((e: unknown) => {
@@ -415,7 +424,7 @@
   {#snippet actions()}
     <div class="flex items-center gap-2">
       {#if isBeta}<Badge variant="outline" class="border-chart-4/40 text-chart-4">Beta</Badge>{/if}
-      <Badge variant="secondary">{envLabel}</Badge>
+      {#if envLabel}<Badge variant="secondary">{envLabel}</Badge>{/if}
       {#if appVersion}<span class="font-mono text-[11px] text-muted-foreground">v{appVersion}</span>{/if}
       <span class="hidden font-mono text-xs text-muted-foreground md:inline">{dash.dateRange}</span>
     </div>

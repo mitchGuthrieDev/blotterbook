@@ -6,9 +6,13 @@
 import { loadRefData, compute, costModel, sessionOf, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../../lib/core/core.ts';
 import { Adapters } from '../../lib/core/adapters.ts';
 import { demoCSV } from '../../lib/core/sampledata.ts';
-import type { Trade, FilterState, SavedFilter, AppSetup, Setup, StoredTradeMeta, StoreLike } from '../../lib/core/types.ts';
+import type { Trade, FilterState, SavedFilter, SavedFilterDef, AppSetup, Setup, StoredTradeMeta, StoreLike } from '../../lib/core/types.ts';
 
-export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
+export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?: boolean }) {
+  // Demo mounts the in-memory DemoStore (nothing persists by construction), but every write path is
+  // ALSO isDemo-guarded here (A87 belt-and-suspenders) and the UI disables the controls — so demo can
+  // never mutate, even if a real Store were passed by mistake.
+  const isDemo = !!opts.isDemo;
   let allTrades = $state<Trade[]>([]);
   let loaded = $state(false);
   let error = $state('');
@@ -124,12 +128,14 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
   const tradesForDay = (date: string) => filtered.filter(t => t.date === date);
   // Persist per-trade metadata (tags + note) — imported trades are immutable (the id is a content
   // hash, no updateTrade), so the Trade Editor edits this metadata layer, not the core fields.
-  async function saveTradeMeta(id: string, tags: string[], note: string) {
+  async function saveTradeMeta(id: string, tags: string[], note: string, shots?: string[]) {
+    if (isDemo) return;
     const ex = tradeMeta.get(id);
-    await store.saveTradeMeta(id, { tags, note, shots: ex?.shots ?? [] });
+    await store.saveTradeMeta(id, { tags, note, shots: shots ?? ex?.shots ?? [] });
     await reloadAll();
   }
   async function deleteTrades(ids: string[]) {
+    if (isDemo) return;
     for (const id of ids) await store.deleteTrade(id);
     await reloadAll();
   }
@@ -147,6 +153,7 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
     tags: string[];
     note: string;
   }) {
+    if (isDemo) return;
     const orig = allTrades.find(t => store.tradeId(t) === r.id);
     if (!orig) return;
     const hhmmss = /^\d\d:\d\d$/.test(r.time) ? `${r.time}:00` : r.time || '00:00:00';
@@ -165,29 +172,83 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
     await reloadAll();
   }
   async function importTrades(trades: Trade[]) {
+    if (isDemo) return { added: 0, duplicate: 0, total: allTrades.length };
     const res = await store.addTrades(trades);
     await reloadAll();
     return res;
   }
   async function purgeAll() {
+    if (isDemo) return;
     await store.purge();
     await reloadAll();
   }
+  // Full-snapshot backup (read-only — safe on demo) and restore (guarded). The Store already owns the
+  // export/import shapes + the restore trust-boundary sanitizer (store.importAll).
+  async function exportBackup() {
+    return store.exportAll();
+  }
+  async function importBackup(data: Record<string, unknown>) {
+    if (isDemo) return { added: 0, dup: 0 };
+    const res = await store.importAll(data);
+    await reloadAll();
+    return res;
+  }
   const noteFor = (date: string) => journal.get(date)?.text ?? '';
-  async function saveNote(date: string, text: string) {
+  const journalFor = (date: string) => journal.get(date) ?? { text: '', tags: [] as string[], shots: [] as string[] };
+  async function saveNote(date: string, text: string, tags?: string[], shots?: string[]) {
+    if (isDemo) return;
     const ex = journal.get(date);
-    await store.saveJournal(date, { text, tags: ex?.tags ?? [], shots: ex?.shots ?? [] });
+    const rec = { text, tags: tags ?? ex?.tags ?? [], shots: shots ?? ex?.shots ?? [] };
+    await store.saveJournal(date, rec);
     const next = new Map(journal);
-    if (text.trim()) {
-      next.set(date, { text, tags: ex?.tags ?? [], shots: ex?.shots ?? [] });
-      journalDates = new Set(journalDates).add(date);
+    const jd = new Set(journalDates);
+    if (text.trim() || rec.tags.length || rec.shots.length) {
+      next.set(date, rec);
+      jd.add(date);
     } else {
       next.delete(date);
-      const jd = new Set(journalDates);
       jd.delete(date);
-      journalDates = jd;
     }
     journal = next;
+    journalDates = jd;
+  }
+
+  // Cost setup (broker/feed/state/platform). Updates reactively on every surface (so demo users can
+  // explore cost sensitivity) but only PERSISTS off-demo — matching legacy App.svelte's setup effect.
+  async function saveSetup(next: AppSetup) {
+    setup = { ...next };
+    if (isDemo) return;
+    await store.setMeta('setup', { broker: next.broker, feed: next.feed, state: next.stateAbbr, platform: String(next.platform) });
+  }
+
+  // Saved filter views — vanilla-compatible {id,name,f} shape (f.symbol holds the root). Mutations are
+  // demo-guarded; applyView is a pure state change (safe on demo).
+  async function saveView(name: string) {
+    if (isDemo) return;
+    const f: SavedFilterDef = { from: filters.from, to: filters.to, symbol: filters.root, side: filters.side, session: filters.session, tag: filters.tag, dows: [...filters.dows] };
+    const id = Date.now().toString(36) + savedFilters.length;
+    savedFilters = [...savedFilters, { id, name: (name || '').trim() || `View ${savedFilters.length + 1}`, f }];
+    await store.setMeta('savedFilters', $state.snapshot(savedFilters));
+  }
+  function applyView(sf: SavedFilter) {
+    const f = sf.f || {};
+    filters.from = f.from || '';
+    filters.to = f.to || '';
+    filters.root = f.symbol || '';
+    filters.side = f.side || '';
+    filters.session = f.session || '';
+    filters.tag = f.tag || '';
+    filters.dows = Array.isArray(f.dows) ? [...f.dows] : [];
+  }
+  async function deleteView(id: string) {
+    if (isDemo) return;
+    savedFilters = savedFilters.filter(s => s.id !== id);
+    await store.setMeta('savedFilters', $state.snapshot(savedFilters));
+  }
+  async function renameView(id: string, name: string) {
+    if (isDemo) return;
+    savedFilters = savedFilters.map(s => (s.id === id ? { ...s, name } : s));
+    await store.setMeta('savedFilters', $state.snapshot(savedFilters));
   }
 
   return {
@@ -254,6 +315,9 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
     get dateRange() {
       return dateRange;
     },
+    get isDemo() {
+      return isDemo;
+    },
     boot,
     reloadAll,
     navMonth,
@@ -265,12 +329,20 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
     brokerName,
     tradesForDay,
     noteFor,
+    journalFor,
     saveNote,
     saveTradeMeta,
     deleteTrades,
     editTradeCore,
     importTrades,
     purgeAll,
+    exportBackup,
+    importBackup,
+    saveSetup,
+    saveView,
+    applyView,
+    deleteView,
+    renameView,
     sessionOf,
   };
 }
