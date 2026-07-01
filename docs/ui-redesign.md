@@ -16,21 +16,23 @@ differently:
   per-page stylesheet; there is one shared one. (The redesign screens themselves use only Tailwind
   utility classes — no scoped page CSS. The only scoped `<style>` left is in the *old* live
   `App.svelte`, which the redesign replaces with utilities.)
-- **Layout / structure** — the sidebar `AppShell` + `SidebarNav` and the per-screen mockups
-  (`src/dev/screens/*`) — lives **only in `src/dev/`** and is **preview-only**. It has **not** touched
-  the real app. The live `/app/` still mounts the old `App.svelte` (topbar + stacked panels).
+- **Layout / structure** — the sidebar `AppShell` + `SidebarNav` and the per-screen screens
+  (originally mocked in `src/dev/screens/*`) — has now **shipped to the real app** via the CH16
+  cutover: the live `/app/`, demo, and staging all mount the redesigned sidebar-shell `App.svelte`
+  (`AppShell` + hash router over `src/app/screens/*`). The `/dev/` sandbox remains as the ongoing
+  design preview.
 
-> **In one line:** the new *look* is already shipped globally; the new *layout* is still a `/dev`
-> preview until a deliberate cutover.
+> **In one line:** both the new *look* and the new *layout* are now shipped globally — the cutover
+> is complete; `/dev` remains a design sandbox.
 
 ## Surfaces today
 
 | Surface | URL | What it is | Data | Redesign state |
 | --- | --- | --- | --- | --- |
 | Marketing site | `/`, `/howto`, … | Svelte SSG pages | — | tokens only |
-| Live app | `/app/` | real `App.svelte` (topbar + panels) | real IndexedDB | tokens only — **old layout** |
-| Demo | `/app/demo.html` | real app, in-memory `DemoStore` | sample, never persists | tokens only |
-| Staging | `/app/staging.html` | real app, isolated DB, key-gated | real, isolated | tokens only |
+| Live app | `/app/` | redesigned `App.svelte` (sidebar shell + screens) | real IndexedDB | **new sidebar shell** (redesign shipped) |
+| Demo | `/app/demo.html` | same redesigned app, in-memory `DemoStore` | sample, never persists | **new sidebar shell** (redesign shipped) |
+| Staging | `/app/staging.html` | same redesigned app, isolated DB, key-gated | real, isolated | **new sidebar shell** (redesign shipped) |
 | **Redesign preview** | `/dev/app.html` | **new sidebar shell + screen mockups** | **hardcoded mock data** | the redesign itself |
 | Styleguide | `/dev/components.html` | live token + component reference | — | the redesign reference |
 
@@ -45,16 +47,19 @@ persistence**. It exists so the new app can be designed in code without risking 
   sidebar shell + a hash router over the seven planned surfaces. Screens register in its `SCREENS`
   map; unbuilt ones fall back to a placeholder.
 
-## Cutover: how `/dev` becomes the app
+## Cutover: how `/dev` became the app (done)
 
-The mockups do **not** auto-become the product. When the design is approved, an explicit cutover
-wires it to reality:
+The mockups did **not** auto-become the product; an explicit cutover (CH16) wired the redesign to
+reality and shipped it to every surface:
 
-1. **Wire screens to the real engine.** Replace each screen's hardcoded data with the live `Store` +
-   `compute()`/`costModel()` pure-logic core (the same pipeline the current app uses).
-2. **Swap the app shell.** Point `App.svelte` at the new `AppShell` + the hash router, with the
-   screens as the real views (gated per surface as needed: `PAGE_MODE`/`isDemo`/`STAGING_PAGE`).
-3. **Roll out via staging first** (below), then promote to prod + demo.
+1. **Wired screens to the real engine.** Each screen's hardcoded data was replaced with the live
+   `Store` + `compute()`/`costModel()` pure-logic core (the same pipeline the app already used).
+2. **Swapped the app shell.** The redesigned root (`StagingApp.svelte`) was **renamed to `App.svelte`**
+   and became THE app root — an `AppShell` + hash router over `src/app/screens/*`, with per-surface
+   behavior derived internally from `PAGE_MODE` (`isDemo`/`isStaging`). The pre-cutover vanilla
+   `App.svelte` and its entire `src/app/components/*` view layer were **deleted**.
+3. **Rolled out to all surfaces.** `main.ts` now mounts the one mode-aware `App.svelte` on app, demo,
+   and staging alike — there is no longer a staging-only dynamic-import branch.
 
 ## Staging's role (still needed)
 
@@ -70,5 +75,7 @@ complementary — `/dev` settles the design, staging proves the real behavior be
   `SidebarNav`; styleguide.
 - **Phase 2 (screens, in `/dev`):** ✅ **complete** — Dashboard · Calendar · Analytics · Blotter ·
   CSV Library · Trade Editor · Reports (all seven mocked in the harness).
-- **Cutover (Phase 3):** not started (the live `/app/` is untouched beyond the global tokens). Next:
-  wire the screens to the real engine, swap `App.svelte` onto `AppShell`, ship to staging, promote.
+- **Cutover (Phase 3):** ✅ **complete** — the CH16 cutover shipped the redesigned sidebar-shell app
+  to **all three surfaces** (app/demo/staging). The redesigned root `StagingApp.svelte` was renamed
+  to `App.svelte` and is now THE app root everywhere; `main.ts` mounts it mode-aware via `PAGE_MODE`.
+  The legacy vanilla `App.svelte` + its `src/app/components/*` view layer were deleted.

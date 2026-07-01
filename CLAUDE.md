@@ -44,15 +44,21 @@ re-platform), and [`docs/architecture.md`](docs/architecture.md).
 - **The `/app/` surface is a Svelte 5 SPA** (ADR-001; A26 Vite, A27 staging, A33 cutover). All three
   surfaces — `app/app.html`, `app/demo.html`, `app/staging.html` — are hand-authored, marker-free
   mount points (`<div id="app">` + `<script type="module" src="./main.ts">`, body
-  `data-mode="app|demo|staging"`). The Svelte app lives in `src/app/` (App.svelte +
-  components/ + lib/{modal,actions,files,flags,modules}.ts) and reuses the **pure-logic core** in
-  `src/lib/core/` (A29, native TS per A61): `adapters` / `compute`+`costModel` in `core` / `store` /
-  `sampledata` / `demostore` / `curveseries` / `report`, with `format` shared by the app *and* the
-  info pages. Cross-component state is Svelte runes (`$state`/`$derived`), not a shared globals
-  object. The mode-aware store seam (context `'bb:store'`) picks the real IndexedDB `Store`
-  (app/staging) or the in-memory `DemoStore` (demo, so **demo persists nothing** — by construction).
+  `data-mode="app|demo|staging"`). The Svelte app lives in `src/app/`: the redesigned sidebar-shell
+  `App.svelte` (an `AppShell` + hash router) + `screens/` (Dashboard/Calendar/Analytics/Blotter/
+  CsvLibrary/TradeEditor/Reports) + `parts/` (CostSetup/Onboarding/ActivityTerminal/Definitions/
+  StatusBanner) + `lib/{dashboard.svelte.ts,modal,actions,files,flags,nav}`. It reuses the
+  **pure-logic core** in `src/lib/core/` (A29, native TS per A61): `adapters` / `compute`+`costModel`
+  in `core` / `store` / `sampledata` / `demostore` / `curveseries` / `report`, with `format` shared by
+  the app *and* the info pages. Cross-component state is Svelte runes (`$state`/`$derived`), not a
+  shared globals object. The mode-aware store seam (context `'bb:store'`) picks the real IndexedDB
+  `Store` (app/staging) or the in-memory `DemoStore` (demo, so **demo persists nothing** — by
+  construction). `main.ts` mounts this ONE mode-aware `App.svelte` on every surface — mode is derived
+  internally from `PAGE_MODE` (`isDemo`/`isStaging`), there is no per-surface root.
   *(The former vanilla view layer — render/ui/widgets/datamanager/export/main/state.js +
-  `partials/app-*.html` — was deleted in A33.)*
+  `partials/app-*.html` — was deleted in A33; the CH16 cutover then retired the pre-redesign
+  `App.svelte` + its entire `src/app/components/*` view layer and the `lib/modules.ts` module
+  registry, renaming the redesigned `StagingApp.svelte` → `App.svelte` as the sole root.)*
 
 ## Commands
 
@@ -109,11 +115,14 @@ So:
 - **PR titles are conventional commits** and drive the version bump: `feat:` →
   minor, `fix:`/`chore:`/`refactor:` → patch, `feat!:` / `BREAKING CHANGE:` →
   major.
-- **App surfaces & their sources (A33).** All three — `app/app.html`, `app/demo.html`,
-  `app/staging.html` — are hand-authored, marker-free **Svelte mount points** that load
-  `src/app/main.ts` and differ only by `<body data-mode="app|demo|staging">`. Edit the
-  Svelte components in `src/app/`, not the HTML shells. (The old `partials/app-*.html`
-  single-source shells were deleted in A33.)
+- **App surfaces & their sources (A33; CH16 redesign cutover).** All three — `app/app.html`,
+  `app/demo.html`, `app/staging.html` — are hand-authored, marker-free **Svelte mount points** that
+  load `src/app/main.ts` and differ only by `<body data-mode="app|demo|staging">`. `main.ts` mounts
+  ONE mode-aware root — the redesigned sidebar-shell `App.svelte` (`AppShell` + hash router over
+  `src/app/screens/*` + `src/app/parts/*`) — on every surface; mode is derived internally from
+  `PAGE_MODE`. Edit the Svelte components in `src/app/` (`App.svelte` + `screens/` + `parts/`), not
+  the HTML shells. (The old `partials/app-*.html` single-source shells were deleted in A33; the CH16
+  cutover retired the pre-redesign `App.svelte` + its `src/app/components/*` view layer.)
 - **Demo must never mutate or persist.** Demo mounts the Svelte app with `data-mode="demo"` → the
   in-memory `DemoStore`, so **nothing reaches IndexedDB or localStorage by construction**. On top of
   that, every data-writing control is `disabled` when `PAGE_MODE === 'demo'` and each write path is
@@ -297,15 +306,16 @@ conforms to the rules below; keep it that way.
     components/shell/   reusable sidebar app frame (UI redesign): AppShell.svelte (rail + content
                         column) + SidebarNav.svelte (data-driven nav rail) — every UI mockup sits inside
     utils.ts            cn() class composer (clsx + tailwind-merge) — `$lib/utils`
-  app/                  the journal app — a Svelte 5 SPA (ADR-001; vanilla view layer removed in A33)
+  app/                  the journal app — a Svelte 5 SPA (ADR-001; vanilla layer removed A33, redesign cutover CH16)
     app.html            Svelte mount, data-mode="app" (served at /app/ via _redirects rewrite)
     demo.html           Svelte mount, data-mode="demo" (in-memory DemoStore — never persists)
     staging.html        Svelte mount, data-mode="staging" (key-gated, isolated IndexedDB)
-    main.ts             entry: imports tailwind.css + side-effect format + mount(App)  ·  App.svelte root
-    components/         the app components (<script lang="ts">)
-    lib/                app-only glue (TS): modal.ts (a11y action), actions.ts (styleProps),
-                        files.ts (readImage/downloadBlob — ex util.js, A76), flags.ts (APP_FLAGS),
-                        modules.ts (the A108 module registry)
+    main.ts             entry: imports tailwind.css + side-effect format + mount(App)  ·  ONE mode-aware App.svelte on every surface
+    App.svelte          the redesigned sidebar-shell root (AppShell + hash router) — mode-aware via PAGE_MODE (CH16)
+    screens/            the app screens (<script lang="ts">): Dashboard/Calendar/Analytics/Blotter/CsvLibrary/TradeEditor/Reports
+    parts/              cross-screen pieces: CostSetup/Onboarding/ActivityTerminal/Definitions/StatusBanner
+    lib/                app-only glue (TS): dashboard.svelte.ts (dashboard state factory), modal.ts (a11y action),
+                        actions.ts (styleProps), files.ts (readImage/downloadBlob — ex util.js, A76), flags.ts (APP_FLAGS), nav.ts
   site/                 MARKETING + INFO — Svelte SSG (A69; prerendered at build by scripts/vite-ssg.mjs, hydrated in place)
     components/         Home / Howto / Roadmap / Changelog / Legal / Admin .svelte (the page components)
     lib/                shared chrome: Nav.svelte, Footer.svelte, SiteShell.svelte (base/typography styles + globals)
@@ -372,9 +382,10 @@ CSV text
 The compute pipeline (`adapters`/`compute`/`costModel`) is the **pure-logic core**, reused
 verbatim (A29). The Svelte app drives it: reactive state lives in runes (`$state`/`$derived`)
 inside the components, the active `Store` is provided via `context('bb:store')` (real IndexedDB
-for app/staging, in-memory `DemoStore` for demo), and `PAGE_MODE`/`STAGING_PAGE` adapt per
-surface. Boot: `loadRefData()` → `Store.init()` → `restoreSession()` (demo seeds in-memory;
-staging seeds its DB first) → `mount()`.
+for app/staging, in-memory `DemoStore` for demo), and `PAGE_MODE` (with `isDemo`/`isStaging` locals
+derived from it) adapts per surface. Boot: `loadRefData()` → `Store.init()` → `restoreSession()`
+(app seeds nothing → empty state shows first-run onboarding; demo seeds in-memory; staging seeds its
+DB first) → `mount()`.
 
 The `core.ts` event bus survives the cutover: shared actions fire events (`app:ready`,
 `data:loaded`, `data:imported`, `note:saved`, `trade:deleted`, `backup:created`, `data:erased`)
@@ -388,9 +399,9 @@ over an `EventTarget` for any listener. The bus is a no-op with no subscriber.
   exitTime, holdMs] }` so `compute()`/`costModel()` never change.
 - **A rate change:** edit the relevant `data/*.json`, then run
   `build-manifest.mjs`. No app code changes.
-- **A new feature:** add/extend a Svelte component in `src/app/`; it ships to all three
+- **A new feature:** add/extend a Svelte screen/part in `src/app/`; it ships to all three
   surfaces at once (no promotion step since the A33 cutover). Gate per surface in the component
-  (`PAGE_MODE`/`isDemo`/`STAGING_PAGE`) and keep demo non-mutating. See the checklist in
+  (`PAGE_MODE`/`isDemo`/`isStaging`) and keep demo non-mutating. See the checklist in
   [docs/architecture.md](docs/architecture.md#building-a-feature-all-surfaces-share-one-spa).
 
 ## Deployment

@@ -198,7 +198,8 @@ test('staging redesign: Dashboard is interactive — chart overlays, day detail,
   const svg = page.locator('svg[aria-label*="P&L curve"]');
   const box = await svg.boundingBox();
   await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.5);
-  await expect(page.locator('[aria-live="polite"]')).toContainText(/\d{4}-\d\d-\d\d.*\$/);
+  // The daily readout div is aria-live but role-less; a role="log" element is also aria-live, so scope it out.
+  await expect(page.locator('[aria-live="polite"]:not([role])')).toContainText(/\d{4}-\d\d-\d\d.*\$/);
 
   // Trading Calendar day-click → the day's trades + a journal-note editor.
   await page.locator('div.grid.grid-cols-7 button:not([disabled])').first().click();

@@ -147,8 +147,8 @@ not in a shared globals object. Boot runs `loadRefData()` → `Store.init()` →
 > `main`/`state` and the `partials/app-*.html` fragments) in favor of the Svelte SPA — see
 > [ADR-001](adr-001-vite-svelte-spa.md). Only the pure-logic core survived, unchanged.
 
-The activity terminal, session pill, and workspace templates are now Svelte components under
-`src/app/components/`. The `core.ts` event bus remains: shared actions fire events
+The activity terminal, definitions, and status banners are now Svelte components under
+`src/app/parts/` (the redesigned screens live in `src/app/screens/`). The `core.ts` event bus remains: shared actions fire events
 (`app:ready`, `data:loaded`, `data:imported`, `note:saved`, `trade:deleted`, `backup:created`,
 `data:erased`) over an `EventTarget` for any listener; it stays a no-op when nothing subscribes.
 
@@ -354,20 +354,23 @@ headers on a navigation, so the admin panel's **Launch staging env** button sets
 the short-lived path-scoped `bb_staging` cookie before opening the page — the token
 never travels in the URL (S19).
 
-After CH16, `STAGING_PAGE` no longer gates dashboard *features* — those were all
-promoted to every surface. It marks only the staging **environment**: the isolated
-`blotterbookStaging` DB, the one-time sample seed, the "open on the initial state"
-landing, and the **Exit staging** affordance. The widgets it once gated (activity
-terminal, session pill, workspace templates) are now ordinary Svelte components under
-`src/app/components/`, rendered on every surface.
+After the CH16 redesign cutover, the whole redesigned app ships to every surface, so
+per-surface behavior is decided by `PAGE_MODE` (with `isStaging`/`isDemo` derived from it) —
+the standalone `STAGING_PAGE` export was removed. What remains staging-specific is only the
+staging **environment**: the isolated `blotterbookStaging` DB, the one-time sample seed, the
+"open on the initial state" landing, and the **Exit staging** affordance — all keyed off
+`PAGE_MODE === 'staging'`. The redesigned features it once proved (dashboard modules, activity
+terminal, definitions, status banners) are now ordinary Svelte components under `src/app/screens/`
+and `src/app/parts/`, rendered on every surface.
 
 ## Building a feature (all surfaces share one SPA)
 
-Since the A33 cutover, all three surfaces (app + demo + staging) **mount the same Svelte SPA**
-from `src/app/main.ts` — there is no longer a separate staging codebase to "promote"
-from. A feature you add to the Svelte app appears on every surface at once; the surface a behavior
-shows on is decided **in the component** by `PAGE_MODE` / `isDemo` / `STAGING_PAGE`, not by where
-the code lives.
+Since the A33 cutover (and the CH16 redesign cutover), all three surfaces (app + demo + staging)
+**mount the same Svelte SPA** from `src/app/main.ts` — one mode-aware redesigned `App.svelte`
+(sidebar `AppShell` + hash router over `src/app/screens/*` + `src/app/parts/*`), with no per-surface
+root. There is no separate staging codebase to "promote" from. A feature you add to the Svelte app
+appears on every surface at once; the surface a behavior shows on is decided **in the component** by
+`PAGE_MODE` / `isDemo` / `isStaging`, not by where the code lives.
 
 **The model in one breath.** The **demo mirrors prod 1:1**: every feature the main app has, the
 demo has too — just with data-mutating controls **disabled** and persistence blocked (the
@@ -378,10 +381,10 @@ or a Svelte component bumps **both** (it ships to all surfaces).
 
 **Checklist for a new feature:**
 
-1. **Build it in `src/app/`** — a component (or extend one), reusing the pure-logic
+1. **Build it in `src/app/`** — a screen/part (or extend one), reusing the pure-logic
    core (`core.ts`/`adapters.ts`/`store.ts`/…) verbatim. Read/write data only through the `Store`
    handed in via `context('bb:store')`, never `indexedDB` directly.
-2. **Gate per surface in the component** — e.g. `{#if STAGING_PAGE}` for staging-env-only chrome.
+2. **Gate per surface in the component** — e.g. `{#if isStaging}` for staging-env-only chrome.
    Most features need no gate; they ship everywhere.
 3. **Preserve demo restrictions (never skip).** Every data-mutating control needs `disabled` when
    `isDemo` **and** must not reach a write path under demo — the `DemoStore` is in-memory, but keep
