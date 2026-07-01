@@ -1,17 +1,23 @@
 <script lang="ts" module>
   export type DashStat = { label: string; value: string; badge?: string; up?: boolean; note: string; key?: string };
   export type DayCell = { pnl: number; tr: number };
+  // The default module layout (all four, default order) — exported so the app's workspace-template
+  // save captures THIS when the user hasn't customized yet (A148: saving on the default layout used
+  // to capture [] and applying it blanked the dashboard).
+  export const DEFAULT_MODULE_KEYS = ['perf', 'cal', 'cost', 'adv'];
   // Live filter model for the dashboard Filters popover — current values + option lists + mutators
   // (bound to the app's filter state).
-  export type FilterPatch = Partial<{ root: string; side: string; session: string; from: string; to: string; dows: number[] }>;
+  export type FilterPatch = Partial<{ root: string; side: string; session: string; tag: string; from: string; to: string; dows: number[] }>;
   export type FilterModel = {
     root: string;
     side: string;
     session: string;
+    tag: string;
     from: string;
     to: string;
     dows: number[];
     roots: string[];
+    tags: string[];
     count: number;
     set: (patch: FilterPatch) => void;
     clear: () => void;
@@ -52,12 +58,13 @@
   import { X } from '@lucide/svelte';
   import * as Dialog from '$lib/components/ui/dialog';
   import { styleProps } from '../lib/actions.ts';
-  import { usd, usdWhole, axMoney, niceTicks, linePath } from '../../lib/core/core.ts';
+  import { usd, usdWhole, axMoney, niceTicks, linePath, minMax, monthCells, DOW_LABEL } from '../../lib/core/core.ts';
   import type { DailyPoint } from '../../lib/core/curveseries.ts';
   import type { AppSetup } from '../../lib/core/types.ts';
   import CostSetup from '../parts/CostSetup.svelte';
   import ActivityTerminal from '../parts/ActivityTerminal.svelte';
   import Definitions from '../parts/Definitions.svelte';
+  import SegmentedControl from '../parts/SegmentedControl.svelte';
   import { type DayTrade } from './Calendar.svelte';
 
   interface Props {
@@ -139,7 +146,7 @@
     { key: 'cost', label: 'Break-even & Cost' },
     { key: 'adv', label: 'Advanced Statistics' },
   ];
-  const validKeys = (ks?: string[]) => (ks ?? MODULES.map(m => m.key)).filter(k => MODULES.some(m => m.key === k));
+  const validKeys = (ks?: string[]) => (ks ?? DEFAULT_MODULE_KEYS).filter(k => MODULES.some(m => m.key === k));
   // svelte-ignore state_referenced_locally — initial layout only; the app re-seeds via the prop below.
   let modOrder = $state<string[]>(validKeys(modules));
   // svelte-ignore state_referenced_locally
@@ -178,11 +185,20 @@
     { d: 5, label: 'Fri' },
   ];
   const filtersActive = $derived(
-    !!(filterModel.root || filterModel.side || filterModel.session || filterModel.from || filterModel.to || filterModel.dows.length)
+    !!(
+      filterModel.root ||
+      filterModel.side ||
+      filterModel.session ||
+      filterModel.tag ||
+      filterModel.from ||
+      filterModel.to ||
+      filterModel.dows.length
+    )
   );
   const sideLabel = $derived(filterModel.side === 'long' ? 'Long' : filterModel.side === 'short' ? 'Short' : 'All sides');
   const sessLabel = $derived(filterModel.session === 'rth' ? 'RTH' : filterModel.session === 'eth' ? 'ETH' : 'All sessions');
   const rootLabel = $derived(filterModel.root || 'All symbols');
+  const tagLabel = $derived(filterModel.tag || 'All tags');
   const toggleDow = (d: number) =>
     filterModel.set({ dows: filterModel.dows.includes(d) ? filterModel.dows.filter(x => x !== d) : [...filterModel.dows, d] });
   // Saved filter views (A49 parity)
@@ -218,12 +234,7 @@
     onscope?.(s);
   };
 
-  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const cells = $derived.by<(number | null)[]>(() => {
-    const c: (number | null)[] = [...Array.from({ length: firstDow }, () => null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
-    while (c.length % 7 !== 0) c.push(null);
-    return c;
-  });
+  const cells = $derived(monthCells(firstDow, daysInMonth));
 
   // ── Calendar day drill-in ────────────────────────────────────────────────────────────────────
   let selectedDay = $state<number | null>(null);
@@ -265,13 +276,7 @@
     if (!series.length) return null;
     const on = enabledList.length ? enabledList : [SERIES[0]];
     const pts: DailyPoint[] = [{ date: '', gross: 0, net: 0, take: 0 }, ...series];
-    let lo = Infinity,
-      hi = -Infinity;
-    for (const p of pts)
-      for (const s of on) {
-        if (p[s.key] < lo) lo = p[s.key];
-        if (p[s.key] > hi) hi = p[s.key];
-      }
+    let { lo, hi } = minMax(on.flatMap(s => pts.map(p => p[s.key])));
     const ticks = niceTicks(lo, hi, 4);
     lo = Math.min(lo, ticks[0]);
     hi = Math.max(hi, ticks[ticks.length - 1]);
@@ -377,7 +382,8 @@
   </div>
 {/snippet}
 
-{#snippet seg(active: boolean, label: string, onclick: () => void)}
+<!-- Multi-select overlay toggle button (the single-select toolbar pills are the shared SegmentedControl). -->
+{#snippet segBtn(active: boolean, label: string, onclick: () => void)}
   <button
     type="button"
     {onclick}
@@ -393,10 +399,14 @@
 <div class="flex flex-col gap-5">
   <!-- Toolbar -->
   <div class="flex flex-wrap items-center gap-3">
-    <div class="flex items-center gap-0.5 rounded-md border border-border p-0.5">
-      {@render seg(scope === 'all', 'All time', () => setScope('all'))}
-      {@render seg(scope === 'month', 'This month', () => setScope('month'))}
-    </div>
+    <SegmentedControl
+      segments={[
+        { key: 'all', label: 'All time' },
+        { key: 'month', label: 'This month' },
+      ]}
+      value={scope}
+      onselect={k => setScope(k as 'all' | 'month')}
+    />
     <Popover.Root>
       <Popover.Trigger>
         {#snippet child({ props })}
@@ -422,6 +432,19 @@
             </Select.Content>
           </Select.Root>
         </div>
+
+        {#if filterModel.tags.length}
+          <div class="grid gap-1.5">
+            <Label class="text-[11px]">Tag</Label>
+            <Select.Root type="single" value={filterModel.tag} onValueChange={v => filterModel.set({ tag: v === '__all' ? '' : v })}>
+              <Select.Trigger class="h-8">{tagLabel}</Select.Trigger>
+              <Select.Content>
+                <Select.Item value="__all">All tags</Select.Item>
+                {#each filterModel.tags as t (t)}<Select.Item value={t}>{t}</Select.Item>{/each}
+              </Select.Content>
+            </Select.Root>
+          </div>
+        {/if}
 
         <div class="grid grid-cols-2 gap-2">
           <div class="grid gap-1.5">
@@ -625,7 +648,7 @@
   {#snippet perfBody()}
     <div class="mb-3 flex w-fit items-center gap-0.5 rounded-md border border-border p-0.5">
       {#each SERIES as s (s.key)}
-        {@render seg(enabled[s.key], s.label, () => toggleSeries(s.key))}
+        {@render segBtn(enabled[s.key], s.label, () => toggleSeries(s.key))}
       {/each}
     </div>
     <div bind:clientWidth={cw}>
@@ -728,7 +751,7 @@
       <span class={['text-sm tabular-nums', monthNet >= 0 ? 'text-chart-2' : 'text-destructive']}>{usdWhole(monthNet)}</span>
     </div>
     <div class="grid grid-cols-7 gap-1.5">
-      {#each weekdays as d (d)}
+      {#each DOW_LABEL as d (d)}
         <div class="pb-1 text-center text-[11px] text-muted-foreground">{d}</div>
       {/each}
       {#each cells as day, i (i)}

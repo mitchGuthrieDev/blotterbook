@@ -91,3 +91,34 @@ for (const s of surfaces) {
     expect(errors, errors.join('\n')).toHaveLength(0);
   });
 }
+
+// A147: the onboarding "Choose a CSV file" CTA must actually open the file picker and import.
+// (It used to be a <button> nested inside the <label> wrapping the file input — the HTML spec
+// suppresses label activation for clicks on interactive descendants, so the CTA was dead and
+// only drag-and-drop worked. This clicks the real button and drives a file through the picker.)
+test('app: onboarding CSV CTA opens the picker and imports', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto('/app/app.html', { waitUntil: 'networkidle' });
+  await page.evaluate(() => indexedDB.deleteDatabase('blotterbook'));
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.getByRole('heading', { name: 'Welcome to Blotterbook' })).toBeVisible({ timeout: 6000 });
+
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser', { timeout: 3000 }),
+    page.getByRole('button', { name: 'Choose a CSV file' }).click(),
+  ]);
+  await chooser.setFiles({
+    name: 'trades.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(
+      'Time,Action,Realized PnL (value)\n' +
+        '2026-06-02 10:00:00,"Close long position for symbol MESM2025 at price 5310.00",50.00\n' +
+        '2026-06-02 11:30:00,"Close short position for symbol MNQM2025 at price 18000.00",-20.00\n'
+    ),
+  });
+
+  // The import lands → onboarding gives way to the dashboard with real KPIs.
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+  await page.evaluate(() => indexedDB.deleteDatabase('blotterbook')); // leave the surface clean
+  expect(errors, errors.join('\n')).toHaveLength(0);
+});

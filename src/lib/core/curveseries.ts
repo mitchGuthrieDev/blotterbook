@@ -10,7 +10,7 @@
    - take:  net − Section-1256 tax on positive net.
    Subscriptions accrue as each new calendar month is entered (B8); the endpoint equals
    costModel.fixedPeriod (fixedMo × distinct months). */
-import { rateFor } from './core.ts';
+import { rateFor, roundTurn } from './core.ts';
 import type { Metrics } from './core.ts';
 
 export interface DailyPoint {
@@ -37,7 +37,7 @@ export function dailySeries(m: Metrics, opts: { broker: string; tEff?: number; f
     let e = map.get(t.date);
     if (!e) map.set(t.date, (e = { gross: 0, comm: 0 }));
     e.gross += t.pnl;
-    e.comm += rateFor(broker, t.root).rate * 2 * (t.qty || 1); // per-contract (B4)
+    e.comm += roundTurn(rateFor(broker, t.root).rate, t.qty); // per-contract (B4)
   }
   let cg = 0,
     cn = 0;

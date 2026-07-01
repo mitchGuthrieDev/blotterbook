@@ -28,7 +28,10 @@
   import { Plus, Trash2, Tag, StickyNote, Pencil, ImagePlus, Image, X } from '@lucide/svelte';
   import { cn } from '$lib/utils';
   import { usdWhole } from '../../lib/core/core.ts';
+  import { cleanTag } from '../../lib/core/store.ts';
   import { readImage } from '../lib/files.ts';
+  import { createPagination } from '../lib/pagination.svelte.ts';
+  import PaginationControls from '../parts/PaginationControls.svelte';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Checkbox } from '$lib/components/ui/checkbox';
@@ -38,7 +41,7 @@
   import * as Table from '$lib/components/ui/table';
   import * as Popover from '$lib/components/ui/popover';
   import * as AlertDialog from '$lib/components/ui/alert-dialog';
-  import * as Dialog from '$lib/components/ui/dialog';
+  import ScreenshotLightbox from '../parts/ScreenshotLightbox.svelte';
 
   interface Props {
     rows: EditorRow[];
@@ -107,7 +110,9 @@
     draft = draft.map(r => (r.id === id ? { ...r, side: r.side === 'Long' ? 'Short' : 'Long' } : r));
   }
   function addTag(id: string, tag: string) {
-    const t = tag.trim();
+    // A153: canonicalize at entry (the same cleanTag the Store applies on save), so the chip the
+    // user sees is exactly the persisted form.
+    const t = cleanTag(tag);
     if (!t) return;
     draft = draft.map(r => (r.id === id && !r.tags.includes(t) ? { ...r, tags: [...r.tags, t] } : r));
   }
@@ -130,7 +135,6 @@
   }
   // Enlarged-screenshot lightbox.
   let zoomShot = $state<string | null>(null);
-  const zoomOpen = $derived(zoomShot !== null);
 
   const editFields = (r: EditorRow) => JSON.stringify({ ...r, isNew: undefined });
   const isDirty = (r: EditorRow) => {
@@ -141,16 +145,9 @@
   const netPnl = $derived(draft.reduce((s, r) => s + r.pnl, 0));
 
   // Pagination — the editor can hold thousands of rows; page them (50/page default) like prod.
-  const PAGE_SIZES = [25, 50, 100, Infinity];
-  let pageSize = $state<number>(50);
-  let page = $state(0);
-  const totalPages = $derived(Math.max(1, Math.ceil(draft.length / pageSize)));
-  $effect(() => {
-    if (page > totalPages - 1) page = totalPages - 1; // clamp when rows shrink / page size grows
-  });
-  const pagedRows = $derived(pageSize === Infinity ? draft : draft.slice(page * pageSize, page * pageSize + pageSize));
-  const pageStart = $derived(draft.length ? page * pageSize + 1 : 0);
-  const pageEnd = $derived(pageSize === Infinity ? draft.length : Math.min(draft.length, (page + 1) * pageSize));
+  // Shared factory (A157) — the clamp/slice logic has ONE definition with the Blotter.
+  const pager = createPagination(() => draft);
+  const pagedRows = $derived(pager.paged);
 
   async function saveAll() {
     if (dataDisabled) return;
@@ -211,13 +208,15 @@
   async function doDelete() {
     const del = new Set(pendingDelete);
     draft = draft.filter(r => !del.has(r.id));
-    del.forEach(id => original.delete(id));
+    // Reassign (don't mutate in place): $state doesn't proxy Map methods, so an in-place
+    // .delete() is invisible to the deriveds that read `original` (A158).
+    original = new Map([...original].filter(([id]) => !del.has(id)));
     selected = new Set();
     deleteOpen = false;
     if (ondelete) await ondelete([...del]);
   }
   function applyBulkTag() {
-    const t = bulkTag.trim();
+    const t = cleanTag(bulkTag); // A153: canonical form at entry
     if (!t) return;
     draft = draft.map(r => (selected.has(r.id) && !r.tags.includes(t) ? { ...r, tags: [...r.tags, t] } : r));
     bulkTag = '';
@@ -513,32 +512,9 @@
       </Table.Root>
       {#if draft.length}
         <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border px-3 py-2 text-xs text-muted-foreground">
-          <span class="tabular-nums">{pageStart.toLocaleString()}–{pageEnd.toLocaleString()} of {draft.length.toLocaleString()}</span>
-          <div class="ml-auto flex items-center gap-1.5">
-            <span class="mr-1">Rows:</span>
-            {#each PAGE_SIZES as sz (sz)}
-              <button
-                type="button"
-                onclick={() => (pageSize = sz)}
-                class={[
-                  'rounded px-1.5 py-0.5 transition-colors',
-                  pageSize === sz ? 'bg-secondary text-foreground' : 'hover:text-foreground',
-                ]}
-              >
-                {sz === Infinity ? 'All' : sz}
-              </button>
-            {/each}
-            <Button variant="outline" size="sm" class="ml-1 h-7" disabled={page === 0} onclick={() => (page = Math.max(0, page - 1))}
-              >Prev</Button
-            >
-            <span class="tabular-nums">{page + 1}/{totalPages}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              class="h-7"
-              disabled={page >= totalPages - 1}
-              onclick={() => (page = Math.min(totalPages - 1, page + 1))}>Next</Button
-            >
+          <span class="tabular-nums">{pager.start.toLocaleString()}–{pager.end.toLocaleString()} of {draft.length.toLocaleString()}</span>
+          <div class="ml-auto">
+            <PaginationControls {pager} />
           </div>
         </div>
       {/if}
@@ -575,16 +551,5 @@
   </AlertDialog.Content>
 </AlertDialog.Root>
 
-<!-- Screenshot lightbox -->
-<Dialog.Root
-  open={zoomOpen}
-  onOpenChange={o => {
-    if (!o) zoomShot = null;
-  }}
->
-  <Dialog.Content class="max-w-3xl p-2">
-    {#if zoomShot}
-      <img src={zoomShot} alt="Enlarged screenshot" class="mx-auto max-h-[80vh] w-auto rounded-md" />
-    {/if}
-  </Dialog.Content>
-</Dialog.Root>
+<!-- Screenshot lightbox (shared part — A152) -->
+<ScreenshotLightbox shot={zoomShot} onclose={() => (zoomShot = null)} />

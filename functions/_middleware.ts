@@ -7,8 +7,9 @@
    It now gates the STAGING app: /app/staging.html requires an admin credential.
    Browsers can't set arbitrary request headers on a navigation, so the admin
    "Launch staging" button sets a `bb_staging` cookie (sent as the Cookie request
-   header) before opening the page; we also accept an `x-admin-key` header (for fetch)
-   and a `?k=` query param. The credential is a short-lived signed token (S3); the raw
+   header) before opening the page; we also accept an `x-admin-key` header (for fetch).
+   (S19: the old `?k=` query-param path was REMOVED — a token must never travel in a
+   URL — do not restore it.) The credential is a short-lived signed token (S3); the raw
    ADMIN_KEY still works as a server-side fallback. If neither a TOKEN_SECRET nor an
    ADMIN_KEY is configured, staging fails CLOSED (403) so a misconfigured deploy can't
    expose the sandbox — set ALLOW_PRESENCE_AUTH=1 for local/preview to allow it (S12). */

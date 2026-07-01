@@ -4,8 +4,9 @@
    1. DEPLOY CONTRACT (needs a built dist/): every static/_redirects target, every sitemap.xml <loc>,
       every page <link rel="canonical">, and the robots.txt Sitemap: line must resolve to a real file
       in dist/. Catches a renamed/moved served file that left a dangling redirect/canonical/sitemap.
-   2. VERSION CLASSIFICATION (no dist needed): every git-tracked file under src/ and static/data/ must
-      be recognized by scripts/bump-version.mjs's prod/staging/non-shipping rules. A new path that no
+   2. VERSION CLASSIFICATION (no dist needed): every git-tracked file under src/ and ALL of static/
+      (A161 — headers/redirects/robots/sitemap/og-image ship too, not just static/data) must be
+      recognized by scripts/bump-version.mjs's prod/staging/non-shipping rules. A new path that no
       rule matches would silently bump nothing (CH12) — this fails loudly so the rule gets updated.
 
    Run AFTER `npm run build` (it reads dist/). Run: node scripts/check-deploy-contract.mjs */
@@ -41,7 +42,7 @@ const distFileFor = u => {
 console.log('A99 — deploy-contract + version-classification guard');
 
 // ── 2. Version classification coverage (always runs) ───────────────────────────────────────────
-const tracked = execSync('git ls-files src static/data', { cwd: ROOT })
+const tracked = execSync('git ls-files src static', { cwd: ROOT })
   .toString()
   .split('\n')
   .map(s => s.trim())
@@ -63,7 +64,7 @@ const classified = f =>
 
 const unclassified = tracked.filter(f => !classified(f));
 ok(
-  `every tracked src/ + static/data/ file is classified by bump-version (${tracked.length} files)`,
+  `every tracked src/ + static/ file is classified by bump-version (${tracked.length} files)`,
   unclassified.length === 0,
   unclassified.length ? `unclassified: ${unclassified.join(', ')}` : ''
 );

@@ -3032,6 +3032,215 @@
       "completedDate": "2026-07-01",
       "partial": false,
       "doneNote": "DONE (2026-07-01) — Sized the bespoke homepage nav header to match the app topbar: nav is now h-12 (48px, was ~65px via py-[13px]) and the wordmark is text-sm font-semibold (14px/600, was 16px/700). Measured both headers headless (home 48px/14px-600 == app 48px/14px-600) and screenshotted — matches, not cramped, CTA still fits. Scoped to the homepage (Home.svelte) per the ask; the shared site Nav.svelte was left unchanged."
+    },
+    {
+      "id": "A133",
+      "title": "(staging) Fix Activity Terminal — not populating with activity",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Superseded by A151: the diagnosis here was wrong — the CH16 cutover had dropped EVERY emit() call, so the Activity Terminal was empty on ALL surfaces, not just staging. Fixed by re-wiring the emitters in the shared dashboard actions + loadRefData (see A151); the terminal now logs activity on app, demo, and staging alike."
+    },
+    {
+      "id": "A147",
+      "title": "Fix onboarding 'Choose a CSV file' button (dead CTA) + dropzone keyboard access",
+      "category": "FIXES",
+      "priority": "P1",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Fixed the dead onboarding CSV CTA: the file input is now driven programmatically (fileInput.click() from the Button's own onclick) instead of relying on label activation, which the HTML spec suppresses for clicks on interactive descendants. The dropzone div role=button also gained Enter/Space handling (opens the picker) and an aria-label. Added an e2e (boot.spec.mjs) that clicks the CTA on the real /app surface, drives a TradingView CSV through the file chooser, and asserts the dashboard renders — locking the regression out."
+    },
+    {
+      "id": "A148",
+      "title": "Fix workspace-layout save capturing [] on the default layout (blanks the dashboard)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Workspace-template save no longer captures [] on the default layout: Dashboard exports DEFAULT_MODULE_KEYS and App's dashLayouts.save stores [...(dashModules ?? DEFAULT_MODULE_KEYS)], so applying a template saved from an untouched dashboard yields the default four modules instead of blanking (and persisting) an empty layout. validKeys semantics unchanged (a deliberately-emptied layout still round-trips)."
+    },
+    {
+      "id": "A149",
+      "title": "Blotter detail drawer: remove/wire the dead write controls (silent data loss) + port to Sheet",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Blotter drawer rebuilt on the Sheet primitive (Esc/focus handling for free) with the write controls actually wired: the journal-note textarea and tag chips edit a draft seeded from the row's trademeta and Save persists via onsavemeta → dash.saveTradeMeta; bulk Delete confirms via AlertDialog → dash.deleteTrades; bulk Tag is a popover input that appends a canonical tag to each selected row. The dead 'Add' badge and 'Drop a chart image' button were removed (screenshots remain the Trade Editor's job). Rows are keyboard-openable via a real button on the symbol cell; every write control is dataDisabled on demo. BlotterRow gained noteText; App passes onsavemeta/ondelete/dataDisabled."
+    },
+    {
+      "id": "A150",
+      "title": "Fix Calendar ISO-week row labels (Sunday-led rows get the prior week) + adopt core isoWeek",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Calendar ISO-week rows are now labeled by the row's MONDAY (falling back to the first present day, +1 when it's the Sunday slot), so Sunday-led rows no longer show the prior week's number (July 2025 now renders W28..W31 correctly instead of W27,W27,...). The private isoWeek reimplementation was deleted — the screen imports the unit-tested core isoWeek (verified numerically equivalent 2019–2032) — and the grid scaffold now comes from the shared core monthCells()."
+    },
+    {
+      "id": "A151",
+      "title": "Event bus has ZERO emitters — Activity Terminal never populates on any surface (supersedes A133's diagnosis)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Event bus re-wired: loadRefData emits refdata:loaded, and the shared dashboard actions emit app:ready + data:loaded {count} (boot), data:imported {added} (importTrades/importBackup), note:saved {date} (saveNote; saveTradeMeta emits note:saved), trade:deleted {count} (deleteTrades), data:erased (purgeAll), backup:created (App doBackup) — the ActivityTerminal now populates on every surface. CLAUDE.md + docs/architecture.md data-flow prose updated (incl. refdata:loaded, which the terminal listened for but was never documented). A133 archived alongside (its staging-only diagnosis was wrong — the cutover had dropped ALL emitters)."
+    },
+    {
+      "id": "A152",
+      "title": "Calendar screenshot lightbox has no dialog — extract a shared ScreenshotLightbox from TradeEditor",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Extracted the working TradeEditor lightbox into a shared part (src/app/parts/ScreenshotLightbox.svelte, shot/onclose props) and mounted it in BOTH screens: Calendar's 'Enlarge screenshot' now actually opens the Dialog (zoomShot was set but no dialog existed; the unused Dialog import and dead zoomOpen derived are gone), and TradeEditor uses the same component."
+    },
+    {
+      "id": "A153",
+      "title": "Finish tag canonicalization (A130): migrate/normalize pre-existing tags, fix saveNote's raw cache, canonicalize at UI entry, unit-test cleanTags",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Tag canonicalization completed end-to-end: (1) a one-shot migration at Store.init() (meta flag 'tagsCanonicalized') rewrites pre-A130 journal/trademeta rows and savedFilters tag fields through cleanTag(s), deleting rows left fully empty — old 'Scalp' data now matches new writes, the chips, and saved filter views; (2) dash.saveNote canonicalizes before BOTH persisting and caching, so the optimistic record equals what the Store writes and the keep/delete decision agrees (no ghost note-dot); (3) Calendar.addTag, Blotter's drawer/bulk tag entry and TradeEditor's addTag/applyBulkTag run cleanTag at entry so chips echo the persisted form; (4) test-demostore.mjs locks the canonical form in (['Scalp','scalp',' <b>X&Y</b> ',''] → ['scalp','bxy/b'])."
+    },
+    {
+      "id": "A154",
+      "title": "Harden CSV export + import trust boundaries: formula-prefix neutralization, editor rootSym parity, importAll residual validation",
+      "category": "SECURITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Export/import trust boundaries hardened: the trades-CSV export escaper neutralizes spreadsheet formula prefixes (leading = + - @ tab get a literal apostrophe, then quote-wrapping as before); the Trade Editor forces the typed symbol through Adapters.rootSym for `root` (parity with CSV import + restore; `symbol` keeps the typed form); importAll now validates `time` (canonical timestamp else midnight-of-date), allow-lists `side` to long|short|'', coerces `qty` to a positive number (else dropped), requires trademeta ids to match the 8-hex tradeId form, and coerces `note` via String().trim(); and addTrades puts { ...t, id } (computed id LAST) in both Store and DemoStore so a crafted backup can never override the content-hash key."
+    },
+    {
+      "id": "A155",
+      "title": "Functions hardening: require exp/iss in verifyAccessJwt; fix stale ?k= comment in _middleware",
+      "category": "SECURITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — verifyAccessJwt now fails closed on missing claims: exp is REQUIRED (a signed assertion without exp no longer verifies forever) and iss is REQUIRED (no more skip-when-absent). Alg pinning/aud/nbf/signature untouched. test-auth.mjs gained an RSA-signed fixture suite (mocked JWKS fetch): valid verifies; missing-exp, missing-iss, expired, wrong-aud, wrong-iss all rejected. The stale _middleware.ts header comment advertising the removed ?k= query-param path was corrected (S19 note added)."
+    },
+    {
+      "id": "A156",
+      "title": "Reports downloads ignore the configured title/account and section toggles (preview disagrees with export)",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Report downloads now render exactly what the preview shows: Reports passes {title, account, sections} into the build callback, buildReportVM threads it into buildReport (ReportLabels gained optional title/account/sections), and the text/Markdown/mailto payloads honor the configured title (also the mailto subject), an Account line, and the kpis/cost/tax/advanced toggles (advanced adds a Key-statistics table to the md; defaults preserve the pre-A156 payloads). The duplicate ExportKind declaration was removed. test-curveandreport.mjs asserts the default and a titled/section-filtered fixture."
+    },
+    {
+      "id": "A157",
+      "title": "Duplication batch (pass 5): adopt core helpers at the remaining sites; add the missing shared helpers",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Duplication batch: analytics.ts uses core dowBuckets; the weekday label array is core DOW_LABEL everywhere (Dashboard/Calendar/analytics); fmtDate/pad2 adopted at Calendar's year-heatmap key, Reports' custom-range seed, and adapters.ts (local pad2 deleted; core pad2 widened to string|number); remaining tone ternaries in Calendar/Blotter markup use core tone; MONTH_ABBR exported (Calendar's MON deleted); Blotter fees render via money(-fees) (thousands grouping restored); minMax reinstated in core and adopted by the Dashboard curve + Reports curvePaths hot loops; core roundTurn(rate, qty) replaces the rate*2*qty formula in costModel, curveseries, and the App row mappers; blotterRows/editorRows share ONE rowBase mapper; monthCells(firstDow, daysInMonth) scaffolds the Dashboard/Calendar/Reports month grids; the duplicated seg snippet became the shared SegmentedControl part (Dashboard keeps a distinct multi-select overlay toggle); the Blotter/TradeEditor pagination block + footer became createPagination (lib/pagination.svelte.ts) + PaginationControls; App's isBeta derives from format.ts isBetaPhase (ONE major<1→Beta rule). (Deliberately not unified: Reports' md 'Key statistics' vs preview advRows serve different outputs; pnlClass was covered by the tone/existing-class adoptions above.)"
+    },
+    {
+      "id": "A158",
+      "title": "Dead-code prune + fix the in-place $state Map mutation in TradeEditor",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Dead code pruned: PanelBundle (types.ts) and reportHtmlDoc (+ its esc import; report.ts) deleted; the dashboard factory's externally-unused surface removed (breakEvenMetrics derived+getter, the raw journal getter, reloadAll dropped from the returned object — it stays internal). TradeEditor's in-place $state Map mutation (original.delete) replaced with a reassignment so the dirty-state deriveds can't go stale on refactor."
+    },
+    {
+      "id": "A159",
+      "title": "Tag-filter plumbing is UI-unreachable since CH16 — restore a Filters tag control or delete it (R17 input)",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — The tag filter is reachable again: FilterModel gained tag + tags, App wires them to dash.filters.tag / dash.tags, and the Dashboard Filters popover shows a Tag select (rendered only when tags exist; '__all' clears) — filtersActive, saved views (which already persisted f.tag), and clearFilters all include it. Works with A153's canonical tags. R17's stat/meaning review stays open (annotated)."
+    },
+    {
+      "id": "A160",
+      "title": "CsvLibrary: dropzone advertises drag & drop but implements none (drop navigates the tab away); rows are mouse-only",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — CsvLibrary's dropzone implements real drag & drop: a wrapper div owns dragover/dragleave/drop (so a drop is intercepted even while the demo-disabled button ignores events — no more navigating the tab to the dropped file), routes the file through the same parse→preview path as browsing, honors dataDisabled (demo drop is swallowed), and highlights while dragging. File rows are keyboard-openable via a real button on the name cell."
+    },
+    {
+      "id": "A161",
+      "title": "Close the gate gaps: e2e conditional assertions can vacuously pass; static/ non-data shipping files are unclassified",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Gates closed: the two demo write-guard e2e assertions now assert the 'Save all' control EXISTS (toHaveCount(1)) before asserting disabled — renaming it fails the suite instead of vacuously passing; check-deploy-contract's classification sweep covers ALL of static/ (git ls-files src static); bump-version classifies the previously-invisible shipping files (_headers/_redirects → prod-shipping both tracks; robots.txt/sitemap.xml/static/assets/** → prod-only), so touching them bumps and a new unclassified static file fails the guard."
+    },
+    {
+      "id": "A162",
+      "title": "Type the remaining fetch boundaries: loadRefData + versions.json (implicit any)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — The remaining untyped fetch boundaries are typed: types.ts declares RefDataManifest/ExchangeFeesFile/BrokersFile/FeedsFile/StateTaxFile and loadRefData types every r.json() against them (generic get<T>); App's versions.json fetch casts to {prod?, staging?}. No runtime change; tsc 0/0."
+    },
+    {
+      "id": "A163",
+      "title": "Docs drift: bundle budget 480→600 KiB, 11→10 HTML entries, event-bus prose",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Docs drift fixed: CLAUDE.md now says 600 KiB budget (since CH16) and 10 HTML entries (both places); ADR-002 records the 480→600 raise; the CLAUDE.md + docs/architecture.md event-bus prose matches the A151 re-wire (emitter list incl. refdata:loaded, ActivityTerminal as the subscriber)."
+    },
+    {
+      "id": "A164",
+      "title": "Fix #92's two cosmetic regressions: site Nav sizing jump (A145 half-applied) + Calendar legend alphas vs the A140 ramp",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — #92's two cosmetic regressions fixed: the shared site Nav.svelte header now matches Home's A145 sizing (h-12, text-sm font-semibold wordmark, h-2 dot — no more chrome jump between / and the info pages), and the Calendar year-heatmap legend renders actual POS/NEG ramp steps (NEG[4]/NEG[1]/neutral/POS[1]/POS[4]) so it can't drift from the heatmap again."
     }
   ]
 }

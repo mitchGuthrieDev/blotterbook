@@ -6,7 +6,6 @@
 import { money, cls, DOW_LABEL, fmtDate, pad2 } from './core.ts';
 import type { Metrics } from './core.ts';
 import type { CostModel, ReportLabels } from './types.ts';
-import { esc } from './format.ts';
 
 /** Assemble the report content (on-screen tiles/tables + Markdown + email body) from the metrics. */
 export function buildReport(m: Metrics, c: CostModel, labels: ReportLabels) {
@@ -52,34 +51,45 @@ export function buildReport(m: Metrics, c: CostModel, labels: ReportLabels) {
     ['Sharpe (daily, illustrative)', isNaN(m.sharpe) ? '—' : m.sharpe.toFixed(2)],
   ];
 
+  // A156: the exports honor the configured title/account + section toggles, so a download renders
+  // exactly what the preview shows. Defaults preserve the pre-A156 payloads (all sections on).
+  const title = (labels.title || '').trim() || 'Blotterbook — Performance Report';
+  const acct = (labels.account || '').trim();
+  const s = { kpis: true, cost: true, tax: true, advanced: true, ...(labels.sections || {}) };
+
   const reportText =
-    `Blotterbook — Performance Report\n` +
+    `${title}\n` +
+    (acct ? `Account: ${acct}\n` : '') +
     `Period: ${range} (${labels.scope})\n` +
     `Generated: ${genStr}\n` +
     `Broker: ${head}\n\n` +
-    headline
-      .slice(0, 6)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join('\n') +
-    `\nTrades: ${m.n} · Active days: ${m.active}\n\n` +
-    `Commissions: ${money(c.totalComm)} · Subscriptions: ${money(c.fixedPeriod)} · Est. 1256 tax: ${money(c.tax)}\n` +
-    `Break-even / trade: ${money(c.bePer)}\n\n` +
+    (s.kpis
+      ? headline
+          .slice(0, 6)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join('\n') + `\nTrades: ${m.n} · Active days: ${m.active}\n\n`
+      : '') +
+    (s.cost || s.tax
+      ? `Commissions: ${money(c.totalComm)} · Subscriptions: ${money(c.fixedPeriod)} · Est. 1256 tax: ${money(c.tax)}\n` +
+        `Break-even / trade: ${money(c.bePer)}\n\n`
+      : '') +
     `Estimates only — not financial or tax advice.`;
 
   const mdRow = (l: string, v: string) => `| ${l} | ${v} |\n`;
   const reportMd =
-    `# Blotterbook — Performance Report\n\n` +
+    `# ${title}\n\n` +
+    (acct ? `**Account:** ${acct}  \n` : '') +
     `**Period:** ${range} (${labels.scope})  \n` +
     `**Generated:** ${genStr}  \n` +
     `**Broker:** ${head}\n\n` +
-    `## Summary\n\n| Metric | Value |\n|---|---|\n` +
-    headline.map(([k, v]) => mdRow(k, v)).join('') +
-    `\n## Cost & tax breakdown\n\n| Line | Amount |\n|---|---|\n` +
-    costRows.map(([l, v]) => mdRow(l, v)).join('') +
-    `\n_Estimates only — not financial or tax advice._\n`;
+    (s.kpis ? `## Summary\n\n| Metric | Value |\n|---|---|\n` + headline.map(([k, v]) => mdRow(k, v)).join('') + `\n` : '') +
+    (s.cost || s.tax
+      ? `## Cost & tax breakdown\n\n| Line | Amount |\n|---|---|\n` + costRows.map(([l, v]) => mdRow(l, v)).join('') + `\n`
+      : '') +
+    (s.advanced ? `## Key statistics\n\n| Metric | Value |\n|---|---|\n` + statsRows.map(([l, v]) => mdRow(l, v)).join('') + `\n` : '') +
+    `_Estimates only — not financial or tax advice._\n`;
 
-  const mailto =
-    'mailto:?subject=' + encodeURIComponent(`Blotterbook Performance Report — ${range}`) + '&body=' + encodeURIComponent(reportText);
+  const mailto = 'mailto:?subject=' + encodeURIComponent(`${title} — ${range}`) + '&body=' + encodeURIComponent(reportText);
 
   // Commissions by symbol (parity with render.js commSymRows): [root, known, trades, cts, $/side, $/RT, total].
   const commRows = (c.bySym || []).map(r => ({
@@ -93,116 +103,4 @@ export function buildReport(m: Metrics, c: CostModel, labels: ReportLabels) {
   }));
 
   return { range, genStr, head, scope: labels.scope, headline, costRows, statsRows, commRows, reportText, reportMd, mailto };
-}
-
-/* Assemble the standalone, self-contained report document (faithful port of export.js's
-   sheetHtml + reportCss) for the iframe preview + print(PDF) + raster(PNG/JPEG). Kept DOM-free:
-   the caller bakes the live design tokens into `tokenBlock` (a `:root{…}` string) via
-   getComputedStyle so the report palette tracks the tailwind.css design tokens (A8) without this module touching the DOM. */
-export function reportHtmlDoc(rep: ReturnType<typeof buildReport>, labels: Omit<ReportLabels, 'generated'>, tokenBlock: string) {
-  const tile = (k: string, v: string, cl = '') =>
-    `<div class="rtile"><div class="rk">${esc(k)}</div><div class="rv ${cl}">${esc(v)}</div></div>`;
-  const tiles = rep.headline.map(([k, v, tone]) => tile(k, v, tone || '')).join('');
-  const COST_CLASS: Record<string, string> = {
-    'Net P&L (pre-tax)': 'tot',
-    'After-tax take-home': 'tot',
-    'State top rate': 'sub',
-    'Blended 1256 rate': 'sub',
-    'Est. 1256 tax (net profit only)': 'sub',
-  };
-  const costTbl = rep.costRows
-    .map(([l, v]) => `<tr class="${COST_CLASS[l] || ''}"><td>${esc(l)}</td><td class="num">${esc(v)}</td></tr>`)
-    .join('');
-  const statsTbl = rep.statsRows.map(([l, v]) => `<tr><td>${esc(l)}</td><td class="num">${esc(v)}</td></tr>`).join('');
-  const commTbl =
-    rep.commRows.length === 0
-      ? '<tr><td colspan="6">No commissions in scope.</td></tr>'
-      : rep.commRows
-          .map(
-            r =>
-              `<tr><td>${esc(r.root)}${r.known ? '' : '<span class="neg">*</span>'}</td><td class="num">${r.count}</td>` +
-              `<td class="num">${r.qty}</td><td class="num">${esc(r.side)}</td><td class="num">${esc(r.rt)}</td><td class="num">${esc(r.total)}</td></tr>`
-          )
-          .join('');
-
-  const reportCss = `
-  ${tokenBlock}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--background);color:var(--foreground);font-family:var(--font-sans);font-size:13px;line-height:1.5;
-    -webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .sheet{max-width:820px;margin:0 auto;padding:34px 38px}
-  .rtop{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;
-    border-bottom:1px solid var(--border);padding-bottom:16px}
-  .brandline{font-size:22px;font-weight:700;display:flex;align-items:center;gap:9px;letter-spacing:.01em}
-  .brandline .dot{width:11px;height:11px;border-radius:3px;background:linear-gradient(135deg,var(--primary),var(--chart-3))}
-  .rsub{font-family:var(--font-mono);color:var(--muted-foreground);font-size:11.5px;margin-top:5px;letter-spacing:.02em}
-  .rmeta{font-family:var(--font-mono);font-size:11px;color:var(--muted-foreground);text-align:right;line-height:1.7}
-  .rmeta b{color:var(--foreground);font-weight:600}
-  h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-foreground);
-    margin:26px 0 10px;font-weight:700}
-  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
-  .rtile{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:11px 12px}
-  .rtile .rk{font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted-foreground)}
-  .rtile .rv{font-family:var(--font-mono);font-size:18px;font-weight:600;margin-top:5px;font-variant-numeric:tabular-nums}
-  .rtile .rv.neg{color:var(--destructive)}
-  table{width:100%;border-collapse:collapse;font-size:12.5px}
-  td,th{padding:6px 0;border-bottom:1px solid var(--border);text-align:left}
-  td.num,th.num{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
-  thead th{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);font-weight:600}
-  tr.tot td{font-weight:700;color:var(--foreground);border-bottom:1px solid var(--border)}
-  tr.sub td{color:var(--muted-foreground);font-size:11.5px;border-bottom:1px dashed var(--border)}
-  tr.sub td:first-child{padding-left:14px}
-  .pos{color:var(--chart-2)} .neg{color:var(--destructive)}
-  .cols{display:grid;grid-template-columns:1fr 1fr;gap:34px}
-  .foot{margin-top:30px;padding-top:14px;border-top:1px solid var(--border);
-    font-size:10.5px;color:var(--muted-foreground);line-height:1.6}
-  @media print{.sheet{padding:0 6mm}@page{margin:12mm}}`;
-
-  const sheetHtml = `<div class="sheet">
-    <div class="rtop">
-      <div>
-        <div class="brandline"><span class="dot"></span>Blotterbook</div>
-        <div class="rsub">Performance Report · ${esc(rep.scope)}</div>
-      </div>
-      <div class="rmeta">
-        Generated <b>${esc(rep.genStr)}</b><br>
-        Period <b>${esc(rep.range)}</b><br>
-        Broker <b>${esc(labels.broker)}</b> · Feed ${esc(labels.feed)}<br>
-        State <b>${esc(labels.state)}</b> · Platform $${esc(String(labels.platform))}/mo
-      </div>
-    </div>
-
-    <h2>Summary</h2>
-    <div class="tiles">${tiles}</div>
-
-    <div class="cols">
-      <div>
-        <h2>Cost &amp; tax breakdown</h2>
-        <table><tbody>${costTbl}</tbody></table>
-      </div>
-      <div>
-        <h2>Key statistics</h2>
-        <table><tbody>${statsTbl}</tbody></table>
-      </div>
-    </div>
-
-    <h2>Commissions by symbol</h2>
-    <table>
-      <thead><tr><th>Symbol</th><th class="num">Trades</th><th class="num">Cts</th><th class="num">$/side</th><th class="num">$/RT</th><th class="num">Commission</th></tr></thead>
-      <tbody>${commTbl}</tbody>
-    </table>
-
-    <div class="foot">
-      Figures are estimates generated by Blotterbook from a balance-history export. Commissions and the
-      Section&nbsp;1256 tax (blended 60/40 federal rate plus state top rate, applied to positive net profit only) are
-      modeled, not statements of record. Costs assume the export's P&amp;L is gross of commission, bill subscriptions
-      for every calendar month from the first to the last trade, and treat a close-event export without a per-trade
-      quantity as a single contract. Max drawdown is realized, closed-trade only. Not financial or tax advice.
-    </div>
-  </div>`;
-
-  // Return the doc body (NO inline <style>) + the CSS separately. The caller injects the CSS into
-  // the iframe via the CSSOM (adoptedStyleSheets), which `style-src 'self'` permits — A55/S18.
-  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Blotterbook — Performance Report</title></head><body>${sheetHtml}</body></html>`;
-  return { html, css: reportCss };
 }

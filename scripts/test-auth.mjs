@@ -1,7 +1,7 @@
 /* Tests for functions/_lib/auth.js — admin token round-trip + Stripe webhook
    signature verification (S13). Run: node scripts/test-auth.mjs
    Uses only Node built-ins; auth.js relies on WebCrypto (global in Node 18+). */
-import { issueToken, verifyToken, verifyStripeSignature } from '../functions/_lib/auth.ts';
+import { issueToken, verifyToken, verifyStripeSignature, verifyAccessJwt } from '../functions/_lib/auth.ts';
 import { onRequest as adminKeyOnRequest } from '../functions/api/admin-key.ts';
 import { createHmac } from 'node:crypto';
 
@@ -51,6 +51,39 @@ ok(
     SECRET
   )
 );
+
+console.log('\nAccess JWT claim strictness (A155):');
+{
+  // A155: exp/iss must be REQUIRED, not skipped-when-absent — a signed assertion missing exp must
+  // not verify forever. Self-sign with a generated RSA key and serve its JWKS via a mocked fetch.
+  const { publicKey, privateKey } = await crypto.subtle.generateKey(
+    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    true,
+    ['sign', 'verify']
+  );
+  const jwk = { ...(await crypto.subtle.exportKey('jwk', publicKey)), kid: 'test-kid', alg: 'RS256', use: 'sig' };
+  const b64u = v => Buffer.from(v).toString('base64url');
+  const sign = async payload => {
+    const head = b64u(JSON.stringify({ alg: 'RS256', kid: 'test-kid' }));
+    const body = b64u(JSON.stringify(payload));
+    const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', privateKey, new TextEncoder().encode(`${head}.${body}`));
+    return `${head}.${body}.${b64u(sig)}`;
+  };
+  const TEAM = 'https://team.cloudflareaccess.com';
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ keys: [jwk] }), { headers: { 'content-type': 'application/json' } });
+  try {
+    const base = { aud: 'aud1', iss: TEAM, exp: now + 3600 };
+    ok('valid assertion verifies', !!(await verifyAccessJwt(await sign(base), TEAM, 'aud1')));
+    ok('missing exp rejected', !(await verifyAccessJwt(await sign({ aud: 'aud1', iss: TEAM }), TEAM, 'aud1')));
+    ok('missing iss rejected', !(await verifyAccessJwt(await sign({ aud: 'aud1', exp: now + 3600 }), TEAM, 'aud1')));
+    ok('expired assertion rejected', !(await verifyAccessJwt(await sign({ ...base, exp: now - 10 }), TEAM, 'aud1')));
+    ok('wrong audience rejected', !(await verifyAccessJwt(await sign(base), TEAM, 'other-aud')));
+    ok('wrong issuer rejected', !(await verifyAccessJwt(await sign({ ...base, iss: 'https://evil.example' }), TEAM, 'aud1')));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
 
 console.log('\nadmin-key ?check debug gate (S21):');
 {

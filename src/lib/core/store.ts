@@ -57,6 +57,9 @@ export const cleanTag = (s: unknown): string =>
     .trim()
     .toLowerCase();
 export const cleanTags = (a: unknown): string[] => [...new Set((Array.isArray(a) ? a : []).map(cleanTag).filter(Boolean))];
+// The shape tradeId() produces (8 lowercase hex chars) — importAll rejects trademeta ids that
+// couldn't have come from a real store (A154).
+const TRADE_ID_RE = /^[0-9a-f]{8}$/;
 
 let dbp: Promise<IDBDatabase> | null = null; // cached open-promise
 
@@ -111,6 +114,54 @@ export function tradeId(t: Trade): string {
   return h.toString(16).padStart(8, '0');
 }
 
+/* A153: one-shot canonicalization of tags persisted BEFORE A130 made cleanTags the single write
+   form. Older live saves stored raw case/markup ('Scalp'), which no longer matches new writes,
+   the lowercase tag filter/chips, or a saved filter's tag — so on first boot after the change we
+   rewrite journal/trademeta rows (and the savedFilters meta) whose canonical form differs, then
+   set a meta flag so this never runs again. Puts are issued inside the getAll onsuccess handler
+   (no await between read and write — B6: an await lets the tx auto-commit mid-flight). */
+const TAGS_MIGRATED = 'tagsCanonicalized';
+async function migrateTags() {
+  const metaRead = await tx(META, 'readonly');
+  if (await reqP(metaRead.get(TAGS_MIGRATED))) return;
+  const same = (a: string[], b: unknown) => Array.isArray(b) && a.length === b.length && a.every((v, i) => v === b[i]);
+  for (const name of [JOURNAL, TRADEMETA]) {
+    const store = await tx(name, 'readwrite');
+    await new Promise<void>((resolve, reject) => {
+      const r = store.getAll();
+      r.onerror = () => reject(r.error);
+      r.onsuccess = () => {
+        for (const row of r.result as Array<StoredJournal | StoredTradeMeta>) {
+          const tags = cleanTags(row.tags);
+          if (same(tags, row.tags)) continue;
+          // A row left with no content at all (tags canonicalized away, no text/note/shots)
+          // is deleted — matching what the live save paths do with an empty record.
+          const text = 'date' in row ? row.text : row.note;
+          if (!tags.length && !(text || '').trim() && !(row.shots || []).length) store.delete('date' in row ? row.date : row.id);
+          else store.put({ ...row, tags });
+        }
+        resolve();
+      };
+    });
+    await done(store);
+  }
+  const metaStore = await tx(META, 'readwrite');
+  await new Promise<void>((resolve, reject) => {
+    const r = metaStore.get('savedFilters');
+    r.onerror = () => reject(r.error);
+    r.onsuccess = () => {
+      const rec = r.result as { key: string; value?: Array<{ f?: { tag?: unknown } }> } | undefined;
+      if (rec && Array.isArray(rec.value)) {
+        for (const v of rec.value) if (v && v.f && v.f.tag != null) v.f.tag = cleanTag(v.f.tag);
+        metaStore.put(rec);
+      }
+      metaStore.put({ key: TAGS_MIGRATED, value: true });
+      resolve();
+    };
+  });
+  await done(metaStore);
+}
+
 export const Store: StoreLike = {
   available() {
     return typeof indexedDB !== 'undefined';
@@ -118,6 +169,7 @@ export const Store: StoreLike = {
 
   async init() {
     await open();
+    await migrateTags();
     return true;
   },
 
@@ -146,7 +198,9 @@ export const Store: StoreLike = {
             continue;
           }
           existing.add(id);
-          store.put({ id, ...t });
+          // A154: computed id LAST so a crafted input object carrying its own `id` key (e.g. a
+          // tampered backup) can never override the content hash the dedupe/meta paths rely on.
+          store.put({ ...t, id });
           added++;
         }
         resolve();
@@ -292,12 +346,24 @@ export const Store: StoreLike = {
     // and the CSV path validates dates but addTrades/journal-restore did not. Require canonical
     // YYYY-MM-DD (and a finite pnl for trades) here so a crafted backup can't smuggle markup in.
     const validDate = (s: unknown) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s);
+    // A154: pin the remaining trade fields to the shapes the live paths produce, so a crafted
+    // backup can't smuggle arbitrary strings into the export/id paths: `time` must be a canonical
+    // timestamp (else it degrades to midnight of the row's date), `side` is allow-listed, and
+    // `qty` is coerced to a positive number (else dropped, i.e. treated as 1 like the adapters).
+    const validTime = (s: unknown) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?/.test(s);
     if (Array.isArray(data.trades) && data.trades.length) {
       const clean = [];
       for (const t of data.trades) {
         if (!t || !validDate(t.date) || !Number.isFinite(+t.pnl)) continue;
         // B35: don't mutate the caller's backup object — push a sanitized COPY.
-        clean.push(t.root != null ? { ...t, root: cleanSym(t.root) } : { ...t });
+        const c = { ...t };
+        if (c.root != null) c.root = cleanSym(c.root);
+        if (!validTime(c.time)) c.time = `${c.date} 00:00:00`;
+        if (c.side !== 'long' && c.side !== 'short') c.side = '';
+        const q = Number(c.qty);
+        if (c.qty == null || !Number.isFinite(q) || q <= 0) delete c.qty;
+        else c.qty = q;
+        clean.push(c);
       }
       const r = await this.addTrades(clean);
       added = r.added;
@@ -356,11 +422,14 @@ export const Store: StoreLike = {
     if (Array.isArray(data.trademeta) && data.trademeta.length) {
       const store = await tx(TRADEMETA, 'readwrite');
       for (const tm of data.trademeta) {
-        if (tm && tm.id)
+        // A154: only accept ids in the 8-hex tradeId form (anything else is an orphan a crafted
+        // backup planted), and coerce note to a string so a non-string can't throw in .trim()
+        // consumers later.
+        if (tm && typeof tm.id === 'string' && TRADE_ID_RE.test(tm.id))
           store.put({
             id: tm.id,
             tags: cleanTags(tm.tags),
-            note: tm.note || '',
+            note: String(tm.note ?? '').trim(),
             shots: cleanShots(tm.shots),
             updated: tm.updated || Date.now(),
           });

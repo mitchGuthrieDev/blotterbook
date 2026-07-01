@@ -174,11 +174,14 @@ export async function verifyAccessJwt(assertion: string, teamDomain: string, aud
     const payload = JSON.parse(b64urlToString(parts[1])) as JwtPayload;
     if (header.alg !== 'RS256' || !header.kid) return null;
 
+    // A155: exp and iss are REQUIRED — fail closed when absent. (A signed assertion with no exp
+    // would otherwise never expire, and one with no iss would skip the issuer check. Cloudflare
+    // Access always emits both, so a well-formed token is unaffected.)
     const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && now >= payload.exp) return null;
+    if (!payload.exp || now >= payload.exp) return null;
     if (payload.nbf && now < payload.nbf) return null;
     const iss = teamDomain.replace(/\/+$/, '');
-    if (payload.iss && payload.iss.replace(/\/+$/, '') !== iss) return null;
+    if (!payload.iss || payload.iss.replace(/\/+$/, '') !== iss) return null;
     const auds = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
     if (!auds.includes(aud)) return null;
 

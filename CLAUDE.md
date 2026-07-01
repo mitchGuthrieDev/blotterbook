@@ -256,7 +256,7 @@ conforms to the rules below; keep it that way.
 
 > **Caveat vs. the generic "Svelte 5 SPA" template:** this repo is a **multi-page** Vite build, so a
 > few one-size-fits-all conventions don't apply literally. The Vite config is the multi-page
-> [`vite.config.mjs`](vite.config.mjs) (11 HTML entries + the [`vite-ssg.mjs`](scripts/vite-ssg.mjs) plugin),
+> [`vite.config.mjs`](vite.config.mjs) (10 HTML entries + the [`vite-ssg.mjs`](scripts/vite-ssg.mjs) plugin),
 > **not** a 4-line `vite.config.ts`. SPA routing lives in [`static/_redirects`](static/_redirects)
 > (Vite's `publicDir` is `static/`, **there is no `public/`**) and rewrites `/app/` → `/app/app.html`
 > — a `/* /index.html 200` catch-all would break the marketing pages and the demo/staging surfaces.
@@ -353,11 +353,11 @@ conforms to the rules below; keep it that way.
   build-manifest.mjs    regenerates static/data/manifest.json content hashes
   bump-version.mjs      two-track version bump from a merge commit (run by CI; classifies src/ + static/ paths)
   vite-ssg.mjs          A69 SSG plugin — server-renders the site components into their templates at build time (A95: moved here from the repo root)
-  check-bundle-size.mjs dev-only /app/-surface JS size budget (480 KiB ceiling) — fails the build if the app bundle crosses it (A96)
+  check-bundle-size.mjs dev-only /app/-surface JS size budget (600 KiB ceiling since CH16) — fails the build if the app bundle crosses it (A96)
   test-*.mjs            the CI test suite (adapters / auth / version / flags / tax / demostore / curveandreport)
 /e2e/                   Playwright render/E2E specs (dev-only — R19 Tier A)
 /dist/                  Vite build output (GITIGNORED) — the artifact Cloudflare Pages serves (A26)
-vite.config.mjs         Vite multi-page build config (root:src, publicDir:static, 11 HTML entries → dist/)
+vite.config.mjs         Vite multi-page build config (root:src, publicDir:static, 10 HTML entries → dist/)
 .node-version           pins Node 22 for the Cloudflare Pages build
 package.json            deps manifest — Vite + Tailwind v4 + shadcn-svelte/bits-ui + @lucide/svelte + dev tooling (pinned, lockfiled)
 components.json         shadcn-svelte CLI config (`npx shadcn-svelte add <name>`)  ·  ADR-002
@@ -388,9 +388,11 @@ derived from it) adapts per surface. Boot: `loadRefData()` → `Store.init()` �
 (app seeds nothing → empty state shows first-run onboarding; demo seeds in-memory; staging seeds its
 DB first) → `mount()`.
 
-The `core.ts` event bus survives the cutover: shared actions fire events (`app:ready`,
-`data:loaded`, `data:imported`, `note:saved`, `trade:deleted`, `backup:created`, `data:erased`)
-over an `EventTarget` for any listener. The bus is a no-op with no subscriber.
+The `core.ts` event bus survives the cutover (emitters re-wired in A151 — the CH16 cutover had
+dropped them all): `loadRefData` emits `refdata:loaded`, and the shared dashboard actions fire
+`app:ready`, `data:loaded`, `data:imported`, `note:saved`, `trade:deleted`, `backup:created`,
+`data:erased` over an `EventTarget` for any listener (the Dashboard's ActivityTerminal subscribes).
+The bus is a no-op with no subscriber.
 
 ## Adding things
 

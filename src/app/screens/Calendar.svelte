@@ -15,10 +15,12 @@
   import { Badge } from '$lib/components/ui/badge';
   import { Input } from '$lib/components/ui/input';
   import * as Card from '$lib/components/ui/card';
-  import * as Dialog from '$lib/components/ui/dialog';
   import { cn } from '$lib/utils';
-  import { usdWhole } from '../../lib/core/core.ts';
+  import { usdWhole, tone, fmtDate, isoWeek, monthCells, MONTH_ABBR, DOW_LABEL } from '../../lib/core/core.ts';
+  import { cleanTag } from '../../lib/core/store.ts';
   import { readImage } from '../lib/files.ts';
+  import ScreenshotLightbox from '../parts/ScreenshotLightbox.svelte';
+  import SegmentedControl from '../parts/SegmentedControl.svelte';
 
   interface Props {
     monthDays: Record<number, CalDay>;
@@ -59,7 +61,9 @@
   });
 
   function addTag() {
-    const t = tagDraft.trim();
+    // A153: canonicalize at entry (the same cleanTag the Store applies on save), so the chip the
+    // user sees is exactly the persisted form — no case/markup divergence, no case-dup chips.
+    const t = cleanTag(tagDraft);
     if (t && !tags.includes(t)) tags = [...tags, t];
     tagDraft = '';
   }
@@ -77,9 +81,8 @@
   function removeShot(idx: number) {
     shots = shots.filter((_, j) => j !== idx);
   }
-  // Enlarged-screenshot lightbox.
+  // Enlarged-screenshot lightbox (the shared ScreenshotLightbox part, mounted below — A152).
   let zoomShot = $state<string | null>(null);
-  const zoomOpen = $derived(zoomShot !== null);
 
   // ── Heatmap shades — literal classes (Tailwind-scannable), bucketed by |P&L|. ─────────────────
   // A140: cap the ramp at /55 (was /75). The top buckets were saturated enough that the same-hue P&L
@@ -94,32 +97,25 @@
   };
   const shade = (pnl: number) => (pnl >= 0 ? POS : NEG)[lvl(pnl)];
   const pct = (w: number, t: number) => (t ? Math.round((100 * w) / t) : 0);
-  // ISO-8601 week number (matches the core helper; inlined so the screen stays self-contained).
-  const isoWeek = (d: Date) => {
-    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
-    const ys = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-    return Math.ceil(((t.getTime() - ys.getTime()) / 86400000 + 1) / 7);
-  };
 
   // ── Month grid (Sunday-first, ISO-week column). ──────────────────────────────────────────────
-  const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   type Cell = { day: number; rec?: CalDay } | null;
   const weeks = $derived.by<{ wk: number; cells: Cell[]; pnl: number; days: number }[]>(() => {
     const firstDow = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const flat: Cell[] = [
-      ...Array.from({ length: firstDow }, () => null),
-      ...Array.from({ length: daysInMonth }, (_, i) => ({ day: i + 1, rec: monthDays[i + 1] })),
-    ];
-    while (flat.length % 7 !== 0) flat.push(null);
+    const flat: Cell[] = monthCells(firstDow, daysInMonth).map(d => (d === null ? null : { day: d, rec: monthDays[d] }));
     const rows: { wk: number; cells: Cell[]; pnl: number; days: number }[] = [];
     for (let i = 0; i < flat.length; i += 7) {
       const cells = flat.slice(i, i + 7);
       const traded = cells.filter((c): c is { day: number; rec: CalDay } => !!c?.rec);
-      const anyDay = cells.find((c): c is { day: number; rec?: CalDay } => !!c);
+      // A150: label the row by its MONDAY. The grid is Sunday-first but ISO weeks are Monday-first —
+      // a Sunday belongs to the ISO week that ENDED that day, so labeling by the first cell tagged
+      // every full row with the PRIOR week's number (and duplicated it across two rows). When the
+      // Monday slot is empty, fall back to the first day present, shifted +1 if it's the Sunday.
+      const labelCell = cells[1] ?? cells.find((c): c is { day: number; rec?: CalDay } => !!c);
+      const labelDate = labelCell ? new Date(year, month, labelCell.day + (labelCell === cells[0] ? 1 : 0)) : null;
       rows.push({
-        wk: anyDay ? isoWeek(new Date(year, month, anyDay.day)) : 0,
+        wk: labelDate ? isoWeek(labelDate) : 0,
         cells,
         pnl: traded.reduce((s, c) => s + c.rec.pnl, 0),
         days: traded.length,
@@ -171,7 +167,7 @@
     const flat: YCell[] = Array.from({ length: lead }, () => null);
     for (let i = 0; i < len; i++) {
       const d = new Date(year, 0, 1 + i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const key = fmtDate(d);
       const has = key in yearPnl;
       flat.push({ date: key, pnl: yearPnl[key] ?? 0, trading: has, m: d.getMonth() });
     }
@@ -184,21 +180,7 @@
   const yearNet = $derived(yearCells.reduce((s, c) => s + c.pnl, 0));
   const yearWin = $derived(yearCells.filter(c => c.pnl > 0).length);
   const yearLoss = $derived(yearCells.filter(c => c.pnl < 0).length);
-  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 </script>
-
-{#snippet seg(active: boolean, label: string, onclick: () => void)}
-  <button
-    type="button"
-    {onclick}
-    class={cn(
-      'rounded px-2.5 py-1 text-xs transition-colors',
-      active ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'
-    )}
-  >
-    {label}
-  </button>
-{/snippet}
 
 {#snippet stat(label: string, value: string, tone: 'pos' | 'neg' | 'plain' = 'plain')}
   <Card.Root class="px-3 py-2">
@@ -217,10 +199,14 @@
 <div class="flex flex-col gap-4">
   <!-- Toolbar -->
   <div class="flex flex-wrap items-center gap-3">
-    <div class="flex items-center gap-0.5 rounded-md border border-border p-0.5">
-      {@render seg(view === 'month', 'Month', () => (view = 'month'))}
-      {@render seg(view === 'year', 'Year', () => (view = 'year'))}
-    </div>
+    <SegmentedControl
+      segments={[
+        { key: 'month', label: 'Month' },
+        { key: 'year', label: 'Year' },
+      ]}
+      value={view}
+      onselect={k => (view = k as 'month' | 'year')}
+    />
     {#if view === 'month'}
       <div class="flex items-center gap-1.5">
         <Button variant="outline" size="icon" class="size-8" aria-label="Previous month" onclick={() => onprev?.()}
@@ -273,7 +259,7 @@
         <Card.Root class="p-3">
           <div class="grid grid-cols-[56px_repeat(7,1fr)] gap-1.5">
             <span class="pb-1 text-[11px] text-muted-foreground">Week</span>
-            {#each DOW as d (d)}<span class="pb-1 text-center text-[11px] text-muted-foreground">{d}</span>{/each}
+            {#each DOW_LABEL as d (d)}<span class="pb-1 text-center text-[11px] text-muted-foreground">{d}</span>{/each}
             {#each weeks as w, wi (wi)}
               <div class="flex flex-col justify-center gap-0.5 rounded border border-border bg-secondary px-1 py-1.5 text-center">
                 <div class="text-[9px] uppercase tracking-wide text-muted-foreground">Wk {w.wk}</div>
@@ -335,7 +321,7 @@
         <Card.Root class="p-4">
           <div class="overflow-x-auto">
             <div class="flex min-w-[680px] justify-between px-0.5 text-[10px] text-muted-foreground">
-              {#each MON as m (m)}<span>{m}</span>{/each}
+              {#each MONTH_ABBR as m (m)}<span>{m}</span>{/each}
             </div>
             <div class="mt-1 flex min-w-[680px] gap-[3px]">
               {#each yearCols as col, ci (ci)}
@@ -353,13 +339,14 @@
               {/each}
             </div>
           </div>
+          <!-- A164: the legend renders actual ramp steps (NEG/POS above), so it can't drift from the heatmap. -->
           <div class="mt-4 flex items-center gap-2 text-[11px] text-muted-foreground">
             <span>Loss</span>
-            <span class="size-[10px] rounded-[2px] bg-destructive/55"></span>
-            <span class="size-[10px] rounded-[2px] bg-destructive/20"></span>
+            <span class={cn('size-[10px] rounded-[2px]', NEG[4])}></span>
+            <span class={cn('size-[10px] rounded-[2px]', NEG[1])}></span>
             <span class="size-[10px] rounded-[2px] bg-secondary/50"></span>
-            <span class="size-[10px] rounded-[2px] bg-chart-2/20"></span>
-            <span class="size-[10px] rounded-[2px] bg-chart-2/55"></span>
+            <span class={cn('size-[10px] rounded-[2px]', POS[1])}></span>
+            <span class={cn('size-[10px] rounded-[2px]', POS[4])}></span>
             <span>Profit</span>
           </div>
         </Card.Root>
@@ -384,7 +371,7 @@
           <div class="space-y-3 p-4">
             <!-- Day stats -->
             <div class="grid grid-cols-2 gap-2">
-              {@render stat('Day P&L', usdWhole(sel.pnl), sel.pnl >= 0 ? 'pos' : 'neg')}
+              {@render stat('Day P&L', usdWhole(sel.pnl), tone(sel.pnl))}
               {@render stat('Win rate', `${pct(sel.wins, sel.trades)}%`)}
               {@render stat('Best trade', bestTrade ? usdWhole(bestTrade.pnl) : '—', 'pos')}
               {@render stat('Worst trade', worstTrade ? usdWhole(worstTrade.pnl) : '—', 'neg')}
@@ -494,8 +481,8 @@
         <div class="space-y-3 p-4">
           {#if view === 'month'}
             <div class="grid grid-cols-2 gap-2">
-              {@render stat('Net P&L', usdWhole(monthNet), monthNet >= 0 ? 'pos' : 'neg')}
-              {@render stat('Avg / day', usdWhole(Math.round(avgDay)), avgDay >= 0 ? 'pos' : 'neg')}
+              {@render stat('Net P&L', usdWhole(monthNet), tone(monthNet))}
+              {@render stat('Avg / day', usdWhole(Math.round(avgDay)), tone(avgDay))}
               {@render stat('Win days', `${winDays}`, 'pos')}
               {@render stat('Loss days', `${lossDays}`, 'neg')}
               {@render stat('Best day', bestDay ? usdWhole(bestDay.pnl) : '—', 'pos')}
@@ -518,7 +505,7 @@
             </div>
           {:else}
             <div class="grid grid-cols-2 gap-2">
-              {@render stat('Net P&L', usdWhole(yearNet), yearNet >= 0 ? 'pos' : 'neg')}
+              {@render stat('Net P&L', usdWhole(yearNet), tone(yearNet))}
               {@render stat('Trading days', `${yearCells.length}`)}
               {@render stat('Win days', `${yearWin}`, 'pos')}
               {@render stat('Loss days', `${yearLoss}`, 'neg')}
@@ -530,3 +517,6 @@
     </div>
   </div>
 </div>
+
+<!-- Screenshot lightbox (shared part — A152): 'Enlarge screenshot' had no dialog before. -->
+<ScreenshotLightbox shot={zoomShot} onclose={() => (zoomShot = null)} />

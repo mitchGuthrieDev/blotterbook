@@ -81,8 +81,11 @@ test('demo: write controls are disabled — cost model + data management + CSV i
   const input = page.locator('table tbody tr').first().locator('td').nth(3).locator('input');
   await input.fill('ZZDEMO');
   await input.press('Enter');
+  // A161: assert the control EXISTS before asserting disabled — the old `if (count())` guard
+  // vacuously passed if "Save all" was ever renamed/removed, silencing the demo write-guard.
   const saveAll = page.getByRole('button', { name: 'Save all' });
-  if (await saveAll.count()) await expect(saveAll).toBeDisabled();
+  await expect(saveAll).toHaveCount(1);
+  await expect(saveAll).toBeDisabled();
 
   // CSV Library: the data-management controls (backup / restore / erase) are disabled on demo, and so
   // is the upload dropzone itself — importing is not allowed at all on demo (A134), not merely
@@ -110,7 +113,8 @@ test('demo: Trade Editor stages edits in-memory but persists nothing across relo
   await input.fill('ZZDEMO');
   await input.press('Enter');
   const saveAll = page.getByRole('button', { name: 'Save all' });
-  if (await saveAll.count()) await expect(saveAll).toBeDisabled();
+  await expect(saveAll).toHaveCount(1); // A161: no vacuous pass if the control is renamed
+  await expect(saveAll).toBeDisabled();
   await page.waitForTimeout(300);
 
   // Nothing was persisted (demo never touches IndexedDB), so a reload re-seeds the pristine dataset.

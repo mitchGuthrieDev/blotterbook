@@ -3,8 +3,20 @@
 // redesign screens read — trades, filters, metrics (compute), cost (costModel), per-trade meta, setup,
 // and the calendar cursor — plus the actions to mutate them. A .svelte.ts module so it can own runes.
 // The same pure-logic core (A29) the current App.svelte drives; this just packages it for the new shell.
-import { loadRefData, compute, costModel, sessionOf, STATES, BROKERS, DEMO_BROKER, DEMO_FEED, DEMO_STATE } from '../../lib/core/core.ts';
+import {
+  loadRefData,
+  compute,
+  costModel,
+  sessionOf,
+  emit,
+  STATES,
+  BROKERS,
+  DEMO_BROKER,
+  DEMO_FEED,
+  DEMO_STATE,
+} from '../../lib/core/core.ts';
 import { Adapters } from '../../lib/core/adapters.ts';
+import { cleanTags } from '../../lib/core/store.ts';
 import { demoCSV } from '../../lib/core/sampledata.ts';
 import type { Trade, FilterState, SavedFilter, SavedFilterDef, AppSetup, Setup, StoredTradeMeta, StoreLike } from '../../lib/core/types.ts';
 
@@ -48,7 +60,6 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   const filtered = $derived(applyFilters(allTrades, filters));
   const metricsAll = $derived(compute(filtered));
   const metricsActive = $derived(filters.scope === 'month' ? compute(filtered.filter(t => inMonth(t, calYear, calMonth))) : metricsAll);
-  const breakEvenMetrics = $derived(compute(allTrades));
   const roots = $derived([...new Set(allTrades.map(t => t.root).filter(Boolean))].sort());
   const tags = $derived([...new Set([...tradeMeta.values()].flatMap(m => m.tags || []))].sort());
   const costInputs = $derived({
@@ -89,6 +100,10 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     calYear = last ? +last.slice(0, 4) : new Date().getFullYear();
     calMonth = last ? +last.slice(5, 7) - 1 : new Date().getMonth();
     loaded = true;
+    // A151: the shared actions fire bus events for the ActivityTerminal (loadRefData emits
+    // refdata:loaded itself; every emit is a no-op with no subscriber).
+    emit('app:ready');
+    emit('data:loaded', { count: allTrades.length });
   }
 
   function navMonth(delta: number) {
@@ -133,11 +148,13 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     const ex = tradeMeta.get(id);
     await store.saveTradeMeta(id, { tags, note, shots: shots ?? ex?.shots ?? [] });
     await reloadAll();
+    emit('note:saved');
   }
   async function deleteTrades(ids: string[]) {
     if (isDemo) return;
     for (const id of ids) await store.deleteTrade(id);
     await reloadAll();
+    emit('trade:deleted', { count: ids.length });
   }
   // Edit a trade's core fields. The id is a content hash, so this rebuilds the trade from the original
   // (preserving the fields the editor doesn't expose) and delegates to store.updateTrade (delete-old +
@@ -162,7 +179,10 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
       ...orig,
       date: r.date,
       time: `${r.date} ${hhmmss}`,
-      root: r.symbol,
+      // A154: force the editor's free-typed symbol through the same rootSym sanitizer every
+      // other `root` write path (CSV import, backup restore) enforces; `symbol` keeps the
+      // typed form for display/id fidelity.
+      root: Adapters.rootSym(r.symbol),
       symbol: r.symbol,
       side: r.side === 'Short' ? 'short' : 'long',
       qty: r.qty,
@@ -176,12 +196,14 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     if (isDemo) return { added: 0, duplicate: 0, total: allTrades.length };
     const res = await store.addTrades(trades);
     await reloadAll();
+    emit('data:imported', { added: res.added });
     return res;
   }
   async function purgeAll() {
     if (isDemo) return;
     await store.purge();
     await reloadAll();
+    emit('data:erased');
   }
   // Full-snapshot backup (read-only — safe on demo) and restore (guarded). The Store already owns the
   // export/import shapes + the restore trust-boundary sanitizer (store.importAll).
@@ -192,6 +214,7 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     if (isDemo) return { added: 0, dup: 0 };
     const res = await store.importAll(data);
     await reloadAll();
+    emit('data:imported', { added: res.added });
     return res;
   }
   const noteFor = (date: string) => journal.get(date)?.text ?? '';
@@ -199,7 +222,11 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   async function saveNote(date: string, text: string, tags?: string[], shots?: string[]) {
     if (isDemo) return;
     const ex = journal.get(date);
-    const rec = { text, tags: tags ?? ex?.tags ?? [], shots: shots ?? ex?.shots ?? [] };
+    // A153: canonicalize BEFORE both persisting and caching, so the optimistic in-memory record
+    // is byte-identical to what the Store writes (saveJournal applies cleanTags too) — a live
+    // chip can't display a form that changes on reload, and the keep/delete decision below
+    // agrees with the Store's.
+    const rec = { text, tags: cleanTags(tags ?? ex?.tags ?? []), shots: shots ?? ex?.shots ?? [] };
     await store.saveJournal(date, rec);
     const next = new Map(journal);
     const jd = new Set(journalDates);
@@ -212,6 +239,7 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     }
     journal = next;
     journalDates = jd;
+    emit('note:saved', { date });
   }
 
   // Cost setup (broker/feed/state/platform). Updates reactively on every surface (so demo users can
@@ -282,9 +310,6 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     get metricsActive() {
       return metricsActive;
     },
-    get breakEvenMetrics() {
-      return breakEvenMetrics;
-    },
     get cost() {
       return cost;
     },
@@ -302,9 +327,6 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     },
     get journalDates() {
       return journalDates;
-    },
-    get journal() {
-      return journal;
     },
     get savedFilters() {
       return savedFilters;
@@ -328,7 +350,6 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
       return isDemo;
     },
     boot,
-    reloadAll,
     navMonth,
     jumpToLatest,
     setCal,

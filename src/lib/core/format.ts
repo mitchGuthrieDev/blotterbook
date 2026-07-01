@@ -32,11 +32,13 @@ export function esc(s: unknown) {
 }
 
 /* Platform phase label derived from the prod major: 0.x → "Beta x", ≥1 → just the version.
-   Browser-shared single source for the admin panel (A11); MIRROR of platformLabel() in
-   scripts/bump-version.mjs (the Node/CI side — keep the two in sync if the rule changes). */
+   Browser-shared single source for the admin panel (A11) and the App topbar beta badge; MIRROR of
+   platformLabel() in scripts/bump-version.mjs (the Node/CI side — keep in sync if the rule changes). */
+export function isBetaPhase(prod: string | number) {
+  return (parseInt(String(prod).split('.')[0], 10) || 0) < 1;
+}
 export function platformLabel(prod: string | number) {
-  var major = parseInt(String(prod).split('.')[0], 10) || 0;
-  return (major < 1 ? 'Beta ' : '') + prod;
+  return (isBetaPhase(prod) ? 'Beta ' : '') + prod;
 }
 
 /* CH12 — populate the version badge(s) at runtime from data/versions.json, so all surfaces

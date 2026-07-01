@@ -173,6 +173,16 @@ export interface StoredTradeMeta {
 }
 
 /** Human-readable labels for the performance report header (report.ts buildReport). */
+/** Report section toggles (A156). curve/calendar are preview-only (no text/Markdown form). */
+export interface ReportSections {
+  kpis: boolean;
+  curve: boolean;
+  calendar: boolean;
+  cost: boolean;
+  tax: boolean;
+  advanced: boolean;
+}
+
 export interface ReportLabels {
   broker: string;
   feed: string;
@@ -181,6 +191,11 @@ export interface ReportLabels {
   stateRate: number;
   platform: number | string;
   generated: Date;
+  /** User-configured report title/account + section toggles (A156) — the downloads must render
+      exactly what the preview shows, so these thread into the text/Markdown/mailto payloads. */
+  title?: string;
+  account?: string;
+  sections?: Partial<ReportSections>;
 }
 
 /** The live filter set driving the dashboard (App `filters` state / FilterBar). */
@@ -221,31 +236,42 @@ export interface AppSetup {
   platform: number;
 }
 
-/** The chrome-control bundle App passes to each dashboard panel wrapper (App.panelBundle). */
-export interface PanelBundle {
-  pkey: string;
-  collapsed: boolean;
-  dragging: boolean;
-  ontoggle: () => void;
-  onreorderstart: () => void;
-  onreorderend: () => void;
-  onreorderover: (e: DragEvent, key?: string) => void;
-  /* R12/A71 (staging): the per-module header menu (move/hide). `menu` enables it; `isFirst`/`isLast`
-     disable the move actions at the ends; the callbacks reorder/hide the module. Optional so prod/demo
-     (where the menu is off) and existing callers stay unaffected. */
-  menu?: boolean;
-  isFirst?: boolean;
-  isLast?: boolean;
-  onmoveup?: () => void;
-  onmovedown?: () => void;
-  onhide?: () => void;
-  /* F26 (staging): grid modules reorder left/right rather than up/down, so the menu's move actions
-     carry their own labels. Default to "Move up"/"Move down" for the stacked full-width panels. */
-  moveUpLabel?: string;
-  moveDownLabel?: string;
+/* ---- reference-data shapes (data/*.json, loaded by loadRefData) ---- */
+
+/** manifest.json — file → content hash, for cache-busting `?v=` params. */
+export interface RefDataManifest {
+  schemaVersion?: number;
+  files?: Record<string, string>;
 }
 
-/* ---- reference-data shapes (data/*.json, loaded by loadRefData) ---- */
+/** exchange-fees.json — per-root exchange/clearing/NFA $ per side + the micro-tier root set. */
+export interface ExchangeFeesFile {
+  schemaVersion?: number;
+  exchange?: Record<string, number>;
+  micro?: string[];
+  fallback?: { micro: number; std: number };
+}
+
+/** brokers.json — broker commission tiers + display order. */
+export interface BrokersFile {
+  schemaVersion?: number;
+  brokers?: Record<string, Broker>;
+  order?: string[];
+}
+
+/** feeds.json — per-broker feed groups; a string value aliases into `shared`. */
+export interface FeedsFile {
+  schemaVersion?: number;
+  shared?: Record<string, FeedGroups>;
+  brokerFeeds?: Record<string, FeedGroups | string>;
+}
+
+/** state-tax.json — per-state top rates + the Section-1256 blend model. */
+export interface StateTaxFile {
+  schemaVersion?: number;
+  states?: StateRow[];
+  model?: Partial<TaxModel>;
+}
 
 /** A broker's per-side commission tiers. */
 export interface Broker {

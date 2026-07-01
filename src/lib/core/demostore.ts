@@ -41,7 +41,8 @@ export function createDemoStore(): StoreLike {
           duplicate++;
           continue;
         }
-        trades.set(id, { id, ...t });
+        // A154 parity with Store.addTrades: computed id last, so an input `id` can't override it.
+        trades.set(id, { ...t, id });
         added++;
       }
       return { added, duplicate, total: trades.size };
@@ -60,7 +61,7 @@ export function createDemoStore(): StoreLike {
       trades.delete(oldId);
       trademeta.delete(oldId);
       const id = tradeId(next);
-      if (!trades.has(id)) trades.set(id, { id, ...next });
+      if (!trades.has(id)) trades.set(id, { ...next, id });
       const tags = cleanTags(m?.tags ?? old?.tags ?? []);
       const note = (m?.note ?? old?.note ?? '').trim();
       const shots = m?.shots ?? old?.shots ?? [];

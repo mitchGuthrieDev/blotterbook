@@ -8,19 +8,27 @@
   import { onMount, setContext } from 'svelte';
   import { Store } from '../lib/core/store.ts';
   import { createDemoStore } from '../lib/core/demostore.ts';
-  import { usd, money, num, ratio, rateFor, PAGE_MODE, pad2, tone, MONTH_NAMES } from '../lib/core/core.ts';
+  import { usd, money, num, ratio, rateFor, roundTurn, emit, PAGE_MODE, pad2, tone, MONTH_NAMES } from '../lib/core/core.ts';
+  import { isBetaPhase } from '../lib/core/format.ts';
   import { Badge } from '$lib/components/ui/badge';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import { createDashboard } from './lib/dashboard.svelte.ts';
   import { dailySeries } from '../lib/core/curveseries.ts';
   import { navSections, navLabel, navItems } from './lib/nav';
-  import Dashboard, { type DashStat, type DayCell, type StatDetail, type FilterModel, type FilterPatch } from './screens/Dashboard.svelte';
+  import Dashboard, {
+    DEFAULT_MODULE_KEYS,
+    type DashStat,
+    type DayCell,
+    type StatDetail,
+    type FilterModel,
+    type FilterPatch,
+  } from './screens/Dashboard.svelte';
   import Calendar, { type CalDay, type DayTrade } from './screens/Calendar.svelte';
   import Analytics from './screens/Analytics.svelte';
   import { buildAnalytics } from './lib/analytics.ts';
   import Blotter, { type BlotterRow } from './screens/Blotter.svelte';
   import TradeEditor, { type EditorRow } from './screens/TradeEditor.svelte';
-  import Reports, { type ReportVM, type ReportRange, type ExportKind } from './screens/Reports.svelte';
+  import Reports, { type ReportVM, type ReportRange, type ReportMeta, type ExportKind } from './screens/Reports.svelte';
   import { buildReportVM } from './lib/reports.ts';
   import { downloadBlob } from './lib/files.ts';
   import CsvLibrary, { type Csv, type ImportPreview } from './screens/CsvLibrary.svelte';
@@ -108,7 +116,9 @@
     canSave: !dash.isDemo,
     save: (name: string) => {
       if (dash.isDemo) return;
-      wsTemplates = { ...wsTemplates, [name]: [...(dashModules ?? [])] };
+      // A148: an untouched dashboard has dashModules === undefined (= the default layout) — capture
+      // the ACTUAL default keys, not [], so applying the saved template can't blank the dashboard.
+      wsTemplates = { ...wsTemplates, [name]: [...(dashModules ?? DEFAULT_MODULE_KEYS)] };
       persistWs();
     },
     apply: (name: string) => {
@@ -129,10 +139,12 @@
     root: dash.filters.root,
     side: dash.filters.side,
     session: dash.filters.session,
+    tag: dash.filters.tag,
     from: dash.filters.from,
     to: dash.filters.to,
     dows: dash.filters.dows,
     roots: dash.roots,
+    tags: dash.tags,
     count: dash.filtered.length,
     set: (patch: FilterPatch) => Object.assign(dash.filters, patch),
     clear: () => dash.clearFilters(),
@@ -324,56 +336,55 @@
   });
   const dashAdvStats = $derived(analytics.statRows);
 
-  // ── Blotter ──────────────────────────────────────────────────────────────────────────────────
-  // Entry/exit prices aren't in the trade model (P&L events, not bars) → undefined → "—"; hold from
-  // holdMs (fills exports only); fees from the broker rate (round-turn = rate × 2 × qty); tags/note
-  // from trademeta; session from sessionOf().
+  // ── Blotter / Trade Editor rows ──────────────────────────────────────────────────────────────
+  // ONE per-trade row base for both tables (A157 — the two mappers had drifted into near-identical
+  // copies): id/qty/meta, display date/time/side, and fees from the broker rate via the shared
+  // core roundTurn. Entry/exit prices aren't in the trade model (P&L events, not bars).
+  const rowBase = (t: Trade) => {
+    const id = dash.tradeId(t);
+    const qty = t.qty ?? 1;
+    const meta = dash.tradeMeta.get(id);
+    const r = dash.setup.broker ? rateFor(dash.setup.broker, t.root) : null;
+    return {
+      id,
+      qty,
+      meta,
+      date: t.date,
+      time: (t.time || '').slice(11, 16),
+      side: t.side === 'short' ? ('Short' as const) : ('Long' as const),
+      pnl: t.pnl,
+      fees: r ? +roundTurn(r.rate, qty).toFixed(2) : undefined,
+    };
+  };
   const blotterRows = $derived<BlotterRow[]>(
     dash.filtered.map(t => {
-      const id = dash.tradeId(t);
-      const qty = t.qty ?? 1;
-      const meta = dash.tradeMeta.get(id);
-      const r = dash.setup.broker ? rateFor(dash.setup.broker, t.root) : null;
+      const b = rowBase(t);
       return {
-        id,
-        date: t.date,
-        time: (t.time || '').slice(11, 16),
+        ...b,
         sym: t.root,
-        side: t.side === 'short' ? 'Short' : 'Long',
-        qty,
         holdMin: t.holdMs != null ? Math.round(t.holdMs / 60000) : undefined,
-        pnl: t.pnl,
-        fees: r ? +(r.rate * 2 * qty).toFixed(2) : undefined,
-        tags: meta?.tags ?? [],
-        note: !!(meta && meta.note),
+        tags: b.meta?.tags ?? [],
+        note: !!b.meta?.note,
+        noteText: b.meta?.note ?? '',
         session: dash.sessionOf(t) === 'rth' ? 'RTH' : 'ETH',
       };
     })
   );
 
-  // ── Trade Editor ─────────────────────────────────────────────────────────────────────────────
-  // Imported trades are immutable → the editor edits the metadata layer (tags + note). entry/exit
-  // aren't in the trade model (NaN → "—"); fees from the broker rate; core cells render read-only.
+  // Imported trades are immutable → the editor edits the metadata layer (tags + note); core cells
+  // render read-only (entry/exit NaN → "—").
   const editorRows = $derived<EditorRow[]>(
     dash.filtered.map(t => {
-      const id = dash.tradeId(t);
-      const qty = t.qty ?? 1;
-      const meta = dash.tradeMeta.get(id);
-      const r = dash.setup.broker ? rateFor(dash.setup.broker, t.root) : null;
+      const b = rowBase(t);
       return {
-        id,
-        date: t.date,
-        time: (t.time || '').slice(11, 16),
+        ...b,
         symbol: t.root,
-        side: t.side === 'short' ? 'Short' : 'Long',
-        qty,
         entry: NaN,
         exit: NaN,
-        pnl: t.pnl,
-        fees: r ? +(r.rate * 2 * qty).toFixed(2) : NaN,
-        tags: meta?.tags ?? [],
-        note: meta?.note ?? '',
-        shots: meta?.shots ?? [],
+        fees: b.fees ?? NaN,
+        tags: b.meta?.tags ?? [],
+        note: b.meta?.note ?? '',
+        shots: b.meta?.shots ?? [],
       };
     })
   );
@@ -404,8 +415,8 @@
     stateRate: Number(dash.costInputs.stateRate) || 0,
     platform: dash.setup.platform,
   });
-  function buildReport(range: ReportRange, compare: boolean): ReportVM {
-    return buildReportVM(dash.allTrades, range, compare, dash.costInputs, reportLabels);
+  function buildReport(range: ReportRange, compare: boolean, meta: ReportMeta): ReportVM {
+    return buildReportVM(dash.allTrades, range, compare, dash.costInputs, reportLabels, meta);
   }
   function onReportExport(kind: ExportKind, vm: ReportVM) {
     if (kind === 'md') downloadBlob('blotterbook-report.md', new Blob([vm.md], { type: 'text/markdown' }));
@@ -413,7 +424,13 @@
     else if (kind === 'email') location.href = vm.mailto;
     else if (kind === 'pdf') window.print();
     else if (kind === 'csv') {
-      const esc = (c: string) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c);
+      // A154: neutralize spreadsheet formula prefixes (= + - @ tab) with a leading apostrophe so a
+      // cell that reached the store un-sanitized can't execute when the export opens in Excel/Sheets,
+      // then quote-wrap as before.
+      const esc = (c: string) => {
+        const g = /^[=+\-@\t\r]/.test(c) ? `'${c}` : c;
+        return /[",\n]/.test(g) ? `"${g.replace(/"/g, '""')}"` : g;
+      };
       const rows = [
         ['date', 'time', 'symbol', 'side', 'qty', 'pnl'],
         ...dash.allTrades.map(t => [t.date, t.time, t.root, t.side, String(t.qty ?? 1), String(t.pnl)]),
@@ -509,6 +526,7 @@
   async function doBackup() {
     const data = await dash.exportBackup();
     downloadBlob(BACKUP_NAME, new Blob([JSON.stringify(data)], { type: 'application/json' }));
+    emit('backup:created');
   }
   async function doRestore(file: File) {
     try {
@@ -530,7 +548,7 @@
   // mirroring platformLabel), and the environment. Fetched from the CH12 versions.json single source.
   let versions = $state<{ prod?: string; staging?: string } | null>(null);
   const appVersion = $derived(versions ? (PAGE_MODE === 'staging' ? versions.staging : versions.prod) : '');
-  const isBeta = $derived(!!versions?.prod && (parseInt(versions.prod.split('.')[0], 10) || 0) < 1);
+  const isBeta = $derived(!!versions?.prod && isBetaPhase(versions.prod)); // ONE major<1→Beta rule (format.ts)
   // Environment pill: only the non-prod surfaces are badged (Staging | Demo); prod /app shows none.
   const envLabel = isStaging ? 'Staging' : isDemo ? 'Demo' : '';
 
@@ -551,7 +569,7 @@
       dash.error = e instanceof Error ? e.message : String(e);
     });
     fetch('/data/versions.json', { cache: 'no-store' })
-      .then(r => (r.ok ? r.json() : null))
+      .then(r => (r.ok ? (r.json() as Promise<{ prod?: string; staging?: string }>) : null))
       .then(v => (versions = v))
       .catch(() => {});
     loadFlags()
@@ -635,7 +653,12 @@
       statRows={analytics.statRows}
     />
   {:else if active === 'blotter'}
-    <Blotter rows={blotterRows} />
+    <Blotter
+      rows={blotterRows}
+      onsavemeta={(id, tags, note) => dash.saveTradeMeta(id, tags, note)}
+      ondelete={ids => dash.deleteTrades(ids)}
+      dataDisabled={dash.isDemo}
+    />
   {:else if active === 'trades'}
     <TradeEditor
       rows={editorRows}

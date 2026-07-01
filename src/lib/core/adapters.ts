@@ -1,4 +1,5 @@
 'use strict';
+import { pad2 } from './core.ts';
 import type { Trade, Fill, Row, Adapter, Detected, ParseResult } from './types.ts';
 /* ============================================================
    Platform CSV adapters + format auto-detection
@@ -68,8 +69,6 @@ function parseCSV(text: string, delim?: string): Row[] {
 }
 
 /* ---------- helpers ---------- */
-const pad2 = (n: string | number) => String(n).padStart(2, '0');
-
 // Futures root: MESM2025 → MES, M2KZ2025 → M2K, MES1! → MES, CME_MINI:ES1! → ES
 function rootSym(s: string) {
   if (!s) return '?';

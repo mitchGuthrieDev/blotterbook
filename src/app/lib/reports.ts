@@ -5,8 +5,11 @@
 // runes, no DOM — the staging shell calls it from a $derived and the /dev preview falls back to mocks.
 import { compute, costModel, usd, money, num, ratio, fmtDate, tone, MONTH_NAMES, type Metrics } from '../../lib/core/core.ts';
 import { buildReport } from '../../lib/core/report.ts';
-import type { Trade, CostInputs, ReportLabels } from '../../lib/core/types.ts';
+import type { Trade, CostInputs, ReportLabels, ReportSections } from '../../lib/core/types.ts';
 
+export type { ReportSections };
+/** The user-configured export meta (A156) — threads into the text/Markdown/mailto payloads. */
+export type ReportMeta = { title: string; account: string; sections: ReportSections };
 export type ReportKpi = { label: string; value: string; prior?: string; tone?: 'pos' | 'neg' };
 export type ReportVM = {
   kpis: ReportKpi[];
@@ -54,7 +57,8 @@ export function buildReportVM(
   range: ReportRange,
   compare: boolean,
   costInputs: CostInputs,
-  labels: Omit<ReportLabels, 'generated' | 'scope'>
+  labels: Omit<ReportLabels, 'generated' | 'scope'>,
+  meta?: ReportMeta
 ): ReportVM {
   const { from, to, label } = bounds(range);
   const slice = allTrades.filter(t => inRange(t, from, to));
@@ -112,7 +116,13 @@ export function buildReportVM(
     ['Max consec. losses', `${m.mcl}`],
   ];
 
-  const rep = buildReport(m, c, { ...labels, scope: label, generated: new Date() });
+  const rep = buildReport(m, c, {
+    ...labels,
+    scope: label,
+    generated: new Date(),
+    // A156: the export payloads honor the configured title/account + section toggles.
+    ...(meta ? { title: meta.title, account: meta.account, sections: meta.sections } : {}),
+  });
 
   return {
     kpis,

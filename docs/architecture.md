@@ -166,9 +166,11 @@ not in a shared globals object. Boot runs `loadRefData()` → `Store.init()` →
 > [ADR-001](adr-001-vite-svelte-spa.md). Only the pure-logic core survived, unchanged.
 
 The activity terminal, definitions, and status banners are now Svelte components under
-`src/app/parts/` (the redesigned screens live in `src/app/screens/`). The `core.ts` event bus remains: shared actions fire events
-(`app:ready`, `data:loaded`, `data:imported`, `note:saved`, `trade:deleted`, `backup:created`,
-`data:erased`) over an `EventTarget` for any listener; it stays a no-op when nothing subscribes.
+`src/app/parts/` (the redesigned screens live in `src/app/screens/`). The `core.ts` event bus
+remains (emitters re-wired in A151 after the cutover dropped them): `loadRefData` emits
+`refdata:loaded`, and the shared dashboard actions fire `app:ready`, `data:loaded`,
+`data:imported`, `note:saved`, `trade:deleted`, `backup:created`, `data:erased` over an
+`EventTarget` for any listener; it stays a no-op when nothing subscribes.
 
 ## Shared chrome: tokens + Svelte components
 

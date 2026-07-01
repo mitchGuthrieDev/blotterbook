@@ -44,6 +44,8 @@ export function isProdOnly(f) {
   // src/site/** Svelte components + shared chrome + client entries (A69) ship to prod — EXCEPT the
   // internal admin page (Admin.svelte / admin.ts), which is Access-gated and bumps neither track.
   if (/^src\/site\/.*\.(?:js|ts|svelte)$/.test(f)) return !/admin\.(?:ts|svelte)$/i.test(f);
+  // A161: SEO/site chrome served verbatim from static/ (robots/sitemap/og image) is prod-facing.
+  if (f === 'static/robots.txt' || f === 'static/sitemap.xml' || /^static\/assets\//.test(f)) return true;
   return false;
 }
 
@@ -71,6 +73,9 @@ export function isProdShipping(f) {
   if (/^src\/styles\/.*\.css$/.test(f)) return true;
   if (/^src\/assets\//.test(f)) return true; // bundled chrome (favicon/banner/icons), shared
   if (/^static\/data\//.test(f) && !NON_SHIPPING_DATA.has(f)) return true;
+  // A161: the Pages infra files served verbatim from static/ (security headers + rewrites) apply
+  // to EVERY surface — a change there ships live and must bump like shared app code.
+  if (f === 'static/_headers' || f === 'static/_redirects') return true;
   return false;
 }
 

@@ -176,6 +176,34 @@ ok('isoWeek: 2019-12-30 (Mon) is week 1 of 2020', isoWeek(new Date(2019, 11, 30)
   ok('report: commRows count === bySym count', rep.commRows.length === c.bySym.length, `${rep.commRows.length} vs ${c.bySym.length}`);
   const commOk = rep.commRows.every((row, i) => row.total === money(c.bySym[i].total) && row.qty === c.bySym[i].qty);
   ok('report: each commRow total/qty matches its bySym entry', commOk);
+
+  // A156: the exports honor the configured title/account + section toggles (the download must
+  // render exactly what the preview shows) — and the defaults preserve the pre-A156 payloads.
+  ok('report: default md keeps the stock title + all sections', rep.reportMd.startsWith('# Blotterbook — Performance Report'));
+  ok(
+    'report: default md includes Summary + cost + stats',
+    ['## Summary', '## Cost & tax breakdown', '## Key statistics'].every(h => rep.reportMd.includes(h))
+  );
+  const rep2 = buildReport(m, c, {
+    ...labels,
+    title: 'Q1 review',
+    account: 'Apex 50k',
+    sections: { kpis: true, cost: false, tax: false, advanced: false },
+  });
+  ok(
+    'report: custom title leads the md + text + mailto',
+    rep2.reportMd.startsWith('# Q1 review') &&
+      rep2.reportText.startsWith('Q1 review') &&
+      rep2.mailto.includes(encodeURIComponent('Q1 review'))
+  );
+  ok('report: account line rendered', rep2.reportMd.includes('**Account:** Apex 50k') && rep2.reportText.includes('Account: Apex 50k'));
+  ok(
+    'report: toggled-off sections omitted from md',
+    !rep2.reportMd.includes('## Cost & tax breakdown') &&
+      !rep2.reportMd.includes('## Key statistics') &&
+      rep2.reportMd.includes('## Summary')
+  );
+  ok('report: toggled-off cost block omitted from text', !rep2.reportText.includes('Commissions:'));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

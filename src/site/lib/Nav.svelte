@@ -22,11 +22,13 @@
 </script>
 
 <header class="sticky top-0 z-50 border-b border-border bg-background/86 backdrop-blur-[10px] backdrop-saturate-150">
-  <nav class="nav relative mx-auto flex max-w-[1080px] items-center px-[22px] py-[13px]">
+  <!-- A164: sized to match Home's A145 header (h-12, text-sm font-semibold wordmark, h-2 dot) so the
+       chrome doesn't visibly jump between / and the info pages. -->
+  <nav class="nav relative mx-auto flex h-12 max-w-[1080px] items-center px-[22px]">
     <a
-      class="wordmark inline-flex items-center gap-[9px] text-[16px] font-bold text-foreground no-underline hover:no-underline"
+      class="wordmark inline-flex items-center gap-[9px] text-sm font-semibold tracking-[0.01em] text-foreground no-underline hover:no-underline"
       href="index.html"
-      ><span class="dot h-[9px] w-[9px] rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--chart-3))]"></span>Blotterbook</a
+      ><span class="dot h-2 w-2 rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--chart-3))]"></span>Blotterbook</a
     >
     <input
       type="checkbox"

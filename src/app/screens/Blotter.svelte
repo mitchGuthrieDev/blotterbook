@@ -15,19 +15,23 @@
     fees?: number;
     tags: string[];
     note: boolean;
+    /** The trade's journal note text (edited in the detail drawer — A149). */
+    noteText: string;
     session: 'RTH' | 'ETH';
   };
 </script>
 
 <script lang="ts">
   // Blotter — a full-width, feature-rich trade table on the shadcn-svelte primitives (Table/Badge/
-  // Checkbox/Input/Card + Select/Popover/Button). Row click → a slide-over detail drawer; click-to-sort
-  // headers, search + side filter, column-group toggle, group-by (day/symbol) with subtotals,
-  // bulk-select, footer totals. Rows come from the `rows` prop (real trades, wired by App.svelte on all
-  // surfaces). Color only in the P&L.
-  import { Search, ArrowUpDown, ChevronUp, Columns3, X, Tag, Trash2, Paperclip, ImagePlus } from '@lucide/svelte';
+  // Checkbox/Input/Card + Select/Popover/Button + Sheet). Row click → a detail Sheet with an editable
+  // journal note + tags (persisted via onsavemeta — A149); click-to-sort headers, search + side filter,
+  // column-group toggle, group-by (day/symbol) with subtotals, bulk-select with tag/delete actions,
+  // footer totals. Rows come from the `rows` prop (real trades, wired by App.svelte on all surfaces).
+  // Color only in the P&L.
+  import { Search, ArrowUpDown, ChevronUp, Columns3, Tag, Trash2, X } from '@lucide/svelte';
   import { cn } from '$lib/utils';
-  import { usd } from '../../lib/core/core.ts';
+  import { usd, tone } from '../../lib/core/core.ts';
+  import { cleanTag } from '../../lib/core/store.ts';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Checkbox } from '$lib/components/ui/checkbox';
@@ -36,9 +40,26 @@
   import * as Table from '$lib/components/ui/table';
   import * as Select from '$lib/components/ui/select';
   import * as Popover from '$lib/components/ui/popover';
-  import { fade, fly } from 'svelte/transition';
+  import * as Sheet from '$lib/components/ui/sheet';
+  import * as AlertDialog from '$lib/components/ui/alert-dialog';
+  import { createPagination } from '../lib/pagination.svelte.ts';
+  import PaginationControls from '../parts/PaginationControls.svelte';
+  import { fade } from 'svelte/transition';
 
-  let { rows }: { rows: BlotterRow[] } = $props();
+  let {
+    rows,
+    onsavemeta,
+    ondelete,
+    dataDisabled = false,
+  }: {
+    rows: BlotterRow[];
+    /** Persist a trade's tags + journal note (the drawer's Save — A149). */
+    onsavemeta?: (id: string, tags: string[], note: string) => void;
+    /** Delete the given trade ids (the bulk Delete — A149). */
+    ondelete?: (ids: string[]) => void;
+    /** Demo: disable every write control (demo never mutates). */
+    dataDisabled?: boolean;
+  } = $props();
   const net = (t: BlotterRow) => t.pnl - (t.fees ?? 0);
   // Cents-precision signed currency (the blotter shows per-trade P&L + fees to the cent).
   const money = usd;
@@ -76,16 +97,9 @@
     })
   );
   // Pagination — the blotter can list thousands of trades; page them (50/page default) like prod.
-  const PAGE_SIZES = [25, 50, 100, Infinity];
-  let pageSize = $state<number>(50);
-  let page = $state(0);
-  const totalPages = $derived(Math.max(1, Math.ceil(sorted.length / pageSize)));
-  $effect(() => {
-    if (page > totalPages - 1) page = totalPages - 1; // clamp when the filter/sort shrinks the list
-  });
-  const pagedSorted = $derived(pageSize === Infinity ? sorted : sorted.slice(page * pageSize, page * pageSize + pageSize));
-  const pageStart = $derived(sorted.length ? page * pageSize + 1 : 0);
-  const pageEnd = $derived(pageSize === Infinity ? sorted.length : Math.min(sorted.length, (page + 1) * pageSize));
+  // Shared factory (A157) — the clamp/slice logic has ONE definition with the Trade Editor.
+  const pager = createPagination(() => sorted);
+  const pagedSorted = $derived(pager.paged);
 
   type Group = { key: string; label: string; trades: BlotterRow[]; subtotal: number };
   const groups = $derived.by((): Group[] => {
@@ -119,6 +133,50 @@
     selected = v ? new Set(filtered.map(t => t.id)) : new Set();
   }
   const openTrade = $derived(openId ? rows.find(t => t.id === openId) : undefined);
+
+  // ── Detail-drawer note/tags draft (A149 — the old drawer's controls were dead mock leftovers
+  // that silently discarded input). Re-seeded whenever a different trade opens.
+  let draftNote = $state('');
+  let draftTags = $state<string[]>([]);
+  let tagDraft = $state('');
+  $effect(() => {
+    const t = openId ? rows.find(r => r.id === openId) : undefined;
+    draftNote = t?.noteText ?? '';
+    draftTags = t ? [...t.tags] : [];
+    tagDraft = '';
+  });
+  function addDraftTag() {
+    // Canonicalize at entry (the same cleanTag the Store applies on save — A153).
+    const t = cleanTag(tagDraft);
+    if (t && !draftTags.includes(t)) draftTags = [...draftTags, t];
+    tagDraft = '';
+  }
+  function saveDrawer() {
+    if (dataDisabled || !openTrade) return;
+    onsavemeta?.(openTrade.id, [...draftTags], draftNote);
+    openId = null;
+  }
+
+  // ── Bulk actions (A149) ──────────────────────────────────────────────────────────────────────
+  let bulkTag = $state('');
+  let bulkTagOpen = $state(false);
+  function applyBulkTag() {
+    const t = cleanTag(bulkTag);
+    if (dataDisabled || !t) return;
+    for (const id of selected) {
+      const r = rows.find(x => x.id === id);
+      if (r && !r.tags.includes(t)) onsavemeta?.(id, [...r.tags, t], r.noteText);
+    }
+    bulkTag = '';
+    bulkTagOpen = false;
+  }
+  let deleteOpen = $state(false);
+  function doBulkDelete() {
+    if (dataDisabled) return;
+    ondelete?.([...selected]);
+    selected = new Set();
+    deleteOpen = false;
+  }
 </script>
 
 {#snippet sortHead(key: 'time' | 'sym' | 'qty' | 'pnl', label: string, cls: string)}
@@ -190,8 +248,33 @@
         transition:fade={{ duration: 120 }}
       >
         <span class="font-medium">{selected.size} selected</span>
-        <Button variant="outline" size="sm" class="h-7"><Tag class="size-3.5" /> Tag</Button>
-        <Button variant="outline" size="sm" class="h-7 text-destructive"><Trash2 class="size-3.5" /> Delete</Button>
+        <Popover.Root bind:open={bulkTagOpen}>
+          <Popover.Trigger>
+            {#snippet child({ props })}
+              <Button {...props} variant="outline" size="sm" class="h-7" disabled={dataDisabled}><Tag class="size-3.5" /> Tag</Button>
+            {/snippet}
+          </Popover.Trigger>
+          <Popover.Content class="w-56" align="start">
+            <p class="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Tag {selected.size} selected</p>
+            <div class="flex items-center gap-1">
+              <Input
+                bind:value={bulkTag}
+                placeholder="Tag name…"
+                class="h-8 flex-1"
+                onkeydown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    applyBulkTag();
+                  }
+                }}
+              />
+              <Button variant="secondary" size="sm" class="h-8" disabled={!bulkTag.trim()} onclick={applyBulkTag}>Apply</Button>
+            </div>
+          </Popover.Content>
+        </Popover.Root>
+        <Button variant="outline" size="sm" class="h-7 text-destructive" disabled={dataDisabled} onclick={() => (deleteOpen = true)}
+          ><Trash2 class="size-3.5" /> Delete</Button
+        >
         <Button variant="ghost" size="sm" class="ml-auto h-7" onclick={() => (selected = new Set())}>Clear</Button>
       </div>
     {/if}
@@ -249,7 +332,12 @@
                   {#if t.note}<span class="size-1.5 rounded-full bg-primary" title="Has a note"></span>{/if}
                 </span>
               </Table.Cell>
-              <Table.Cell class="font-medium">{t.sym}</Table.Cell>
+              <Table.Cell class="font-medium">
+                <!-- A real button so keyboard users can open the detail sheet (the row onclick is mouse-only). -->
+                <button type="button" class="rounded hover:underline focus-visible:underline" onclick={() => (openId = t.id)}
+                  >{t.sym}</button
+                >
+              </Table.Cell>
               <Table.Cell>{@render sideBadge(t.side)}</Table.Cell>
               <Table.Cell class="text-right tabular-nums">{t.qty}</Table.Cell>
               <Table.Cell class={cn('text-right font-semibold tabular-nums', t.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}
@@ -261,9 +349,7 @@
                 <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.holdMin != null ? `${t.holdMin}m` : '—'}</Table.Cell>
               {/if}
               {#if cols.costs}
-                <Table.Cell class="text-right tabular-nums text-muted-foreground"
-                  >{t.fees != null ? `-$${t.fees.toFixed(2)}` : '—'}</Table.Cell
-                >
+                <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.fees != null ? money(-t.fees) : '—'}</Table.Cell>
                 <Table.Cell class={cn('text-right tabular-nums', net(t) >= 0 ? 'text-chart-2' : 'text-destructive')}
                   >{money(net(t))}</Table.Cell
                 >
@@ -285,34 +371,9 @@
           <Table.Cell colspan={colCount} class="pl-3">
             <span class="flex flex-wrap items-center gap-x-3 gap-y-2">
               <span class="text-xs tabular-nums text-muted-foreground"
-                >{pageStart.toLocaleString()}–{pageEnd.toLocaleString()} of {filtered.length.toLocaleString()}</span
+                >{pager.start.toLocaleString()}–{pager.end.toLocaleString()} of {filtered.length.toLocaleString()}</span
               >
-              <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span class="mr-1">Rows:</span>
-                {#each PAGE_SIZES as sz (sz)}
-                  <button
-                    type="button"
-                    onclick={() => (pageSize = sz)}
-                    class={cn(
-                      'rounded px-1.5 py-0.5 transition-colors',
-                      pageSize === sz ? 'bg-secondary text-foreground' : 'hover:text-foreground'
-                    )}
-                  >
-                    {sz === Infinity ? 'All' : sz}
-                  </button>
-                {/each}
-                <Button variant="outline" size="sm" class="ml-1 h-7" disabled={page === 0} onclick={() => (page = Math.max(0, page - 1))}
-                  >Prev</Button
-                >
-                <span class="tabular-nums">{page + 1}/{totalPages}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  class="h-7"
-                  disabled={page >= totalPages - 1}
-                  onclick={() => (page = Math.min(totalPages - 1, page + 1))}>Next</Button
-                >
-              </span>
+              <PaginationControls {pager} />
               <span class={cn('ml-auto text-sm font-semibold tabular-nums', totalPnl >= 0 ? 'text-chart-2' : 'text-destructive')}
                 >Net {money(totalPnl)}</span
               >
@@ -324,81 +385,105 @@
   </Card.Content>
 </Card.Root>
 
-<!-- Detail drawer -->
-{#if openTrade}
-  <div class="fixed inset-0 z-40 bg-black/60" transition:fade={{ duration: 150 }} onclick={() => (openId = null)} role="presentation"></div>
-  <aside
-    class="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-card"
-    transition:fly={{ x: 400, duration: 200 }}
-  >
-    <div class="flex items-center justify-between border-b border-border px-4 py-3">
-      <div class="flex items-center gap-2">
-        <span class="text-sm font-semibold">{openTrade.sym}</span>
-        {@render sideBadge(openTrade.side)}
-        <span class="text-xs text-muted-foreground">{openTrade.date} · {openTrade.time}</span>
-      </div>
-      <button
-        type="button"
-        class="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-        aria-label="Close"
-        onclick={() => (openId = null)}
-      >
-        <X class="size-4" />
-      </button>
-    </div>
-    <div class="flex-1 space-y-4 overflow-y-auto p-4">
-      <div class="grid grid-cols-2 gap-2 text-sm">
-        {#snippet field(label: string, value: string, tone: 'pos' | 'neg' | 'plain' = 'plain')}
-          <div class="rounded-md border border-border bg-background px-3 py-2">
-            <div class="text-[11px] text-muted-foreground">{label}</div>
-            <div
-              class={cn(
-                'mt-0.5 font-semibold tabular-nums',
-                tone === 'pos' ? 'text-chart-2' : tone === 'neg' ? 'text-destructive' : 'text-foreground'
-              )}
-            >
-              {value}
+<!-- Detail sheet (A149: rebuilt on the Sheet primitive — Esc/focus handling for free — with the
+     note + tags actually wired to onsavemeta; screenshots stay the Trade Editor's job) -->
+<Sheet.Root
+  open={!!openTrade}
+  onOpenChange={o => {
+    if (!o) openId = null;
+  }}
+>
+  <Sheet.Content side="right" class="w-full sm:max-w-md">
+    {#if openTrade}
+      <Sheet.Header>
+        <Sheet.Title class="flex items-center gap-2">
+          {openTrade.sym}
+          {@render sideBadge(openTrade.side)}
+        </Sheet.Title>
+        <Sheet.Description>{openTrade.date} · {openTrade.time}</Sheet.Description>
+      </Sheet.Header>
+      <div class="flex-1 space-y-4 overflow-y-auto p-4">
+        <div class="grid grid-cols-2 gap-2 text-sm">
+          {#snippet field(label: string, value: string, fieldTone: 'pos' | 'neg' | 'plain' = 'plain')}
+            <div class="rounded-md border border-border bg-background px-3 py-2">
+              <div class="text-[11px] text-muted-foreground">{label}</div>
+              <div
+                class={cn(
+                  'mt-0.5 font-semibold tabular-nums',
+                  fieldTone === 'pos' ? 'text-chart-2' : fieldTone === 'neg' ? 'text-destructive' : 'text-foreground'
+                )}
+              >
+                {value}
+              </div>
             </div>
+          {/snippet}
+          {@render field('Gross P&L', money(openTrade.pnl), tone(openTrade.pnl))}
+          {@render field('Net P&L', money(net(openTrade)), tone(net(openTrade)))}
+          {@render field('Entry', openTrade.entry != null ? String(openTrade.entry) : '—')}
+          {@render field('Exit', openTrade.exit != null ? String(openTrade.exit) : '—')}
+          {@render field('Qty', String(openTrade.qty))}
+          {@render field('Hold', openTrade.holdMin != null ? `${openTrade.holdMin}m` : '—')}
+          {@render field('Fees', openTrade.fees != null ? money(-openTrade.fees) : '—', 'neg')}
+          {@render field('Session', openTrade.session)}
+        </div>
+        <div>
+          <div class="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Tags</div>
+          <div class="mb-1.5 flex flex-wrap gap-1">
+            {#each draftTags as tag (tag)}
+              <Badge variant="secondary" class="gap-1">
+                {tag}{#if !dataDisabled}<button
+                    type="button"
+                    class="text-muted-foreground hover:text-foreground"
+                    aria-label="Remove tag {tag}"
+                    onclick={() => (draftTags = draftTags.filter(x => x !== tag))}><X class="size-3" /></button
+                  >{/if}
+              </Badge>
+            {/each}
+            {#if !draftTags.length}<span class="text-xs text-muted-foreground">No tags</span>{/if}
           </div>
-        {/snippet}
-        {@render field('Gross P&L', money(openTrade.pnl), openTrade.pnl >= 0 ? 'pos' : 'neg')}
-        {@render field('Net P&L', money(net(openTrade)), net(openTrade) >= 0 ? 'pos' : 'neg')}
-        {@render field('Entry', openTrade.entry != null ? String(openTrade.entry) : '—')}
-        {@render field('Exit', openTrade.exit != null ? String(openTrade.exit) : '—')}
-        {@render field('Qty', String(openTrade.qty))}
-        {@render field('Hold', openTrade.holdMin != null ? `${openTrade.holdMin}m` : '—')}
-        {@render field('Fees', openTrade.fees != null ? `-$${openTrade.fees.toFixed(2)}` : '—', 'neg')}
-        {@render field('Session', openTrade.session)}
-      </div>
-      <div>
-        <div class="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Tags</div>
-        <div class="flex flex-wrap gap-1">
-          {#each openTrade.tags as tag (tag)}<Badge variant="secondary">{tag}</Badge>{/each}
-          <Badge variant="outline" class="cursor-pointer border-dashed text-muted-foreground"><Tag class="size-3" /> Add</Badge>
+          <Input
+            bind:value={tagDraft}
+            placeholder="Add tag, Enter…"
+            class="h-8"
+            disabled={dataDisabled}
+            onkeydown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addDraftTag();
+              }
+            }}
+          />
+        </div>
+        <div>
+          <div class="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Journal note</div>
+          <textarea
+            class="h-24 w-full resize-none rounded-md border border-border bg-background p-2 text-xs leading-relaxed outline-none focus-visible:border-ring"
+            placeholder="Notes for this trade…"
+            bind:value={draftNote}
+            disabled={dataDisabled}
+          ></textarea>
         </div>
       </div>
-      <div>
-        <div class="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Journal note</div>
-        <textarea
-          class="h-24 w-full resize-none rounded-md border border-border bg-background p-2 text-xs leading-relaxed outline-none focus-visible:border-ring"
-          placeholder="Notes for this trade…"
-        ></textarea>
-      </div>
-      <div>
-        <div class="mb-1.5 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          <Paperclip class="size-3" /> Screenshot
-        </div>
-        <button
-          type="button"
-          class="grid aspect-video w-full place-items-center rounded-md border border-dashed border-border text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <span class="flex flex-col items-center gap-1 text-xs"><ImagePlus class="size-5" /> Drop a chart image</span>
-        </button>
-      </div>
-    </div>
-    <div class="flex justify-end gap-2 border-t border-border p-3">
-      <Button variant="ghost" size="sm" onclick={() => (openId = null)}>Close</Button>
-      <Button size="sm">Save</Button>
-    </div>
-  </aside>
-{/if}
+      <Sheet.Footer class="flex-row justify-end gap-2">
+        <Button variant="ghost" size="sm" onclick={() => (openId = null)}>Close</Button>
+        <Button size="sm" disabled={dataDisabled} onclick={saveDrawer}>Save</Button>
+      </Sheet.Footer>
+    {/if}
+  </Sheet.Content>
+</Sheet.Root>
+
+<!-- Bulk-delete confirm (A149) -->
+<AlertDialog.Root bind:open={deleteOpen}>
+  <AlertDialog.Content>
+    <AlertDialog.Header>
+      <AlertDialog.Title>Delete {selected.size} {selected.size === 1 ? 'trade' : 'trades'}?</AlertDialog.Title>
+      <AlertDialog.Description
+        >This permanently removes the selected trades (and their tags/notes) from this browser.</AlertDialog.Description
+      >
+    </AlertDialog.Header>
+    <AlertDialog.Footer>
+      <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+      <AlertDialog.Action class="bg-destructive text-white hover:bg-destructive/90" onclick={doBulkDelete}>Delete</AlertDialog.Action>
+    </AlertDialog.Footer>
+  </AlertDialog.Content>
+</AlertDialog.Root>

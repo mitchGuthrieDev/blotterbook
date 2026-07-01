@@ -2,10 +2,36 @@
 /* Blotterbook app · core — metrics, formatting, broker/cost model, reference-data loading, shared
    pure helpers, and the app event bus. A native ES module: everything it shares is `export`ed and
    imported explicitly by the Svelte app + the pure-logic modules. */
-import type { Trade, CostInputs, CostModel, SymCost, Broker, FeedGroups, TaxModel, StateRow } from './types.ts';
+import type {
+  Trade,
+  CostInputs,
+  CostModel,
+  SymCost,
+  Broker,
+  FeedGroups,
+  TaxModel,
+  StateRow,
+  RefDataManifest,
+  ExchangeFeesFile,
+  BrokersFile,
+  FeedsFile,
+  StateTaxFile,
+} from './types.ts';
 
-export const pad2 = (n: number) => String(n).padStart(2, '0');
+export const pad2 = (n: number | string) => String(n).padStart(2, '0');
 export const fmtDate = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+// running min/max — avoids Math.min(...arr)/Math.max(...arr), whose argument spread overflows the
+// call stack on large per-trade arrays (equity curve / pnl list). compute() walks manually for the
+// same reason; this is the shared helper for the chart code (B27).
+export function minMax(arr: number[]) {
+  let lo = Infinity,
+    hi = -Infinity;
+  for (const v of arr) {
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  return { lo, hi };
+}
 // Positive/negative P&L classifier — shared by the dashboard/analytics/reports view-models for coloring.
 export const tone = (n: number): 'pos' | 'neg' => (n >= 0 ? 'pos' : 'neg');
 // Full month names, index 0 = January — shared by the App dashboard + the reports view-model.
@@ -23,6 +49,8 @@ export const MONTH_NAMES = [
   'November',
   'December',
 ];
+// Short month names, index 0 = Jan — shared by the Calendar month picker + the changelog dates.
+export const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 /* Page modes (document.body[data-mode]):
      ''        — the main app
      'demo'    — in-memory sample data, never persists
@@ -62,11 +90,12 @@ export const PAGE_MODE = (typeof document !== 'undefined' && document.body && do
    ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------
-   App event bus — shared code EMITS action events; widgets.js (loaded on
-   every surface since CH16) subscribes to mirror them into the activity
-   terminal. emit() stays a harmless no-op on any page without a listener,
-   so shared code never names a widget symbol directly. Events: app:ready,
-   data:imported, note:saved, trade:deleted, backup:created, data:erased.
+   App event bus — shared code EMITS action events; the Dashboard's
+   ActivityTerminal part subscribes to mirror them into the activity
+   log. emit() stays a harmless no-op on any page without a listener,
+   so shared code never names a component symbol directly. Events:
+   app:ready, refdata:loaded, data:loaded, data:imported, note:saved,
+   trade:deleted, backup:created, data:erased.
    ------------------------------------------------------------------ */
 export const BUS = new EventTarget();
 export function emit(name: string, detail?: unknown) {
@@ -370,6 +399,17 @@ export function isoWeek(d: Date) {
   const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
   return 1 + Math.round(((t.getTime() - y0.getTime()) / 864e5 - 3 + ((y0.getUTCDay() + 6) % 7)) / 7);
 }
+// Sunday-first month-grid scaffold: leading nulls up to the 1st's weekday, then day numbers,
+// then trailing nulls to a whole number of weeks. Shared by the Dashboard / Calendar / Reports
+// month grids so the scaffolding can't drift.
+export function monthCells(firstDow: number, daysInMonth: number): (number | null)[] {
+  const cells: (number | null)[] = [
+    ...Array.from({ length: firstDow }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
 
 /* ============================================================
    Broker / commission / cost model
@@ -409,21 +449,22 @@ export const DEMO_BROKER = 'AMP',
    cached indefinitely yet still update the instant its bytes change.
    ------------------------------------------------------------ */
 export async function loadRefData() {
-  const man = await fetch('../data/manifest.json?t=' + Date.now(), { cache: 'no-cache' }).then(r => {
+  // Fetched JSON is typed at the boundary (A162) — the /data/* files own these shapes (types.ts).
+  const man: RefDataManifest = await fetch('../data/manifest.json?t=' + Date.now(), { cache: 'no-cache' }).then(r => {
     if (!r.ok) throw new Error('manifest ' + r.status);
-    return r.json();
+    return r.json() as Promise<RefDataManifest>;
   });
   const v = (f: string) => (man.files && man.files[f] ? '?v=' + man.files[f] : '');
-  const get = (f: string) =>
+  const get = <T>(f: string): Promise<T> =>
     fetch(`../data/${f}${v(f)}`).then(r => {
       if (!r.ok) throw new Error(f + ' ' + r.status);
-      return r.json();
+      return r.json() as Promise<T>;
     });
   const [exch, brokers, feeds, tax] = await Promise.all([
-    get('exchange-fees.json'),
-    get('brokers.json'),
-    get('feeds.json'),
-    get('state-tax.json'),
+    get<ExchangeFeesFile>('exchange-fees.json'),
+    get<BrokersFile>('brokers.json'),
+    get<FeedsFile>('feeds.json'),
+    get<StateTaxFile>('state-tax.json'),
   ]);
 
   EXCH = exch.exchange || {};
@@ -435,9 +476,10 @@ export async function loadRefData() {
 
   // resolve string aliases (e.g. "AMP": "CQG") against feeds.shared
   const shared = feeds.shared || {};
+  const brokerFeeds = feeds.brokerFeeds || {};
   BROKER_FEEDS = {};
-  for (const k in feeds.brokerFeeds || {}) {
-    const v = feeds.brokerFeeds[k];
+  for (const k in brokerFeeds) {
+    const v = brokerFeeds[k];
     BROKER_FEEDS[k] = typeof v === 'string' ? shared[v] || {} : v;
   }
 
@@ -452,6 +494,7 @@ export async function loadRefData() {
     TAXMODEL.ltcgWeight /= wsum;
     TAXMODEL.ordinaryWeight /= wsum;
   }
+  emit('refdata:loaded');
 }
 
 export function rateFor(brokerKey: string, root: string) {
@@ -460,6 +503,11 @@ export function rateFor(brokerKey: string, root: string) {
     exch = exchOf(root, tier);
   return { rate: +(b.comm[tier] + exch).toFixed(4), known: EXCH[root] != null };
 }
+
+// Round-turn commission for one trade: 2 sides × the per-side rate × contracts. Close-event
+// exports (e.g. TradingView) have no qty, so (qty || 1) keeps single-contract data unchanged.
+// ONE definition — shared by costModel, curveseries, and the blotter/editor row mappers.
+export const roundTurn = (rate: number, qty?: number) => rate * 2 * (qty || 1);
 
 // Section-1256 blended federal rate + a given state rate (%). Takes the rate as a param so the cost
 // panel passes its own value (A32) — no DOM coupling.
@@ -499,7 +547,7 @@ export function costModel(m: Metrics, inputs: CostInputs = {}): CostModel {
     // (e.g. TradingView) have no qty, so (t.qty||1) keeps single-contract data unchanged.
     const q = t.qty || 1;
     const { rate, known } = rateFor(broker, t.root);
-    const rt = rate * 2 * q;
+    const rt = roundTurn(rate, q);
     totalComm += rt;
     let e = bySym.get(t.root);
     if (!e) bySym.set(t.root, (e = { root: t.root, count: 0, qty: 0, rate, known, total: 0 }));

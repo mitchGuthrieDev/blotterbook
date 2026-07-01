@@ -67,6 +67,17 @@ ok('tradeCount matches', (await s.tradeCount()) === 2);
 await s.saveJournal('2026-01-02', { text: 'good day', tags: ['a', ''], shots: [] });
 ok('getJournal returns saved text', (await s.getJournal('2026-01-02')).text === 'good day');
 ok('journalDates has the date', (await s.journalDates()).has('2026-01-02'));
+// A153/A161: lock in the canonical tag form — every write runs cleanTags (trim + lowercase +
+// strip markup + dedupe), the SAME rule the real Store and backup restore apply.
+await s.saveJournal('2026-01-02', { text: 'good day', tags: ['Scalp', 'scalp', ' <b>X&Y</b> ', ''], shots: [] });
+{
+  const tags = (await s.getJournal('2026-01-02')).tags;
+  ok(
+    'tags canonicalized (lowercase + markup-strip + dedupe)',
+    tags.length === 2 && tags[0] === 'scalp' && tags[1] === 'bxy/b',
+    tags.join('|')
+  );
+}
 await s.saveJournal('2026-01-02', { text: '', tags: [], shots: [] });
 ok('empty save deletes the note', !(await s.journalDates()).has('2026-01-02'));
 

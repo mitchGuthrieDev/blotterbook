@@ -156,14 +156,31 @@
     if (dataDisabled) return; // A134: no uploading in demo
     if (parse) fileInput?.click();
   }
-  async function onFilePicked(e: Event) {
-    const input = e.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
+  async function handleFile(file: File | undefined) {
     if (!file || !parse || dataDisabled) return;
     const text = await file.text();
     preview = parse(text, file.name);
     uploadOpen = true;
+  }
+  async function onFilePicked(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    await handleFile(file);
+  }
+  // A160: the dropzone advertised drag & drop but implemented none — the browser default then
+  // NAVIGATED the tab to the dropped file. The wrapper (not the disable-able button) owns the drag
+  // events so a drop is always intercepted; the demo guard just swallows it.
+  let dragging = $state(false);
+  function onDragOver(e: DragEvent) {
+    e.preventDefault();
+    dragging = !dataDisabled;
+  }
+  function onDrop(e: DragEvent) {
+    e.preventDefault();
+    dragging = false;
+    if (dataDisabled) return; // demo: reject the drop (and the navigation default)
+    void handleFile(e.dataTransfer?.files?.[0]);
   }
   async function confirmImport() {
     if (!preview || preview.error || dataDisabled) return;
@@ -231,23 +248,29 @@
 
   <input bind:this={fileInput} type="file" accept=".csv,text/csv" class="hidden" onchange={onFilePicked} />
 
-  <!-- Upload dropzone (A134: disabled in demo — the demo dataset is fixed) -->
-  <button
-    type="button"
-    onclick={pickFile}
-    disabled={dataDisabled}
-    class="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-card py-8 text-center transition-colors hover:border-ring hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border disabled:hover:bg-card"
-  >
-    <span class="grid size-10 place-items-center rounded-full border border-border text-muted-foreground"
-      ><CloudUpload class="size-5" /></span
+  <!-- Upload dropzone (A134: disabled in demo — the demo dataset is fixed; A160: real drop handling) -->
+  <!-- svelte-ignore a11y_no_static_element_interactions — drag-only wrapper; the button inside is the control -->
+  <div ondragover={onDragOver} ondragleave={() => (dragging = false)} ondrop={onDrop}>
+    <button
+      type="button"
+      onclick={pickFile}
+      disabled={dataDisabled}
+      class={cn(
+        'flex w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-card py-8 text-center transition-colors hover:border-ring hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border disabled:hover:bg-card',
+        dragging ? 'border-primary bg-accent' : 'border-border'
+      )}
     >
-    <span class="text-sm font-medium text-foreground">Drag &amp; drop CSVs, or click to browse</span>
-    <span class="text-xs text-muted-foreground"
-      >{dataDisabled
-        ? 'Importing is disabled in the demo — explore the sample dataset'
-        : 'TradingView, Tradovate, NinjaTrader, Apex… — auto-detected'}</span
-    >
-  </button>
+      <span class="grid size-10 place-items-center rounded-full border border-border text-muted-foreground"
+        ><CloudUpload class="size-5" /></span
+      >
+      <span class="text-sm font-medium text-foreground">Drag &amp; drop CSVs, or click to browse</span>
+      <span class="text-xs text-muted-foreground"
+        >{dataDisabled
+          ? 'Importing is disabled in the demo — explore the sample dataset'
+          : 'TradingView, Tradovate, NinjaTrader, Apex… — auto-detected'}</span
+      >
+    </button>
+  </div>
 
   <!-- File table -->
   <Card.Root>
@@ -281,7 +304,12 @@
                 <Table.Cell class="pl-4">
                   <span class="flex items-center gap-2">
                     <FileText class="size-4 shrink-0 text-muted-foreground" />
-                    <span class="font-medium">{f.label ?? f.name}</span>
+                    <!-- A real button so keyboard users can open the detail sheet (the row onclick is mouse-only). -->
+                    <button
+                      type="button"
+                      class="rounded font-medium hover:underline focus-visible:underline"
+                      onclick={() => openDetail(f.id)}>{f.label ?? f.name}</button
+                    >
                   </span>
                 </Table.Cell>
                 <Table.Cell><Badge variant="secondary">{f.platform}</Badge></Table.Cell>

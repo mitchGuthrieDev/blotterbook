@@ -21,6 +21,7 @@
   let busy = $state(false);
   let err = $state('');
   let dragging = $state(false);
+  let fileInput = $state<HTMLInputElement | null>(null);
 
   async function handle(file: File | undefined) {
     if (!file || busy) return;
@@ -34,6 +35,10 @@
     dragging = false;
     void handle(e.dataTransfer?.files?.[0]);
   }
+  // A147: open the picker programmatically. The CTA used to be a <Button> nested inside the
+  // <label> wrapping the input — per the HTML spec a label does NOT forward activation to its
+  // control when the click targets an interactive descendant, so the primary import CTA was dead.
+  const pickFile = () => fileInput?.click();
 </script>
 
 <div class="mx-auto max-w-2xl py-8">
@@ -54,6 +59,7 @@
     <div
       role="button"
       tabindex="0"
+      aria-label="Import a CSV file"
       class={[
         'flex flex-col items-center justify-center gap-2 rounded-md border border-dashed p-8 text-center transition-colors',
         dragging ? 'border-primary bg-accent' : 'border-border',
@@ -64,18 +70,23 @@
       }}
       ondragleave={() => (dragging = false)}
       ondrop={onDrop}
+      onkeydown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          pickFile();
+        }
+      }}
     >
       <Upload class="size-6 text-muted-foreground" />
       <p class="text-sm text-muted-foreground">Drag a CSV here, or</p>
-      <label class="cursor-pointer">
-        <input
-          type="file"
-          accept=".csv,text/csv"
-          class="sr-only"
-          onchange={e => handle((e.currentTarget as HTMLInputElement).files?.[0])}
-        />
-        <Button variant="secondary" size="sm" disabled={busy}>{busy ? 'Importing…' : 'Choose a CSV file'}</Button>
-      </label>
+      <input
+        bind:this={fileInput}
+        type="file"
+        accept=".csv,text/csv"
+        class="sr-only"
+        onchange={e => handle((e.currentTarget as HTMLInputElement).files?.[0])}
+      />
+      <Button variant="secondary" size="sm" disabled={busy} onclick={pickFile}>{busy ? 'Importing…' : 'Choose a CSV file'}</Button>
       {#if err}<p class="text-xs text-destructive" role="alert">{err}</p>{/if}
     </div>
     <p class="mt-2 text-[11px] text-muted-foreground">

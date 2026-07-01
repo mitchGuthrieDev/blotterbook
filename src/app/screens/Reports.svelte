@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  export type { ReportVM, ReportKpi, ReportRange } from '../lib/reports.ts';
+  export type { ReportVM, ReportKpi, ReportRange, ReportMeta } from '../lib/reports.ts';
   export type ExportKind = 'pdf' | 'md' | 'csv' | 'email' | 'copy';
 </script>
 
@@ -17,19 +17,19 @@
   import { Switch } from '$lib/components/ui/switch';
   import { Separator } from '$lib/components/ui/separator';
   import * as Card from '$lib/components/ui/card';
-  import type { ReportVM, ReportRange } from '../lib/reports.ts';
+  import type { ReportVM, ReportRange, ReportMeta, ReportSections } from '../lib/reports.ts';
 
   type Tmpl = 'performance' | 'cost' | 'tax' | 'full';
-  type Sections = { kpis: boolean; curve: boolean; calendar: boolean; cost: boolean; tax: boolean; advanced: boolean };
-  type ExportKind = 'pdf' | 'md' | 'csv' | 'email' | 'copy';
 
   interface Props {
     defaultTitle?: string;
     defaultAccount?: string;
     calYear: number;
     calMonth: number;
-    build: (range: ReportRange, compare: boolean) => ReportVM;
-    onexport?: (kind: ExportKind, vm: ReportVM, meta: { title: string; account: string }) => void;
+    // A156: the builder receives the configured title/account/sections, so the vm's export
+    // payloads (md/text/mailto) always match what the preview renders.
+    build: (range: ReportRange, compare: boolean, meta: ReportMeta) => ReportVM;
+    onexport?: (kind: ExportKind, vm: ReportVM) => void;
   }
   let { defaultTitle = '', defaultAccount = '', calYear, calMonth, build, onexport }: Props = $props();
 
@@ -42,9 +42,9 @@
   let from = $state('');
   let to = $state('');
   let compare = $state(true);
-  let sections = $state<Sections>({ kpis: true, curve: true, calendar: true, cost: true, tax: true, advanced: true });
+  let sections = $state<ReportSections>({ kpis: true, curve: true, calendar: true, cost: true, tax: true, advanced: true });
 
-  const PRESETS: Record<Tmpl, Sections> = {
+  const PRESETS: Record<Tmpl, ReportSections> = {
     performance: { kpis: true, curve: true, calendar: true, cost: false, tax: false, advanced: true },
     cost: { kpis: true, curve: false, calendar: false, cost: true, tax: false, advanced: false },
     tax: { kpis: true, curve: false, calendar: false, cost: false, tax: true, advanced: false },
@@ -68,7 +68,7 @@
   }
 
   const range = $derived<ReportRange>({ scope, from, to, calYear, calMonth });
-  const vm = $derived(build(range, compare));
+  const vm = $derived(build(range, compare, { title, account, sections }));
 
   const TEMPLATES: { key: Tmpl; label: string; icon: typeof FileText }[] = [
     { key: 'performance', label: 'Performance', icon: ChartLine },
@@ -76,7 +76,7 @@
     { key: 'tax', label: 'Tax (1256)', icon: Percent },
     { key: 'full', label: 'Full / custom', icon: FileText },
   ];
-  const SECTION_LIST: { key: keyof Sections; label: string }[] = [
+  const SECTION_LIST: { key: keyof ReportSections; label: string }[] = [
     { key: 'kpis', label: 'Headline KPIs' },
     { key: 'curve', label: 'Equity curve' },
     { key: 'calendar', label: 'Trading calendar' },
@@ -105,7 +105,7 @@
     ...Array.from({ length: vm.calFirstDow }, () => null),
     ...Array.from({ length: vm.calDaysInMonth }, (_, i) => i + 1),
   ]);
-  const fire = (kind: ExportKind) => onexport?.(kind, vm, { title, account });
+  const fire = (kind: ExportKind) => onexport?.(kind, vm);
 </script>
 
 {#snippet sectionTitle(t: string)}
