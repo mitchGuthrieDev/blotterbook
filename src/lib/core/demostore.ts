@@ -10,7 +10,7 @@
    The dedupe key (tradeId) and the screenshot allow-list (validShot) are imported VERBATIM from
    store.js (A29) so they can never drift from the real backend. Backup restore (importAll) is a
    no-op in demo (restore is disabled), avoiding any duplication of store.js's sanitization. */
-import { tradeId, validShot } from './store.ts';
+import { tradeId, validShot, cleanTags } from './store.ts';
 import type { Annotation, Trade, StoredJournal, StoredTradeMeta, StoreLike } from './types.ts';
 
 export function createDemoStore(): StoreLike {
@@ -61,7 +61,7 @@ export function createDemoStore(): StoreLike {
       trademeta.delete(oldId);
       const id = tradeId(next);
       if (!trades.has(id)) trades.set(id, { id, ...next });
-      const tags = (m?.tags ?? old?.tags ?? []).filter(Boolean);
+      const tags = cleanTags(m?.tags ?? old?.tags ?? []);
       const note = (m?.note ?? old?.note ?? '').trim();
       const shots = m?.shots ?? old?.shots ?? [];
       if (tags.length || note || shots.length) trademeta.set(id, { id, tags, note, shots, updated: Date.now() });
@@ -71,7 +71,7 @@ export function createDemoStore(): StoreLike {
     async saveJournal(date, rec) {
       const r: Annotation = typeof rec === 'string' ? { text: rec } : rec || {};
       const text = (r.text || '').trim();
-      const tags = Array.isArray(r.tags) ? r.tags.filter(Boolean) : [];
+      const tags = cleanTags(r.tags); // A130: parity with the real Store's canonical tag form
       const shots = Array.isArray(r.shots) ? r.shots.filter(validShot) : [];
       if (text || tags.length || shots.length) journal.set(date, { date, text, tags, shots, updated: Date.now() });
       else journal.delete(date);
@@ -104,7 +104,7 @@ export function createDemoStore(): StoreLike {
       return trademeta.get(id) || { id, tags: [], note: '', shots: [] };
     },
     async saveTradeMeta(id, m) {
-      const tags = (m.tags || []).filter(Boolean);
+      const tags = cleanTags(m.tags); // A130: parity with the real Store's canonical tag form
       const note = (m.note || '').trim();
       const shots = (m.shots || []).filter(validShot);
       if (tags.length || note || shots.length) trademeta.set(id, { id, tags, note, shots, updated: Date.now() });

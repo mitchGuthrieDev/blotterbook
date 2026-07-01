@@ -8,7 +8,7 @@
   import { onMount, setContext } from 'svelte';
   import { Store } from '../lib/core/store.ts';
   import { createDemoStore } from '../lib/core/demostore.ts';
-  import { usd, money, num, ratio, rateFor, PAGE_MODE } from '../lib/core/core.ts';
+  import { usd, money, num, ratio, rateFor, PAGE_MODE, pad2, tone, MONTH_NAMES } from '../lib/core/core.ts';
   import { Badge } from '$lib/components/ui/badge';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import { createDashboard } from './lib/dashboard.svelte.ts';
@@ -40,8 +40,6 @@
   const SEEDED = isStaging || isDemo;
   setContext('bb:store', store);
   const dash = createDashboard(store, { seed: SEEDED, isDemo });
-
-  const MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   const fromHash = (): string => {
     const h = typeof location !== 'undefined' ? location.hash.replace(/^#/, '') : '';
@@ -153,7 +151,6 @@
   function statDetail(key: string): StatDetail {
     const m = dash.metricsActive;
     const c = dash.cost;
-    const tone = (n: number): 'pos' | 'neg' => (n >= 0 ? 'pos' : 'neg');
     const bar = (
       label: string,
       v: number,
@@ -272,13 +269,18 @@
         net += d.pnl;
       }
     }
-    return { dayPnl, net, firstDow: new Date(y, mo, 1).getDay(), daysInMonth: new Date(y, mo + 1, 0).getDate(), label: `${MON[mo]} ${y}` };
+    return {
+      dayPnl,
+      net,
+      firstDow: new Date(y, mo, 1).getDay(),
+      daysInMonth: new Date(y, mo + 1, 0).getDate(),
+      label: `${MONTH_NAMES[mo]} ${y}`,
+    };
   });
 
   // ── Calendar ─────────────────────────────────────────────────────────────────────────────────
   // The full Calendar screen reads per-day records (P&L / trades / wins + a note flag) for the cursor
   // month and a date→P&L map for the year heatmap, both from the all-time (filtered) days.
-  const pad2 = (n: number) => String(n).padStart(2, '0');
   const dateOf = (day: number) => `${dash.calYear}-${pad2(dash.calMonth + 1)}-${pad2(day)}`;
   const calMonthDays = $derived.by<Record<number, CalDay>>(() => {
     const out: Record<number, CalDay> = {};
@@ -311,13 +313,12 @@
   // Analytics advanced-stats grid so the dashboard cards match their full-screen counterparts.
   const dashCostRows = $derived.by(() => {
     const c = dash.cost;
-    const t = (n: number): 'pos' | 'neg' => (n >= 0 ? 'pos' : 'neg');
     return [
-      { label: 'Gross P&L', value: usd(c.gross), tone: t(c.gross) },
+      { label: 'Gross P&L', value: usd(c.gross), tone: tone(c.gross) },
       { label: 'Commissions (all-in)', value: usd(-c.totalComm), tone: 'neg' as const },
       { label: `Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, value: usd(-c.fixedPeriod), tone: 'neg' as const },
       { label: 'Est. 1256 tax', value: usd(-c.tax), tone: 'neg' as const },
-      { label: 'Take-home', value: usd(c.afterTax), tone: t(c.afterTax), total: true },
+      { label: 'Take-home', value: usd(c.afterTax), tone: tone(c.afterTax), total: true },
       { label: 'Break-even / trade', value: usd(c.bePer) },
     ];
   });
@@ -559,7 +560,7 @@
   });
 </script>
 
-<AppShell sections={navSections} {active} onnavigate={navigate} title={navLabel(active)}>
+<AppShell sections={navSections} {active} onnavigate={navigate} title={navLabel(active)} hideNav={needsOnboarding}>
   {#snippet actions()}
     <div class="flex items-center gap-2">
       {#if isBeta}<Badge variant="outline" class="border-chart-4/40 text-chart-4">Beta</Badge>{/if}

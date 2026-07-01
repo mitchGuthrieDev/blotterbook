@@ -599,7 +599,7 @@
         type="button"
         onclick={() => openStat(s.key)}
         disabled={!s.key}
-        class="rounded-xl border border-border bg-card p-4 text-left transition-colors enabled:cursor-pointer enabled:hover:border-ring enabled:hover:bg-accent/30"
+        class="rounded-md border border-border bg-card p-4 text-left transition-colors enabled:cursor-pointer enabled:hover:border-ring enabled:hover:bg-accent/30"
       >
         <div class="flex items-start justify-between gap-2">
           <span class="text-xs text-muted-foreground">{s.label}</span>

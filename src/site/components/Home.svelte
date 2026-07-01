@@ -136,9 +136,10 @@
     ? 'border-border bg-background/86'
     : 'border-transparent bg-background/72'}"
 >
-  <nav class="nav relative mx-auto flex max-w-[1180px] items-center gap-[18px] px-[22px] py-[13px]">
-    <a class="wordmark inline-flex items-center gap-[9px] text-[16px] font-bold tracking-[0.01em] text-foreground" href="#home"
-      ><span class="dot h-[9px] w-[9px] rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--chart-3))]"></span>Blotterbook</a
+  <!-- A145: header sized to match the app's topbar (h-12 / 48px, text-sm font-semibold wordmark). -->
+  <nav class="nav relative mx-auto flex h-12 max-w-[1180px] items-center gap-[18px] px-[22px]">
+    <a class="wordmark inline-flex items-center gap-[9px] text-sm font-semibold tracking-[0.01em] text-foreground" href="#home"
+      ><span class="dot h-2 w-2 rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--chart-3))]"></span>Blotterbook</a
     >
     <input
       type="checkbox"

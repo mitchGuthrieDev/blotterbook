@@ -6,18 +6,23 @@ import type { Trade, CostInputs, CostModel, SymCost, Broker, FeedGroups, TaxMode
 
 export const pad2 = (n: number) => String(n).padStart(2, '0');
 export const fmtDate = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-// running min/max — avoids Math.min(...arr)/Math.max(...arr), whose argument spread overflows the
-// call stack on large per-trade arrays (equity curve / pnl list). compute() walks manually for the
-// same reason; this is the shared helper for the chart code (B27).
-export function minMax(arr: number[]) {
-  let lo = Infinity,
-    hi = -Infinity;
-  for (const v of arr) {
-    if (v < lo) lo = v;
-    if (v > hi) hi = v;
-  }
-  return { lo, hi };
-}
+// Positive/negative P&L classifier — shared by the dashboard/analytics/reports view-models for coloring.
+export const tone = (n: number): 'pos' | 'neg' => (n >= 0 ? 'pos' : 'neg');
+// Full month names, index 0 = January — shared by the App dashboard + the reports view-model.
+export const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
 /* Page modes (document.body[data-mode]):
      ''        — the main app
      'demo'    — in-memory sample data, never persists

@@ -82,8 +82,12 @@
   const zoomOpen = $derived(zoomShot !== null);
 
   // ── Heatmap shades — literal classes (Tailwind-scannable), bucketed by |P&L|. ─────────────────
-  const POS = ['bg-chart-2/10', 'bg-chart-2/20', 'bg-chart-2/35', 'bg-chart-2/55', 'bg-chart-2/75'];
-  const NEG = ['bg-destructive/10', 'bg-destructive/20', 'bg-destructive/35', 'bg-destructive/55', 'bg-destructive/75'];
+  // A140: cap the ramp at /55 (was /75). The top buckets were saturated enough that the same-hue P&L
+  // text (text-chart-2 on bg-chart-2, text-destructive on bg-destructive) and the muted day number
+  // lost contrast on the biggest win/loss days. /55 keeps a clear intensity gradient and matches the
+  // legend swatches; the day number is also promoted to text-foreground on cells (see the grid below).
+  const POS = ['bg-chart-2/10', 'bg-chart-2/18', 'bg-chart-2/28', 'bg-chart-2/40', 'bg-chart-2/55'];
+  const NEG = ['bg-destructive/10', 'bg-destructive/18', 'bg-destructive/28', 'bg-destructive/40', 'bg-destructive/55'];
   const lvl = (pnl: number) => {
     const a = Math.abs(pnl);
     return a > 400 ? 4 : a > 250 ? 3 : a > 120 ? 2 : a > 40 ? 1 : 0;
@@ -300,7 +304,9 @@
                         class="absolute right-1 top-1 grid size-3 place-items-center rounded-full bg-chart-2 text-background"
                         title="Hit daily target"><Check class="size-2" /></span
                       >{/if}
-                    <span class="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <span
+                      class={cn('flex items-center gap-1 text-[11px]', c.rec ? 'font-medium text-foreground' : 'text-muted-foreground')}
+                    >
                       {c.day}{#if c.rec?.note}<span class="size-1.5 rounded-full bg-primary" title="Has a note"></span>{/if}
                     </span>
                     {#if c.rec}
@@ -310,7 +316,7 @@
                           c.rec.pnl >= 0 ? 'text-chart-2' : 'text-destructive'
                         )}>{usdWhole(c.rec.pnl)}</span
                       >
-                      <span class="text-right text-[9px] text-muted-foreground">{c.rec.trades} tr · {pct(c.rec.wins, c.rec.trades)}%</span>
+                      <span class="text-right text-[9px] text-foreground/70">{c.rec.trades} tr · {pct(c.rec.wins, c.rec.trades)}%</span>
                     {/if}
                   </button>
                 {:else}

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "title": "Blotterbook — completed backlog archive (Done items)",
   "intro": "Archived Done items moved out of backlog.json to keep the active backlog lean. Each retains its doneNote — the shipped record of what was actually done (prompts were already stripped per donePolicy). Newest work tends toward the end, mirroring the order items were completed in the live file.",
-  "updated": "2026-06-30",
+  "updated": "2026-07-01",
   "note": "Append-only archive of completed backlog items. When an item in backlog.json is set to `done`, move its object here. Admin-only and fetched no-store; like backlog.json it is EXCLUDED from the cache-busting manifest (build-manifest.mjs) and from version-bump path classification (bump-version.mjs), so editing it never churns the manifest or bumps the version. The admin Backlog panel fetches this file alongside backlog.json and merges the item lists.",
   "categories": [
     "SECURITY",
@@ -2944,6 +2944,94 @@
       "completedDate": "2026-06-30",
       "partial": false,
       "doneNote": "DONE (2026-06-30) — Pinned the six dev-tooling deps that used caret ranges to exact versions in package.json: @eslint/js 10.0.1, eslint 10.6.0, globals 17.7.0, prettier 3.9.0, typescript 6.0.3, typescript-eslint 8.62.0 — each already the resolved version in package-lock.json, so reconciling the lock (npm install --package-lock-only) produced ZERO version churn (only the 6 range-spec strings changed). Every dependency is now exact-pinned, consistent with the stated convention (chose option (a)). Also refreshed the package.json description's retired-pillar framing ('dependencies are minimal/pinned/audited … local-compute pillar is hard' → 'exact-pinned + lockfiled, and compute stays local'). npm test + build + 50-spec e2e + check-deploy + size-budget all green; npm audit clean."
+    },
+    {
+      "id": "A129",
+      "title": "Centralize duplicated helpers (pad2/fmtDate/tone/month-names) into core",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Centralized the duplicated helpers into src/lib/core/core.ts: added `export const tone` (pos/neg P&L classifier) and `export const MONTH_NAMES`, and imported pad2/fmtDate/tone/MONTH_NAMES at the call sites (App.svelte dropped its local pad2/tone/`t`/MON; reports.ts dropped iso→fmtDate + MON→MONTH_NAMES + local tone; analytics.ts dropped local tone). No helper is defined in more than one place now. typecheck 0/0, 31 unit tests green; no visual change. (Calendar.svelte's abbreviated Jan/Feb MON is a distinct single-use array — left as-is.)"
+    },
+    {
+      "id": "A130",
+      "title": "Canonicalize live-entered journal tags (lowercase/strip) to match the restore path",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Added a shared, exported cleanTags (lowercase + strip [<>&\"'] + dedupe) in store.ts as the single tag-canonicalization seam, and applied it on the LIVE save paths (saveJournal + saveTradeMeta) in both the real Store and DemoStore, plus deduped importAll's local copy. Live-entered tags now land in the same canonical form as restored ones, so uppercase tags match the lowercase tag filter/chips. Fixed the stale store.ts comment that referenced a non-existent `annCapture`. typecheck + unit green."
+    },
+    {
+      "id": "A131",
+      "title": "Remove the unused minMax export from core.ts",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Removed the unused `minMax` export from core.ts (grep-verified dead across src/ + scripts/). Left `dowBuckets` in place — it is NOT dead (used inside compute() at core.ts). typecheck + unit green."
+    },
+    {
+      "id": "A134",
+      "title": "CSV Library in Demo must not allow uploading files",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — CSV Library upload is now fully blocked on demo (was only the final Import CTA): pickFile()/onFilePicked() return early when dataDisabled, and the dropzone button is `disabled` with a demo hint ('Importing is disabled in the demo — explore the sample dataset'). The e2e 'demo write controls' test was updated to assert the stronger guarantee — the dropzone is disabled and forcing a file onto the hidden input opens no preview. 36 e2e green; the no-IndexedDB-on-demo assertion still holds."
+    },
+    {
+      "id": "A140",
+      "title": "(staging) Calendar: hard-to-read text on max green/red days",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Fixed calendar text legibility on the biggest win/loss days: capped the heatmap tint ramp at /55 (was /75, where same-hue P&L text and the muted day number lost contrast) with a smoother [10/18/28/40/55] ramp, and promoted the day number + meta to text-foreground / text-foreground/70 on traded cells. Verified via headless screenshot on the demo Calendar (max +$454 / -$270 days now clearly readable). Colored P&L retained; legend swatches still match."
+    },
+    {
+      "id": "A143",
+      "title": "(staging) Sharpen corners on the six top dashboard modules",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — The six top dashboard KPI cards used rounded-xl (8px) while the module Card.Root chrome uses rounded-md (2px); changed the KPI cards to rounded-md so all dashboard modules share the same angular corner. Verified via screenshot — the KPI row now matches the Performance/Calendar module cards."
+    },
+    {
+      "id": "A144",
+      "title": "Initial state: keep the sidebar hidden until a CSV is imported",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Added a `hideNav` prop to AppShell that hides the sidebar rail (and the topbar collapse/menu toggles) entirely, wired from App.svelte's needsOnboarding signal, so the first-run empty state (real app, zero trades) shows a focused onboarding with no sidebar until a CSV is imported. Demo/staging (which seed data) are unaffected. Verified via screenshot on a fresh app surface."
+    },
+    {
+      "id": "A145",
+      "title": "Match homepage nav header size/scale to the app's header",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-01",
+      "partial": false,
+      "doneNote": "DONE (2026-07-01) — Sized the bespoke homepage nav header to match the app topbar: nav is now h-12 (48px, was ~65px via py-[13px]) and the wordmark is text-sm font-semibold (14px/600, was 16px/700). Measured both headers headless (home 48px/14px-600 == app 48px/14px-600) and screenshotted — matches, not cramped, CTA still fits. Scoped to the homepage (Home.svelte) per the ask; the shared site Nav.svelte was left unchanged."
     }
   ]
 }

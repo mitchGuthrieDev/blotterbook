@@ -46,6 +46,18 @@ export function validShot(s: unknown): boolean {
   return typeof s === 'string' && SHOT_RE.test(s);
 }
 
+// Canonical tag form — markup-stripped, trimmed, lowercased, deduped. The ONE definition used by
+// EVERY tag write path: the live journal/trade-meta saves AND untrusted backup restore. Applying it
+// on the live path (A130) means a live-entered tag and a restored one land in the identical form, so
+// both match the lowercase tag filter/chips (was B29 — only restore canonicalized before). Exported
+// so DemoStore reuses it verbatim (no drift), like tradeId/validShot.
+export const cleanTag = (s: unknown): string =>
+  String(s == null ? '' : s)
+    .replace(/[<>&"']/g, '')
+    .trim()
+    .toLowerCase();
+export const cleanTags = (a: unknown): string[] => [...new Set((Array.isArray(a) ? a : []).map(cleanTag).filter(Boolean))];
+
 let dbp: Promise<IDBDatabase> | null = null; // cached open-promise
 
 function open() {
@@ -163,7 +175,7 @@ export const Store: StoreLike = {
     const store = await tx(JOURNAL, 'readwrite');
     const r: Annotation = typeof rec === 'string' ? { text: rec } : rec || {};
     const text = (r.text || '').trim();
-    const tags = Array.isArray(r.tags) ? r.tags.filter(Boolean) : [];
+    const tags = cleanTags(r.tags); // A130: canonicalize live tags (same form as restore)
     const shots = Array.isArray(r.shots) ? r.shots.filter(s => this.validShot(s)) : [];
     if (text || tags.length || shots.length) store.put({ date, text, tags, shots, updated: Date.now() });
     else store.delete(date);
@@ -230,7 +242,7 @@ export const Store: StoreLike = {
   },
   async saveTradeMeta(id, m) {
     const store = await tx(TRADEMETA, 'readwrite');
-    const tags = (m.tags || []).filter(Boolean);
+    const tags = cleanTags(m.tags); // A130: canonicalize live tags (same form as restore)
     const note = (m.note || '').trim();
     // Enforce the screenshot allow-list here too (matches saveJournal — S15/S18); .filter also
     // yields a plain array, so a Svelte $state proxy can't reach IndexedDB's structured clone.
@@ -272,14 +284,8 @@ export const Store: StoreLike = {
     // `Adapters && Adapters.rootSym ? … : <fallback>` guard was always truthy (dead fallback +
     // duplicated charset regex). Call rootSym directly — it's the stricter sanitizer.
     const cleanSym = (s: unknown) => Adapters.rootSym(String(s || ''));
-    // B29: lowercase to match the live editors' canonical form (annCapture lowercases + dedupes),
-    // so restored tags match the tag filter/chips. cleanTags also dedupes, like the live path.
-    const cleanTag = (s: unknown) =>
-      String(s == null ? '' : s)
-        .replace(/[<>&"']/g, '')
-        .trim()
-        .toLowerCase();
-    const cleanTags = (a: unknown) => [...new Set((Array.isArray(a) ? a : []).map(cleanTag).filter(Boolean))];
+    // Tags use the shared module-level cleanTags (lowercase + strip markup + dedupe) — the same
+    // canonical form the live save paths now apply (A130), so restored tags match the tag filter/chips.
     // Restore is untrusted: keep ONLY well-formed base64 image data URIs (S15, SHOT_RE above).
     const cleanShots = (a: unknown) => (Array.isArray(a) ? a.filter(s => typeof s === 'string' && SHOT_RE.test(s)) : []);
     // S17: a restored `date` flows into innerHTML sinks (the data-manager trades/day-notes lists),

@@ -3,7 +3,7 @@
 // (KPIs with optional prior-period comparison, equity curve, calendar, cost / tax / advanced tables)
 // plus the export payloads (Markdown / text / mailto) via the shared report.ts builder (A34). Pure: no
 // runes, no DOM — the staging shell calls it from a $derived and the /dev preview falls back to mocks.
-import { compute, costModel, usd, money, num, ratio, type Metrics } from '../../lib/core/core.ts';
+import { compute, costModel, usd, money, num, ratio, fmtDate, tone, MONTH_NAMES, type Metrics } from '../../lib/core/core.ts';
 import { buildReport } from '../../lib/core/report.ts';
 import type { Trade, CostInputs, ReportLabels } from '../../lib/core/types.ts';
 
@@ -26,17 +26,13 @@ export type ReportVM = {
 
 export type ReportRange = { scope: 'all' | 'month' | 'custom'; from: string; to: string; calYear: number; calMonth: number };
 
-const MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const tone = (n: number): 'pos' | 'neg' => (n >= 0 ? 'pos' : 'neg');
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
 // Resolve a range descriptor into concrete [from, to] ISO bounds (empty = open-ended).
 function bounds(r: ReportRange): { from: string; to: string; label: string } {
   if (r.scope === 'all') return { from: '', to: '', label: 'All time' };
   if (r.scope === 'month') {
-    const from = iso(new Date(r.calYear, r.calMonth, 1));
-    const to = iso(new Date(r.calYear, r.calMonth + 1, 0));
-    return { from, to, label: `${MON[r.calMonth]} ${r.calYear}` };
+    const from = fmtDate(new Date(r.calYear, r.calMonth, 1));
+    const to = fmtDate(new Date(r.calYear, r.calMonth + 1, 0));
+    return { from, to, label: `${MONTH_NAMES[r.calMonth]} ${r.calYear}` };
   }
   return { from: r.from, to: r.to, label: `${r.from || '…'} → ${r.to || '…'}` };
 }
@@ -50,7 +46,7 @@ function priorBounds(from: string, to: string): { from: string; to: string } | n
   const days = Math.round((b.getTime() - a.getTime()) / 86400000) + 1;
   const pb = new Date(a.getTime() - 86400000);
   const pa = new Date(pb.getTime() - (days - 1) * 86400000);
-  return { from: iso(pa), to: iso(pb) };
+  return { from: fmtDate(pa), to: fmtDate(pb) };
 }
 
 export function buildReportVM(
@@ -124,7 +120,7 @@ export function buildReportVM(
     calPnl,
     calFirstDow: new Date(cy, cm, 1).getDay(),
     calDaysInMonth: new Date(cy, cm + 1, 0).getDate(),
-    calMonthLabel: `${MON[cm]} ${cy}`,
+    calMonthLabel: `${MONTH_NAMES[cm]} ${cy}`,
     costRows,
     taxRows,
     advRows,

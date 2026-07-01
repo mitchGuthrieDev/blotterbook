@@ -153,13 +153,14 @@
   const size = (kb: number) => (kb <= 0 ? '—' : kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`);
 
   function pickFile() {
+    if (dataDisabled) return; // A134: no uploading in demo
     if (parse) fileInput?.click();
   }
   async function onFilePicked(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
-    if (!file || !parse) return;
+    if (!file || !parse || dataDisabled) return;
     const text = await file.text();
     preview = parse(text, file.name);
     uploadOpen = true;
@@ -230,17 +231,22 @@
 
   <input bind:this={fileInput} type="file" accept=".csv,text/csv" class="hidden" onchange={onFilePicked} />
 
-  <!-- Upload dropzone -->
+  <!-- Upload dropzone (A134: disabled in demo — the demo dataset is fixed) -->
   <button
     type="button"
     onclick={pickFile}
-    class="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-card py-8 text-center transition-colors hover:border-ring hover:bg-accent"
+    disabled={dataDisabled}
+    class="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-card py-8 text-center transition-colors hover:border-ring hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border disabled:hover:bg-card"
   >
     <span class="grid size-10 place-items-center rounded-full border border-border text-muted-foreground"
       ><CloudUpload class="size-5" /></span
     >
     <span class="text-sm font-medium text-foreground">Drag &amp; drop CSVs, or click to browse</span>
-    <span class="text-xs text-muted-foreground">TradingView, Tradovate, NinjaTrader, Apex… — auto-detected</span>
+    <span class="text-xs text-muted-foreground"
+      >{dataDisabled
+        ? 'Importing is disabled in the demo — explore the sample dataset'
+        : 'TradingView, Tradovate, NinjaTrader, Apex… — auto-detected'}</span
+    >
   </button>
 
   <!-- File table -->

@@ -85,14 +85,15 @@ test('demo: write controls are disabled — cost model + data management + CSV i
   if (await saveAll.count()) await expect(saveAll).toBeDisabled();
 
   // CSV Library: the data-management controls (backup / restore / erase) are disabled on demo, and so
-  // is the import-confirm CTA once a file is parsed (the import silently no-ops on demo). Done last —
-  // parsing a file opens the preview sheet, whose overlay would block further nav.
+  // is the upload dropzone itself — importing is not allowed at all on demo (A134), not merely
+  // no-op'd at the final confirm. Even forcing a file onto the hidden input does not open the preview.
   await gotoScreen(page, 'CSV Library');
   await expect(page.getByRole('button', { name: /backup/i }).first()).toBeDisabled();
   await expect(page.getByRole('button', { name: /Erase/i })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /click to browse/i })).toBeDisabled();
   const csv = 'Time,Action,Realized PnL (value)\n2027-05-01 10:00:00,"Close long position for symbol MESM2025 at price 5310.00",30.00';
   await page.setInputFiles('input[type=file]', { name: 'demo.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
-  await expect(page.getByRole('button', { name: /Import \d+ trade/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Import \d+ trade/ })).toHaveCount(0);
 });
 
 test('demo: Trade Editor stages edits in-memory but persists nothing across reload', async ({ page }) => {

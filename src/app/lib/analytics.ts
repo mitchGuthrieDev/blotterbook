@@ -2,7 +2,7 @@
 // compute() Metrics + the working trade list into the discrete arrays/values the Analytics component
 // renders (KPI strip, P&L histogram, hour/weekday signed bars, per-symbol + long/short breakdowns,
 // and the advanced-stats grid). Pure: no runes, no DOM — the staging shell calls it from a $derived.
-import { usd, money, num, ratio, fmtDur, type Metrics } from '../../lib/core/core.ts';
+import { usd, money, num, ratio, fmtDur, tone, type Metrics } from '../../lib/core/core.ts';
 import type { Trade } from '../../lib/core/types.ts';
 
 export type Kpi = { label: string; value: string; tone?: 'pos' | 'neg' };
@@ -24,7 +24,6 @@ export interface AnalyticsVM {
   statRows: StatRow[];
 }
 
-const tone = (n: number): 'pos' | 'neg' => (n >= 0 ? 'pos' : 'neg');
 const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // Symmetric per-trade P&L histogram. Edges in dollars; the outer buckets catch the tails.
