@@ -10,8 +10,9 @@
   import { usd, money, num, ratio, rateFor } from '../lib/core/core.ts';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import { createDashboard } from './lib/dashboard.svelte.ts';
+  import { dailySeries } from '../lib/core/curveseries.ts';
   import { navSections, navLabel, navItems } from './lib/nav';
-  import Dashboard, { type DashStat, type DayCell } from './screens/Dashboard.svelte';
+  import Dashboard, { type DashStat, type DayCell, type StatDetail } from './screens/Dashboard.svelte';
   import Calendar, { type CalDay, type DayTrade } from './screens/Calendar.svelte';
   import Analytics from './screens/Analytics.svelte';
   import { buildAnalytics } from './lib/analytics.ts';
@@ -49,14 +50,123 @@
   const dStats = $derived.by<DashStat[]>(() => {
     const m = dash.metricsActive;
     return [
-      { label: 'Net P&L', value: usd(m.net), up: m.net >= 0, note: `${m.wins}W · ${m.losses}L` },
-      { label: 'Win rate', value: `${m.winRate.toFixed(1)}%`, note: `${m.n} trades` },
-      { label: 'Profit factor', value: ratio(m.pf), note: 'gross win ÷ loss' },
-      { label: 'Expectancy', value: usd(m.expectancy), badge: 'per trade', up: m.expectancy >= 0, note: 'avg edge' },
-      { label: 'Max drawdown', value: m.maxDD > 0 ? `-${money(m.maxDD)}` : '$0', badge: `${m.maxDDpct.toFixed(1)}%`, up: false, note: 'of peak' },
-      { label: 'Sharpe (daily)', value: num(m.sharpe), note: `${m.active} trading days` },
+      { key: 'net', label: 'Net P&L', value: usd(m.net), up: m.net >= 0, note: `${m.wins}W · ${m.losses}L` },
+      { key: 'win', label: 'Win rate', value: `${m.winRate.toFixed(1)}%`, note: `${m.n} trades` },
+      { key: 'pf', label: 'Profit factor', value: ratio(m.pf), note: 'gross win ÷ loss' },
+      { key: 'exp', label: 'Expectancy', value: usd(m.expectancy), badge: 'per trade', up: m.expectancy >= 0, note: 'avg edge' },
+      { key: 'dd', label: 'Max drawdown', value: m.maxDD > 0 ? `-${money(m.maxDD)}` : '$0', badge: `${m.maxDDpct.toFixed(1)}%`, up: false, note: 'of peak' },
+      { key: 'sharpe', label: 'Sharpe (daily)', value: num(m.sharpe), note: `${m.active} trading days` },
     ];
   });
+  // Daily cumulative gross/net/take series for the Performance chart — same cost/tax-adjusted math as
+  // the cost panel (tEff/fixedMo from costModel), so the Net/Take-home overlays reconcile.
+  const dashSeries = $derived(
+    dailySeries(dash.metricsActive, { broker: String(dash.costInputs.broker ?? ''), tEff: dash.cost.tEff, fixedMo: dash.cost.fixedMo }).pts
+  );
+  // KPI card drill-in content (parity with the app/demo stat-card modal), from metrics + cost.
+  function statDetail(key: string): StatDetail {
+    const m = dash.metricsActive;
+    const c = dash.cost;
+    const tone = (n: number): 'pos' | 'neg' => (n >= 0 ? 'pos' : 'neg');
+    const bar = (label: string, v: number, max: number, t: 'pos' | 'neg' | 'muted'): { label: string; value: string; pct: number; tone: 'pos' | 'neg' | 'muted' } => ({
+      label,
+      value: usd(v),
+      pct: max ? (Math.abs(v) / max) * 100 : 0,
+      tone: t,
+    });
+    switch (key) {
+      case 'net': {
+        const mx = Math.max(Math.abs(c.gross), Math.abs(c.netPreTax), Math.abs(c.afterTax), 1);
+        return {
+          title: 'Net P&L',
+          value: usd(m.net),
+          tone: tone(m.net),
+          desc: 'Realized P&L after commissions, subscriptions and estimated Section 1256 tax.',
+          bars: [bar('Gross', c.gross, mx, 'pos'), bar('Net (pre-tax)', c.netPreTax, mx, 'pos'), bar('Take-home', c.afterTax, mx, 'muted')],
+          rows: [
+            { label: 'Gross P&L', value: usd(c.gross), tone: tone(c.gross) },
+            { label: 'Commissions (all-in)', value: usd(-c.totalComm), tone: 'neg' },
+            { label: `Subscriptions (${c.months} mo)`, value: usd(-c.fixedPeriod), tone: 'neg' },
+            { label: 'Est. 1256 tax', value: usd(-c.tax), tone: 'neg' },
+            { label: 'Take-home', value: usd(c.afterTax), tone: tone(c.afterTax) },
+          ],
+        };
+      }
+      case 'win': {
+        const mx = Math.max(m.wins, m.losses, m.scratch, 1);
+        return {
+          title: 'Win rate',
+          value: `${m.winRate.toFixed(1)}%`,
+          desc: 'Share of trades closed for a profit.',
+          bars: [
+            { label: 'Wins', value: `${m.wins}`, pct: (m.wins / mx) * 100, tone: 'pos' },
+            { label: 'Losses', value: `${m.losses}`, pct: (m.losses / mx) * 100, tone: 'neg' },
+            { label: 'Scratch', value: `${m.scratch}`, pct: (m.scratch / mx) * 100, tone: 'muted' },
+          ],
+          rows: [
+            { label: 'Wins', value: `${m.wins}`, tone: 'pos' },
+            { label: 'Losses', value: `${m.losses}`, tone: 'neg' },
+            { label: 'Scratch (0)', value: `${m.scratch}` },
+            { label: 'Total trades', value: `${m.n}` },
+          ],
+        };
+      }
+      case 'pf': {
+        const mx = Math.max(m.gp, Math.abs(m.gl), 1);
+        return {
+          title: 'Profit factor',
+          value: ratio(m.pf),
+          desc: 'Gross profit ÷ gross loss — dollars won per dollar lost.',
+          bars: [bar('Gross profit', m.gp, mx, 'pos'), bar('Gross loss', m.gl, mx, 'neg')],
+          rows: [
+            { label: 'Gross profit', value: usd(m.gp), tone: 'pos' },
+            { label: 'Gross loss', value: usd(m.gl), tone: 'neg' },
+            { label: 'Profit factor', value: ratio(m.pf) },
+          ],
+        };
+      }
+      case 'exp':
+        return {
+          title: 'Expectancy',
+          value: usd(m.expectancy),
+          tone: tone(m.expectancy),
+          desc: 'Average P&L per trade — your statistical edge.',
+          rows: [
+            { label: 'Average win', value: usd(m.avgW), tone: 'pos' },
+            { label: 'Average loss', value: usd(m.avgL), tone: 'neg' },
+            { label: 'Payoff ratio', value: ratio(m.wl) },
+            { label: 'Per-trade std dev', value: money(m.tStd) },
+          ],
+        };
+      case 'dd':
+        return {
+          title: 'Max drawdown',
+          value: m.maxDD > 0 ? `-${money(m.maxDD)}` : '$0',
+          tone: 'neg',
+          desc: 'Largest peak-to-trough drop in realized equity.',
+          rows: [
+            { label: 'Max drawdown', value: m.maxDD > 0 ? usd(-m.maxDD) : '$0', tone: 'neg' },
+            { label: '% of peak', value: `${m.maxDDpct.toFixed(1)}%` },
+            { label: 'Duration', value: `${m.maxDDdur} trades` },
+            { label: 'Recovery factor', value: ratio(m.recovery) },
+          ],
+        };
+      case 'sharpe':
+        return {
+          title: 'Sharpe (daily)',
+          value: num(m.sharpe),
+          desc: 'Daily mean P&L ÷ daily P&L std dev (illustrative — not annualized).',
+          rows: [
+            { label: 'Avg daily P&L', value: usd(m.avgDaily), tone: tone(m.avgDaily) },
+            { label: 'Sortino (daily)', value: num(m.sortino) },
+            { label: 'Active days', value: `${m.active}` },
+            { label: 'Avg trades / day', value: m.avgTrades.toFixed(1) },
+          ],
+        };
+      default:
+        return { title: key, value: '—', desc: '', rows: [] };
+    }
+  }
   // The Trading Calendar module shows the cursor month from the all-time (filtered) days, independent
   // of the scope toggle (mirrors the current app).
   const calData = $derived.by(() => {
@@ -250,7 +360,7 @@
   {:else if active === 'dashboard'}
     <Dashboard
       stats={dStats}
-      curve={dash.metricsActive.curve}
+      series={dashSeries}
       dateRange={dash.dateRange}
       monthLabel={calData.label}
       monthNet={calData.net}
@@ -258,6 +368,10 @@
       firstDow={calData.firstDow}
       daysInMonth={calData.daysInMonth}
       onscope={dash.setScope}
+      dayTrades={calTradesForDay}
+      getNote={day => dash.noteFor(dateOf(day))}
+      onsavenote={(day, text) => dash.saveNote(dateOf(day), text)}
+      {statDetail}
     />
   {:else if active === 'calendar'}
     <Calendar

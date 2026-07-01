@@ -143,6 +143,25 @@ test('demo (Svelte): Manage-data trades table paginates (A73, promoted)', async 
   await expect(page.locator('.modal .pginfo')).toContainText('1–50 of');
 });
 
+// L11 safety net: a stuck inline `body { pointer-events: none }` (the modal scroll-lock's teardown
+// being skipped) must never freeze the page — the global CSS keys the lock to a modal overlay being
+// present, so with no overlay the body is forced interactive again. Guards the "unresponsive after
+// dismissing a dialog" regression on every surface.
+test('demo (Svelte): a stray body pointer-events lock cannot freeze the page (L11 safety net)', async ({ page }) => {
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.locator('#sv-app [data-card="net"] .value')).toContainText('$', { timeout: 5000 });
+  // Simulate a leaked scroll-lock with NO modal overlay in the DOM.
+  const computed = await page.evaluate(() => {
+    document.body.style.pointerEvents = 'none';
+    return getComputedStyle(document.body).pointerEvents;
+  });
+  expect(computed).toBe('auto'); // the safety net overrides the stale inline lock
+  await page.click('#sv-app [data-card="net"]', { timeout: 3000 }); // page is genuinely clickable
+  await expect(page.locator('.modal[aria-label="Net PnL"]')).toBeVisible();
+  // While a real modal IS open, the guard does not apply — the overlay locks the background.
+  expect(await page.evaluate(() => getComputedStyle(document.body).pointerEvents)).toBe('none');
+});
+
 // B41: toggle/collapse controls must expose ARIA state (aria-pressed / aria-expanded) on the Svelte
 // surface (demo) after the A33 cutover.
 test('toggle + collapse controls expose ARIA state (B41)', async ({ page }) => {

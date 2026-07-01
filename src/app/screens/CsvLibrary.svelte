@@ -98,7 +98,18 @@
 
   const mapping: [string, string][] = [['Date/Time', 'time'], ['Symbol', 'root'], ['Side', 'side'], ['Qty', 'qty'], ['Realized P&L', 'pnl'], ['Commission', 'fees']];
 
-  let openId = $state<string | null>(null); // detail sheet
+  let openId = $state<string | null>(null); // which file's detail sheet is showing
+  let detailOpen = $state(false); // bits-ui owns the detail Sheet's open state (bind:open, per L11)
+  const openDetail = (id: string) => {
+    openId = id;
+    detailOpen = true;
+  };
+  // Clearing the selection when bits-ui dismisses the sheet — bind:open flips detailOpen → we drop
+  // the id after its teardown, instead of a controlled `open={openId!==null}` that skips the scroll-lock
+  // release and freezes the page (L11).
+  $effect(() => {
+    if (!detailOpen) openId = null;
+  });
   let uploadOpen = $state(false); // parse-preview sheet
   let renameOpen = $state(false);
   let renameId = $state<string | null>(null);
@@ -165,7 +176,7 @@
     const id = deleteId;
     list = list.filter(f => f.id !== id);
     deleteOpen = false;
-    if (openId === id) openId = null;
+    if (openId === id) detailOpen = false;
     if (id && ondelete) await ondelete(id);
   }
 </script>
@@ -230,7 +241,7 @@
           </Table.Header>
           <Table.Body>
             {#each list as f (f.id)}
-              <Table.Row class={cn('cursor-pointer', !f.included && 'opacity-55')} onclick={() => (openId = f.id)}>
+              <Table.Row class={cn('cursor-pointer', !f.included && 'opacity-55')} onclick={() => openDetail(f.id)}>
                 <Table.Cell class="pl-4">
                   <span class="flex items-center gap-2">
                     <FileText class="size-4 shrink-0 text-muted-foreground" />
@@ -265,7 +276,7 @@
                     </DropdownMenu.Trigger>
                     <DropdownMenu.Content align="end" class="min-w-[160px]">
                       {#if perFileActions}
-                        <DropdownMenu.Item onSelect={() => (openId = f.id)}><RefreshCw class="size-4" /> Re-import</DropdownMenu.Item>
+                        <DropdownMenu.Item onSelect={() => openDetail(f.id)}><RefreshCw class="size-4" /> Re-import</DropdownMenu.Item>
                         <DropdownMenu.Item onSelect={() => startRename(f)}><Pencil class="size-4" /> Rename</DropdownMenu.Item>
                         <DropdownMenu.Item><Download class="size-4" /> Download original</DropdownMenu.Item>
                         <DropdownMenu.Separator />
@@ -286,7 +297,7 @@
 </div>
 
 <!-- Detail sheet -->
-<Sheet.Root open={openId !== null} onOpenChange={o => { if (!o) openId = null; }}>
+<Sheet.Root bind:open={detailOpen}>
   <Sheet.Content side="right" class="w-full sm:max-w-md">
     {#if openFile}
       <Sheet.Header>

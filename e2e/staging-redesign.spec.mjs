@@ -36,8 +36,8 @@ test('staging redesign: boots into the sidebar shell + real Dashboard, no errors
   // Real KPIs (compute()): a money value renders, and the equity curve is a real SVG path.
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible();
   await expect(page.getByText(/\$[\d,]+/).first()).toBeVisible();
-  const line = page.locator('svg[aria-label="Cumulative P&L curve"] path.stroke-chart-2');
-  await expect(line).toHaveAttribute('d', /^M[\d.]+ [\d.]+ L/);
+  const line = page.locator('svg[aria-label*="P&L curve"] path.stroke-chart-2');
+  await expect(line).toHaveAttribute('d', /^M[\d.]+,[\d.]+ L/);
 
   // Trading Calendar module renders real traded days (green/red P&L tiles).
   await expect(page.getByText('TRADING CALENDAR')).toBeVisible();
@@ -170,4 +170,53 @@ test('staging redesign: Reports custom range re-slices with a prior-period compa
   // Markdown export downloads a real .md built from the report.ts builder.
   const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Markdown' }).click()]);
   expect(dl.suggestedFilename()).toMatch(/\.md$/);
+});
+
+test('staging redesign: buttons drop the no-preflight UA chrome (no white fill / emboss)', async ({ page }) => {
+  await bootDashboard(page);
+  // The data-mode="staging" reset must reach bare <button>s: inactive nav items are transparent (not
+  // the ~#efefef UA fill) and appearance is neutralized (no embossed bevel).
+  const probe = await page.evaluate(() => {
+    const inactive = document.querySelector('nav[aria-label="Primary"] button:not([aria-current])');
+    const s = getComputedStyle(inactive);
+    return { bg: s.backgroundColor, appearance: s.appearance };
+  });
+  expect(probe.appearance).toBe('none');
+  expect(probe.bg).toBe('rgba(0, 0, 0, 0)'); // transparent, not a UA light-grey fill
+});
+
+test('staging redesign: Dashboard is interactive — chart overlays, day detail, KPI drill-in', async ({ page }) => {
+  await bootDashboard(page);
+
+  // Performance overlay toggle switches the primary series (Gross green → Net near-white line).
+  await expect(page.locator('svg[aria-label*="P&L curve"] path.stroke-chart-2')).toBeVisible();
+  await page.getByRole('button', { name: 'Net', exact: true }).click();
+  await expect(page.locator('svg[aria-label*="P&L curve"] path.stroke-primary')).toBeVisible();
+  await page.getByRole('button', { name: 'Gross', exact: true }).click();
+
+  // Hover the curve → the live daily readout shows a date + value.
+  const svg = page.locator('svg[aria-label*="P&L curve"]');
+  const box = await svg.boundingBox();
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.5);
+  await expect(page.locator('[aria-live="polite"]')).toContainText(/\d{4}-\d\d-\d\d.*\$/);
+
+  // Trading Calendar day-click → the day's trades + a journal-note editor.
+  await page.locator('div.grid.grid-cols-7 button:not([disabled])').first().click();
+  await expect(page.getByText('Journal note')).toBeVisible();
+
+  // KPI card → detail dialog (Net P&L shows the take-home waterfall row), closes clean + responsive.
+  await page
+    .getByRole('button', { name: /Net P&L/ })
+    .first()
+    .click();
+  await expect(page.locator('[data-slot="dialog-content"]')).toBeVisible();
+  await expect(page.getByText('Take-home').first()).toBeVisible();
+  await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 5, y: 5 } });
+  await expect(page.locator('[data-slot="dialog-content"]')).toHaveCount(0);
+  // Safety net: the page stays interactive after dismissing the dialog.
+  await page
+    .getByRole('button', { name: /Profit factor/ })
+    .first()
+    .click({ timeout: 3000 });
+  await expect(page.locator('[data-slot="dialog-content"]')).toBeVisible();
 });

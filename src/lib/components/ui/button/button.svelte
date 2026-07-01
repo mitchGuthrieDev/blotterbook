@@ -15,7 +15,7 @@
 				destructive:
 					"bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20",
 				outline:
-					"border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground",
+					"border border-input bg-input/30 shadow-xs hover:bg-accent hover:text-accent-foreground",
 				secondary:
 					"bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
 				ghost: "hover:bg-accent hover:text-accent-foreground",
