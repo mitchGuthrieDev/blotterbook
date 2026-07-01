@@ -1,36 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 260" width="1200" height="260" role="img" aria-label="Blotterbook — private futures journal and cost dashboard">
   <defs>
     <style>
-      .mono{font-family:"SF Mono",SFMono-Regular,ui-monospace,Menlo,Consolas,monospace}
-      .sans{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+      .mono{font-family:"Geist Mono",ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
     </style>
   </defs>
 
-  <!-- background -->
-  <rect x="0" y="0" width="1200" height="260" rx="16" fill="#0d1014"/>
-  <rect x="1" y="1" width="1198" height="258" rx="15" fill="none" stroke="#262d38" stroke-width="2"/>
+  <!-- background (neutral near-black ramp; angular corners) -->
+  <rect x="0" y="0" width="1200" height="260" rx="6" fill="#09090b"/>
+  <rect x="1" y="1" width="1198" height="258" rx="5" fill="none" stroke="#232327" stroke-width="2"/>
 
-  <!-- left: title block -->
-  <text x="56" y="96" class="sans" font-size="46" font-weight="600" fill="#d6dde6">Blotterbook</text>
-  <text x="58" y="132" class="mono" font-size="17" fill="#8a94a3">Private futures journal &amp; cost dashboard</text>
+  <!-- left: title block (mono-forward, near-white) -->
+  <text x="56" y="94" class="mono" font-size="42" font-weight="600" fill="#fafafa">Blotterbook</text>
+  <text x="58" y="130" class="mono" font-size="16" fill="#8b8f98">Private futures journal &amp; cost dashboard</text>
 
-  <!-- chips -->
-  <g class="mono" font-size="14" fill="#8a94a3">
-    <rect x="58" y="160" width="118" height="30" rx="7" fill="#151a21" stroke="#262d38"/>
-    <circle cx="76" cy="175" r="5" fill="#3fb950"/><text x="88" y="180">Gross</text>
-    <rect x="186" y="160" width="104" height="30" rx="7" fill="#151a21" stroke="#262d38"/>
-    <circle cx="204" cy="175" r="5" fill="#6aa0ff"/><text x="216" y="180">Net</text>
-    <rect x="300" y="160" width="150" height="30" rx="7" fill="#151a21" stroke="#262d38"/>
-    <circle cx="318" cy="175" r="5" fill="#c98bff"/><text x="330" y="180">Take-home</text>
+  <!-- chips (data-layer chart tokens: gross=green, net=blue, take-home=purple) -->
+  <g class="mono" font-size="14" fill="#8b8f98">
+    <rect x="58" y="158" width="118" height="30" rx="4" fill="#27272a" stroke="#232327"/>
+    <circle cx="76" cy="173" r="5" fill="#3fb950"/><text x="88" y="178">Gross</text>
+    <rect x="186" y="158" width="104" height="30" rx="4" fill="#27272a" stroke="#232327"/>
+    <circle cx="204" cy="173" r="5" fill="#6aa0ff"/><text x="216" y="178">Net</text>
+    <rect x="300" y="158" width="150" height="30" rx="4" fill="#27272a" stroke="#232327"/>
+    <circle cx="318" cy="173" r="5" fill="#c98bff"/><text x="330" y="178">Take-home</text>
   </g>
-  <text x="58" y="222" class="mono" font-size="13" fill="#5b6470">No dependencies &#183; no server &#183; parsed in your browser</text>
+  <text x="58" y="222" class="mono" font-size="13" fill="#5b6470">Client-side &#183; your trade data never leaves the browser</text>
 
   <!-- right: mini performance graph -->
   <g transform="translate(636,40)">
     <!-- gridlines -->
-    <line x1="0" y1="20" x2="500" y2="20" stroke="#262d38" stroke-width="1"/>
-    <line x1="0" y1="150" x2="500" y2="150" stroke="#262d38" stroke-width="1"/>
-    <line x1="0" y1="92" x2="500" y2="92" stroke="#3a4150" stroke-width="1" stroke-dasharray="3 3"/>
+    <line x1="0" y1="20" x2="500" y2="20" stroke="#232327" stroke-width="1"/>
+    <line x1="0" y1="150" x2="500" y2="150" stroke="#232327" stroke-width="1"/>
+    <line x1="0" y1="92" x2="500" y2="92" stroke="#3a3a40" stroke-width="1" stroke-dasharray="3 3"/>
     <!-- drawdown band (peak vs equity) -->
     <path d="M0,70 L70,32 L150,32 L150,150 L70,150 L0,90 Z" fill="rgba(240,74,74,0.14)"/>
     <!-- gross equity curve -->
@@ -43,8 +42,8 @@
     <line x1="270" y1="6" x2="270" y2="172" stroke="#6aa0ff" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.85"/>
     <circle cx="270" cy="108" r="4" fill="#3fb950"/>
     <!-- y labels -->
-    <text x="-8" y="24" text-anchor="end" class="mono" font-size="11" fill="#8a94a3">$92</text>
-    <text x="-8" y="154" text-anchor="end" class="mono" font-size="11" fill="#8a94a3">-$35</text>
-    <text x="250" y="196" text-anchor="middle" class="sans" font-size="11" fill="#8a94a3">Date</text>
+    <text x="-8" y="24" text-anchor="end" class="mono" font-size="11" fill="#8b8f98">$92</text>
+    <text x="-8" y="154" text-anchor="end" class="mono" font-size="11" fill="#8b8f98">-$35</text>
+    <text x="250" y="196" text-anchor="middle" class="mono" font-size="11" fill="#8b8f98">Date</text>
   </g>
 </svg>
