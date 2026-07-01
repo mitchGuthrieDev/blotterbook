@@ -147,6 +147,19 @@
     /* No preflight ships, so a UA <button> keeps a border (recolored by *{border-color}). Zero it;
        a `border` utility (e.g. shadcn's outline Button) re-adds it from the higher utilities layer. */
     border-width: 0;
+    /* AND a UA <button>/<input> keeps `color: ButtonText` — a SYSTEM color that resolves DARK on a
+       light-themed OS (invisible on the dark app; it only looked fine where the OS theme was dark).
+       Preflight normally sets `color: inherit` here; since none ships, do it ourselves so unstyled
+       controls take the theme foreground. A `text-*` utility (e.g. the primary Button) still wins. */
+    color: inherit;
+  }
+  /* Same UA-color gap for text inputs: <input>/<textarea>/<select> keep the dark UA text color and a
+     UA fill — inherit the theme foreground so typed text/placeholders read on the dark surfaces
+     (the shadcn Input/Textarea re-add their own bg/border/placeholder from the utilities layer). */
+  [data-mode='dev'] :is(input, textarea, select),
+  [data-mode='staging'] :is(input, textarea, select) {
+    color: inherit;
+    background-color: transparent;
   }
   /* Same preflight gap for anchors: a bare <a> gets the UA blue + underline. On these surfaces an
      <a> should inherit color and carry no underline (utilities opt back in where wanted). */
