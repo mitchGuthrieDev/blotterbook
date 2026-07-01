@@ -38,6 +38,18 @@ test('demo: boots into the redesigned sidebar dashboard with real seeded metrics
   // The header carries the Demo environment pill (prod /app shows none; staging shows Staging).
   await expect(page.locator('header').getByText('Demo', { exact: true })).toBeVisible();
 
+  // Regression: the no-preflight UA button reset must reach demo too (it was scoped to dev/staging
+  // only pre-CH16, so demo/app rendered raw <button>s with a light UA fill — the "white outline" bug).
+  const chrome = await nav(page)
+    .locator('button:not([aria-current])')
+    .first()
+    .evaluate(el => {
+      const s = getComputedStyle(el);
+      return { bg: s.backgroundColor, appearance: s.appearance };
+    });
+  expect(chrome.appearance).toBe('none');
+  expect(chrome.bg).toBe('rgba(0, 0, 0, 0)'); // transparent, not a UA light-grey fill
+
   expect(errors, errors.join('\n')).toHaveLength(0);
 });
 

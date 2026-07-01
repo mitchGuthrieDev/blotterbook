@@ -134,13 +134,15 @@
     pointer-events: auto !important;
   }
   /* This build ships no Tailwind preflight, so native form controls keep their UA chrome (e.g. a
-     light <button> background + embossed bevel). The redesign shell (data-mode="staging" after the
-     Phase-3 cutover) and the /dev preview surfaces use many raw <button>s as styled controls —
-     neutralize the native fill there so unstyled buttons inherit the dark theme. Scoped to those
-     surfaces so the current app/demo (App.svelte, which styles its own buttons) stay untouched until
-     the redesign is promoted; add data-mode='app'/'demo' here at that promotion step. */
+     light <button> background + embossed bevel). After the CH16 cutover the redesign shell is THE app
+     on EVERY surface (app/demo/staging) plus the /dev preview — all use many raw <button>s as styled
+     controls — so neutralize the native fill on all of them so unstyled buttons inherit the dark
+     theme. (Pre-cutover this was scoped to dev/staging only; app/demo were added at promotion —
+     without it, their sidebar nav shows a white UA button fill / "white outline".) */
   [data-mode='dev'] button,
-  [data-mode='staging'] button {
+  [data-mode='staging'] button,
+  [data-mode='app'] button,
+  [data-mode='demo'] button {
     appearance: none;
     background-color: transparent;
     background-image: none;
@@ -157,14 +159,18 @@
      UA fill — inherit the theme foreground so typed text/placeholders read on the dark surfaces
      (the shadcn Input/Textarea re-add their own bg/border/placeholder from the utilities layer). */
   [data-mode='dev'] :is(input, textarea, select),
-  [data-mode='staging'] :is(input, textarea, select) {
+  [data-mode='staging'] :is(input, textarea, select),
+  [data-mode='app'] :is(input, textarea, select),
+  [data-mode='demo'] :is(input, textarea, select) {
     color: inherit;
     background-color: transparent;
   }
   /* Same preflight gap for anchors: a bare <a> gets the UA blue + underline. On these surfaces an
      <a> should inherit color and carry no underline (utilities opt back in where wanted). */
   [data-mode='dev'] a,
-  [data-mode='staging'] a {
+  [data-mode='staging'] a,
+  [data-mode='app'] a,
+  [data-mode='demo'] a {
     color: inherit;
     text-decoration: none;
   }
