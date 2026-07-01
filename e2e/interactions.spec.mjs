@@ -73,10 +73,26 @@ test('demo: write controls are disabled — cost model + data management + CSV i
   await expect(brokerTrigger).toBeVisible();
   await expect(brokerTrigger).toBeDisabled();
 
-  // CSV Library: the data-management controls (backup / restore / erase) are disabled on demo.
+  // Trade Editor: a staged cell edit cannot be saved — "Save all" is disabled on demo.
+  await gotoScreen(page, 'Trade Editor');
+  await expect(page.locator('table tbody tr').first()).toBeVisible();
+  const cell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
+  await cell.click();
+  const input = page.locator('table tbody tr').first().locator('td').nth(3).locator('input');
+  await input.fill('ZZDEMO');
+  await input.press('Enter');
+  const saveAll = page.getByRole('button', { name: 'Save all' });
+  if (await saveAll.count()) await expect(saveAll).toBeDisabled();
+
+  // CSV Library: the data-management controls (backup / restore / erase) are disabled on demo, and so
+  // is the import-confirm CTA once a file is parsed (the import silently no-ops on demo). Done last —
+  // parsing a file opens the preview sheet, whose overlay would block further nav.
   await gotoScreen(page, 'CSV Library');
   await expect(page.getByRole('button', { name: /backup/i }).first()).toBeDisabled();
   await expect(page.getByRole('button', { name: /Erase/i })).toBeDisabled();
+  const csv = 'Time,Action,Realized PnL (value)\n2027-05-01 10:00:00,"Close long position for symbol MESM2025 at price 5310.00",30.00';
+  await page.setInputFiles('input[type=file]', { name: 'demo.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await expect(page.getByRole('button', { name: /Import \d+ trade/ })).toBeDisabled();
 });
 
 test('demo: Trade Editor stages edits in-memory but persists nothing across reload', async ({ page }) => {
@@ -85,15 +101,16 @@ test('demo: Trade Editor stages edits in-memory but persists nothing across relo
   await gotoScreen(page, 'Trade Editor');
   await expect(page.locator('table tbody tr').first()).toBeVisible();
 
-  // Edit the first row's Symbol cell → ZZDEMO, then Save all (a demo no-op guarded by isDemo).
+  // Edit the first row's Symbol cell → ZZDEMO (an in-memory draft edit). On demo the Save-all control
+  // is DISABLED (isDemo), so the staged edit can never be persisted.
   const symCell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
   await symCell.click();
   const input = page.locator('table tbody tr').first().locator('td').nth(3).locator('input');
   await input.fill('ZZDEMO');
   await input.press('Enter');
   const saveAll = page.getByRole('button', { name: 'Save all' });
-  if (await saveAll.count()) await saveAll.click();
-  await page.waitForTimeout(400);
+  if (await saveAll.count()) await expect(saveAll).toBeDisabled();
+  await page.waitForTimeout(300);
 
   // Nothing was persisted (demo never touches IndexedDB), so a reload re-seeds the pristine dataset.
   const dbs = await page.evaluate(async () => (indexedDB.databases ? (await indexedDB.databases()).map(d => d.name || '') : []));
