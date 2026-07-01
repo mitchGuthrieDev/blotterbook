@@ -108,6 +108,10 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
       calMonth = +last.slice(5, 7) - 1;
     }
   }
+  function setCal(year: number, month: number) {
+    calYear = year;
+    calMonth = month;
+  }
   function setScope(s: 'all' | 'month') {
     filters.scope = s;
   }
@@ -254,6 +258,7 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean }) {
     reloadAll,
     navMonth,
     jumpToLatest,
+    setCal,
     setScope,
     clearFilters,
     tradeId,

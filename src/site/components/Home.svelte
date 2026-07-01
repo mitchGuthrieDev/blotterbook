@@ -217,7 +217,7 @@
         {#each FEATURES as f, i (f.title)}
           <button
             type="button"
-            class="feat-item flex w-full cursor-pointer appearance-none items-center gap-[13px] rounded-[12px] border bg-card px-4 py-[14px] text-left transition-[border-color,background,transform] duration-[180ms] hover:translate-x-[2px] hover:border-ring focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary {activeFeat ===
+            class="feat-item flex w-full cursor-pointer appearance-none items-center gap-[13px] rounded-[12px] border bg-card px-4 py-[14px] text-left text-foreground transition-[border-color,background,transform] duration-[180ms] hover:translate-x-[2px] hover:border-ring focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary {activeFeat ===
             i
               ? 'is-active border-primary bg-secondary'
               : 'border-border'}"
