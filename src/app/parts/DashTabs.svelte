@@ -31,8 +31,8 @@
     oncreate: () => void;
     onrename: (id: string) => void;
     onmove: (id: string, dir: -1 | 1) => void;
-    /** Drag-reorder: place tab `id` at tab `overId`'s position. */
-    onreorder?: (id: string, overId: string) => void;
+    /** Drag-reorder: commit the FINAL tab order (ids), once, on drop (A192). */
+    onreorder?: (ids: string[]) => void;
     ondelete: (id: string) => void;
     /** Persist the ACTIVE tab's layout (clears its dirty flag). */
     onsave?: () => void;
@@ -40,11 +40,19 @@
 
   const isDirty = (id: string) => dirty.includes(id);
 
-  // Pointer drag-to-reorder (A186). HTML5 drag events + animate:flip on the keyed each; the menu's
-  // Move left/right stays as the keyboard-accessible path, so drag is a pointer-only enhancement.
+  // Pointer drag-to-reorder (A186; reworked A192). HTML5 drag events + animate:flip on the keyed
+  // each; the menu's Move left/right stays as the keyboard-accessible path, so drag is a
+  // pointer-only enhancement. During the drag we reorder a LOCAL working copy (rendered instead of
+  // the prop) and only commit — once — on drop; a cancelled drag (Esc / dropped elsewhere) fires
+  // dragend without drop and simply discards the working copy, restoring the entry order. Reorders
+  // trigger at the hovered tab's horizontal MIDPOINT, not on edge entry, so unequal-width tabs
+  // don't thrash while animate:flip is mid-flight.
   let dragId = $state<string | null>(null);
+  let workOrder = $state<DashTab[] | null>(null);
+  const view = $derived(workOrder ?? tabs);
   function dragStart(e: DragEvent, id: string) {
     dragId = id;
+    workOrder = [...tabs];
     if (e.dataTransfer) {
       e.dataTransfer.setData('text/plain', id);
       e.dataTransfer.effectAllowed = 'move';
@@ -52,18 +60,42 @@
   }
   function dragOver(e: DragEvent, overId: string) {
     e.preventDefault(); // allow drop
-    if (dragId && dragId !== overId) onreorder?.(dragId, overId);
+    if (!dragId || dragId === overId || !workOrder) return;
+    const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const before = e.clientX < box.x + box.width / 2;
+    const from = workOrder.findIndex(t => t.id === dragId);
+    const over = workOrder.findIndex(t => t.id === overId);
+    if (from < 0 || over < 0) return;
+    let to = before ? over : over + 1;
+    if (from < to) to -= 1; // account for the removal shifting indices
+    if (to === from) return;
+    const next = [...workOrder];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    workOrder = next;
+  }
+  function drop() {
+    if (dragId && workOrder) onreorder?.(workOrder.map(t => t.id));
+    dragId = null;
+    workOrder = null;
+  }
+  // dragend fires on the SOURCE after drop (already committed + cleared) or on cancel — either
+  // way, discard the working copy; without a preceding drop this restores the entry order.
+  function dragEnd() {
+    dragId = null;
+    workOrder = null;
   }
 </script>
 
 <div class="flex flex-wrap items-center gap-1 border-b border-border pb-2">
-  {#each tabs as t, i (t.id)}
+  {#each view as t, i (t.id)}
     <div
       role="presentation"
       draggable="true"
       ondragstart={e => dragStart(e, t.id)}
       ondragover={e => dragOver(e, t.id)}
-      ondragend={() => (dragId = null)}
+      ondrop={drop}
+      ondragend={dragEnd}
       animate:flip={{ duration: dur(180) }}
       class={[
         'flex items-center rounded-md border',

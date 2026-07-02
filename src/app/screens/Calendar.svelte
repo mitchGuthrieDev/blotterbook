@@ -15,7 +15,7 @@
   import { Badge } from '$lib/components/ui/badge';
   import * as Card from '$lib/components/ui/card';
   import { cn } from '$lib/utils';
-  import { usdWhole, tone, fmtDate, isoWeek, monthCells, MONTH_ABBR, DOW_LABEL } from '../../lib/core/core.ts';
+  import { usdWhole, tone, fmtDate, isoWeek, monthCells, dowPnlRows, MONTH_ABBR, DOW_LABEL } from '../../lib/core/core.ts';
   import { cleanTag } from '../../lib/core/store.ts';
   import { readImage } from '../lib/files.ts';
   import ScreenshotLightbox from '../parts/ScreenshotLightbox.svelte';
@@ -162,15 +162,9 @@
     return s;
   });
   // A174: all seven weekdays — Globex Sunday (and holiday-Saturday) sessions count in the month
-  // total, so a Mon–Fri-only list silently dropped them from the bars. Weekend rows render only
-  // when they actually carry P&L. DOW_LABEL is Sun-first, matching getDay().
-  const dowPnl = $derived(
-    DOW_LABEL.map((lbl, i) => ({
-      lbl,
-      i,
-      pnl: traded.filter(t => new Date(year, month, t.day).getDay() === i).reduce((s, t) => s + t.pnl, 0),
-    })).filter(d => (d.i >= 1 && d.i <= 5) || d.pnl !== 0)
-  );
+  // total, so a Mon–Fri-only list silently dropped them from the bars. The bucket/filter rule is
+  // the node-tested core dowPnlRows (A194).
+  const dowPnl = $derived(dowPnlRows(traded.map(t => ({ dow: new Date(year, month, t.day).getDay(), pnl: t.pnl }))));
 
   // ── Selected day detail (real trades for the day). ───────────────────────────────────────────
   const sel = $derived(selectedDay ? monthDays[selectedDay] : undefined);
@@ -304,6 +298,7 @@
                   {@const hit = !!c.rec && c.rec.pnl >= target}
                   <button
                     type="button"
+                    data-testid="cal-day"
                     onclick={() => (selectedDay = selectedDay === c.day ? null : c.day)}
                     title={c.rec?.tags?.length ? `Day tags: ${c.rec.tags.join(' · ')}` : undefined}
                     class={cn(

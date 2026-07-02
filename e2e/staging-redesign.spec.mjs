@@ -510,3 +510,49 @@ test('staging redesign: dashboard tabs — staged layouts, Save + dirty asterisk
   await expect(page.getByRole('button', { name: /^Scalping/ })).toHaveCount(0);
   await expect(page.locator('#dashmod-perf')).toBeVisible();
 });
+
+test('staging redesign: dashboard tabs drag-reorder — one commit on drop, Esc-style cancel reverts (A186/A192)', async ({ page }) => {
+  test.setTimeout(60_000);
+  let tabNo = 0;
+  page.on('dialog', d => d.accept(d.type() === 'prompt' ? ['Alpha', 'Beta'][tabNo++] : undefined));
+  await bootDashboard(page);
+  await page.getByRole('button', { name: 'New tab' }).click();
+  await page.getByRole('button', { name: 'New tab' }).click();
+  const order = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('[aria-label^="Tab menu: "]')].map(el => el.getAttribute('aria-label').replace('Tab menu: ', ''))
+    );
+  expect(await order()).toEqual(['Main', 'Alpha', 'Beta']);
+
+  // HTML5 DnD is synthesized via dispatched DragEvents (Playwright's mouse API doesn't drive the
+  // native drag pipeline headless). Drag 'Beta' to the left half of 'Main', then DROP → commits once.
+  const drag = (fromName, overName, drop) =>
+    page.evaluate(
+      ([fromName, overName, drop]) => {
+        const tabOf = name => document.querySelector(`[aria-label="Tab menu: ${name}"]`).closest('[draggable]');
+        const from = tabOf(fromName),
+          over = tabOf(overName);
+        const dt = new DataTransfer();
+        from.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+        const box = over.getBoundingClientRect();
+        over.dispatchEvent(
+          new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: box.x + 2, clientY: box.y + 2 })
+        );
+        if (drop) over.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: dt }));
+        from.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }));
+      },
+      [fromName, overName, drop]
+    );
+
+  await drag('Beta', 'Main', true);
+  await expect.poll(order).toEqual(['Beta', 'Main', 'Alpha']);
+
+  // The committed order survives a reload (persisted once, on the drop).
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+  await expect.poll(order).toEqual(['Beta', 'Main', 'Alpha']);
+
+  // A cancelled drag (dragend without drop — what Esc produces) reverts to the entry order.
+  await drag('Alpha', 'Beta', false);
+  await expect.poll(order).toEqual(['Beta', 'Main', 'Alpha']);
+});

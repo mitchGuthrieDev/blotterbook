@@ -92,6 +92,9 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     savedFilters = ((await store.getMeta('savedFilters')) as SavedFilter[]) || [];
   }
   async function boot() {
+    // A195: 'session initiated' (app:ready) leads the activity log — emitted BEFORE loadRefData,
+    // which fires its own refdata:loaded (the replay buffer preserves emit order for the backfill).
+    emit('app:ready');
     await loadRefData();
     if (!store.available()) throw new Error('Local storage is unavailable in this browser');
     await store.init();
@@ -103,9 +106,8 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     calYear = last ? +last.slice(0, 4) : new Date().getFullYear();
     calMonth = last ? +last.slice(5, 7) - 1 : new Date().getMonth();
     loaded = true;
-    // A151: the shared actions fire bus events for the ActivityTerminal (loadRefData emits
-    // refdata:loaded itself; every emit is a no-op with no subscriber).
-    emit('app:ready');
+    // A151: the shared actions fire bus events for the ActivityTerminal (every emit is a no-op
+    // with no subscriber; app:ready leads boot() — A195).
     emit('data:loaded', { count: allTrades.length });
   }
 

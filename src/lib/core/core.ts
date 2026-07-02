@@ -377,6 +377,15 @@ export function dowBuckets(trades: Trade[]) {
   }
   return d;
 }
+// The Calendar 'By weekday' rows (A174/A194): sum P&L per weekday index (0=Sun..6=Sat) and keep
+// Mon–Fri always; weekend rows only when they actually carry P&L (Globex Sunday sessions count in
+// the month total, so silently dropping them made the bars not reconcile). Extracted from
+// Calendar.svelte so the filter rule is node-testable.
+export function dowPnlRows(items: Array<{ dow: number; pnl: number }>): Array<{ lbl: string; i: number; pnl: number }> {
+  const all = DOW_LABEL.map((lbl, i) => ({ lbl, i, pnl: 0 }));
+  for (const it of items) if (it.dow >= 0 && it.dow <= 6) all[it.dow].pnl += it.pnl;
+  return all.filter(d => (d.i >= 1 && d.i <= 5) || d.pnl !== 0);
+}
 
 /* ============================================================
    Formatting

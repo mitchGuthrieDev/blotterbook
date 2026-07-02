@@ -9,26 +9,25 @@
   import { fade, fly, slide } from 'svelte/transition';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import { navSections } from './nav';
-  // A180 spike: Phosphor comparison set (pinned dep; named imports stay tree-shaken). The app's
-  // real set stays @lucide/svelte until the A180 decision lands.
-  import {
-    ChartLine as PhChartLine,
-    CalendarDots as PhCalendar,
-    Table as PhTable,
-    PencilSimple as PhPencil,
-    FileCsv as PhFileCsv,
-    Notebook as PhNotebook,
-    Funnel as PhFunnel,
-    Tag as PhTag,
-    Terminal as PhTerminal,
-    FloppyDisk as PhSave,
-    Trash as PhTrash,
-    Plus as PhPlus,
-    X as PhX,
-    List as PhList,
-    Gauge as PhGauge,
-    Receipt as PhReceipt,
-  } from 'phosphor-svelte';
+  // A180 spike: Phosphor comparison set (pinned dep). A191: DEEP imports — the package index
+  // re-exports every icon and does NOT tree-shake through named imports (the naive form shipped an
+  // 8.5 MB devcomponents chunk); per-icon paths keep this chunk in the tens of KBs.
+  import PhChartLine from 'phosphor-svelte/lib/ChartLine';
+  import PhCalendar from 'phosphor-svelte/lib/CalendarDots';
+  import PhTable from 'phosphor-svelte/lib/Table';
+  import PhPencil from 'phosphor-svelte/lib/PencilSimple';
+  import PhFileCsv from 'phosphor-svelte/lib/FileCsv';
+  import PhNotebook from 'phosphor-svelte/lib/Notebook';
+  import PhFunnel from 'phosphor-svelte/lib/Funnel';
+  import PhTag from 'phosphor-svelte/lib/Tag';
+  import PhTerminal from 'phosphor-svelte/lib/Terminal';
+  import PhSave from 'phosphor-svelte/lib/FloppyDisk';
+  import PhTrash from 'phosphor-svelte/lib/Trash';
+  import PhPlus from 'phosphor-svelte/lib/Plus';
+  import PhX from 'phosphor-svelte/lib/X';
+  import PhList from 'phosphor-svelte/lib/List';
+  import PhGauge from 'phosphor-svelte/lib/Gauge';
+  import PhReceipt from 'phosphor-svelte/lib/Receipt';
   import {
     ChartLine as LuChartLine,
     CalendarDays as LuCalendar,

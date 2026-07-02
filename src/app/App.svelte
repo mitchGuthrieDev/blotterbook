@@ -163,14 +163,13 @@
       : ((store.local.get(modKeyFor(id)) as string[] | null) ?? undefined);
     persistTabs();
   }
-  // Drag-reorder (A186): place tab `id` at `overId`'s position.
-  function reorderDashTab(id: string, overId: string) {
-    const from = dashTabs.findIndex(t => t.id === id),
-      to = dashTabs.findIndex(t => t.id === overId);
-    if (from < 0 || to < 0 || from === to) return;
-    const next = [...dashTabs];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
+  // Drag-reorder (A186; A192): DashTabs commits the FINAL order once, on drop — one persist per
+  // completed drag. Ignore an order that isn't a permutation of the current tabs (stale drop).
+  function reorderDashTabs(ids: string[]) {
+    if (ids.length !== dashTabs.length) return;
+    const byId = new Map(dashTabs.map(t => [t.id, t]));
+    const next = ids.map(id => byId.get(id)).filter((t): t is DashTab => !!t);
+    if (next.length !== dashTabs.length) return;
     dashTabs = next;
     persistTabs();
   }
@@ -246,9 +245,15 @@
       wsTemplates = { ...wsTemplates, [name]: [...(dashModules ?? DEFAULT_MODULE_KEYS)] };
       persistWs();
     },
+    // A193: applying a template / resetting to default are EXPLICIT target states — they persist
+    // immediately (stage + save), unlike incremental module edits which stage behind the dirty
+    // asterisk. Keeps the template menu's contract consistent with its save/remove actions.
     apply: (name: string) => {
       const order = wsTemplates[name];
-      if (order) saveModules([...order]);
+      if (order) {
+        saveModules([...order]);
+        saveTabLayout();
+      }
     },
     remove: (name: string) => {
       if (dash.isDemo) return;
@@ -257,7 +262,10 @@
       wsTemplates = next;
       persistWs();
     },
-    revert: () => revertModules(),
+    revert: () => {
+      revertModules();
+      saveTabLayout();
+    },
   });
 
   const filterModel = $derived<FilterModel>({
@@ -773,7 +781,7 @@
             oncreate={createDashTab}
             onrename={renameDashTab}
             onmove={moveDashTab}
-            onreorder={reorderDashTab}
+            onreorder={reorderDashTabs}
             ondelete={deleteDashTab}
             onsave={saveTabLayout}
           />

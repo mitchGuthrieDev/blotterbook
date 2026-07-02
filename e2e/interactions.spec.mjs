@@ -38,6 +38,11 @@ test('demo: boots into the redesigned sidebar dashboard with real seeded metrics
   // The header carries the Demo environment pill (prod /app shows none; staging shows Staging).
   await expect(page.locator('header').getByText('Demo', { exact: true })).toBeVisible();
 
+  // A179/A194: the rotating flavor text renders a phrase from the curated list (desktop only).
+  const { FLAVOR_PHRASES } = await import('../src/app/lib/flavor.ts');
+  const flavor = (await page.getByTestId('flavor-text').innerText()).trim();
+  expect(FLAVOR_PHRASES).toContain(flavor);
+
   // Regression: the no-preflight UA button reset must reach demo too (it was scoped to dev/staging
   // only pre-CH16, so demo/app rendered raw <button>s with a light UA fill — the "white outline" bug).
   const chrome = await nav(page)
@@ -176,21 +181,27 @@ test('demo (mobile): no screen scrolls horizontally at 360px (A183) and both cal
   await page.goto(DEMO, { waitUntil: 'networkidle' });
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
 
+  // Poll-based settle (A194 — no fixed waits): retries until the layout stops widening the page.
   const assertNoHScroll = async label => {
-    const { sw, cw } = await page.evaluate(() => ({
-      sw: document.documentElement.scrollWidth,
-      cw: document.documentElement.clientWidth,
-    }));
-    expect(sw, `${label}: page must not scroll horizontally (scrollWidth ${sw} > clientWidth ${cw})`).toBeLessThanOrEqual(cw);
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), {
+        message: `${label}: page must not scroll horizontally (scrollWidth exceeds clientWidth)`,
+      })
+      .toBeLessThanOrEqual(0);
   };
 
   await assertNoHScroll('Dashboard');
+  // A184: the cost-setup data-feed select stays inside the viewport even with a long feed label.
+  const feed = page.locator('[aria-label="Data feed"]').first();
+  if (await feed.isVisible()) {
+    const fb = await feed.boundingBox();
+    expect(fb.x + fb.width).toBeLessThanOrEqual(360);
+  }
   for (const name of ['Calendar', 'Analytics', 'Blotter', 'CSV Library', 'Trade Editor', 'Reports']) {
     // Mobile nav is a drawer — open it, navigate, drawer closes on pick.
     await page.getByRole('button', { name: 'Open navigation' }).click();
     await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name, exact: true }).click();
     await expect(page.locator('header h1')).toHaveText(name);
-    await page.waitForTimeout(250);
     await assertNoHScroll(name);
   }
 
@@ -198,7 +209,7 @@ test('demo (mobile): no screen scrolls horizontally at 360px (A183) and both cal
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Calendar', exact: true }).click();
   await expect(page.locator('header h1')).toHaveText('Calendar');
-  const cell = page.locator('button.aspect-square').last();
+  const cell = page.getByTestId('cal-day').last();
   await expect(cell).toBeVisible();
   const box = await cell.boundingBox();
   expect(box.x + box.width).toBeLessThanOrEqual(360);

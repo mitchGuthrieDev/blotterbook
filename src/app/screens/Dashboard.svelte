@@ -172,6 +172,10 @@
   const moduleLabel = (key: string) => MODULES.find(m => m.key === key)?.label ?? key;
   function commitModules(order: string[]) {
     modOrder = order;
+    // A195: keep the re-seed guard in sync — the app echoes this order back through the `modules`
+    // prop, and without updating lastModKey the effect above redundantly reassigned modOrder (a
+    // fresh identical array) after every local edit.
+    lastModKey = order.join(',');
     onmoduleschange?.(order);
   }
   function moveModule(key: string, dir: -1 | 1) {
@@ -785,6 +789,7 @@
           {@const up = t && t.pnl >= 0}
           <button
             type="button"
+            data-testid="cal-day"
             onclick={() => t && pickDay(day)}
             disabled={!t}
             class={[

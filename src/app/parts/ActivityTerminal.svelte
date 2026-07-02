@@ -1,8 +1,8 @@
 <script lang="ts">
   // Activity terminal (CH16 redesign chrome). A small scrollable status log that subscribes to the
   // core event bus (onEvent — A29) and appends a timestamped human-readable line for each action
-  // event shared code emits (data loaded/imported, note saved, backup, erase, trade delete). Parity
-  // with the legacy src/app/components/ActivityTerminal.svelte, but self-contained (no Panel wrapper).
+  // event shared code emits (data loaded/imported, note saved, backup, erase, trade delete, filter
+  // saved/applied, tab created). Boot events are backfilled from the bus replay buffer (A188).
   import { onEvent, busLog, pad2 } from '../../lib/core/core.ts';
   import { cn } from '$lib/utils';
   import { Terminal } from '@lucide/svelte';

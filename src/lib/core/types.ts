@@ -214,7 +214,7 @@ export interface FilterState {
   dows: number[];
 }
 
-/** The persisted filter payload of a saved view (vanilla-compatible `f` shape; `symbol` holds root). */
+/** The persisted payload of a saved filter (vanilla-compatible `f` shape; `symbol` holds root). */
 export interface SavedFilterDef {
   from?: string;
   to?: string;

@@ -14,7 +14,7 @@ flowchart TD
     S3 --> S4["format:check — Prettier"]
     S4 --> S5["test:unit — 7 node suites"]
     S5 --> S6["build — build-manifest + vite → dist/"]
-    S6 --> S7["size-budget — /app/ bundle ≤ 480 KiB"]
+    S6 --> S7["size-budget — /app/ bundle ≤ 600 KiB"]
     S7 --> S8["check-deploy — deploy contract + version classification"]
     S8 --> S9["test:e2e — Playwright, boot every surface from dist/"]
     S9 --> S10["re-run scripts/build-manifest.mjs"]
