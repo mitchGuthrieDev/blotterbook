@@ -17,8 +17,8 @@ subscription tier) cloud-hosted storage.
 | `cloud` | recurring subscription   | IndexedDB **+** server storage | planned  |
 
 The client never branches on the tier when reading/writing data — it goes
-through `Store` (`src/lib/store.ts`). A future `CloudStore` implementing the same
-interface gets selected by `Entitlements.storeFor()` (`src/lib/entitlements.ts`),
+through `Store` (`src/lib/core/store.ts`). A future `CloudStore` implementing the same
+interface gets selected by `Entitlements.storeFor()` (`src/lib/core/entitlements.ts`),
 so adding the cloud tier does not touch the rest of the app.
 
 ## Account provisioning flow (planned, à la gwtrade.app)
@@ -43,8 +43,9 @@ so adding the cloud tier does not touch the rest of the app.
 Live today; no auth required:
 
 - `functions/api/geo.ts` — returns the visitor's coarse region from Cloudflare edge metadata
-  (`{ country, region, regionCode }`) to pre-fill the tax state. No IP lookup, no third-party
-  service, nothing stored.
+  (`{ country, region, regionCode }`). No IP lookup, no third-party service, nothing stored.
+  NOTE: deployed but currently NOT called by the app (the tax-state prefill was dropped in the
+  CH16 cutover; re-wiring it is a candidate enhancement).
 - `GET /api/status` — the homepage "Live" indicator (`{ mode, label, updatedAt }`). The **POST**
   is admin-only (see below).
 - `GET /api/config` — feature flags the app reads at boot (no secrets). The **POST** is admin-only.

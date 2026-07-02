@@ -3670,6 +3670,17 @@
       "completedDate": "2026-07-02",
       "partial": false,
       "doneNote": "DONE (2026-07-02) — Drift batch (R1 pass-6): ci-pipeline.md size-budget label 480→600 KiB; ActivityTerminal's dead legacy-path comment replaced with the real event list + A188 note; 'saved view' stragglers fixed (types.ts comment, Roadmap sync bullet); emit('app:ready') moved to the top of boot() so 'session initiated' leads the activity log (the replay buffer preserves order); Dashboard commitModules() now updates lastModKey, killing the redundant modOrder reassignment the prop echo triggered after every layout edit."
+    },
+    {
+      "id": "F36",
+      "title": "Add Interactive Brokers (IBKR) as a selectable broker",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02, closed by backlog review) — already satisfied in the data: IBKR ships in static/data/brokers.json (order slot + {micro: 0.25, std: 0.85} per side, matching IBKR's published Fixed futures pricing: US micro contracts $0.25/contract, standard $0.85/contract, exchange/regulatory fees separate — which costModel() adds from exchange-fees.json) AND has a brokerFeeds entry in feeds.json, so it is selectable end-to-end with no app-code change (verified BROKER_ORDER renders it and costModel prices with it). The entry predates this review (landed by #64); the item was never closed. Values are snapshot estimates like the rest of brokers.json (its _comment); IBKR's tiered plan is not modeled — file separately if wanted."
     }
   ]
 }
