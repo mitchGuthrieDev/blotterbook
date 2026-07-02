@@ -18,7 +18,7 @@ flowchart TD
 
     subgraph ROUTES["functions/api/*"]
         direction TB
-        GEO["GET /api/geo<br/>coarse region from request.cf · public 30m"]
+        GEO["GET /api/geo<br/>coarse region from request.cf · public 30m · deployed, not called by the app"]
         STAT["/api/status<br/>GET public 30s · POST admin → STATUS_KV"]
         CFG["/api/config<br/>GET flags public 60s · POST admin → STATUS_KV"]
         AK["GET /api/admin-key<br/>Cf-Access JWT (S4) → short-lived token"]
@@ -43,7 +43,7 @@ flowchart TD
 
 | Route | Auth | Purpose |
 | --- | --- | --- |
-| `GET /api/geo` | public | Visitor region (from `request.cf`) to pre-fill the tax-state selector |
+| `GET /api/geo` | public | Visitor region (from `request.cf`) — deployed but currently NOT called by the app (candidate: pre-fill the tax-state selector) |
 | `GET/POST /api/status` | GET public · POST admin | Homepage "Live" indicator (KV-backed) |
 | `GET/POST /api/config` | GET public · POST admin | Admin-managed feature flags read by the app at boot |
 | `GET /api/admin-key` | Cloudflare Access JWT | Issue a short-lived signed admin token (S3/S4) |

@@ -38,7 +38,7 @@ parsed, computed, and stored locally. No accounts, no uploads, no tracking.
   </tr>
   <tr>
     <td width="160"><img src="src/assets/why-journal.svg" alt="A trading-calendar month grid with green and red daily PnL cells, note dots and a tag chip" width="150"></td>
-    <td><b>A real journal.</b> Per-day and per-trade notes, tags, and screenshots; saved filter views; a tag filter — so you can actually review <i>why</i> a day went the way it did.</td>
+    <td><b>A real journal.</b> Per-day and per-trade notes, tags, and screenshots; saved filters; a tag filter — so you can actually review <i>why</i> a day went the way it did.</td>
   </tr>
   <tr>
     <td width="160"><img src="src/assets/why-platforms.svg" alt="Several platform CSV exports auto-detected and normalized into one unified trade table" width="150"></td>
@@ -88,9 +88,9 @@ Your CSV ─▶ parsed & platform-detected in the browser
          ─▶ rendered: cards · equity curve · calendar · cost waterfall · stats
 ```
 
-The only network calls Blotterbook ever makes are for its *own* reference data (broker/fee/tax
-tables) and an optional coarse-region lookup to pre-fill your tax state — never your trades. The
-full privacy statement is on the in-app **Legal** page (`legal.html`).
+The only network calls Blotterbook ever makes are for its *own* static reference data
+(broker/fee/tax tables, version + release notes) and a tiny same-host feature-flag/status
+endpoint — never your trades. The full privacy statement is on the **Legal** page (`legal.html`).
 
 ## Pricing
 

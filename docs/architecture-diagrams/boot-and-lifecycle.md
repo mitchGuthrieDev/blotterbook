@@ -26,8 +26,10 @@ sequenceDiagram
     App->>Dash: createDashboard(store, {seed, isDemo})
     App->>Dash: onMount → dash.boot()
     activate Dash
+    Dash->>Bus: emit app:ready — first, before refdata (A195 · replay-buffered A188)
     Dash->>Ref: await loadRefData()
     Ref-->>Dash: brokers / exchange-fees / feeds / state-tax
+    Ref->>Bus: emit refdata:loaded
     Dash->>Store: await store.init()
     alt seed (demo or staging)
         Dash->>Store: seedIfEmpty() — parse demo CSV, addTrades
@@ -35,8 +37,8 @@ sequenceDiagram
     Dash->>Store: reloadAll() — trades, journal, tradeMeta, savedFilters
     Store-->>Dash: persisted data
     Dash->>Dash: restore setup · set calendar cursor · loaded = true
+    Dash->>Bus: emit data:loaded with the trade count
     deactivate Dash
-    App->>Bus: emit app:ready
     App->>App: fetch /data/versions.json (badge) · loadFlags()
     App->>App: needsOnboarding = !isDemo && !isStaging && loaded && allTrades.length == 0
 ```

@@ -1,5 +1,9 @@
 # Staging gating after the CH16 cutover — recommendation (A111)
 
+> **2026-07-02 note:** the worked example below (A135 dashboard tabs as the live staging-only
+> inventory) is now historical — tabs were promoted to all surfaces in the CH16 run the day after
+> this was written. The recommendation itself stands unchanged.
+
 **Decision record, 2026-07-01.** Closes backlog **A111**. Question: now that app/demo/staging all
 mount ONE Svelte bundle (`main.ts` → the mode-aware `App.svelte`), is runtime `PAGE_MODE`/
 `isStaging` gating still the right way to use staging as a proving ground — versus build-time

@@ -12,7 +12,7 @@ flowchart TD
     S1 --> S2["lint — ESLint"]
     S2 --> S3["typecheck — tsc(core)+tsc(functions)+svelte-check"]
     S3 --> S4["format:check — Prettier"]
-    S4 --> S5["test:unit — 7 node suites"]
+    S4 --> S5["test:unit — 8 node suites"]
     S5 --> S6["build — build-manifest + vite → dist/"]
     S6 --> S7["size-budget — /app/ bundle ≤ 600 KiB"]
     S7 --> S8["check-deploy — deploy contract + version classification"]

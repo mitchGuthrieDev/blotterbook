@@ -116,7 +116,7 @@ page), update *all* of:
 | `static/_headers` | CSP `connect-src 'self'` assumes same-origin `/api`, `/data`, `/app` |
 | `static/robots.txt` / `static/sitemap.xml` | `/app/`, `/admin.html`, and the public-page canonical URLs (CH5/CH6) |
 | Page `<link rel="canonical">` + OG tags | the canonical URL of each marketing page (CH5) |
-| `vite.config.mjs` | `root: 'src'`, `publicDir: static/`, `outDir: dist/`, the 9 `rollupOptions.input` entry paths + the `ssg()` page list (A69) |
+| `vite.config.mjs` | `root: 'src'`, `publicDir: static/`, `outDir: dist/`, the 10 `rollupOptions.input` entry paths + the `ssg()` page list (A69) |
 | `scripts/vite-ssg.mjs` | maps each site page's URL → its `src/site/components/*.svelte` component (A69 prerender; A95 moved it under `scripts/`) |
 | `scripts/build-manifest.mjs` | hashes `static/data/*.json`, with an explicit filename exclude-set |
 | `scripts/bump-version.mjs` | classifies prod-shipping surfaces by the `src/app/`, `src/lib/`, `src/site/`, `src/assets/`, `static/data/` prefixes + specific filenames |
@@ -168,9 +168,11 @@ not in a shared globals object. Boot runs `loadRefData()` → `Store.init()` →
 The activity terminal, definitions, and status banners are now Svelte components under
 `src/app/parts/` (the redesigned screens live in `src/app/screens/`). The `core.ts` event bus
 remains (emitters re-wired in A151 after the cutover dropped them): `loadRefData` emits
-`refdata:loaded`, and the shared dashboard actions fire `app:ready`, `data:loaded`,
-`data:imported`, `note:saved`, `trade:deleted`, `backup:created`, `data:erased` over an
-`EventTarget` for any listener; it stays a no-op when nothing subscribes.
+`refdata:loaded`, and the shared actions fire `app:ready` (first, at boot start — A195),
+`data:loaded`, `data:imported`, `note:saved`, `trade:deleted`, `backup:created`, `data:erased`,
+`filter:saved`, `filter:applied`, and `tab:created` over an `EventTarget` for any listener; a
+50-entry replay buffer (`busLog()`, A188) lets the ActivityTerminal backfill boot events, and the
+bus stays a no-op when nothing subscribes.
 
 ## Shared chrome: tokens + Svelte components
 
@@ -310,7 +312,7 @@ TradingView PaperTrade** (zero commission).
 | File | Contents |
 | --- | --- |
 | `brokers.json` | `order` + `brokers` (per-side commission for `micro`/`std`). |
-| `exchange-fees.json` | `exchange` (fee per root), `micro` set, and a `fallback`. |
+| `exchange-fees.json` | `exchange` (fee per root), `micro` set, `notMicro` list (A171 — full-size M-prefixed roots), and a `fallback`. |
 | `feeds.json` | `shared` feed sets + `brokerFeeds` (a broker may alias a shared set by name, e.g. `"AMP": "CQG"`). |
 | `state-tax.json` | `model` (`fedOrdinary`, `ltcg`, weights) + `states` (`[abbr, ratePct, label]`). |
 
@@ -492,10 +494,10 @@ set an **`ADMIN_KEY`** secret. Detailed click-paths and the admin-auth model
 ### Location-based tax state
 
 `functions/api/geo.ts` returns the visitor's coarse region from Cloudflare's edge
-metadata (`request.cf`), and the app calls `/api/geo` on the landing screen to
-**pre-select the US state** for the tax estimate. No IP or third-party service,
-nothing stored; it never overrides a chosen/saved state and silently does nothing
-off-Cloudflare or outside the US.
+metadata (`request.cf`) — no IP or third-party service, nothing stored. **The endpoint is
+deployed but currently unwired**: nothing in `src/` calls `/api/geo` since the CH16 cutover
+(the legal page's outbound-call inventory reflects this — A181). Re-wiring it to pre-select
+the tax state is a candidate future enhancement; it must never override a chosen/saved state.
 
 ## Marketing & info site
 

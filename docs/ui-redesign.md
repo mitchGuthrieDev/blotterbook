@@ -33,7 +33,6 @@ differently:
 | Live app | `/app/` | redesigned `App.svelte` (sidebar shell + screens) | real IndexedDB | **new sidebar shell** (redesign shipped) |
 | Demo | `/app/demo.html` | same redesigned app, in-memory `DemoStore` | sample, never persists | **new sidebar shell** (redesign shipped) |
 | Staging | `/app/staging.html` | same redesigned app, isolated DB, key-gated | real, isolated | **new sidebar shell** (redesign shipped) |
-| **Redesign preview** | `/dev/app.html` | **new sidebar shell + screen mockups** | **hardcoded mock data** | the redesign itself |
 | Styleguide | `/dev/components.html` | live token + component reference | — | the redesign reference |
 
 ## The `/dev` sandbox
@@ -42,10 +41,9 @@ differently:
 linked from the product, driven by **hardcoded mock data**, with **no real data engine and no
 persistence**. It exists so the new app can be designed in code without risking the live one:
 
-- `/dev/components.html` — the styleguide (every token + installed shadcn-svelte primitive).
-- `/dev/app.html` — the redesign harness ([`RedesignApp.svelte`](../src/dev/RedesignApp.svelte)): the
-  sidebar shell + a hash router over the seven planned surfaces. Screens register in its `SCREENS`
-  map; unbuilt ones fall back to a placeholder.
+- `/dev/components.html` — the styleguide (every token + installed shadcn-svelte primitive). *(The
+  `/dev/app.html` redesign harness + `RedesignApp.svelte` were retired post-CH16 — the real app IS
+  the redesign; new screens are designed directly in `src/app/screens/`.)*
 
 ## Cutover: how `/dev` became the app (done)
 
