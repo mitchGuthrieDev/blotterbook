@@ -4,6 +4,20 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.43.0",
+      "date": "2026-07-02",
+      "title": "More accurate numbers everywhere — plus tag analytics and a faster app",
+      "summary": "A top-to-bottom audit of every calculation Blotterbook performs, with fixes across CSV import, drawdown and profit-factor edge cases, commission tiers, and report labeling. Also new: per-tag performance analytics, day-tag surfacing with autocomplete, and a lighter first load. Your trade data still never leaves the browser.",
+      "highlights": [
+        "CSV import is tougher: semicolon-delimited files (EU Excel re-saves) parse correctly, ambiguous dates can no longer be flipped by a stray note, IBKR timestamps keep their time of day, and unreadable fills are skipped with a visible notice instead of corrupting the import.",
+        "Edge-case metrics tell the truth: drawdowns that start at your first trade show '—' instead of a misleading 0.0% of peak, tiny rounding residue can no longer produce absurd profit-concentration percentages or a red -$0.00, and $0 scratch trades are footnoted rather than counted as wins.",
+        "Commission estimates cover 33 futures roots (treasuries, grains, FX, micro yields, micro crypto) with correct micro/standard tiers — and any rate that's still an estimate is clearly marked with an asterisk.",
+        "Reports now show one number per label: the preview KPIs match the exported report exactly (net of costs, commission-adjusted profit factor), and the 'compare to prior period' window is timezone-safe and snaps month scopes to the previous calendar month.",
+        "Analytics gains a 'Performance by tag' breakdown with an untagged-coverage row; calendar day tags surface in tooltips and drill-ins, and tag inputs autocomplete from your existing vocabulary.",
+        "The app loads faster: screens beyond the Dashboard now load on demand."
+      ]
+    },
+    {
       "version": "0.42.0",
       "date": "2026-07-01",
       "title": "A redesigned Blotterbook — new sidebar app on every screen",
