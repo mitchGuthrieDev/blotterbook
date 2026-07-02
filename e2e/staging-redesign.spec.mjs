@@ -202,7 +202,7 @@ test('staging redesign: Dashboard is interactive — chart overlays, day detail,
   await expect(page.locator('[aria-live="polite"]:not([role])')).toContainText(/\d{4}-\d\d-\d\d.*\$/);
 
   // Trading Calendar day-click → the day's trades + a journal-note editor.
-  await page.locator('div.grid.grid-cols-7 button:not([disabled])').first().click();
+  await page.locator('#dashmod-cal .grid button:not([disabled])').first().click();
   await expect(page.getByText('Journal note')).toBeVisible();
 
   // KPI card → detail dialog (Net P&L shows the take-home waterfall row), closes clean + responsive.
@@ -268,17 +268,22 @@ test('staging redesign: Dashboard modules hide/reorder and persist across reload
   await page.locator('#dashmod-cal button[aria-label="Module menu"]').click(); // Trading Calendar's own menu
   await page.getByRole('menuitem', { name: 'Move up' }).click();
   expect(await order()).toEqual(['Trading Calendar', 'Performance']);
+  // A186: layout edits STAGE (dirty asterisk); Save persists, and only then does a reload keep it.
+  await page.getByRole('button', { name: 'Save layout' }).click();
   await page.reload({ waitUntil: 'networkidle' });
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
   expect(await order()).toEqual(['Trading Calendar', 'Performance']); // persisted via Store.local
 
-  // A139: hide a module, add it back via the 'Add module' picker, and the add-back persists.
+  // A139/A189: hide a module, add it back via the always-visible 'Add modules' picker, save → persists.
   await page.locator('#dashmod-perf button[aria-label="Module menu"]').click();
   await page.getByRole('menuitem', { name: 'Hide' }).click();
   await expect(page.locator('#dashmod-perf')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Add module' }).click();
-  await page.getByRole('menuitem', { name: 'Performance' }).click();
+  await page.getByRole('button', { name: 'Add modules' }).click();
+  const dlg = page.getByRole('dialog');
+  await dlg.locator('label', { hasText: 'Performance' }).locator('input[type=checkbox]').check();
+  await dlg.getByRole('button', { name: /Add module/ }).click();
   await expect(page.locator('#dashmod-perf')).toBeVisible();
+  await page.getByRole('button', { name: 'Save layout' }).click();
   await page.reload({ waitUntil: 'networkidle' });
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
   await expect(page.locator('#dashmod-perf')).toBeVisible(); // the add-back persisted too
@@ -443,39 +448,111 @@ test('staging redesign: the Dashboard Tag filter narrows to tagged trades (A159)
   await expect(page.getByText('untagged', { exact: true })).toBeVisible();
 });
 
-test('staging redesign: dashboard tabs hold independent layouts and persist (A135)', async ({ page }) => {
-  test.setTimeout(60_000);
+test('staging redesign: dashboard tabs — staged layouts, Save + dirty asterisk, ✕ close, add-modules picker (A135/A186/A189)', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
   page.on('dialog', d => d.accept(d.type() === 'prompt' ? 'Scalping' : undefined));
   await bootDashboard(page);
   await expect(page.getByRole('button', { name: 'Main', exact: true })).toBeVisible();
 
+  // A189: the add-modules '+' is ALWAYS visible, even on a full default layout; the picker lists
+  // every module with already-added ones checked + disabled.
+  const plus = page.getByRole('button', { name: 'Add modules' });
+  await expect(plus).toBeVisible();
+  await plus.click();
+  const dlg = page.getByRole('dialog');
+  await expect(dlg.getByText('Performance')).toBeVisible();
+  await expect(dlg.getByText('Added').first()).toBeVisible();
+  const addBtn = dlg.getByRole('button', { name: /Add module/ });
+  await expect(addBtn).toBeDisabled(); // nothing selectable on a full layout
+  await page.keyboard.press('Escape');
+
   // Create a second tab (prompt supplies the name) — it becomes active with the default layout.
   await page.getByRole('button', { name: 'New tab' }).click();
-  const scalpTab = page.getByRole('button', { name: 'Scalping', exact: true });
+  const scalpTab = page.getByRole('button', { name: /^Scalping/ });
   await expect(scalpTab).toBeVisible();
   await expect(scalpTab).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('#dashmod-perf')).toBeVisible();
 
-  // Hide Performance on the new tab only.
+  // Hide Performance on the new tab — the layout STAGES: dirty asterisk + Save button appear (A186/A189).
   await page.locator('#dashmod-perf button[aria-label="Module menu"]').click();
   await page.getByRole('menuitem', { name: 'Hide' }).click();
   await expect(page.locator('#dashmod-perf')).toHaveCount(0);
+  await expect(page.getByTitle('Unsaved layout changes')).toBeVisible();
+  const save = page.getByRole('button', { name: 'Save layout' });
+  await expect(save).toBeVisible();
 
-  // Main keeps its own (full) layout; switching back restores the tab's trimmed layout.
+  // Unsaved edits survive a tab SWITCH (in-memory draft): Main keeps its full layout.
   await page.getByRole('button', { name: 'Main', exact: true }).click();
   await expect(page.locator('#dashmod-perf')).toBeVisible();
   await scalpTab.click();
   await expect(page.locator('#dashmod-perf')).toHaveCount(0);
 
-  // Both the active tab and its per-tab layout survive a reload.
+  // Save persists the layout and clears the asterisk; it then survives a reload.
+  await save.click();
+  await expect(page.getByTitle('Unsaved layout changes')).toHaveCount(0);
   await page.reload({ waitUntil: 'networkidle' });
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
-  await expect(page.getByRole('button', { name: 'Scalping', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('button', { name: /^Scalping/ })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('#dashmod-perf')).toHaveCount(0);
 
-  // Delete the tab (confirm accepted) — Main takes over with its full layout.
-  await page.getByRole('button', { name: 'Tab menu: Scalping' }).click();
-  await page.getByRole('menuitem', { name: 'Delete' }).click();
-  await expect(page.getByRole('button', { name: 'Scalping', exact: true })).toHaveCount(0);
+  // A189: re-add Performance through the picker — it stages (asterisk returns) and renders.
+  await page.getByRole('button', { name: 'Add modules' }).click();
+  const dlg2 = page.getByRole('dialog');
+  await dlg2.locator('label', { hasText: 'Performance' }).locator('input[type=checkbox]').check();
+  await dlg2.getByRole('button', { name: /Add module/ }).click();
   await expect(page.locator('#dashmod-perf')).toBeVisible();
+  await expect(page.getByTitle('Unsaved layout changes')).toBeVisible();
+
+  // A186: the direct ✕ closes the tab (confirm accepted) — Main takes over with its full layout.
+  await page.getByRole('button', { name: 'Close tab: Scalping' }).click();
+  await expect(page.getByRole('button', { name: /^Scalping/ })).toHaveCount(0);
+  await expect(page.locator('#dashmod-perf')).toBeVisible();
+});
+
+test('staging redesign: dashboard tabs drag-reorder — one commit on drop, Esc-style cancel reverts (A186/A192)', async ({ page }) => {
+  test.setTimeout(60_000);
+  let tabNo = 0;
+  page.on('dialog', d => d.accept(d.type() === 'prompt' ? ['Alpha', 'Beta'][tabNo++] : undefined));
+  await bootDashboard(page);
+  await page.getByRole('button', { name: 'New tab' }).click();
+  await page.getByRole('button', { name: 'New tab' }).click();
+  const order = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('[aria-label^="Tab menu: "]')].map(el => el.getAttribute('aria-label').replace('Tab menu: ', ''))
+    );
+  expect(await order()).toEqual(['Main', 'Alpha', 'Beta']);
+
+  // HTML5 DnD is synthesized via dispatched DragEvents (Playwright's mouse API doesn't drive the
+  // native drag pipeline headless). Drag 'Beta' to the left half of 'Main', then DROP → commits once.
+  const drag = (fromName, overName, drop) =>
+    page.evaluate(
+      ([fromName, overName, drop]) => {
+        const tabOf = name => document.querySelector(`[aria-label="Tab menu: ${name}"]`).closest('[draggable]');
+        const from = tabOf(fromName),
+          over = tabOf(overName);
+        const dt = new DataTransfer();
+        from.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+        const box = over.getBoundingClientRect();
+        over.dispatchEvent(
+          new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: box.x + 2, clientY: box.y + 2 })
+        );
+        if (drop) over.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: dt }));
+        from.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }));
+      },
+      [fromName, overName, drop]
+    );
+
+  await drag('Beta', 'Main', true);
+  await expect.poll(order).toEqual(['Beta', 'Main', 'Alpha']);
+
+  // The committed order survives a reload (persisted once, on the drop).
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+  await expect.poll(order).toEqual(['Beta', 'Main', 'Alpha']);
+
+  // A cancelled drag (dragend without drop — what Esc produces) reverts to the entry order.
+  await drag('Alpha', 'Beta', false);
+  await expect.poll(order).toEqual(['Beta', 'Main', 'Alpha']);
 });

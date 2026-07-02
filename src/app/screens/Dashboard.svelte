@@ -172,6 +172,10 @@
   const moduleLabel = (key: string) => MODULES.find(m => m.key === key)?.label ?? key;
   function commitModules(order: string[]) {
     modOrder = order;
+    // A195: keep the re-seed guard in sync — the app echoes this order back through the `modules`
+    // prop, and without updating lastModKey the effect above redundantly reassigned modOrder (a
+    // fresh identical array) after every local edit.
+    lastModKey = order.join(',');
     onmoduleschange?.(order);
   }
   function moveModule(key: string, dir: -1 | 1) {
@@ -183,7 +187,18 @@
     commitModules(next);
   }
   const hideModule = (key: string) => commitModules(modOrder.filter(k => k !== key));
-  const addModule = (key: string) => commitModules([...modOrder, key]);
+
+  // A189: the illustrated multi-select add-modules picker (the always-visible '+' opens it).
+  let pickerOpen = $state(false);
+  let pickerSel = $state<string[]>([]);
+  function togglePick(key: string) {
+    pickerSel = pickerSel.includes(key) ? pickerSel.filter(k => k !== key) : [...pickerSel, key];
+  }
+  function addPicked() {
+    if (pickerSel.length) commitModules([...modOrder, ...pickerSel.filter(k => !modOrder.includes(k))]);
+    pickerSel = [];
+    pickerOpen = false;
+  }
 
   // ── Filters ──────────────────────────────────────────────────────────────────────────────────
   const DOW_OPTS = [
@@ -220,7 +235,7 @@
     newViewName = '';
   }
   function doRenameView(id: string, current: string) {
-    const name = typeof prompt === 'function' ? prompt('Rename view', current) : null;
+    const name = typeof prompt === 'function' ? prompt('Rename filter', current) : null;
     if (name && name.trim()) filterModel.renameView?.(id, name.trim());
   }
 
@@ -533,7 +548,7 @@
 
         {#if canSaveView || savedViews.length}
           <div class="grid gap-1.5 border-t border-border pt-2">
-            <Label class="text-[11px]">Saved views</Label>
+            <Label class="text-[11px]">Saved filters</Label>
             {#each savedViews as v (v.id)}
               <div class="flex items-center gap-1">
                 <button
@@ -546,7 +561,7 @@
                 {#if canSaveView}
                   <button
                     type="button"
-                    aria-label="Rename view"
+                    aria-label="Rename filter"
                     class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                     onclick={() => doRenameView(v.id, v.name)}
                   >
@@ -554,7 +569,7 @@
                   </button>
                   <button
                     type="button"
-                    aria-label="Delete view"
+                    aria-label="Delete filter"
                     class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-destructive"
                     onclick={() => filterModel.deleteView?.(v.id)}
                   >
@@ -567,7 +582,7 @@
               <div class="flex items-center gap-1">
                 <Input
                   bind:value={newViewName}
-                  placeholder="Name this view…"
+                  placeholder="Name this filter…"
                   class="h-8 flex-1"
                   disabled={!filtersActive}
                   onkeydown={e => e.key === 'Enter' && doSaveView()}
@@ -759,7 +774,10 @@
       <span class="text-sm font-medium text-foreground">{monthLabel}</span>
       <span class={['text-sm tabular-nums', monthNet >= 0 ? 'text-chart-2' : 'text-destructive']}>{usdWhole(monthNet)}</span>
     </div>
-    <div class="grid grid-cols-7 gap-1.5">
+    <!-- A182: minmax(0,1fr) columns + min-w-0/overflow-hidden cells — content can never widen the
+         grid past its container (the mobile right-edge clip); cells are square on mobile, and the
+         P&L figure truncates instead of escaping the border (full precision in the drill-in). -->
+    <div class="grid grid-cols-[repeat(7,minmax(0,1fr))] gap-1 sm:gap-1.5">
       {#each DOW_LABEL as d (d)}
         <div class="pb-1 text-center text-[11px] text-muted-foreground">{d}</div>
       {/each}
@@ -771,10 +789,11 @@
           {@const up = t && t.pnl >= 0}
           <button
             type="button"
+            data-testid="cal-day"
             onclick={() => t && pickDay(day)}
             disabled={!t}
             class={[
-              'min-h-16 rounded border p-1.5 text-left transition-colors',
+              'aspect-square min-w-0 overflow-hidden rounded-md border p-1 text-left transition-colors sm:aspect-auto sm:min-h-16 sm:p-1.5',
               t ? (up ? 'border-chart-2/30 bg-chart-2/10' : 'border-destructive/30 bg-destructive/10') : 'cursor-default border-border',
               selectedDay === day && 'ring-2 ring-primary',
             ]}
@@ -783,10 +802,15 @@
               {day}{#if getNote(day)}<span class="size-1.5 rounded-full bg-primary" title="Has a note"></span>{/if}
             </span>
             {#if t}
-              <div class={['mt-1 text-right text-xs font-medium tabular-nums', up ? 'text-chart-2' : 'text-destructive']}>
+              <div
+                class={[
+                  'mt-1 truncate text-right text-[10px] font-medium tabular-nums sm:text-xs',
+                  up ? 'text-chart-2' : 'text-destructive',
+                ]}
+              >
                 {usdWhole(t.pnl)}
               </div>
-              <div class="text-right text-[10px] text-muted-foreground">{t.tr} tr</div>
+              <div class="hidden text-right text-[10px] text-muted-foreground sm:block">{t.tr} tr</div>
             {/if}
           </button>
         {/if}
@@ -902,6 +926,39 @@
     </div>
   {/snippet}
 
+  <!-- A189: tiny stylized per-module thumbnails for the picker — inline SVG in the chart tokens
+       (geometry attrs + fill/stroke utilities only; CSP-clean). -->
+  {#snippet moduleThumb(key: string)}
+    <svg viewBox="0 0 40 28" class="h-7 w-10 shrink-0 rounded-sm border border-border bg-background" aria-hidden="true">
+      {#if key === 'perf'}
+        <polyline points="3,22 10,16 16,19 24,9 31,12 37,5" fill="none" class="stroke-chart-1" stroke-width="1.5" />
+      {:else if key === 'cal'}
+        {#each [0, 1, 2] as r (r)}
+          {#each [0, 1, 2, 3, 4] as c (c)}
+            <rect
+              x={4 + c * 7}
+              y={4 + r * 7}
+              width="5"
+              height="5"
+              rx="1"
+              class={(r + c) % 3 === 0 ? 'fill-chart-2/60' : 'fill-secondary'}
+            />
+          {/each}
+        {/each}
+      {:else if key === 'cost'}
+        {#each [6, 12, 18] as y, i (y)}
+          <rect x="4" {y} width={i === 2 ? 32 : 22 - i * 4} height="3" rx="1" class={i === 2 ? 'fill-chart-3/70' : 'fill-secondary'} />
+        {/each}
+      {:else}
+        {#each [0, 1] as r (r)}
+          {#each [0, 1, 2] as c (c)}
+            <rect x={4 + c * 12} y={6 + r * 10} width="9" height="6" rx="1" class="fill-secondary" />
+          {/each}
+        {/each}
+      {/if}
+    </svg>
+  {/snippet}
+
   <!-- Modules — reorderable / hideable / re-addable (persisted to Store.local). A146: reorders
        FLIP into place and add/remove fades (durations collapse under reduced motion). -->
   {#each modOrder as key (key)}
@@ -915,27 +972,57 @@
     </div>
   {/each}
 
-  <!-- Add-module affordance — offers the hidden modules. -->
-  {#if hiddenModules.length}
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger>
-        {#snippet child({ props })}
-          <button
-            {...props}
-            type="button"
-            class="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+  <!-- Add-modules affordance (A189) — ALWAYS visible (the A139 dropdown only rendered when a module
+       was hidden, so a default dashboard offered no way to discover it). Opens an illustrated
+       multi-select picker; already-added modules show as checked + disabled. -->
+  <button
+    type="button"
+    class="flex items-center justify-center gap-2 rounded-md border border-dashed border-border py-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+    title={hiddenModules.length ? 'Add modules to this dashboard' : 'All modules are already on this dashboard'}
+    onclick={() => {
+      pickerSel = [];
+      pickerOpen = true;
+    }}
+  >
+    <Plus class="size-4" /> Add modules
+  </button>
+
+  <Dialog.Root bind:open={pickerOpen}>
+    <Dialog.Content class="sm:max-w-md">
+      <Dialog.Header>
+        <Dialog.Title>Add modules</Dialog.Title>
+        <Dialog.Description>Pick the modules to add to this dashboard's layout.</Dialog.Description>
+      </Dialog.Header>
+      <div class="grid gap-2">
+        {#each MODULES as m (m.key)}
+          {@const onDash = modOrder.includes(m.key)}
+          <label
+            class={[
+              'flex items-center gap-3 rounded-md border border-border p-2.5',
+              onDash ? 'opacity-50' : 'cursor-pointer hover:bg-accent',
+            ]}
           >
-            <Plus class="size-4" /> Add module
-          </button>
-        {/snippet}
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Content align="start" class="min-w-[180px]">
-        {#each hiddenModules as m (m.key)}
-          <DropdownMenu.Item onSelect={() => addModule(m.key)}><Plus class="size-4" /> {m.label}</DropdownMenu.Item>
+            <input
+              type="checkbox"
+              class="accent-primary"
+              disabled={onDash}
+              checked={onDash || pickerSel.includes(m.key)}
+              onchange={() => togglePick(m.key)}
+            />
+            {@render moduleThumb(m.key)}
+            <span class="flex-1 text-sm text-foreground">{m.label}</span>
+            {#if onDash}<span class="text-[10px] uppercase tracking-wide text-muted-foreground">Added</span>{/if}
+          </label>
         {/each}
-      </DropdownMenu.Content>
-    </DropdownMenu.Root>
-  {/if}
+      </div>
+      <Dialog.Footer class="flex-row justify-end gap-2">
+        <Button variant="ghost" size="sm" onclick={() => (pickerOpen = false)}>Cancel</Button>
+        <Button size="sm" disabled={!pickerSel.length} onclick={addPicked}
+          >Add module{pickerSel.length === 1 ? '' : 's'}{pickerSel.length ? ` (${pickerSel.length})` : ''}</Button
+        >
+      </Dialog.Footer>
+    </Dialog.Content>
+  </Dialog.Root>
 
   <!-- Chrome parity (R12/F27): the boot/activity log + the metric & cost definitions/caveats. -->
   <div class="grid gap-4 lg:grid-cols-2">

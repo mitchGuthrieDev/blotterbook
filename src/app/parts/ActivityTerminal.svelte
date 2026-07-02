@@ -1,9 +1,9 @@
 <script lang="ts">
   // Activity terminal (CH16 redesign chrome). A small scrollable status log that subscribes to the
   // core event bus (onEvent — A29) and appends a timestamped human-readable line for each action
-  // event shared code emits (data loaded/imported, note saved, backup, erase, trade delete). Parity
-  // with the legacy src/app/components/ActivityTerminal.svelte, but self-contained (no Panel wrapper).
-  import { onEvent, pad2 } from '../../lib/core/core.ts';
+  // event shared code emits (data loaded/imported, note saved, backup, erase, trade delete, filter
+  // saved/applied, tab created). Boot events are backfilled from the bus replay buffer (A188).
+  import { onEvent, busLog, pad2 } from '../../lib/core/core.ts';
   import { cn } from '$lib/utils';
   import { Terminal } from '@lucide/svelte';
 
@@ -31,31 +31,46 @@
 
   // Event name → human-readable line. Kept simple + defensive since the detail is `unknown`.
   const FMT: Record<string, (d: unknown) => string> = {
-    'app:ready': () => 'app ready',
+    'app:ready': () => 'session initiated',
     'refdata:loaded': () => 'reference data loaded',
-    'data:loaded': d => `loaded ${num(d, 'count') ?? '?'} trades`,
-    'data:imported': d => `imported ${num(d, 'added') ?? '?'} new trades`,
+    'data:loaded': d => `[data] loaded ${num(d, 'count') ?? '?'} trades`,
+    'data:imported': d => `[csv] imported ${num(d, 'added') ?? '?'} new trades`,
     'note:saved': d => `note saved${str(d, 'date') ? ` · ${str(d, 'date')}` : ''}`,
     'trade:deleted': () => 'trade deleted',
     'backup:created': () => 'backup downloaded',
     'data:erased': () => 'all local data erased',
+    'filter:saved': d => `filter saved${str(d, 'name') ? ` · ${str(d, 'name')}` : ''}`,
+    'filter:applied': d => `filter applied${str(d, 'name') ? ` · ${str(d, 'name')}` : ''}`,
+    'tab:created': d => `dashboard tab created${str(d, 'name') ? ` · ${str(d, 'name')}` : ''}`,
   };
 
   let lines = $state<Line[]>([]);
   let nextId = 0; // stable per-line key so the ring buffer doesn't reindex on wrap
   let box: HTMLDivElement | undefined = $state();
 
-  function add(msg: string) {
-    const t = new Date();
-    const ts = `${pad2(t.getHours())}:${pad2(t.getMinutes())}:${pad2(t.getSeconds())}`;
-    lines = [...lines.slice(-49), { id: nextId++, ts, msg }]; // keep the last ~50
+  const fmtTs = (at: Date) => `${pad2(at.getHours())}:${pad2(at.getMinutes())}:${pad2(at.getSeconds())}`;
+  function add(msg: string, at: Date = new Date()) {
+    lines = [...lines.slice(-49), { id: nextId++, ts: fmtTs(at), msg }]; // keep the last ~50
   }
 
-  // Subscribe on mount; onEvent returns an unsubscribe fn (core.ts), so collect them and release in
-  // the $effect teardown — no duplicate log lines if this component ever unmounts + remounts.
+  // A188: backfill from the bus replay buffer FIRST — the boot events (session init, refdata,
+  // data loaded) fire before this component mounts, so without the replay the log always opened
+  // empty ("Waiting for activity…") — then subscribe live. The backfill ASSIGNS `lines` without
+  // reading it (add() reads it — calling it here would make the effect depend on the state it
+  // writes → effect_update_depth_exceeded). onEvent returns an unsubscribe fn (core.ts); the
+  // teardown resets the lines so a remount can't double-render the backfill.
   $effect(() => {
+    const seed: Line[] = [];
+    for (const e of busLog()) {
+      const fmt = FMT[e.name];
+      if (fmt) seed.push({ id: nextId++, ts: fmtTs(e.at), msg: fmt(e.detail) });
+    }
+    lines = seed.slice(-50);
     const offs = Object.entries(FMT).map(([ev, fmt]) => onEvent(ev, d => add(fmt(d))));
-    return () => offs.forEach(off => off());
+    return () => {
+      offs.forEach(off => off());
+      lines = [];
+    };
   });
 
   // Auto-scroll to the newest line.

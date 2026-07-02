@@ -3,7 +3,7 @@
   "title": "Blotterbook — improvement backlog (paste-ready prompts)",
   "intro": "From the 2026-06-25 audit. Each item is a self-contained prompt: scope, goal, constraints, \"done when\".",
   "tags": "Tags: P1 do-soon · P2 durable win · P3 polish. Send them one at a time (one surface/concern per turn).",
-  "updated": "2026-07-01",
+  "updated": "2026-07-02",
   "note": "Committed source of truth for the ACTIVE engineering backlog (open + guardrail items; replaces the retired .claude/backlog.md). Completed (Done) items are archived in data/backlog_archive.json to keep this file lean — the admin Backlog panel reads BOTH and merges them, so done items stay visible. The admin panel shows category/effort/status only; prompt + doneNote stay in the JSON.",
   "commitConvention": "Conventional-commit titles (enables CH12 automated versioning): when committing, and ESPECIALLY when titling a PR / squash-merge, lead the title with a conventional-commit type so the version bump can be derived automatically — `feat:` (new capability → minor), `fix:` (bug fix → patch), `chore:`/`refactor:`/`docs:`/`style:`/`test:`/`perf:` (→ patch), and append `!` (e.g. `feat!:`) or a `BREAKING CHANGE:` footer for a breaking change (→ major). Scope it when useful, e.g. `feat(staging): …`. Untyped/legacy titles default to a patch bump. Keep the existing Co-Authored-By and Claude-Session trailers on the commit body.",
   "donePolicy": "When an item's status is set to `done`, delete its `prompt` field and keep only the `doneNote` — the doneNote is the shipped record of what was actually done, so the original prompt is redundant and only bloats this file (the admin backlog panel never renders done-item prompts anyway). Keep `prompt` on `open` and `guardrail` items, since those are still the actionable spec. Applies retroactively: a done item should never carry a prompt. RECURRING ITEMS: an item with `recurring: true` (e.g. R1 repo audit, CH16 staging→prod promotion) is a perpetual driver — NEVER set its status to done, set completedDate, or strip its prompt; it stays open across every run and its prompt leads with a RECURRING/REPEATABLE marker. Each run ships its output as new items, not by closing the recurring item. ARCHIVE (post-split): completed items now live in `data/backlog_archive.json`. When you set an item to `done` and strip its prompt, MOVE the item object out of backlog.json into backlog_archive.json (the admin panel merges both). Recurring items never move — they stay open in backlog.json.",
@@ -450,6 +450,42 @@
       "completedDate": null,
       "partial": false,
       "prompt": "DISCUSSION/BRAINSTORM. Propose additional dashboards or dashboard modules that would add value for futures traders, grounded in the metrics the pure-logic core already computes (compute()/costModel()/curveseries — e.g. drawdown, expectancy, streaks, session/day-of-week splits, cost/tax breakdown, per-symbol stats) plus any that need new (cheap, local) computation. For each idea: what it shows, which existing metrics it uses, rough effort, and whether it's a new dashboard vs a module in the existing grid. Prioritize a shortlist. Done when: a written, prioritized list of candidate dashboards/modules is delivered; adopted ones spun off as their own items.",
+      "doneNote": null
+    },
+    {
+      "id": "A176",
+      "title": "(Discussion) Platform-aware module availability — richer CSVs unlock more calculations",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "large",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "DISCUSSION/DESIGN first, then build. Different platform exports carry different data richness: fills exports (Tradovate/IBKR/...) yield qty/entry-exit/hold time while close-event exports (TradingView balance history) don't — today the UI just renders '—' where data is missing. Design an 'available modules/calculations' capability model: each adapter declares what it provides (e.g. capabilities: ['holdTime','qty','entryExit','realized']), the import records the active dataset's capability union, and modules/stat rows that need a missing capability either hide or render an explicit 'not in your platform's export' state instead of silent dashes. Cover the TradingView case explicitly: TV can export MULTIPLE different CSVs (balance history, the 'List of trades' paper-trading export, and per-account variants) with different columns — decide the most elegant handling (separate adapters per TV export flavor sharing a family label vs one adapter with per-flavor capability detection; the import preview should say WHICH TV export it detected and what it unlocks). Prereq/related: F37 (per-file provenance) would let capabilities be tracked per file rather than per dataset. Deliverable: a short design note in docs/ + the capability map in adapters.ts + gating in the affected modules. Done when: importing a data-poor CSV visibly explains what's unavailable and why, and each TV export flavor detects + labels correctly.",
+      "doneNote": null
+    },
+    {
+      "id": "A177",
+      "title": "CSV upload security hardening (type/size/content validation at every intake)",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "All parsing is client-side (no server to compromise) but the intake should still be hardened against hostile/degenerate files. Add a shared validation layer in front of Adapters.parse at ALL CSV intake points — CsvLibrary upload zone + file picker, the Onboarding dropzone, and any drag-drop path: (1) extension/MIME allowlist (.csv/.txt, text/*) with a clear rejection message; (2) size cap (e.g. 20 MB) and row cap with a friendly 'file too large' error instead of a frozen tab; (3) binary sniff (NUL bytes / non-text control chars → reject as not-a-CSV); (4) keep and extend the existing content guards — rootSym charset restriction (XSS via symbol), CSV formula escaping on EXPORT (A154), SHOT_RE validation for images; (5) a fuzz fixture in scripts/test-adapters.mjs feeding junk (binary blob, 10k-column line, deeply quoted garbage) asserting graceful ok:false errors, never exceptions. Keep the moat: validation must be pure client-side, no file ever leaves the browser. Related: A178 (approved-platform gate). Done when: every intake path rejects oversized/binary/wrong-type files with a readable message and the fuzz fixtures are green.",
+      "doneNote": null
+    },
+    {
+      "id": "A178",
+      "title": "Reject CSVs that don't come from an approved platform (strict detection gate)",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Adapters.detect currently picks the best-scoring sniff > 0 — a random CSV that happens to contain a keyword can land in the wrong adapter and misparse (A174 tightened this with word-boundary matching, but weak single-point matches can still win). Add a strictness gate: (1) define a minimum confidence score per adapter (sniff scores are already weighted 3-5 for distinctive headers) and refuse anything below it; (2) on refusal, show an explicit 'This CSV doesn't match a supported platform export' error listing the nine supported platforms and linking the Howto import guides, instead of importing garbage; (3) make the import preview always name the detected platform + its beta status so a wrong detection is visible BEFORE confirm (partially exists — assert it); (4) fixtures: a generic bank-statement-ish CSV and a shuffled-header file must both refuse; every real platform fixture must still detect. Related: A177 (intake hardening), A176 (capability model). Done when: no unrecognized CSV can silently import through a low-scoring adapter match.",
       "doneNote": null
     }
   ],

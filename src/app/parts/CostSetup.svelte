@@ -32,20 +32,20 @@
 </script>
 
 <div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-[10px]">
-  <label class="flex flex-col gap-1 text-[11px] text-muted-foreground">
+  <label class="flex min-w-0 flex-col gap-1 text-[11px] text-muted-foreground">
     <span>Broker</span>
     <Select.Root type="single" value={setup.broker} onValueChange={onBroker} items={brokerItems} {disabled}>
-      <Select.Trigger aria-label="Broker"><Select.Value placeholder="— Select broker —" /></Select.Trigger>
+      <Select.Trigger class="w-full min-w-0" aria-label="Broker"><Select.Value placeholder="— Select broker —" /></Select.Trigger>
       <Select.Content>
         {#each brokerItems as it (it.value)}<Select.Item value={it.value} label={it.label} />{/each}
       </Select.Content>
     </Select.Root>
   </label>
 
-  <label class="flex flex-col gap-1 text-[11px] text-muted-foreground">
+  <label class="flex min-w-0 flex-col gap-1 text-[11px] text-muted-foreground">
     <span>Data feed</span>
     <Select.Root type="single" value={setup.feed} onValueChange={v => commit({ feed: v })} items={feedItems} {disabled}>
-      <Select.Trigger aria-label="Data feed"><Select.Value placeholder="— Select data feed —" /></Select.Trigger>
+      <Select.Trigger class="w-full min-w-0" aria-label="Data feed"><Select.Value placeholder="— Select data feed —" /></Select.Trigger>
       <Select.Content>
         {#each Object.entries(feedGroups) as [grp, list] (grp)}
           <Select.Group>
@@ -57,10 +57,10 @@
     </Select.Root>
   </label>
 
-  <label class="flex flex-col gap-1 text-[11px] text-muted-foreground">
+  <label class="flex min-w-0 flex-col gap-1 text-[11px] text-muted-foreground">
     <span>State (tax)</span>
     <Select.Root type="single" value={setup.stateAbbr} onValueChange={v => commit({ stateAbbr: v })} items={stateItems} {disabled}>
-      <Select.Trigger aria-label="State"><Select.Value placeholder="— Select state —" /></Select.Trigger>
+      <Select.Trigger class="w-full min-w-0" aria-label="State"><Select.Value placeholder="— Select state —" /></Select.Trigger>
       <Select.Content>
         {#each stateItems as it (it.value)}<Select.Item value={it.value} label={it.label} />{/each}
       </Select.Content>
@@ -68,7 +68,7 @@
   </label>
 
   {#if showPlatform}
-    <label class="flex flex-col gap-1 text-[11px] text-muted-foreground">
+    <label class="flex min-w-0 flex-col gap-1 text-[11px] text-muted-foreground">
       <span>Platform ($/mo)</span>
       <input
         type="number"

@@ -170,7 +170,7 @@
           ></b
         >
         <p class="mt-[3px] mb-0 text-[13.5px] leading-[1.5] text-muted-foreground">
-          End-to-end-encrypted sync of your trades, notes, tags, and saved views, so your journal follows you to any device — and we never
+          End-to-end-encrypted sync of your trades, notes, tags, and saved filters, so your journal follows you to any device — and we never
           see your data. The one optional paid add-on; everything else stays free.
         </p>
       </div>

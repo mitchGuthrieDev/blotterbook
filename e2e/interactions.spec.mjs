@@ -38,6 +38,11 @@ test('demo: boots into the redesigned sidebar dashboard with real seeded metrics
   // The header carries the Demo environment pill (prod /app shows none; staging shows Staging).
   await expect(page.locator('header').getByText('Demo', { exact: true })).toBeVisible();
 
+  // A179/A194: the rotating flavor text renders a phrase from the curated list (desktop only).
+  const { FLAVOR_PHRASES } = await import('../src/app/lib/flavor.ts');
+  const flavor = (await page.getByTestId('flavor-text').innerText()).trim();
+  expect(FLAVOR_PHRASES).toContain(flavor);
+
   // Regression: the no-preflight UA button reset must reach demo too (it was scoped to dev/staging
   // only pre-CH16, so demo/app rendered raw <button>s with a light UA fill — the "white outline" bug).
   const chrome = await nav(page)
@@ -147,4 +152,76 @@ test('demo: feedback dialog builds a mailto draft from ONLY the typed text (A105
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('feedback-mailto')).toHaveCount(0);
   expect(errors, errors.join('\n')).toHaveLength(0);
+});
+
+test('demo: dashboard tabs render and work in-memory (A135, promoted) — but never persist', async ({ page }) => {
+  test.setTimeout(60_000);
+  page.on('dialog', d => d.accept(d.type() === 'prompt' ? 'Swing' : undefined));
+  await bootDashboard(page);
+
+  // The tab bar ships on every surface now — demo boots with the implicit Main tab.
+  await expect(page.getByRole('button', { name: 'Main', exact: true })).toBeVisible();
+
+  // Creating a tab works (in-memory DemoStore.local) and becomes active.
+  await page.getByRole('button', { name: 'New tab' }).click();
+  const swingTab = page.getByRole('button', { name: 'Swing', exact: true });
+  await expect(swingTab).toBeVisible();
+  await expect(swingTab).toHaveAttribute('aria-current', 'page');
+
+  // Demo invariant: nothing persists — a reload is back to the single Main tab.
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+  await expect(page.getByRole('button', { name: 'Main', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Swing', exact: true })).toHaveCount(0);
+});
+
+test('demo (mobile): no screen scrolls horizontally at 360px (A183) and both calendars fit (A182)', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto(DEMO, { waitUntil: 'networkidle' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+
+  // Poll-based settle (A194 — no fixed waits): retries until the layout stops widening the page.
+  const assertNoHScroll = async label => {
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), {
+        message: `${label}: page must not scroll horizontally (scrollWidth exceeds clientWidth)`,
+      })
+      .toBeLessThanOrEqual(0);
+  };
+
+  await assertNoHScroll('Dashboard');
+  // A184: the cost-setup data-feed select stays inside the viewport even with a long feed label.
+  const feed = page.locator('[aria-label="Data feed"]').first();
+  if (await feed.isVisible()) {
+    const fb = await feed.boundingBox();
+    expect(fb.x + fb.width).toBeLessThanOrEqual(360);
+  }
+  for (const name of ['Calendar', 'Analytics', 'Blotter', 'CSV Library', 'Trade Editor', 'Reports']) {
+    // Mobile nav is a drawer — open it, navigate, drawer closes on pick.
+    await page.getByRole('button', { name: 'Open navigation' }).click();
+    await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name, exact: true }).click();
+    await expect(page.locator('header h1')).toHaveText(name);
+    await assertNoHScroll(name);
+  }
+
+  // A182: the Calendar month grid's last day cell ends inside the viewport (no right-edge clip).
+  await page.getByRole('button', { name: 'Open navigation' }).click();
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Calendar', exact: true }).click();
+  await expect(page.locator('header h1')).toHaveText('Calendar');
+  const cell = page.getByTestId('cal-day').last();
+  await expect(cell).toBeVisible();
+  const box = await cell.boundingBox();
+  expect(box.x + box.width).toBeLessThanOrEqual(360);
+});
+
+test('demo: the Activity terminal backfills boot events and appends live actions (A188)', async ({ page }) => {
+  await bootDashboard(page);
+
+  // The replay buffer backfills the boot events that fired before the terminal mounted.
+  const log = page.getByRole('log');
+  await expect(log).toBeVisible();
+  await expect(log).toContainText('session initiated');
+  await expect(log).toContainText(/\[data\] loaded \d+ trades/);
+  await expect(log).not.toContainText('Waiting for activity…');
 });

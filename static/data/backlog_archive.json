@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "title": "Blotterbook — completed backlog archive (Done items)",
   "intro": "Archived Done items moved out of backlog.json to keep the active backlog lean. Each retains its doneNote — the shipped record of what was actually done (prompts were already stripped per donePolicy). Newest work tends toward the end, mirroring the order items were completed in the live file.",
-  "updated": "2026-07-01",
+  "updated": "2026-07-02",
   "note": "Append-only archive of completed backlog items. When an item in backlog.json is set to `done`, move its object here. Admin-only and fetched no-store; like backlog.json it is EXCLUDED from the cache-busting manifest (build-manifest.mjs) and from version-bump path classification (bump-version.mjs), so editing it never churns the manifest or bumps the version. The admin Backlog panel fetches this file alongside backlog.json and merges the item lists.",
   "categories": [
     "SECURITY",
@@ -3483,6 +3483,193 @@
       "completedDate": "2026-07-01",
       "partial": false,
       "doneNote": "DONE (2026-07-01) — scripts/test-compute.mjs added (73 assertions) and wired into npm run test:unit + CI (8 node suites now; CLAUDE.md updated): the hand-worked 6-trade definitional set (counts/net/gp/gl/pf/avgW/avgL/wl/winRate/expectancy/tStd/curve/best/worst), Sharpe+Sortino numeric pins, the drawdown pack (maxDD/maxDDpct/maxDDdur/ddPeakIdx/ddTroughIdx incl. inception + never-drawn-down), streak counts AND dollars with a scratch break, concPct incl. the float-dust gate, sessionOf boundary times, dowBuckets, long/short/unknown split, empty/one-trade/all-scratch degradation, the formatting suite (usd/money/usdWhole/axMoney/ratio/num/fmtDur/tone), the Analytics histogram boundary pack, dailySeries MID-series assertions (day-level accrual + tax-on-cumulative + gap-month), and the A169 TZ-pinned priorBounds repro (self-spawning child processes under 3 timezones). A171/A172/A173 fixtures landed in test-curveandreport alongside. (inMonth/applyFilters extraction deferred — noted in the item as a 'consider'.)"
+    },
+    {
+      "id": "A179",
+      "title": "Header flavor text — cycling friendly status phrases",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — Rotating header flavor text shipped: src/app/lib/flavor.ts (24 curated desk-wisdom phrases, data-only module) + pickFlavor(); one phrase per page load in the topbar (text-xs muted italic, truncating, hidden below lg so it can never shift layout). Pinned by test-compute fixtures (member-of-list, empty-list degradation) and a demo e2e assertion (A194)."
+    },
+    {
+      "id": "A180",
+      "title": "(Spike) Try Phosphor icons alongside/instead of Lucide",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — Phosphor spike delivered: phosphor-svelte pinned (3.1.0) and a 'Lucide vs Phosphor' section added to the /dev styleguide — the app's ~16 core glyphs side-by-side at 16/20px plus Phosphor's weight axis (thin→duotone). DECISION: stay with @lucide/svelte as the app set — it's the shadcn standard, already integrated everywhere, and its 1.5px stroke fits the thin greyscale chrome better at size-4; Phosphor's weight axis (fill/duotone) is the one genuine attraction and remains available in the styleguide if a future surface (e.g. richer module-picker thumbnails or empty states) wants it. Mixing sets for that alone isn't worth the visual inconsistency. NOTE (A191): the naive named imports shipped an 8.5 MB dev chunk — switched to deep per-icon imports (~104 KiB)."
+    },
+    {
+      "id": "A181",
+      "title": "Review privacy policy, terms of use, data handling & compliance",
+      "category": "REVIEW / AUDIT",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — Legal/privacy/compliance review complete; copy corrected to match reality. Checked: every fetch() in src/ (all same-origin static JSON or the /api/config|status flag endpoints — no trade data, no cookies), the feedback mailto (typed text only, no auto-send), storage inventory (IndexedDB trades/journal/trademeta + first-party localStorage for settings/layouts), the dormant Stripe/accounts scaffold (functions api/me|checkout|webhook exist but nothing calls them — GDPR/CCPA obligations activate as preconditions WHEN accounts/sync ship; noted for those items), disclaimers coverage (report exports + Definitions both carry the not-advice line). FIXED: the privacy section claimed a geo prefill call the app no longer makes — replaced with the actual outbound-call inventory incl. the flags endpoint and the mailto-only feedback; storage disclosure extended to tags/screenshots/localStorage; last-updated bumped. Structural gaps → none blocking for a no-accounts client-side tool."
+    },
+    {
+      "id": "A182",
+      "title": "Calendar mobile layout: bounded square day cells, no clipping, consistent rounding, no horizontal scroll",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — Calendar mobile fixed on BOTH surfaces (dashboard Trading Calendar module + Calendar screen month grid): grid columns are minmax(0,1fr) so content can never widen past the container (the right-edge clip), day cells are aspect-square on mobile (sm+ keeps the desktop min-h), min-w-0 + overflow-hidden bound the content, the P&L figure truncates at text-[10px] (full precision in the drill-in) and secondary lines (tr count / win%) are desktop-only, rounding unified to rounded-md, and the Calendar screen's Week column is desktop-only so the month fits 360px without horizontal scroll. e2e asserts the last day cell ends inside a 360px viewport."
+    },
+    {
+      "id": "A183",
+      "title": "Lock horizontal scrolling on mobile across all app screens",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — Page-level horizontal scrolling locked at the shell (AppShell <main> overflow-x-hidden + min-w-0 content column); wide content scrolls internally (shadcn Table.Root already wraps tables in overflow-x-auto — verified). e2e mobile sweep (360px) asserts scrollWidth <= clientWidth on all seven screens via a settle-poll (no fixed waits — A194)."
+    },
+    {
+      "id": "A184",
+      "title": "Cost setup: data-feed select clips its right edge on mobile with long feed names",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — Cost-setup selects (broker/data feed/state) width-bounded: w-full min-w-0 on the triggers (they were w-fit — a long feed label widened the control past its grid cell) + min-w-0 on the grid items; the trigger's built-in line-clamp-1 truncates the selected label once bounded. Mobile e2e asserts the Data-feed trigger's right edge stays inside a 360px viewport."
+    },
+    {
+      "id": "A185",
+      "title": "App sidebar brand icon should be the Blotterbook mark (favicon), not a white dot",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — The sidebar brand now renders the real Blotterbook mark: the favicon's gradient rounded-square SVG (same stops #6aa0ff→#c98bff, rx=8) inlined in SidebarNav.svelte at size-5 (no asset import needed, CSP-clean, byte-faithful to src/assets/favicon.svg), replacing the placeholder white dot; sized to the old box so the brand row and the collapsed rail are unchanged."
+    },
+    {
+      "id": "A186",
+      "title": "Dashboard tabs v2: close ✕ on tabs, explicit Save, drag-to-reorder with animation",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — Tabs v2: each tab has a direct close ✕ (last-tab guard kept; menu Delete retained), an explicit 'Save layout' button appears while the active tab is dirty, and tabs drag-reorder horizontally with animate:flip (A146 dur() — collapses under reduced motion; menu Move left/right stays as the keyboard path). Layout edits STAGE in memory behind a dirty asterisk: drafts survive tab switches, reloads keep only the saved layout (decided: discard-on-reload, keep-on-switch). A192 hardened the drag: local working order during the drag, midpoint-threshold reordering, ONE commit+persist on drop, dragend-without-drop cancels back to the entry order. e2e covers staged-save, asterisk lifecycle, ✕ close, drag commit/persist/cancel."
+    },
+    {
+      "id": "A187",
+      "title": "Rename 'saved views' → 'saved filters' in the dashboard filter popover",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — 'Saved views' → 'Saved filters' throughout the filter popover (section label, 'Name this filter…' placeholder, rename prompt, Rename/Delete aria-labels) + the saveView default name ('Filter N'); A195 swept the stragglers (types.ts comment, Roadmap sync bullet). Internal identifiers (savedFilters) already matched."
+    },
+    {
+      "id": "A188",
+      "title": "Debug the Activity Terminal — it never populates",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — Activity terminal fixed. Root cause: boot events (app:ready/refdata:loaded/data:loaded) fire before the Dashboard mounts and the EventTarget bus kept no history, so the log always opened empty. The core bus now records the last 50 emits with timestamps (busLog()); the terminal backfills from the replay buffer on mount (assigning state without reading it — the first attempt called add() inside the $effect and tripped effect_update_depth_exceeded) then subscribes live. New emits: filter:saved, filter:applied, tab:created; labels reworked ('session initiated', '[data] loaded N trades', '[csv] imported N'); A195 reordered boot so session-initiated leads. Ring-buffer unit fixtures (cap/order/live-unsubscribe) + a demo e2e asserting the backfilled lines."
+    },
+    {
+      "id": "A189",
+      "title": "Dashboard '+ add modules' affordance: visible button, illustrated picker, unsaved-asterisk",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — '+ Add modules' is now ALWAYS visible on the dashboard (the A139 dropdown only rendered when a module was hidden — invisible on the default layout, which is exactly what the report flagged). It opens an illustrated multi-select Dialog: every module listed with a small stylized inline-SVG thumbnail (mini curve / month grid / cost rows / stat grid, chart-token colors, CSP-clean), checkboxes (already-added = checked+disabled with an 'Added' tag), and an 'Add modules (n)' button. Adding/removing/reordering modules marks the active tab dirty (asterisk, shared with A186's Save which clears it). e2e: picker on a full layout (disabled Add), add-back + asterisk + save-persists."
+    },
+    {
+      "id": "A190",
+      "title": "P2: bundle-size gate must include the lazy screen chunks (post-#94 blind spot)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — Bundle gate fixed (R1 pass-6 P2): check-bundle-size.mjs now BFS-walks the chunk graph from app.html's boot scripts through static ('./chunk.js') and dynamic ('assets/chunk.js') import specifiers, so the #94 code-split screens are measured again. True app total: 559.4 KiB / 600 (the 411 KiB reading was the screens escaping the sum); lazy chunks are labeled in the output and the header comment now describes the real behavior. Ceiling kept at 600 KiB — 40.6 KiB genuine headroom."
+    },
+    {
+      "id": "A191",
+      "title": "Phosphor spike: 8.5 MB devcomponents chunk (named imports don't tree-shake)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — The 8.5 MB devcomponents chunk fixed: the Styleguide's phosphor imports switched to deep per-icon paths (phosphor-svelte/lib/<Icon> — the package's ./lib/* export maps to the .svelte component; the index re-exports every icon and does not tree-shake), dropping dist/assets/devcomponents-*.js from 8,469,825 → ~104 KB; the false 'named imports stay tree-shaken' comment corrected and the build's chunk-size warning is gone."
+    },
+    {
+      "id": "A192",
+      "title": "Dashboard tabs: drag-reorder v2 — local-order drag, midpoint threshold, persist once, atomic cancel",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — Drag-reorder v2 (R1 pass-6): DashTabs keeps a LOCAL working order during the drag (rendered in place of the prop), reorders at the hovered tab's horizontal midpoint (no edge-entry thrash against animate:flip), and commits the final order upward ONCE on drop — App validates it's a permutation and persists once; dragend without drop (Esc/cancelled) discards the working copy, restoring the entry order. onreorder signature changed to (ids: string[]). e2e drives the pipeline with dispatched DragEvents (Playwright's mouse API can't produce native HTML5 DnD headless): commit-on-drop, persist-across-reload, cancel-reverts."
+    },
+    {
+      "id": "A193",
+      "title": "Workspace templates: align apply/revert with the staged-layout model",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — Template contract aligned (R1 pass-6): dashLayouts.apply() and revert() now persist immediately (stage via saveModules/revertModules, then saveTabLayout()) — they're explicit target states, unlike incremental module edits which stay staged behind the dirty asterisk; save/remove were already immediate. Covered by the existing staging template flow specs (hide/reorder path unchanged)."
+    },
+    {
+      "id": "A194",
+      "title": "Coverage batch: drag-reorder spec, flavor assertion, pickFlavor/dowPnl fixtures, stable mobile selectors",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — Coverage batch (R1 pass-6): drag-reorder e2e (dispatched DragEvents: commit/persist/cancel); flavor-text e2e asserts the rendered phrase is a FLAVOR_PHRASES member; pickFlavor fixtures (member-of-list ×200, empty-list ''); the A174 weekday rule lifted into core as dowPnlRows() (Calendar now consumes it) with 7 fixtures incl. Sunday-Globex retention + quiet-Saturday drop + out-of-range dow; the mobile spec now targets data-testid='cal-day' (both calendars carry it) instead of button.aspect-square, uses a settle-poll instead of waitForTimeout, and asserts the Data-feed select right edge <= 360px (A184)."
+    },
+    {
+      "id": "A195",
+      "title": "Drift batch: ci-pipeline budget label, stale comments, saved-view stragglers, boot-order + lastModKey micro-fixes",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-02",
+      "partial": false,
+      "doneNote": "DONE (2026-07-02) — Drift batch (R1 pass-6): ci-pipeline.md size-budget label 480→600 KiB; ActivityTerminal's dead legacy-path comment replaced with the real event list + A188 note; 'saved view' stragglers fixed (types.ts comment, Roadmap sync bullet); emit('app:ready') moved to the top of boot() so 'session initiated' leads the activity log (the replay buffer preserves order); Dashboard commitModules() now updates lastModKey, killing the redundant modOrder reassignment the prop echo triggered after every layout edit."
     }
   ]
 }

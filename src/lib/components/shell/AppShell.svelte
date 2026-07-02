@@ -108,8 +108,10 @@
       {/if}
     </header>
 
-    <main class="flex-1 overflow-y-auto">
-      <div class="p-4 sm:p-6">{@render children()}</div>
+    <!-- A183: overflow-x-hidden locks page-level horizontal scrolling (mobile especially) — wide
+         content (tables) must scroll INSIDE its own overflow-x-auto wrapper, never widen the page. -->
+    <main class="flex-1 overflow-x-hidden overflow-y-auto">
+      <div class="min-w-0 p-4 sm:p-6">{@render children()}</div>
     </main>
   </div>
 </div>

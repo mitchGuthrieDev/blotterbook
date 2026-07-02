@@ -9,7 +9,7 @@
   <h1>Legal &amp; Disclaimers</h1>
   <p class="blurb">
     Blotterbook is a private trading <b>journal and cost/tax estimation tool</b>. Please read these disclaimers before relying on anything
-    it shows you. Last updated June&nbsp;2026.
+    it shows you. Last updated July&nbsp;2026.
   </p>
 
   <div class="note warn">
@@ -64,17 +64,18 @@
   <h2>Privacy</h2>
   <ul>
     <li>
-      <b>Your trade data never leaves your browser.</b> CSV parsing, all computation, and storage happen locally; trades and day-notes live in
-      your browser's IndexedDB and are not uploaded.
+      <b>Your trade data never leaves your browser.</b> CSV parsing, all computation, and storage happen locally; trades, journal notes, tags,
+      and attached screenshots live in your browser's IndexedDB (plus first-party local storage for settings and layouts) and are not uploaded.
     </li>
     <li>
       <b>No accounts, no tracking, no advertising cookies.</b> Local storage used to keep your data and settings is first-party and essential
       — not used to track you across sites.
     </li>
     <li>
-      <b>Limited outbound calls.</b> The site loads its own reference-data JSON; resolves your coarse region (country/state) from Cloudflare's
-      edge to pre-fill the tax state (no IP stored); and the changelog reads a small static release-notes file the site ships. None of these transmit
-      your trades.
+      <b>Limited outbound calls.</b> The site loads its own static reference data, version, and release-notes JSON, and the app asks a tiny
+      feature-flag/status endpoint on our own host whether a maintenance banner should show — these carry no personal data, no cookies, and
+      never anything about your trades. The optional <b>Send feedback</b> button only opens <i>your own</i> email client pre-filled with the text
+      you typed; nothing is sent automatically.
     </li>
     <li>Export a backup any time from <b>Manage data → Download backup</b> — your data is yours.</li>
   </ul>

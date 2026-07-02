@@ -41,9 +41,17 @@
     href={brandHref}
     class="mb-2 flex items-center gap-2 rounded-md px-2 py-2 text-sm font-semibold text-foreground no-underline hover:bg-accent"
   >
-    <span class="grid size-5 shrink-0 place-items-center rounded-full border border-border" aria-hidden="true">
-      <span class="size-2 rounded-full bg-foreground"></span>
-    </span>
+    <!-- A185: the real Blotterbook mark (same art as src/assets/favicon.svg), not a placeholder dot.
+         Inlined so it needs no asset import and stays CSP-clean. -->
+    <svg class="size-5 shrink-0" viewBox="0 0 32 32" aria-hidden="true">
+      <defs>
+        <linearGradient id="bb-brand-g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#6aa0ff" />
+          <stop offset="1" stop-color="#c98bff" />
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#bb-brand-g)" />
+    </svg>
     {#if !collapsed}<span class="truncate">{brand}</span>{/if}
   </a>
 

@@ -1,8 +1,10 @@
 // Bundle size budget for the /app/ surface (A96). Dev-only, zero-dependency (A28): after a build,
-// it sums the byte size of every JS chunk the app shell actually loads and fails loudly if the
-// total crosses a ceiling, so a stray heavy import or an accidental dependency can't bloat the
-// download silently. Run AFTER `vite build` (it reads dist/) — wired into CI right after the build
-// step. The /app/, /demo/, /staging/ surfaces share the same main bundle, so app.html is the proxy.
+// it sums the byte size of every JS chunk the app can load — the boot scripts referenced by
+// app.html PLUS every chunk reachable from them through static/dynamic imports (A190: the #94
+// code-split moved the screens to import() chunks, which the old static-only sum missed) — and
+// fails loudly if the total crosses a ceiling, so a stray heavy import can't bloat the download
+// silently. Run AFTER `vite build` (it reads dist/) — wired into CI right after the build step.
+// The /app/, /demo/, /staging/ surfaces share the same main bundle, so app.html is the proxy.
 import { readFileSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,22 +40,42 @@ try {
   process.exit(1);
 }
 
-// Pull every <script src="/assets/*.js"> the shell references and total their on-disk size.
-const srcs = [...html.matchAll(/src="(\/assets\/[^"]+\.js)"/g)].map(m => m[1]);
-if (srcs.length === 0) {
+// Pull every <script src="/assets/*.js"> the shell references, then walk the CHUNK GRAPH from
+// them (A190): the #94 code-split loads the six non-default screens via import(), so their chunks
+// never appear in app.html — summing only the static scripts let a heavy lazy import ship past the
+// gate silently. Each emitted chunk names its static + dynamic imports as ./relative or /assets/
+// .js specifiers in the code, so a BFS over those references reaches every chunk the app can load.
+const bootSrcs = [...html.matchAll(/src="(\/assets\/[^"]+\.js)"/g)].map(m => m[1]);
+if (bootSrcs.length === 0) {
   console.error('size-budget: no /assets/*.js scripts found in app.html — build output looks wrong.');
   process.exit(1);
 }
 
+const seen = new Set(bootSrcs);
+const queue = [...bootSrcs];
+while (queue.length) {
+  const url = queue.shift();
+  const code = readFileSync(resolve(DIST, '.' + url), 'utf8');
+  // Static imports are emitted as "./chunk.js"; dynamic import() targets as "assets/chunk.js"
+  // (resolved against the site root at runtime); either may also appear as "/assets/chunk.js".
+  for (const m of code.matchAll(/["'](?:\.\/|\/?assets\/)([A-Za-z0-9_.-]+\.js)["']/g)) {
+    const ref = '/assets/' + m[1];
+    if (!seen.has(ref)) {
+      seen.add(ref);
+      queue.push(ref);
+    }
+  }
+}
+
 let total = 0;
-const rows = srcs.map(url => {
+const rows = [...seen].map(url => {
   const bytes = statSync(resolve(DIST, '.' + url)).size;
   total += bytes;
-  return `  ${String(bytes).padStart(8)}  ${url}`;
+  return `  ${String(bytes).padStart(8)}  ${url}${bootSrcs.includes(url) ? '' : '  (lazy)'}`;
 });
 
 const kib = n => (n / 1024).toFixed(1) + ' KiB';
-console.log('App-surface JS budget (uncompressed):');
+console.log('App-surface JS budget (uncompressed; boot + lazy screen chunks):');
 console.log(rows.join('\n'));
 console.log(`  ${'-'.repeat(8)}`);
 console.log(`  ${String(total).padStart(8)}  total (budget ${BUDGET_BYTES} = ${kib(BUDGET_BYTES)})`);

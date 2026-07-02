@@ -15,7 +15,7 @@
   import { Badge } from '$lib/components/ui/badge';
   import * as Card from '$lib/components/ui/card';
   import { cn } from '$lib/utils';
-  import { usdWhole, tone, fmtDate, isoWeek, monthCells, MONTH_ABBR, DOW_LABEL } from '../../lib/core/core.ts';
+  import { usdWhole, tone, fmtDate, isoWeek, monthCells, dowPnlRows, MONTH_ABBR, DOW_LABEL } from '../../lib/core/core.ts';
   import { cleanTag } from '../../lib/core/store.ts';
   import { readImage } from '../lib/files.ts';
   import ScreenshotLightbox from '../parts/ScreenshotLightbox.svelte';
@@ -162,15 +162,9 @@
     return s;
   });
   // A174: all seven weekdays — Globex Sunday (and holiday-Saturday) sessions count in the month
-  // total, so a Mon–Fri-only list silently dropped them from the bars. Weekend rows render only
-  // when they actually carry P&L. DOW_LABEL is Sun-first, matching getDay().
-  const dowPnl = $derived(
-    DOW_LABEL.map((lbl, i) => ({
-      lbl,
-      i,
-      pnl: traded.filter(t => new Date(year, month, t.day).getDay() === i).reduce((s, t) => s + t.pnl, 0),
-    })).filter(d => (d.i >= 1 && d.i <= 5) || d.pnl !== 0)
-  );
+  // total, so a Mon–Fri-only list silently dropped them from the bars. The bucket/filter rule is
+  // the node-tested core dowPnlRows (A194).
+  const dowPnl = $derived(dowPnlRows(traded.map(t => ({ dow: new Date(year, month, t.day).getDay(), pnl: t.pnl }))));
 
   // ── Selected day detail (real trades for the day). ───────────────────────────────────────────
   const sel = $derived(selectedDay ? monthDays[selectedDay] : undefined);
@@ -277,11 +271,17 @@
     <div class="min-w-0 flex-1">
       {#if view === 'month'}
         <Card.Root class="p-3">
-          <div class="grid grid-cols-[56px_repeat(7,1fr)] gap-1.5">
-            <span class="pb-1 text-[11px] text-muted-foreground">Week</span>
+          <!-- A182: minmax(0,1fr) columns + min-w-0/overflow-hidden cells keep the month inside the
+               card at mobile widths (no right-edge clipping, no horizontal scroll); the Week summary
+               column is desktop-only (it would eat a day column's width on a phone). Day cells are
+               square on mobile and the P&L truncates instead of escaping the border. -->
+          <div class="grid grid-cols-[repeat(7,minmax(0,1fr))] gap-1 sm:grid-cols-[56px_repeat(7,minmax(0,1fr))] sm:gap-1.5">
+            <span class="hidden pb-1 text-[11px] text-muted-foreground sm:block">Week</span>
             {#each DOW_LABEL as d (d)}<span class="pb-1 text-center text-[11px] text-muted-foreground">{d}</span>{/each}
             {#each weeks as w, wi (wi)}
-              <div class="flex flex-col justify-center gap-0.5 rounded border border-border bg-secondary px-1 py-1.5 text-center">
+              <div
+                class="hidden flex-col justify-center gap-0.5 rounded-md border border-border bg-secondary px-1 py-1.5 text-center sm:flex"
+              >
                 <div class="text-[9px] uppercase tracking-wide text-muted-foreground">Wk {w.wk}</div>
                 <div
                   class={cn(
@@ -298,10 +298,11 @@
                   {@const hit = !!c.rec && c.rec.pnl >= target}
                   <button
                     type="button"
+                    data-testid="cal-day"
                     onclick={() => (selectedDay = selectedDay === c.day ? null : c.day)}
                     title={c.rec?.tags?.length ? `Day tags: ${c.rec.tags.join(' · ')}` : undefined}
                     class={cn(
-                      'relative flex min-h-20 flex-col rounded border p-1.5 text-left transition-colors',
+                      'relative flex aspect-square min-w-0 flex-col overflow-hidden rounded-md border p-1 text-left transition-colors sm:aspect-auto sm:min-h-20 sm:p-1.5',
                       c.rec ? shade(c.rec.pnl) : '',
                       c.rec ? (c.rec.pnl >= 0 ? 'border-chart-2/30' : 'border-destructive/30') : 'border-border hover:border-ring',
                       selectedDay === c.day && 'ring-2 ring-primary'
@@ -319,11 +320,13 @@
                     {#if c.rec}
                       <span
                         class={cn(
-                          'mt-auto text-right text-xs font-bold tabular-nums',
+                          'mt-auto truncate text-right text-[10px] font-bold tabular-nums sm:text-xs',
                           c.rec.pnl >= 0 ? 'text-chart-2' : 'text-destructive'
                         )}>{usdWhole(c.rec.pnl)}</span
                       >
-                      <span class="text-right text-[9px] text-foreground/70">{c.rec.trades} tr · {pct(c.rec.wins, c.rec.trades)}%</span>
+                      <span class="hidden text-right text-[9px] text-foreground/70 sm:block"
+                        >{c.rec.trades} tr · {pct(c.rec.wins, c.rec.trades)}%</span
+                      >
                     {/if}
                   </button>
                 {:else}

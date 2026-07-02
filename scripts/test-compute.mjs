@@ -215,6 +215,70 @@ const t = (time, pnl, side = 'long', root = 'MES', qty = 1) => ({ time, date: ti
   ok('series: endpoint net === costModel netPreTax basis', approx(p2.net, c.gross - c.totalComm - c.fixedPeriod, 1e-9));
 }
 
+// ── A188: the event bus replay buffer — late subscribers can backfill boot events ──
+{
+  const { emit, busLog, onEvent } = core;
+  const before = busLog().length;
+  emit('test:boot', { n: 1 });
+  emit('test:boot', { n: 2 });
+  ok(
+    'bus: emits are recorded in busLog with a timestamp',
+    busLog().length === before + 2 && busLog()[busLog().length - 1].at instanceof Date
+  );
+  ok(
+    'bus: entries carry name + detail for backfill formatting',
+    busLog()[busLog().length - 1].name === 'test:boot' && busLog()[busLog().length - 1].detail.n === 2
+  );
+  // Live subscription still works alongside the log.
+  let got = null;
+  const off = onEvent('test:live', d => (got = d));
+  emit('test:live', { hello: true });
+  off();
+  ok('bus: live onEvent still fires (and unsubscribes)', got && got.hello === true);
+  // The buffer is a ring: it never exceeds 50 entries.
+  for (let i = 0; i < 60; i++) emit('test:flood', { i });
+  ok('bus: replay buffer caps at 50 entries (ring)', busLog().length === 50, busLog().length);
+  ok('bus: ring keeps the NEWEST entries', busLog()[busLog().length - 1].detail.i === 59);
+}
+
+// ── A194: dowPnlRows — the Calendar 'By weekday' bucket/filter rule (A174) ──
+{
+  const { dowPnlRows } = core;
+  const rows = dowPnlRows([
+    { dow: 0, pnl: 40 }, // Sunday Globex session — must appear
+    { dow: 1, pnl: 10 },
+    { dow: 1, pnl: 5 },
+    { dow: 5, pnl: -20 },
+  ]);
+  ok(
+    'dowPnlRows: Sunday row present when it carries P&L',
+    rows.some(r => r.i === 0 && r.pnl === 40)
+  );
+  ok('dowPnlRows: weekday buckets sum', rows.find(r => r.i === 1)?.pnl === 15 && rows.find(r => r.i === 5)?.pnl === -20);
+  ok(
+    'dowPnlRows: Mon–Fri always present (zeros included)',
+    [1, 2, 3, 4, 5].every(i => rows.some(r => r.i === i))
+  );
+  ok('dowPnlRows: quiet Saturday dropped', !rows.some(r => r.i === 6));
+  ok('dowPnlRows: rows reconcile with the input total', rows.reduce((a, r) => a + r.pnl, 0) === 35);
+  const quiet = dowPnlRows([{ dow: 2, pnl: 100 }]);
+  ok('dowPnlRows: no weekend rows on a weekday-only month', quiet.length === 5 && quiet[0].i === 1);
+  ok(
+    'dowPnlRows: out-of-range dow ignored',
+    dowPnlRows([{ dow: 9, pnl: 5 }]).every(r => r.pnl === 0)
+  );
+}
+
+// ── A194: pickFlavor — header flavor text ──
+{
+  const { FLAVOR_PHRASES, pickFlavor } = await import('../src/app/lib/flavor.ts');
+  ok('flavor: list is non-trivial', FLAVOR_PHRASES.length >= 20);
+  let all = true;
+  for (let i = 0; i < 200; i++) if (!FLAVOR_PHRASES.includes(pickFlavor())) all = false;
+  ok('flavor: pick always returns a member of the list', all);
+  ok('flavor: empty list degrades to empty string', pickFlavor([]) === '');
+}
+
 // ── A169: priorBounds is DST-safe — pinned under three timezones via child processes ──
 {
   for (const tz of ['UTC', 'America/New_York', 'Australia/Lord_Howe']) {

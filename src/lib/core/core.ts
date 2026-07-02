@@ -100,7 +100,22 @@ export const PAGE_MODE = (typeof document !== 'undefined' && document.body && do
    trade:deleted, backup:created, data:erased.
    ------------------------------------------------------------------ */
 export const BUS = new EventTarget();
+// A188: a small replay buffer — the boot events (app:ready, refdata:loaded, data:loaded) fire
+// BEFORE the Dashboard's ActivityTerminal mounts, and an EventTarget keeps no history, so the
+// terminal always looked dead. emit() records the last 50 events with a wall-clock stamp; a late
+// subscriber backfills from busLog() and then listens live.
+export interface BusEntry {
+  name: string;
+  detail: unknown;
+  at: Date;
+}
+const BUS_LOG: BusEntry[] = [];
+export function busLog(): readonly BusEntry[] {
+  return BUS_LOG;
+}
 export function emit(name: string, detail?: unknown) {
+  BUS_LOG.push({ name, detail, at: new Date() });
+  if (BUS_LOG.length > 50) BUS_LOG.shift();
   BUS.dispatchEvent(new CustomEvent(name, { detail }));
 }
 // Subscribe to a bus event; returns an unsubscribe function (callers that don't need cleanup —
@@ -361,6 +376,15 @@ export function dowBuckets(trades: Trade[]) {
     d[wd].n++;
   }
   return d;
+}
+// The Calendar 'By weekday' rows (A174/A194): sum P&L per weekday index (0=Sun..6=Sat) and keep
+// Mon–Fri always; weekend rows only when they actually carry P&L (Globex Sunday sessions count in
+// the month total, so silently dropping them made the bars not reconcile). Extracted from
+// Calendar.svelte so the filter rule is node-testable.
+export function dowPnlRows(items: Array<{ dow: number; pnl: number }>): Array<{ lbl: string; i: number; pnl: number }> {
+  const all = DOW_LABEL.map((lbl, i) => ({ lbl, i, pnl: 0 }));
+  for (const it of items) if (it.dow >= 0 && it.dow <= 6) all[it.dow].pnl += it.pnl;
+  return all.filter(d => (d.i >= 1 && d.i <= 5) || d.pnl !== 0);
 }
 
 /* ============================================================
