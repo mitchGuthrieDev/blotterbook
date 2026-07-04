@@ -218,7 +218,68 @@
         </div>
         <p>
           Then press <b>Start Blotterbook</b>. Re-uploads are safe — trades are de-duplicated by a stable id, so importing an overlapping
-          export only adds genuinely new rows.
+          export only adds genuinely new rows, and a richer duplicate <b>fills in</b> fields the stored trade lacks (hold time, quantity, commission)
+          without touching what's already there.
+        </p>
+        <p>
+          <b>Not every export carries the same data.</b> The import preview states what a file provides before you confirm; this is the full picture
+          per format:
+        </p>
+        <div class="overflow-x-auto my-4">
+          <table class="w-full border border-border rounded-md text-[12.5px]">
+            <thead>
+              <tr class="bg-card text-left">
+                <th class="px-3 py-2 font-mono text-[10.5px] tracking-[0.08em] uppercase text-muted-foreground">Export</th>
+                <th class="px-3 py-2 font-mono text-[10.5px] tracking-[0.08em] uppercase text-muted-foreground">P&amp;L</th>
+                <th class="px-3 py-2 font-mono text-[10.5px] tracking-[0.08em] uppercase text-muted-foreground">Qty</th>
+                <th class="px-3 py-2 font-mono text-[10.5px] tracking-[0.08em] uppercase text-muted-foreground">Hold time</th>
+                <th class="px-3 py-2 font-mono text-[10.5px] tracking-[0.08em] uppercase text-muted-foreground">Commissions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-t border-border">
+                <td class="px-3 py-1.5">TradingView — balance history</td>
+                <td class="px-3 py-1.5 text-chart-2">exact</td>
+                <td class="px-3 py-1.5 text-muted-foreground">—</td>
+                <td class="px-3 py-1.5 text-muted-foreground">—</td>
+                <td class="px-3 py-1.5 text-muted-foreground">—</td>
+              </tr>
+              <tr class="border-t border-border">
+                <td class="px-3 py-1.5">TradingView — order history</td>
+                <td class="px-3 py-1.5">derived</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5">when your broker reports them</td>
+              </tr>
+              <tr class="border-t border-border">
+                <td class="px-3 py-1.5">MotiveWave — trade report</td>
+                <td class="px-3 py-1.5 text-chart-2">exact</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-muted-foreground">—</td>
+              </tr>
+              <tr class="border-t border-border">
+                <td class="px-3 py-1.5">Fills exports (Tradovate, Rithmic, Sierra Chart, TradeStation, Webull, Schwab)</td>
+                <td class="px-3 py-1.5">derived</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-muted-foreground">—</td>
+              </tr>
+              <tr class="border-t border-border">
+                <td class="px-3 py-1.5">Interactive Brokers — trades/Flex</td>
+                <td class="px-3 py-1.5 text-chart-2">broker-reported</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-chart-2">yes (IBCommission)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          “Derived” P&amp;L is computed from fill prices × contract size; “—” means the field simply isn't in that export — the cost model
+          estimates commissions from your broker setting, and hold-time stats note their coverage. You can import <b
+            >multiple export types and multiple platforms</b
+          > side by side (people switch platforms over time) — everything normalizes to one trade shape and de-duplicates.
         </p>
       </section>
 

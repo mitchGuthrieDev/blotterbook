@@ -7,7 +7,9 @@ import type { Trade } from '../../lib/core/types.ts';
 
 export type Kpi = { label: string; value: string; tone?: 'pos' | 'neg' };
 export type DistBar = { label: string; value: number; neg: boolean };
-export type SignedBar = { label: string; value: number };
+/** `key` = the underlying bucket id where the bar is filterable (A197 — weekday bars carry the
+ *  dow index for click-to-filter; hour bars have no matching filter, so it stays unset). */
+export type SignedBar = { label: string; value: number; key?: number };
 export type SymbolRow = { sym: string; trades: number; win: number; pnl: number };
 export type TagRow = { tag: string; trades: number; win: number; pnl: number };
 export type StatRow = { k: string; v: string; tone?: 'pos' | 'neg' };
@@ -26,10 +28,15 @@ export interface AnalyticsVM {
   unknownSide: number;
   hours: SignedBar[];
   wdays: SignedBar[];
+  /** FULL per-symbol/per-tag breakdowns, sorted by |P&L| — the screen owns display truncation
+   *  (A197: a "show all" toggle replaced the builder-side top-N slice). */
   symbols: SymbolRow[];
   byTag: TagRow[];
   untagged: TagRow | null;
   statRows: StatRow[];
+  /** A176: fraction (0..1) of trades carrying a hold time — drives the "hold time available for
+   *  X% of trades" capability note (balance-history-style exports have none). */
+  holdCoverage: number;
 }
 
 // Symmetric per-trade P&L histogram. Edges in dollars; the outer buckets catch the tails.
@@ -78,7 +85,7 @@ export function buildAnalytics(m: Metrics, trades: Trade[], tagsFor: (t: Trade) 
   const wdays: SignedBar[] = dowBuckets(trades)
     .map((d, i) => ({ i, ...d }))
     .filter(d => d.n)
-    .map(d => ({ label: DOW_LABEL[d.i], value: Math.round(d.pnl / d.n) }));
+    .map(d => ({ label: DOW_LABEL[d.i], value: Math.round(d.pnl / d.n), key: d.i }));
 
   // ── Per-symbol breakdown (top 8 by |P&L|) ──
   const symMap = new Map<string, { trades: number; wins: number; pnl: number }>();
@@ -92,8 +99,7 @@ export function buildAnalytics(m: Metrics, trades: Trade[], tagsFor: (t: Trade) 
   }
   const symbols: SymbolRow[] = [...symMap.entries()]
     .map(([sym, a]) => ({ sym, trades: a.trades, win: a.trades ? Math.round((100 * a.wins) / a.trades) : 0, pnl: a.pnl }))
-    .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
-    .slice(0, 8);
+    .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl));
 
   // ── Per-tag breakdown (R17/A165) — core tagBuckets over the caller's trademeta lookup. Top 10
   // by |P&L|; the untagged bucket is the disjoint remainder and doubles as tag coverage. ──
@@ -104,15 +110,17 @@ export function buildAnalytics(m: Metrics, trades: Trade[], tagsFor: (t: Trade) 
     win: a.n ? Math.round((100 * a.wins) / a.n) : 0,
     pnl: a.pnl,
   });
-  const byTag: TagRow[] = [...tb.tags.entries()]
-    .map(([tag, a]) => tagRow(tag, a))
-    .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
-    .slice(0, 10);
+  const byTag: TagRow[] = [...tb.tags.entries()].map(([tag, a]) => tagRow(tag, a)).sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl));
   const untagged: TagRow | null = tb.untagged.n ? tagRow('untagged', tb.untagged) : null;
 
   // ── Avg hold time (only trades that carry a duration — fills exports) ──
   const holds = trades.map(t => t.holdMs).filter((h): h is number => typeof h === 'number' && h > 0);
-  const avgHold = holds.length ? fmtDur(holds.reduce((a, b) => a + b, 0) / holds.length) : '—';
+  const holdCoverage = trades.length ? holds.length / trades.length : 0;
+  // A176: partial coverage is stated inline so a mixed dataset can't pass the average off as total.
+  const avgHold = holds.length
+    ? fmtDur(holds.reduce((a, b) => a + b, 0) / holds.length) +
+      (holdCoverage < 0.995 ? ` · ${Math.round(holdCoverage * 100)}% of trades` : '')
+    : '—';
 
   // ── Advanced-stats grid ──
   const statRows: StatRow[] = [
@@ -159,5 +167,6 @@ export function buildAnalytics(m: Metrics, trades: Trade[], tagsFor: (t: Trade) 
     byTag,
     untagged,
     statRows,
+    holdCoverage,
   };
 }
