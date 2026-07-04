@@ -619,6 +619,18 @@
       "partial": false,
       "prompt": "DISCUSSION/ANALYSIS. The marketing/info site already prerenders to static HTML at build time (A69 SSG via scripts/vite-ssg.mjs), but the /app/ surfaces (app/demo/staging) are bare mount points that render entirely client-side after the JS bundle loads (boot ~411 KiB first paint per A190). Explore options to make the app feel like it 'static loads': a prerendered app shell / above-the-fold skeleton in the HTML (pairs with A206), inlining critical layout, streaming/priority hints, or partial SSG of the static chrome — WITHOUT breaking the hard constraints (client-only compute, no trade data server-side, IndexedDB-driven state, CSP style-src 'self'). For each option: expected first-paint/perceived-perf win, complexity/risk, and interaction with the size budget (A136) and the no-SvelteKit decision (A62). Done when: a written, prioritized set of recommendations is delivered; adopted ones spun off as their own items.",
       "doneNote": null
+    },
+    {
+      "id": "A208",
+      "title": "Use real per-trade commissions from the CSV to override modeled commissions",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Some platform CSVs carry ACTUAL commission/fee amounts per row (e.g. IBKR's ibCommission — see the fills comment in src/lib/core/adapters.ts; others may include commission/fees columns). Today costModel() (src/lib/core/core.ts) estimates commissions purely from brokers.json + exchange-fees.json (tier x volume x root), ignoring any real cost in the file. Change this so that when a trade's source CSV includes real commission data, that actual amount OVERRIDES the modeled commission for those specific trades, while trades WITHOUT file-provided commissions keep using the model. Scope: (1) capture the exported commission/fee on the normalized shape — add an optional `commission` (and consider fees) to the Trade interface (src/lib/core/types.ts) and to Fill, and have each adapter that exposes it populate it in toTrades()/pairFills() (start with IBKR; make it generic so other adapters can opt in); (2) in costModel(), for trades that carry a real commission use it verbatim, else fall back to the tier model — and reflect the mix in the commission breakdown (bySym) so totals reconcile; (3) surface it in the UI (cost setup / dashboard) so the user knows some rows use real broker costs vs modeled estimates, and — decide with the owner — whether a global toggle 'prefer CSV commissions when present' is warranted. Keep the pure-logic core node-tested: add a fixture asserting a commission-bearing CSV yields file commissions and a bare CSV yields modeled ones. Related: F30 (effective-dated rates), A177/A178 (CSV intake), A203 (Commission Compare). Done when: trades imported with real commission data cost out at the file's actual commissions, model-only trades are unchanged, totals reconcile, and the distinction is visible in the UI.",
+      "doneNote": null
     }
   ],
   "howToDrive": [
