@@ -3681,6 +3681,39 @@
       "completedDate": "2026-07-02",
       "partial": false,
       "doneNote": "DONE (2026-07-02, closed by backlog review) — already satisfied in the data: IBKR ships in static/data/brokers.json (order slot + {micro: 0.25, std: 0.85} per side, matching IBKR's published Fixed futures pricing: US micro contracts $0.25/contract, standard $0.85/contract, exchange/regulatory fees separate — which costModel() adds from exchange-fees.json) AND has a brokerFeeds entry in feeds.json, so it is selectable end-to-end with no app-code change (verified BROKER_ORDER renders it and costModel prices with it). The entry predates this review (landed by #64); the item was never closed. Values are snapshot estimates like the rest of brokers.json (its _comment); IBKR's tiered plan is not modeled — file separately if wanted."
+    },
+    {
+      "id": "R21",
+      "title": "Discussion: brokers.json <-> exchange-fees.json relationship",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Delivered as docs/rates-data-assessment.md (2026-07-04, Phase 3 of the CSV/data-mgmt plan). Verdict: KEEP the two-file split — broker-controlled vs exchange-controlled cost components on different clocks; no overlap/duplication; units consistent. Research finding that shaped F30: CME exchange fees change annually (documented Feb-2024/Feb-2025 notices, cited), broker commissions are sticky and unarchived. Effective-dating shipped across BOTH files as optional closed periods ({until, values, source}, partial by design) with current values untouched. Also exposed + fixed stale composites (ZC/ZS/ZW 2.05→2.15, MGC 0.50→0.62). Clearing-by-route noted as a possible future third component, not a restructure."
+    },
+    {
+      "id": "F35",
+      "title": "Add Discount Trader as a selectable broker",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-04 (feat/rates-data). Discount Trading selectable in the cost model: micro $0.20/side, std $0.49/side (published base tier; exchange/clearing/NFA additional; volume tiers go lower) — source discounttrading.com/commission-rates.html, cited in brokers.json. feeds.json maps it to the shared CQG set (routes CQG/Rithmic/Teton). Manifest regenerated; costModel fixtures assert 0.55 micro / 1.94 std all-in vs MES/ES; no app-code change needed."
+    },
+    {
+      "id": "F30",
+      "title": "Effective-dated (historical) broker commission rates",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-04 (feat/rates-data; design in docs/rates-data-assessment.md). Both data files at schemaVersion 2: current values stay in comm/exchange (date-agnostic consumers unchanged); optional history = closed {until(inclusive), values, source} periods, oldest first, PARTIAL by design with fall-through to current. rateFor/exchOf take an optional date; costModel/curveseries/blotter fees price each trade at ITS date (undated = identical to before — backward-compat requirement met). Cited history: CME eff. 2024-02-01 (equity/energy/metals) + eff. 2025-02-01 (CBOT ag, micro gold) per AMP notices; stale current composites corrected (ZC/ZS/ZW 2.15, MGC 0.62). Broker rateHistory ships as a tested MECHANISM with no entries — no citable broker-commission change exists 2024–2026 (research finding: only pass-through CME increases are announced); entries get added opportunistically per A210, never fabricated. 17 fixtures in test-compute.mjs."
     }
   ]
 }

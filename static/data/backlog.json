@@ -333,42 +333,6 @@
       "doneNote": null
     },
     {
-      "id": "F30",
-      "title": "Effective-dated (historical) broker commission rates",
-      "category": "FEATURES",
-      "priority": "P2",
-      "effort": "large",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Commission rates change over time, so calculating commissions on OLDER trades with TODAY's rates is inaccurate. RESEARCH the history of commission rates for each broker in static/data/brokers.json (the per-broker micro/std per-side tiers) — when each broker's rates changed and the prior values — and restructure brokers.json to carry EFFECTIVE-DATED rate tiers (e.g. each broker holds a list of {effectiveFrom, comm:{micro,std}} entries, newest last), bump schemaVersion, and regenerate the manifest (scripts/build-manifest.mjs). Then update costModel() in src/lib/core/core.ts to pick the rate effective on EACH trade's date instead of a single current rate, keeping the existing API/shape so compute() is unaffected (A29). Backward-compatible: a broker with one tier behaves exactly as today. Add node fixtures (test-tax.mjs or a new suite) covering a trade before AND after a rate change. NOTE the research needs real sources (broker fee schedules) — cite them; ship incrementally per broker if needed. Done when: brokers.json carries dated rate history, costModel applies the date-correct rate per trade (with tests), build-manifest is regenerated, and npm test is green. Pairs with R21 (brokers.json/exchange-fees.json review). — AUTHORIZED 2026-07-04 (owner): research published broker fee-schedule history from web sources, cited, shipped incrementally per broker.",
-      "doneNote": null
-    },
-    {
-      "id": "R21",
-      "title": "Discussion: brokers.json <-> exchange-fees.json relationship",
-      "category": "REVIEW / AUDIT",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "DISCUSSION/ANALYSIS. Review the relationship between static/data/brokers.json (per-broker commission tiers: micro/std per-side) and static/data/exchange-fees.json (CME exchange/clearing/NFA fees + the micro set) and how costModel() in src/lib/core/core.ts combines them (broker commission + per-contract exchange fee -> per-symbol rate). Assess: overlap/duplication, whether the split is the right model, how the 'unknown exchange fee' fallback interacts with broker rates, schema consistency (schemaVersion, units), and how a future effective-dated rate history (F30) should be structured across BOTH files (do exchange/clearing/NFA fees also change over time?). Recommend keep/restructure + any spun-off items. Done when: a written assessment + recommendation is delivered. Adjacent: F30 (historical commission rates). — UPDATE 2026-07-02 (backlog review): A171 (2026-07-02) expanded exchange-fees.json 16→33 roots and added a notMicro list; tierOf() now checks the explicit micro list before the M-prefix heuristic, and estimated (known:false fallback) rates are asterisked in the UI — factor that structure into the assessment.",
-      "doneNote": null
-    },
-    {
-      "id": "F35",
-      "title": "Add Discount Trader as a selectable broker",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Add Discount Trading (Discount Trader) as a selectable broker in the cost model. RESEARCH its published FUTURES commission rates (per-side, micro vs standard contracts) and add a broker entry to static/data/brokers.json in the existing {name, comm:{micro,std}} shape, then regenerate the manifest (scripts/build-manifest.mjs) and commit the updated static/data/manifest.json. If the broker bundles specific data feeds, add them to static/data/feeds.json too. Verify it appears in the Break-even & Cost broker selector (BROKERS / BROKER_ORDER from src/lib/core/core.ts) and that costModel() prices trades with its rates — no app-code change should be needed (adapters/compute/costModel read the data). CITE the rate source in the commit. Done when: Discount Trader is selectable, its commissions compute correctly, the manifest is regenerated, and npm test is green.",
-      "doneNote": null
-    },
-    {
       "id": "CH35",
       "title": "CI optimization: parallel lint/typecheck job + npm run ci lockstep",
       "category": "CHORE / REFACTOR",
@@ -642,6 +606,18 @@
       "completedDate": null,
       "partial": false,
       "prompt": "Add platform adapters for Quantower and NinjaTrader — neither is among the nine supported platforms in src/lib/core/adapters.ts. Owner has accounts on both and will supply REAL exports (blocked until then — don't guess header shapes from docs alone). Per the 'Adding things' recipe: one adapter object each (sniff + toTrades) normalizing to the standard Trade shape { time, date, pnl, symbol, root, side[, qty, entryTime, exitTime, holdMs] } (use pairFills() if the export is fills-based), a representative fixture in scripts/test-adapters.mjs per format, beta-flagged until verified (A103 pattern). Mind the A178 strict-detection gate: each new sniff must clear its minimum-confidence bar on real files and not misfire on the other platforms' fixtures. Update the Howto import guide (A107) with each platform's export steps. Done when: both adapters detect + parse real exports with fixtures green, ship beta-flagged, and the supported-platform list/docs are updated.",
+      "doneNote": null
+    },
+    {
+      "id": "A210",
+      "title": "Rates upkeep: verify 2026 CME fee changes in our composites + opportunistic history backfill",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Follow-up from F30 (see docs/rates-data-assessment.md — Follow-ups). (1) CME published a 2026-02-01 fee schedule AND announced further transaction-fee changes effective 2026-04-01; our current composites in static/data/exchange-fees.json are a 'mid-2026 snapshot' (A171, 2026-07-02) that SHOULD include both — spot-check the equity/energy/metals/micro groups against cmegroup.com's current schedule (clearing-fees page); if anything moved, bump the current values and push the prior values into a new history entry ('until': '2026-03-31' or '2026-01-31' as documented), then run build-manifest.mjs. (2) Backfill deeper (pre-2024) exchange-fee history from cmegroup.com/company/clearing-fees/historical-fees.html only if users import multi-year-old data. (3) Add broker rateHistory entries ONLY with a citable source (broker announcement or a Wayback capture of their pricing page) — never fabricate. Schema needs no changes for any of this. Done when: the 2026 spot-check is recorded (values confirmed or corrected+dated) and any added history entries carry citations.",
       "doneNote": null
     }
   ],
