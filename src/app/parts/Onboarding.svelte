@@ -4,6 +4,7 @@
   // Renders inside the AppShell content column; once the import lands, the normal dashboard takes over.
   import { Upload } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
+  import { checkCsvFile } from '../../lib/core/intake.ts';
   import type { AppSetup } from '../../lib/core/types.ts';
   import CostSetup from './CostSetup.svelte';
 
@@ -25,6 +26,13 @@
 
   async function handle(file: File | undefined) {
     if (!file || busy) return;
+    // A177: pre-read gate (extension/MIME allowlist + size cap) before the file is read at all;
+    // the post-read binary/row checks run inside Adapters.parse.
+    const veto = checkCsvFile(file);
+    if (veto) {
+      err = veto;
+      return;
+    }
     busy = true;
     err = '';
     err = await onimport(file);
@@ -82,7 +90,7 @@
       <input
         bind:this={fileInput}
         type="file"
-        accept=".csv,text/csv"
+        accept=".csv,.txt,.tsv,text/csv,text/plain"
         class="sr-only"
         onchange={e => handle((e.currentTarget as HTMLInputElement).files?.[0])}
       />

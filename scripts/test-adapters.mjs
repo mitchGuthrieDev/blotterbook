@@ -5,6 +5,7 @@
    ESM (A20): app/adapters.js is now a native ES module, so this imports its
    default export instead of require()-ing it. */
 import A from '../src/lib/core/adapters.ts';
+import * as I from '../src/lib/core/intake.ts';
 import { tradeId } from '../src/lib/core/store.ts';
 
 let pass = 0,
@@ -315,6 +316,52 @@ ok(
   rdang.ok && rdang.openLots === 1 && rdang.trades.length === 1,
   JSON.stringify({ open: rdang.openLots, n: (rdang.trades || []).length })
 );
+
+/* ---------- A177/A178 intake hardening ---------- */
+console.log('\nA177/A178 intake hardening:');
+
+// A178 strict detection gate — non-platform CSVs must REFUSE, not auto-claim an adapter.
+const bankStatement = `Date,Description,Amount,Balance
+2026-06-01,ACH DEPOSIT PAYROLL,2500.00,10500.00
+2026-06-02,DEBIT CARD PURCHASE COFFEE,-4.50,10495.50
+2026-06-03,ONLINE TRANSFER TO SAVINGS,-500.00,9995.50`;
+ok('bank-statement CSV refuses (no adapter claim)', A.detect(bankStatement) === null, JSON.stringify(A.detect(bankStatement)));
+const rbank = A.parse(bankStatement);
+ok('bank-statement refusal names the supported platforms', !rbank.ok && /supported/i.test(rbank.error || ''), rbank.error);
+// Shuffled/partial generic headers — single keywords must not clear an adapter's minScore.
+const shuffled = `Balance,Symbol,Notes,Price
+100,hello,world,1.23
+200,foo,bar,4.56`;
+ok('shuffled generic headers refuse', !A.parse(shuffled).ok && A.detect(shuffled) === null, JSON.stringify(A.detect(shuffled)));
+// Every real platform fixture must still clear its own gate (regression guard for minScore).
+for (const id of Object.keys(C)) ok('minScore gate: ' + id + ' still detects', (A.detect(C[id]) || {}).id === id);
+
+// A177 fuzz — junk input must yield graceful ok:false, never an exception.
+function fuzz(name, input) {
+  try {
+    const r = A.parse(input);
+    ok('fuzz: ' + name + ' → graceful refusal', r.ok === false && typeof r.error === 'string', JSON.stringify(r.error));
+  } catch (e) {
+    ok('fuzz: ' + name + ' → graceful refusal', false, 'THREW: ' + e.message);
+  }
+}
+fuzz('binary blob (NULs)', 'PK\u0003\u0004' + '\u0000'.repeat(512));
+fuzz('control-char soup', '\u0001\u0002\u0007\u0008'.repeat(400));
+fuzz('10k-column line', 'a,'.repeat(10000) + 'a\n' + 'b,'.repeat(10000) + 'b');
+fuzz('deeply quoted garbage', '"'.repeat(4001) + ',x\n"unterminated,"",,' + '"'.repeat(333));
+
+// A177 intake gates (checkCsvFile / checkCsvText) — the pre-parse validation layer.
+ok('intake: normal .csv passes', I.checkCsvFile({ name: 'trades.csv', size: 1024, type: 'text/csv' }) === null);
+ok(
+  'intake: Windows .csv (application/vnd.ms-excel MIME) passes on extension',
+  I.checkCsvFile({ name: 'trades.csv', size: 1024, type: 'application/vnd.ms-excel' }) === null
+);
+ok('intake: extensionless text/plain passes on MIME', I.checkCsvFile({ name: 'export', size: 1024, type: 'text/plain' }) === null);
+ok('intake: .exe with unknown MIME rejects', I.checkCsvFile({ name: 'totally-a-csv.exe', size: 1024, type: '' }) !== null);
+ok('intake: oversize file rejects', I.checkCsvFile({ name: 'huge.csv', size: I.CSV_MAX_BYTES + 1, type: 'text/csv' }) !== null);
+ok('intake: normal CSV text passes', I.checkCsvText('Time,Action,Realized PnL\n2026-06-02 10:00:00,close,50.00') === null);
+ok('intake: NUL byte rejects as binary', I.checkCsvText('Time,Act\u0000ion,PnL\n1,2,3') !== null);
+ok('intake: row cap rejects', I.checkCsvText('h\n' + '\n'.repeat(I.CSV_MAX_ROWS + 1)) !== null);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

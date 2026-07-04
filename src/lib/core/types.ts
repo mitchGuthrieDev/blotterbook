@@ -80,6 +80,10 @@ export interface Adapter {
   label: string;
   kind: 'closed' | 'fills';
   beta: boolean;
+  /** Minimum sniff score detect() will accept for THIS adapter (A178 strict gate) — a weaker
+   *  partial match refuses instead of auto-claiming the file. Set to the adapter's full-signature
+   *  sniff score so today's all-or-nothing sniffs behave identically. */
+  minScore: number;
   sniff(text: string, rows: Row[]): number;
   toTrades(text: string, rows: Row[]): Trade[];
 }
