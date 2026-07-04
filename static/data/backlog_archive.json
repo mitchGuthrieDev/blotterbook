@@ -3714,6 +3714,28 @@
       "completedDate": "2026-07-04",
       "partial": false,
       "doneNote": "Shipped 2026-07-04 (feat/rates-data; design in docs/rates-data-assessment.md). Both data files at schemaVersion 2: current values stay in comm/exchange (date-agnostic consumers unchanged); optional history = closed {until(inclusive), values, source} periods, oldest first, PARTIAL by design with fall-through to current. rateFor/exchOf take an optional date; costModel/curveseries/blotter fees price each trade at ITS date (undated = identical to before — backward-compat requirement met). Cited history: CME eff. 2024-02-01 (equity/energy/metals) + eff. 2025-02-01 (CBOT ag, micro gold) per AMP notices; stale current composites corrected (ZC/ZS/ZW 2.15, MGC 0.62). Broker rateHistory ships as a tested MECHANISM with no entries — no citable broker-commission change exists 2024–2026 (research finding: only pass-through CME increases are announced); entries get added opportunistically per A210, never fabricated. 17 fixtures in test-compute.mjs."
+    },
+    {
+      "id": "A110",
+      "title": "Discussion/doc: data flow & data-management overview",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Delivered as docs/data-flow.md (2026-07-04, feat/tradingview-exports). One prose narrative stitching the end-to-end flow — intake gates (A177/A178) → detection/normalization → the Store seam + IndexedDB v3 object-store table (incl. F37 files/filetext, tradeId/dedupe/provenance-merge semantics, backup trust boundary) → hash-busted ref data with F30 dated rates → the pure recompute chain → the three modes → the no-egress guarantee. Links the PR #91 architecture diagrams as the boxes-and-arrows companion."
+    },
+    {
+      "id": "A106",
+      "title": "Evaluate supporting TradingView’s other CSV export types",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Evaluated + SHIPPED (2026-07-04, feat/tradingview-exports) against real owner-supplied paper-trading exports of all five TradingView CSV types. Outcome: (1) balance history — existing adapter verified on real data (50/50 trades; CME_MINI:MES1! symbols resolve correctly); (2) order history — new `tradingview-orders` fills adapter (Status-gated executions, avg Fill price + Closing time → pairFills for hold time; Commission column feeds A208 when populated); cross-validated vs the same account's balance history — 21/23 round trips reconcile to the cent, the 2 misses are the export's own reach-back truncation (Howto caveat + openLots notice); (3) positions/orders/trading-journal — not trade data, the A178 gate refuses them (fixture-pinned). Detection strategy: auto-detect via distinctive 'Placing time'+'Fill price'+'Status' sniff (no picker needed); no collision with Webull's 'Placed Time' thanks to A174 word-boundary matching. Howto updated with both import types."
     }
   ]
 }

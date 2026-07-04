@@ -257,19 +257,7 @@
       "status": "open",
       "completedDate": null,
       "partial": false,
-      "prompt": "Spun off from the R1 audit (2026-06-29). Only the TradingView adapter is verified; the other adapters in src/lib/core/adapters.ts (Tradovate, Rithmic, SierraChart, TradeStation, MotiveWave, Webull, IBKR, Schwab) are marked beta. Validate each against a REAL export from that platform — symbol/root, side, qty, PnL, date/time, and (for fills exports) the FIFO round-trip pairing + holdMs — and add a representative fixture to scripts/test-adapters.mjs for each verified format. Drop the beta flag per adapter only once validated, and note it in data/changelog.json. Needs real statements (external dependency); ship incrementally, one adapter per pass. Done when: at least one more adapter is verified end-to-end with a fixture and its beta flag cleared. — UPDATE 2026-07-04: owner will supply TradingView's ADDITIONAL export types first (only Balance History verified today — feeds A106), then Quantower and Tradovate/NinjaTrader exports soon after. NOTE Quantower and NinjaTrader are NOT yet supported platforms — new-adapter work is filed as A209; this item stays the verification pass for the existing nine.",
-      "doneNote": null
-    },
-    {
-      "id": "A106",
-      "title": "Evaluate supporting TradingView’s other CSV export types",
-      "category": "REVIEW / AUDIT",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "EVALUATION. TradingView can export several CSV shapes (e.g. the Strategy Tester / List-of-trades exports, account-manager history, and the balance/closed-position export the current adapter targets). Inventory which formats exist, which the existing TradingView adapter in src/lib/core/adapters.ts handles, and which are worth supporting. For each candidate: does it map cleanly to the normalized Trade shape (time/date/pnl/symbol/root/side/qty/holdMs), or does it need fills-pairing? Propose the best USER FLOW (auto-detect via sniff() vs an explicit picker in the landing/import UI). Keep compute()/costModel() unchanged (A29 — adapters normalize). Done when: a written evaluation + recommendation (which formats, detection strategy) is delivered, with adapter work spun off as its own item(s). — UPDATE 2026-07-02 (backlog review): overlaps A176 (platform-aware module availability), which explicitly covers the TradingView multi-export question — run the two evaluations together or fold this into A176's design note.",
+      "prompt": "Spun off from the R1 audit (2026-06-29). Only the TradingView adapter is verified; the other adapters in src/lib/core/adapters.ts (Tradovate, Rithmic, SierraChart, TradeStation, MotiveWave, Webull, IBKR, Schwab) are marked beta. Validate each against a REAL export from that platform — symbol/root, side, qty, PnL, date/time, and (for fills exports) the FIFO round-trip pairing + holdMs — and add a representative fixture to scripts/test-adapters.mjs for each verified format. Drop the beta flag per adapter only once validated, and note it in data/changelog.json. Needs real statements (external dependency); ship incrementally, one adapter per pass. Done when: at least one more adapter is verified end-to-end with a fixture and its beta flag cleared. — UPDATE 2026-07-04: owner will supply TradingView's ADDITIONAL export types first (only Balance History verified today — feeds A106), then Quantower and Tradovate/NinjaTrader exports soon after. NOTE Quantower and NinjaTrader are NOT yet supported platforms — new-adapter work is filed as A209; this item stays the verification pass for the existing nine. — UPDATE 2026-07-04: TradingView is now verified against REAL exports for BOTH its types (balance history + the new A106 order-history adapter, cross-validated against each other to the cent). The nine-platform verification list is unchanged; Quantower/Tradovate/NinjaTrader exports are the owner's next supply (A209).",
       "doneNote": null
     },
     {
@@ -282,18 +270,6 @@
       "completedDate": null,
       "partial": false,
       "prompt": "Improve the How-To wiki (src/site/components/Howto.svelte) so a new user can reliably export the right CSV from each supported platform. Add per-platform screenshots of the export flow and tighten the step-by-step instructions (where the export lives, which option to pick, common gotchas). Images go through Vite's asset pipeline (src/assets/ or co-located, fingerprinted) and must respect the CSP/img-src; keep the page prerendered (SSG, A69) and the bundle lean (A28/size-budget). Done when: each supported platform has clear instructions + at least one screenshot, and the page builds + prerenders cleanly. — UPDATE 2026-07-04: owner will capture screenshots; in the interim, use other trading-journal products' public import docs/wikis as REFERENCE for accurate per-platform steps, but do NOT republish their screenshots (copyright) — ship only our own captures or officially-licensed platform doc images.",
-      "doneNote": null
-    },
-    {
-      "id": "A110",
-      "title": "Discussion/doc: data flow & data-management overview",
-      "category": "REVIEW / AUDIT",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Write a concise overview (docs/) of how data moves through the app: CSV upload -> Adapters.detect/parse (normalization + fills pairing) -> Store.addTrades delta-merge -> IndexedDB persistence (the trades/journal/meta/trademeta object stores) -> loadRefData ref-data -> applyFilters -> compute/costModel -> view. Clarify what is transformed vs stored raw, the Store seam (real IndexedDB vs in-memory DemoStore), the stable tradeId/dedupe, and the local-compute/no-egress guarantee. Largely documents existing behavior (cross-check against store.ts/adapters.ts/core.ts). Done when: a written data-flow + data-management overview is committed under docs/ (pairs well with A109's diagrams). — UPDATE 2026-07-01 (backlog review): PARTIALLY covered by the PR #91 diagrams (csv-import-adapters, compute-costmodel-render, storage/mode separation). Remaining scope = a single concise PROSE overview stitching the flow end-to-end (or a decision that the diagrams + CLAUDE.md data-flow section suffice and this closes).",
       "doneNote": null
     },
     {
