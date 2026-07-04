@@ -243,6 +243,51 @@ const t = (time, pnl, side = 'long', root = 'MES', qty = 1) => ({ time, date: ti
   ok('A208: curve endpoint reconciles with actual commissions', approx(pts[pts.length - 1].net, c.gross - c.totalComm, 1e-9));
 }
 
+// ── F30/F35: effective-dated rates + the Discount Trading broker ──
+{
+  const { rateFor, BROKERS, estimatedCommRoots } = core;
+  // F35: Discount Trading is selectable and prices at its published base tier (0.20/0.49 + exch).
+  ok('F35: Discount Trading present', BROKERS.DISCOUNTTRADING && BROKERS.DISCOUNTTRADING.name === 'Discount Trading');
+  ok('F35: DT micro all-in (0.20 + 0.35 MES)', approx(rateFor('DISCOUNTTRADING', 'MES').rate, 0.55, 1e-9));
+  ok('F35: DT std all-in (0.49 + 1.45 ES)', approx(rateFor('DISCOUNTTRADING', 'ES').rate, 1.94, 1e-9));
+
+  // F30: dated exchange-fee lookups (CME change eff. 2024-02-01 — AMP notice, see exchange-fees.json).
+  ok('F30: ES pre-2024-02-01 uses the old fee (0.50+1.40)', approx(rateFor('AMP', 'ES', '2024-01-15').rate, 1.9, 1e-9));
+  ok('F30: ES on the boundary day still old fee', approx(rateFor('AMP', 'ES', '2024-01-31').rate, 1.9, 1e-9));
+  ok('F30: ES after the change uses current (0.50+1.45)', approx(rateFor('AMP', 'ES', '2024-02-01').rate, 1.95, 1e-9));
+  ok('F30: undated call = current', approx(rateFor('AMP', 'ES').rate, 1.95, 1e-9));
+  // Partial periods fall through: ZC changed 2025-02-01 but NOT 2024 — a 2023 trade must skip the
+  // 2024 entry (no ZC) and land on the 2025 one (2.12), a 2024-06 trade likewise.
+  ok('F30: ZC 2023 falls through to the 2025 period (0.50+2.12)', approx(rateFor('AMP', 'ZC', '2023-06-01').rate, 2.62, 1e-9));
+  ok('F30: ZC mid-2024 same period (no 2024 ag change)', approx(rateFor('AMP', 'ZC', '2024-06-01').rate, 2.62, 1e-9));
+  ok('F30: ZC current (corrected composite 2.15)', approx(rateFor('AMP', 'ZC', '2026-06-01').rate, 2.65, 1e-9));
+  ok(
+    'F30: MGC micro dated (0.25+0.52 pre / 0.25+0.62 now)',
+    approx(rateFor('AMP', 'MGC', '2024-12-01').rate, 0.77, 1e-9) && approx(rateFor('AMP', 'MGC').rate, 0.87, 1e-9)
+  );
+
+  // F30: broker rateHistory mechanism (no real broker has citable history yet — synthetic entry).
+  BROKERS.ZZTEST = {
+    name: 'Test',
+    comm: { micro: 0.3, std: 0.6 },
+    rateHistory: [{ until: '2023-12-31', comm: { micro: 0.1, std: 0.2 } }],
+  };
+  ok('F30: broker history dated (0.10+1.40 ES old fee too)', approx(rateFor('ZZTEST', 'ES', '2023-06-01').rate, 1.6, 1e-9));
+  ok('F30: broker history expires (current comm after until)', approx(rateFor('ZZTEST', 'ES', '2026-06-01').rate, 2.05, 1e-9));
+  delete BROKERS.ZZTEST;
+
+  // F30: costModel prices each trade at ITS date; bySym shows the current reference rate.
+  const mixed = compute([t('2024-01-15 10:00:00', 100, 'long', 'ES'), t('2026-06-01 10:00:00', 100, 'long', 'ES')]);
+  const cm = costModel(mixed, { broker: 'AMP', platform: 0, feedCost: 0, stateRate: 0 });
+  ok('F30: mixed-period totals (1.90+1.95)×2 sides', approx(cm.totalComm, 3.8 + 3.9, 1e-9), cm.totalComm);
+  ok('F30: bySym reference rate is current', approx(cm.bySym[0].rate, 1.95, 1e-9) && approx(cm.bySym[0].total, 7.7, 1e-9));
+  ok('F30: dated rates never flag estimatedCommRoots', estimatedCommRoots(cm).length === 0);
+  // The curve applies the same dated rule — endpoint reconciles.
+  const { dailySeries: ds30 } = await import('../src/lib/core/curveseries.ts');
+  const pts30 = ds30(mixed, { broker: 'AMP', tEff: 0, fixedMo: 0 }).pts;
+  ok('F30: curve endpoint reconciles with dated rates', approx(pts30[pts30.length - 1].net, cm.gross - cm.totalComm, 1e-9));
+}
+
 // ── A188: the event bus replay buffer — late subscribers can backfill boot events ──
 {
   const { emit, busLog, onEvent } = core;

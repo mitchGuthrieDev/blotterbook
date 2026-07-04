@@ -512,7 +512,7 @@
     const id = dash.tradeId(t);
     const qty = t.qty ?? 1;
     const meta = dash.tradeMeta.get(id);
-    const r = dash.setup.broker ? rateFor(dash.setup.broker, t.root) : null;
+    const r = dash.setup.broker ? rateFor(dash.setup.broker, t.root, t.date) : null; // F30: dated rate
     return {
       id,
       qty,

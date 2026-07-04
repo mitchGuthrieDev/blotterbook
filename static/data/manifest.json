@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "files": {
-    "brokers.json": "c15e4028738f",
-    "exchange-fees.json": "504956cf603d",
-    "feeds.json": "5341a905a26e",
+    "brokers.json": "3dc5513b7ae9",
+    "exchange-fees.json": "b6089f520922",
+    "feeds.json": "4eb01af1233b",
     "state-tax.json": "4c751f7c290a"
   }
 }

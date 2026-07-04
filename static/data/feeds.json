@@ -22,6 +22,7 @@
         ["CME Globex — L2 depth (non-pro)", 17]],
       "Other": [["None", 0]]
     },
+    "DISCOUNTTRADING": "CQG",
     "TRADOVATE": {
       "CME (non-pro)": [["CME — L1 (non-pro)", 12], ["CME — L2 depth (non-pro)", 14],
         ["CBOT — L1", 12], ["NYMEX — L1", 12], ["COMEX — L1", 12]],

@@ -12,6 +12,7 @@ import type {
   TaxModel,
   StateRow,
   RefDataManifest,
+  FeeHistoryEntry,
   ExchangeFeesFile,
   BrokersFile,
   FeedsFile,
@@ -497,6 +498,11 @@ export let EXCH: Record<string, number> = {}; // root -> exchange/clearing/NFA $
 export let MICRO = new Set<string>(); // roots priced at the micro tier
 export let NOT_MICRO = new Set<string>(); // full-size roots the M-prefix heuristic would misprice (A171)
 export let EXCH_FALLBACK = { micro: 0.37, std: 1.5 };
+// F30: effective-dated fee periods (oldest first). Each entry holds the values that applied to
+// trades ON OR BEFORE its `until`; a root absent from an entry falls through to the next-newer
+// period and finally the current EXCH map. CME adjusts these roughly every February — the
+// documented changes live in exchange-fees.json `history` with citations.
+export let EXCH_HISTORY: FeeHistoryEntry[] = [];
 export let BROKERS: Record<string, Broker> = {}; // key -> {name, comm:{micro,std}}
 export let BROKER_ORDER: string[] = [];
 export let BROKER_FEEDS: Record<string, FeedGroups> = {}; // key -> {group: [[label,$/mo],...]}
@@ -511,7 +517,13 @@ export function tierOf(root: string): 'micro' | 'std' {
   if (EXCH[root] != null || NOT_MICRO.has(root)) return 'std';
   return root[0] === 'M' && root.length >= 3 ? 'micro' : 'std';
 }
-export function exchOf(root: string, tier: 'micro' | 'std') {
+export function exchOf(root: string, tier: 'micro' | 'std', date?: string) {
+  // F30: a dated lookup scans the effective periods oldest→newest and takes the first one that
+  // both covers the date AND lists the root; anything else falls through to the current values.
+  // No date (the default) = current, so date-agnostic callers are unchanged.
+  if (date) {
+    for (const h of EXCH_HISTORY) if (date <= h.until && h.exchange[root] != null) return h.exchange[root];
+  }
   return EXCH[root] != null ? EXCH[root] : tier === 'micro' ? EXCH_FALLBACK.micro : EXCH_FALLBACK.std;
 }
 
@@ -548,6 +560,8 @@ export async function loadRefData() {
   MICRO = new Set(exch.micro || []);
   NOT_MICRO = new Set(exch.notMicro || []);
   EXCH_FALLBACK = exch.fallback || EXCH_FALLBACK;
+  // F30: sort ascending by `until` so the dated lookup can take the FIRST matching period.
+  EXCH_HISTORY = [...(exch.history || [])].sort((a, b) => (a.until < b.until ? -1 : 1));
 
   BROKERS = brokers.brokers || {};
   BROKER_ORDER = brokers.order || Object.keys(BROKERS);
@@ -575,11 +589,18 @@ export async function loadRefData() {
   emit('refdata:loaded');
 }
 
-export function rateFor(brokerKey: string, root: string) {
+// F30: the broker commission effective on `date` — scans rateHistory (oldest first) for the first
+// period covering the date, else the current tiers. No history (the norm) = current for all dates.
+function commOf(b: Broker, tier: 'micro' | 'std', date?: string): number {
+  if (date && b.rateHistory) for (const h of b.rateHistory) if (date <= h.until && h.comm[tier] != null) return h.comm[tier];
+  return b.comm[tier];
+}
+
+/** All-in per-side rate for a broker+root — dated (F30) when a trade date is passed, current otherwise. */
+export function rateFor(brokerKey: string, root: string, date?: string) {
   const b = BROKERS[brokerKey] || BROKERS.AMP;
-  const tier = tierOf(root),
-    exch = exchOf(root, tier);
-  return { rate: +(b.comm[tier] + exch).toFixed(4), known: EXCH[root] != null };
+  const tier = tierOf(root);
+  return { rate: +(commOf(b, tier, date) + exchOf(root, tier, date)).toFixed(4), known: EXCH[root] != null };
 }
 
 // Round-turn commission for one trade: 2 sides × the per-side rate × contracts. Close-event
@@ -630,12 +651,17 @@ export function costModel(m: Metrics, inputs: CostInputs = {}): CostModel {
     // A208: a trade carrying an ACTUAL commission from its source CSV uses it VERBATIM (it's the
     // whole round-turn cost, qty already priced in by the broker) — the model only covers the rest.
     const q = t.qty || 1;
-    const { rate, known } = rateFor(broker, t.root);
+    // F30: price each trade at the rate effective on ITS date (falls back to current when no
+    // history covers it). bySym's display `rate` below stays the current rate — a mixed-period
+    // symbol totals correctly but shows today's rate as the reference figure.
+    const { rate, known } = rateFor(broker, t.root, t.date);
     const hasActual = t.commission != null && Number.isFinite(t.commission);
     const rt = hasActual ? (t.commission as number) : roundTurn(rate, q);
     totalComm += rt;
     let e = bySym.get(t.root);
-    if (!e) bySym.set(t.root, (e = { root: t.root, count: 0, qty: 0, rate, known, total: 0, actual: 0 }));
+    // The row's reference `rate` is the CURRENT rate (one extra lookup per new symbol), not
+    // whichever dated rate the first trade happened to carry.
+    if (!e) bySym.set(t.root, (e = { root: t.root, count: 0, qty: 0, rate: rateFor(broker, t.root).rate, known, total: 0, actual: 0 }));
     e.count++;
     e.qty += q;
     e.total += rt;

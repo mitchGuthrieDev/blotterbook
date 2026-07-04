@@ -268,6 +268,17 @@ export interface RefDataManifest {
   files?: Record<string, string>;
 }
 
+/** One effective-dated fee period (F30): the values that applied to trades ON OR BEFORE `until`.
+ *  Partial by design — a root/tier absent here falls through to the next-newer period (and
+ *  finally the current values), so an entry only lists what a documented change actually moved. */
+export interface FeeHistoryEntry {
+  /** Last day (YYYY-MM-DD, inclusive) these values applied — i.e. the day before the change. */
+  until: string;
+  exchange: Record<string, number>;
+  /** Citation for the documented change (F30 requires sourced history). */
+  source?: string;
+}
+
 /** exchange-fees.json — per-root exchange/clearing/NFA $ per side + the micro-tier root set. */
 export interface ExchangeFeesFile {
   schemaVersion?: number;
@@ -276,6 +287,8 @@ export interface ExchangeFeesFile {
   /** Full-size roots the M-prefix tier heuristic would misprice as micro (e.g. MWE) — A171. */
   notMicro?: string[];
   fallback?: { micro: number; std: number };
+  /** F30: effective-dated fee periods, oldest first (ascending `until`). */
+  history?: FeeHistoryEntry[];
 }
 
 /** brokers.json — broker commission tiers + display order. */
@@ -302,7 +315,11 @@ export interface StateTaxFile {
 /** A broker's per-side commission tiers. */
 export interface Broker {
   name: string;
+  /** The CURRENT per-side commission tiers — everything date-agnostic reads this unchanged. */
   comm: { micro: number; std: number };
+  /** F30: prior commission periods, oldest first — each applies to trades ON OR BEFORE `until`.
+   *  Absent (the norm — brokers rarely change and never archive rates) = `comm` for all dates. */
+  rateHistory?: Array<{ until: string; comm: { micro: number; std: number }; source?: string }>;
 }
 
 /** A feed group: label → list of [label, $/mo] options. */
