@@ -3736,6 +3736,17 @@
       "completedDate": "2026-07-04",
       "partial": false,
       "doneNote": "Evaluated + SHIPPED (2026-07-04, feat/tradingview-exports) against real owner-supplied paper-trading exports of all five TradingView CSV types. Outcome: (1) balance history — existing adapter verified on real data (50/50 trades; CME_MINI:MES1! symbols resolve correctly); (2) order history — new `tradingview-orders` fills adapter (Status-gated executions, avg Fill price + Closing time → pairFills for hold time; Commission column feeds A208 when populated); cross-validated vs the same account's balance history — 21/23 round trips reconcile to the cent, the 2 misses are the export's own reach-back truncation (Howto caveat + openLots notice); (3) positions/orders/trading-journal — not trade data, the A178 gate refuses them (fixture-pinned). Detection strategy: auto-detect via distinctive 'Placing time'+'Fill price'+'Status' sniff (no picker needed); no collision with Webull's 'Placed Time' thanks to A174 word-boundary matching. Howto updated with both import types."
+    },
+    {
+      "id": "A176",
+      "title": "(Discussion) Platform-aware module availability — richer CSVs unlock more calculations",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Shipped across two slices (2026-07-04, feat/tradingview-exports + feat/analytics-interactivity). Import-time: the preview states data-driven field coverage (hold/qty/commissions) with a per-adapter 'upload X to unlock Y' upgradeHint, and duplicate trades ENRICH missing fields so import order doesn't matter. Dataset-level: Avg hold time states its coverage inline ('· N% of trades'), the Analytics stats grid footnotes what unlocks missing hold data, and the Howto carries a per-export capability matrix (P&L exact/derived, qty, hold, commissions × every format) + multi-platform guidance. Mixed-platform datasets work by design (normalized shape + F37 provenance, per-file platform badges in the Library). Deeper per-module gating (hide/annotate modules below a coverage threshold) folds into A197's remaining scope if ever wanted; the original 'TradingView multi-export' question was executed as A106."
     }
   ]
 }
