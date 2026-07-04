@@ -439,6 +439,11 @@ const tradingview: Adapter = {
   kind: 'closed',
   beta: false,
   minScore: 5,
+  // A176 first slice: this export has exact P&L but no quantities/hold times — point at the
+  // sibling export that adds them (overlapping trades de-duplicate and enrich, so importing
+  // both is safe in either order).
+  upgradeHint:
+    'TradingView’s order-history export adds hold times, quantities and broker-reported commissions — import both; overlapping trades merge automatically.',
   sniff(text, rows) {
     const h = lc(rows[0] || []);
     return hasAny(h, ['action']) && hasAny(h, ['realized pnl']) ? 5 : 0;
@@ -979,6 +984,7 @@ function parse(text: string, platformId?: string): ParseResult {
     // A168/A174 import-quality notices (fills-based adapters only; 0/absent for close-event exports).
     ...(SKIPPED_FILLS ? { skippedFills: SKIPPED_FILLS } : {}),
     ...(OPEN_LOTS ? { openLots: OPEN_LOTS } : {}),
+    ...(adapter.upgradeHint ? { upgradeHint: adapter.upgradeHint } : {}),
   };
 }
 

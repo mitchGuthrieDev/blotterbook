@@ -82,6 +82,8 @@ export interface ParseResult {
   skippedFills?: number;
   /** Lots left open at end-of-file (truncated export / open position) — import-quality notice (A174). */
   openLots?: number;
+  /** The adapter's "upload X to unlock Y" sibling-export guidance, passed through to the preview. */
+  upgradeHint?: string;
 }
 
 /** A platform CSV adapter (one per supported export format). */
@@ -94,6 +96,10 @@ export interface Adapter {
    *  partial match refuses instead of auto-claiming the file. Set to the adapter's full-signature
    *  sniff score so today's all-or-nothing sniffs behave identically. */
   minScore: number;
+  /** Shown in the import preview when this format lacks fields a SIBLING export of the same
+   *  platform provides (e.g. TradingView balance history → its order-history export adds hold
+   *  times) — the "upload X to unlock Y" guidance. */
+  upgradeHint?: string;
   sniff(text: string, rows: Row[]): number;
   toTrades(text: string, rows: Row[]): Trade[];
 }

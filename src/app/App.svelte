@@ -700,6 +700,14 @@
       skippedFills: r.skippedFills ?? 0,
       openLots: r.openLots ?? 0,
       sample,
+      // A176 first slice: data-driven field coverage — computed from the actual parsed trades,
+      // so the preview truthfully states what THIS file provides (not what the format claims).
+      coverage: {
+        hold: trades.filter(t => t.holdMs != null).length / trades.length,
+        qty: trades.filter(t => t.qty != null).length / trades.length,
+        comm: trades.filter(t => t.commission != null).length / trades.length,
+      },
+      upgradeHint: r.upgradeHint,
     };
   }
   async function importPreview() {

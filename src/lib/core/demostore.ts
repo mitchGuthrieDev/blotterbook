@@ -10,7 +10,7 @@
    The dedupe key (tradeId) and the screenshot allow-list (validShot) are imported VERBATIM from
    store.js (A29) so they can never drift from the real backend. Backup restore (importAll) is a
    no-op in demo (restore is disabled), avoiding any duplication of store.js's sanitization. */
-import { tradeId, validShot, cleanTags } from './store.ts';
+import { tradeId, validShot, cleanTags, setField } from './store.ts';
 import type { Annotation, Trade, StoredJournal, StoredTradeMeta, StoreLike, CsvFileRec } from './types.ts';
 
 export function createDemoStore(): StoreLike {
@@ -42,11 +42,20 @@ export function createDemoStore(): StoreLike {
         const prev = trades.get(id);
         if (prev) {
           duplicate++;
-          // F37 parity: merge incoming provenance into the existing record's fileIds array.
+          // F37 parity: merge incoming provenance into the existing record's fileIds array, and
+          // let a richer duplicate ENRICH missing fields (same rule as Store.addTrades — never
+          // overwrite, identity fields untouched).
+          let next: Trade | null = null;
           if (t.fileIds?.length) {
             const merged = [...new Set([...(prev.fileIds || []), ...t.fileIds])];
-            if (merged.length !== (prev.fileIds || []).length) trades.set(id, { ...prev, fileIds: merged });
+            if (merged.length !== (prev.fileIds || []).length) next = { ...prev, fileIds: merged };
           }
+          for (const k of ['qty', 'entryTime', 'exitTime', 'holdMs', 'commission'] as const)
+            if (prev[k] == null && t[k] != null) {
+              next = next ?? { ...prev };
+              setField(next, k, t[k]);
+            }
+          if (next) trades.set(id, next);
           continue;
         }
         // A154 parity with Store.addTrades: computed id last, so an input `id` can't override it.

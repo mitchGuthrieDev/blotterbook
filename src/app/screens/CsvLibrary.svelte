@@ -36,6 +36,11 @@
     skippedFills: number;
     openLots: number;
     sample: { time: string; sym: string; side: string; qty: number; pnl: number; up: boolean }[];
+    /** A176 first slice — what fraction (0..1) of the parsed trades carry each optional field, so
+     *  the user learns BEFORE confirming what this export type does and doesn't provide. */
+    coverage?: { hold: number; qty: number; comm: number };
+    /** The platform's "upload X to unlock Y" sibling-export guidance (from the adapter). */
+    upgradeHint?: string;
     error?: string;
   };
   /** An error-only preview (intake rejection / failed parse) in the shape the preview sheet renders. */
@@ -196,6 +201,8 @@
   const budgetOver = $derived(usedKb > FILE_BUDGET_KB);
   const fmt = (n: number) => n.toLocaleString();
   const size = (kb: number) => (kb <= 0 ? '—' : kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`);
+  // A176: coverage fractions render as all / none / NN% (float-tolerant at the ends).
+  const covLabel = (f: number) => (f >= 0.995 ? 'all' : f <= 0.005 ? 'none' : `${Math.round(f * 100)}%`);
 
   function pickFile() {
     if (dataDisabled) return; // A134: no uploading in demo
@@ -568,6 +575,20 @@
           Parsed <b class="text-foreground">{fmt(preview.rows)} rows</b> → <b class="text-foreground">{fmt(preview.tradeCount)} trades</b> ·
           covers <b class="text-foreground">{preview.from} → {preview.to}</b>.
         </p>
+        {#if preview.coverage}
+          <!-- A176 first slice: what this export type provides, stated before confirm -->
+          <p class="text-xs text-muted-foreground">
+            Data coverage — hold times: <b class="text-foreground">{covLabel(preview.coverage.hold)}</b> · quantities:
+            <b class="text-foreground">{covLabel(preview.coverage.qty)}</b> · broker commissions:
+            <b class="text-foreground">{covLabel(preview.coverage.comm)}</b>
+          </p>
+          {#if preview.upgradeHint && (preview.coverage.hold < 0.995 || preview.coverage.qty < 0.995 || preview.coverage.comm < 0.995)}
+            <div class="flex items-start gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+              <FileText class="size-4 shrink-0" />
+              <span>{preview.upgradeHint}</span>
+            </div>
+          {/if}
+        {/if}
         {#if preview.sample.length}
           <div>
             <div class="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Sample rows</div>

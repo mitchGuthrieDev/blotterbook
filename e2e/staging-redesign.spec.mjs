@@ -373,7 +373,9 @@ test('staging redesign: Blotter drawer saves a journal note (A149) and the note 
   await expect(sheet).not.toBeVisible();
 
   // The row now carries the note dot, and reopening the drawer shows the persisted note.
-  await expect(firstRow.locator('[title="Has a note"]')).toBeVisible({ timeout: 4000 });
+  // (10s like the file's other post-write asserts — under full-suite parallel load the
+  //  save→reload→re-render roundtrip was observed to exceed the old 4s.)
+  await expect(firstRow.locator('[title="Has a note"]')).toBeVisible({ timeout: 10_000 });
   await firstRow.locator('td').nth(2).getByRole('button').click();
   await expect(page.locator('[data-slot="sheet-content"]').getByPlaceholder('Notes for this trade…')).toHaveValue('drawer note e2e');
 });
