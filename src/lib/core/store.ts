@@ -613,6 +613,8 @@ export const Store: StoreLike = {
           to: validDate(f.to) ? (f.to as string).slice(0, 10) : '',
           imported: typeof f.imported === 'string' ? f.imported.slice(0, 32) : new Date().toISOString(),
           included: f.included !== false,
+          // A211: broker override — key charset only (rateFor falls back safely on unknown keys).
+          ...(typeof f.broker === 'string' && /^[A-Z0-9_]{1,32}$/.test(f.broker) ? { broker: f.broker } : {}),
         };
         await this.addFile(rec, text);
       }

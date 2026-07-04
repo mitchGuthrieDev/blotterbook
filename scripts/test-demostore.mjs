@@ -124,6 +124,10 @@ await s.updateFile('aaaa1111', { label: 'Renamed', included: false });
 const fUpd = (await s.getFiles())[0];
 ok('updateFile patches label/included (id fixed)', fUpd.label === 'Renamed' && fUpd.included === false && fUpd.id === 'aaaa1111');
 ok('filesBytes sums stored sizes', (await s.filesBytes()) === 10);
+await s.updateFile('aaaa1111', { broker: 'SCHWAB' });
+ok('updateFile sets a broker override (A211)', (await s.getFiles())[0].broker === 'SCHWAB');
+await s.updateFile('aaaa1111', { broker: undefined });
+ok('updateFile clears the broker override', (await s.getFiles())[0].broker === undefined);
 // provenance merge on duplicate + the deleteFile cascade
 await s.purge();
 await s.addTrades([{ ...t('2025-02-01 10:00:00', 5), fileIds: ['f1'] }]);

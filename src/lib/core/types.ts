@@ -131,6 +131,9 @@ export interface CostInputs {
   platform?: number | string;
   feedCost?: number | string;
   stateRate?: number | string;
+  /** A211: per-trade broker resolver (file-level overrides) — returns a broker key for trades
+   *  whose source file carries one, undefined otherwise (→ the global `broker`). */
+  brokerFor?: (t: Trade) => string | undefined;
 }
 
 /** costModel() output — commissions, subscriptions, tax, take-home over the active metrics. */
@@ -371,6 +374,10 @@ export interface CsvFileRec {
   imported: string;
   /** Include this file's trades in the active dataset (the Library toggle). */
   included: boolean;
+  /** A211: broker override for THIS file's trades — a user who switched brokers marks their old
+   *  files ("this file is my Schwab era") and costModel prices those trades at that broker's
+   *  rates. Absent (the norm) = the global setup broker. */
+  broker?: string;
 }
 
 export interface StoreLike {

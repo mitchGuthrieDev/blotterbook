@@ -14,6 +14,8 @@
     sizeKb: number;
     overlap: number;
     included: boolean;
+    /** A211: this file's broker override (broker KEY, e.g. 'AMP'); absent = the global setting. */
+    broker?: string;
     /** The derived pre-F37 "no file history" row — per-file actions (rename/include/download/
      *  re-import) don't apply; delete clears the whole dataset. */
     legacy?: boolean;
@@ -96,6 +98,7 @@
   import * as Dialog from '$lib/components/ui/dialog';
   import * as AlertDialog from '$lib/components/ui/alert-dialog';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+  import * as Select from '$lib/components/ui/select';
   import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 
   interface Props {
@@ -117,6 +120,10 @@
     ondownload?: (id: string) => void;
     /** F37: re-parse the stored text and re-add its trades (restores deleted rows; dupes no-op). */
     onreimport?: (id: string) => void | Promise<void>;
+    /** A211: broker choices for the per-file override select ([key, display name] pairs). */
+    brokers?: Array<[string, string]>;
+    /** A211: set/clear a file's broker override ('' = clear → the global setting applies). */
+    onbroker?: (id: string, brokerKey: string) => void | Promise<void>;
     /** Download a full backup of the local data (parent owns file naming). */
     onbackup?: () => void;
     /** Restore from a picked backup file (parent parses/imports + owns any toast). */
@@ -139,6 +146,8 @@
     onrename,
     ondownload,
     onreimport,
+    brokers = [],
+    onbroker,
     onbackup,
     onrestore,
     onerase,
@@ -275,6 +284,13 @@
     list = list.map(f => (f.id === renameId ? { ...f, label: renameVal.trim() || undefined } : f));
     if (renameId) void onrename?.(renameId, renameVal.trim());
     renameOpen = false;
+  }
+  // A211: the detail sheet's broker-override select ('GLOBAL' sentinel = clear the override —
+  // bits-ui items need a non-empty value).
+  function setBroker(id: string, v: string) {
+    const key = v === 'GLOBAL' ? '' : v;
+    list = list.map(f => (f.id === id ? { ...f, broker: key || undefined } : f));
+    void onbroker?.(id, key);
   }
   function askDelete(id: string) {
     deleteId = id;
@@ -516,6 +532,31 @@
           {@render kv('Size', size(openFile.sizeKb))}
           {@render kv('Overlap', openFile.overlap > 0 ? `${openFile.overlap} rows` : 'None')}
         </div>
+
+        {#if perFileActions && !openFile.legacy && brokers.length}
+          <!-- A211: per-file broker override — for users who switched brokers over time. -->
+          <div>
+            <div class="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Broker for this file's trades</div>
+            <Select.Root
+              type="single"
+              value={openFile.broker || 'GLOBAL'}
+              onValueChange={v => setBroker(openFile.id, v)}
+              disabled={dataDisabled}
+            >
+              <Select.Trigger class="w-full min-w-0" aria-label="Broker override for this file">
+                <Select.Value placeholder="Use the global broker setting" />
+              </Select.Trigger>
+              <Select.Content>
+                <Select.Item value="GLOBAL" label="Use the global broker setting" />
+                {#each brokers as [key, name] (key)}<Select.Item value={key} label={name} />{/each}
+              </Select.Content>
+            </Select.Root>
+            <p class="mt-1 text-[11px] text-muted-foreground">
+              Switched brokers at some point? Price this file's trades at the broker you actually used — everything else keeps the global
+              setting. Trades with real CSV commissions are unaffected.
+            </p>
+          </div>
+        {/if}
 
         <div>
           <div class="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Column mapping</div>

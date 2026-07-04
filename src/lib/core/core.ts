@@ -652,9 +652,11 @@ export function costModel(m: Metrics, inputs: CostInputs = {}): CostModel {
     // whole round-turn cost, qty already priced in by the broker) — the model only covers the rest.
     const q = t.qty || 1;
     // F30: price each trade at the rate effective on ITS date (falls back to current when no
-    // history covers it). bySym's display `rate` below stays the current rate — a mixed-period
-    // symbol totals correctly but shows today's rate as the reference figure.
-    const { rate, known } = rateFor(broker, t.root, t.date);
+    // history covers it). A211: and at ITS broker — a per-file override resolved by
+    // inputs.brokerFor (a user who switched brokers marks old files), else the global setup
+    // broker. bySym's display `rate` below stays the current global-broker rate — a mixed-
+    // period/-broker symbol totals correctly but shows one reference figure.
+    const { rate, known } = rateFor(inputs.brokerFor?.(t) ?? broker, t.root, t.date);
     const hasActual = t.commission != null && Number.isFinite(t.commission);
     const rt = hasActual ? (t.commission as number) : roundTurn(rate, q);
     totalComm += rt;
