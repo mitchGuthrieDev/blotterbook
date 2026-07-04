@@ -14,7 +14,12 @@
     sizeKb: number;
     overlap: number;
     included: boolean;
+    /** The derived pre-F37 "no file history" row — per-file actions (rename/include/download/
+     *  re-import) don't apply; delete clears the whole dataset. */
+    legacy?: boolean;
   };
+  /** Raw-CSV library budget (F37): soft 50 MB cap — a warning renders from 80%. */
+  export const FILE_BUDGET_KB = 50 * 1024;
   export type ImportPreview = {
     name: string;
     platform: string;
@@ -54,11 +59,11 @@
 <script lang="ts">
   // CSV Library surface (UI redesign; Data Management). Manage imported CSVs: a drag-drop/click upload
   // zone that opens a parse-preview Sheet, a Table of files, a detail Sheet, rename + delete dialogs.
-  // The app (all surfaces) has no per-file provenance in the Store (only the merged trade set), so file
-  // storage is DEFERRED: the upload zone is a REAL importer (Adapters parse → preview → addTrades, via
-  // the `parse`/`onimport` props), the table shows one derived "active dataset" row built from the
-  // trades, and per-file-only actions (rename/re-import/download/include) are hidden (perFileActions=
-  // false). Delete clears the dataset. shadcn-svelte primitives; color in P&L.
+  // F37: the Store keeps REAL per-file provenance (file records + raw texts; trades carry fileIds),
+  // so every row is a real imported file with working rename / include-exclude / download-original /
+  // re-import / delete (all via the on* callback props — the parent owns the Store seam). Trades
+  // imported before F37 have no fileIds and surface as one derived legacy row (delete clears the
+  // dataset, as before). A soft 50 MB raw-CSV budget warns from 80%. shadcn-svelte primitives.
   import {
     Upload,
     FileText,
@@ -97,8 +102,16 @@
     parse?: (text: string, name: string) => ImportPreview;
     /** Persist the previewed import (addTrades + reload). */
     onimport?: (preview: ImportPreview) => void | Promise<void>;
-    /** Remove a dataset/file (clears the dataset). */
+    /** Remove a file's trades (or, for the legacy row, clear the dataset). */
     ondelete?: (id: string) => void | Promise<void>;
+    /** F37: include/exclude a file's trades in the active dataset. */
+    oninclude?: (id: string, included: boolean) => void | Promise<void>;
+    /** F37: persist a file's display label ('' clears back to the filename). */
+    onrename?: (id: string, label: string) => void | Promise<void>;
+    /** F37: download the stored original CSV text. */
+    ondownload?: (id: string) => void;
+    /** F37: re-parse the stored text and re-add its trades (restores deleted rows; dupes no-op). */
+    onreimport?: (id: string) => void | Promise<void>;
     /** Download a full backup of the local data (parent owns file naming). */
     onbackup?: () => void;
     /** Restore from a picked backup file (parent parses/imports + owns any toast). */
@@ -117,6 +130,10 @@
     parse,
     onimport,
     ondelete,
+    oninclude,
+    onrename,
+    ondownload,
+    onreimport,
     onbackup,
     onrestore,
     onerase,
@@ -173,6 +190,10 @@
   const delFile = $derived(deleteId ? list.find(f => f.id === deleteId) : undefined);
   const includedCount = $derived(list.filter(f => f.included).length);
   const totalTrades = $derived(list.filter(f => f.included).reduce((s, f) => s + f.trades, 0));
+  // F37 raw-CSV budget (soft 50 MB, owner decision): warn from 80%, flag when over.
+  const usedKb = $derived(list.reduce((s, f) => s + (f.sizeKb || 0), 0));
+  const budgetWarn = $derived(usedKb >= FILE_BUDGET_KB * 0.8);
+  const budgetOver = $derived(usedKb > FILE_BUDGET_KB);
   const fmt = (n: number) => n.toLocaleString();
   const size = (kb: number) => (kb <= 0 ? '—' : kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`);
 
@@ -236,6 +257,7 @@
 
   function toggleInclude(id: string, v: boolean) {
     list = list.map(f => (f.id === id ? { ...f, included: v } : f));
+    void oninclude?.(id, v); // F37: persist + reload the active dataset
   }
   function startRename(f: Csv) {
     renameId = f.id;
@@ -244,6 +266,7 @@
   }
   function saveRename() {
     list = list.map(f => (f.id === renameId ? { ...f, label: renameVal.trim() || undefined } : f));
+    if (renameId) void onrename?.(renameId, renameVal.trim());
     renameOpen = false;
   }
   function askDelete(id: string) {
@@ -309,10 +332,27 @@
     <Card.Header>
       <Card.Title>{perFileActions ? 'Uploaded files' : 'Active dataset'}</Card.Title>
       <span class="text-xs text-muted-foreground">
-        {#if perFileActions}{includedCount} of {list.length} included · {fmt(totalTrades)} trades{:else}{fmt(totalTrades)} trades imported{/if}
+        {#if perFileActions}{includedCount} of {list.length} included · {fmt(totalTrades)} trades · {size(usedKb)} of {size(FILE_BUDGET_KB)} stored{:else}{fmt(
+            totalTrades
+          )} trades imported{/if}
       </span>
     </Card.Header>
     <Card.Content class="p-0">
+      {#if budgetWarn}
+        <!-- F37: soft 50 MB raw-CSV budget — warn from 80%, flag when exceeded (imports still work). -->
+        <div class="flex items-start gap-2 border-b border-chart-4/40 bg-chart-4/10 px-4 py-2 text-xs text-muted-foreground">
+          <TriangleAlert class="size-4 shrink-0 text-chart-4" />
+          <span>
+            {#if budgetOver}
+              Stored CSVs exceed the {size(FILE_BUDGET_KB)} budget ({size(usedKb)}). Imports still work, but consider deleting old files —
+              your trades stay either way.
+            {:else}
+              Stored CSVs are at {size(usedKb)} of the {size(FILE_BUDGET_KB)} budget. Deleting a file's record keeps nothing of its raw text;
+              its trades can be removed with it or kept via re-import first.
+            {/if}
+          </span>
+        </div>
+      {/if}
       {#if list.length === 0}
         <p class="px-4 py-10 text-center text-sm text-muted-foreground">No trades yet — drop a CSV above to import.</p>
       {:else}
@@ -358,7 +398,16 @@
                 </Table.Cell>
                 {#if perFileActions}
                   <Table.Cell class="text-center" onclick={e => e.stopPropagation()}>
-                    <Switch checked={f.included} onCheckedChange={v => toggleInclude(f.id, v)} aria-label="Include in dataset" />
+                    {#if f.legacy}
+                      <span class="text-xs text-muted-foreground">—</span>
+                    {:else}
+                      <Switch
+                        checked={f.included}
+                        disabled={dataDisabled}
+                        onCheckedChange={v => toggleInclude(f.id, v)}
+                        aria-label="Include in dataset"
+                      />
+                    {/if}
                   </Table.Cell>
                 {/if}
                 <Table.Cell onclick={e => e.stopPropagation()}>
@@ -376,13 +425,19 @@
                       {/snippet}
                     </DropdownMenu.Trigger>
                     <DropdownMenu.Content align="end" class="min-w-[160px]">
-                      {#if perFileActions}
-                        <DropdownMenu.Item onSelect={() => openDetail(f.id)}><RefreshCw class="size-4" /> Re-import</DropdownMenu.Item>
-                        <DropdownMenu.Item onSelect={() => startRename(f)}><Pencil class="size-4" /> Rename</DropdownMenu.Item>
-                        <DropdownMenu.Item><Download class="size-4" /> Download original</DropdownMenu.Item>
+                      {#if perFileActions && !f.legacy}
+                        <DropdownMenu.Item disabled={dataDisabled} onSelect={() => onreimport?.(f.id)}>
+                          <RefreshCw class="size-4" /> Re-import
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item disabled={dataDisabled} onSelect={() => startRename(f)}>
+                          <Pencil class="size-4" /> Rename
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item onSelect={() => ondownload?.(f.id)}
+                          ><Download class="size-4" /> Download original</DropdownMenu.Item
+                        >
                         <DropdownMenu.Separator />
                       {/if}
-                      <DropdownMenu.Item class="text-destructive" onSelect={() => askDelete(f.id)}>
+                      <DropdownMenu.Item class="text-destructive" disabled={dataDisabled} onSelect={() => askDelete(f.id)}>
                         <Trash2 class="size-4" /> Delete
                       </DropdownMenu.Item>
                     </DropdownMenu.Content>
@@ -475,8 +530,12 @@
         </div>
       </div>
       <Sheet.Footer class="flex-row justify-between">
-        {#if perFileActions}<Button variant="outline" size="sm"><RefreshCw class="size-4" /> Re-import</Button>{/if}
-        <Button variant="outline" size="sm" class="text-destructive" onclick={() => askDelete(openFile.id)}
+        {#if perFileActions && !openFile.legacy}
+          <Button variant="outline" size="sm" disabled={dataDisabled} onclick={() => onreimport?.(openFile.id)}>
+            <RefreshCw class="size-4" /> Re-import
+          </Button>
+        {/if}
+        <Button variant="outline" size="sm" class="text-destructive" disabled={dataDisabled} onclick={() => askDelete(openFile.id)}
           ><Trash2 class="size-4" /> Delete</Button
         >
       </Sheet.Footer>
@@ -597,7 +656,12 @@
     <AlertDialog.Header>
       <AlertDialog.Title>Delete {delFile?.label ?? delFile?.name}?</AlertDialog.Title>
       <AlertDialog.Description>
-        This removes the {perFileActions ? 'file' : 'dataset'} and its {fmt(delFile?.trades ?? 0)} trades from your data. This can't be undone.
+        {#if delFile?.legacy}
+          This clears the whole pre-file-history dataset ({fmt(delFile?.trades ?? 0)} trades). This can't be undone.
+        {:else}
+          This removes the file, its stored original CSV, and its {fmt(delFile?.trades ?? 0)} trades — except trades another file also contributed.
+          This can't be undone.
+        {/if}
       </AlertDialog.Description>
     </AlertDialog.Header>
     <AlertDialog.Footer>

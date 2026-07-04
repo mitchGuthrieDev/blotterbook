@@ -619,21 +619,31 @@ export function costModel(m: Metrics, inputs: CostInputs = {}): CostModel {
   const trades = m && m.trades ? m.trades : [];
   const bySym = new Map<string, SymCost>();
   let totalComm = 0,
+    actualComm = 0,
+    actualCommTrades = 0,
     gp = 0,
     gl = 0;
   for (const t of trades) {
     // Round-turn commission is charged per CONTRACT: 2 sides × the per-side rate × qty.
     // Fills-based adapters (and MotiveWave) emit trades with qty>1; close-event exports
     // (e.g. TradingView) have no qty, so (t.qty||1) keeps single-contract data unchanged.
+    // A208: a trade carrying an ACTUAL commission from its source CSV uses it VERBATIM (it's the
+    // whole round-turn cost, qty already priced in by the broker) — the model only covers the rest.
     const q = t.qty || 1;
     const { rate, known } = rateFor(broker, t.root);
-    const rt = roundTurn(rate, q);
+    const hasActual = t.commission != null && Number.isFinite(t.commission);
+    const rt = hasActual ? (t.commission as number) : roundTurn(rate, q);
     totalComm += rt;
     let e = bySym.get(t.root);
-    if (!e) bySym.set(t.root, (e = { root: t.root, count: 0, qty: 0, rate, known, total: 0 }));
+    if (!e) bySym.set(t.root, (e = { root: t.root, count: 0, qty: 0, rate, known, total: 0, actual: 0 }));
     e.count++;
     e.qty += q;
     e.total += rt;
+    if (hasActual) {
+      e.actual++;
+      actualComm += rt;
+      actualCommTrades++;
+    }
     const x = t.pnl - rt;
     if (x > 0) gp += x;
     else if (x < 0) gl += x;
@@ -673,9 +683,12 @@ export function costModel(m: Metrics, inputs: CostInputs = {}): CostModel {
     contracts,
     bePer: trades.length ? (totalComm + fixedPeriod) / trades.length : 0,
     bySym: [...bySym.values()].sort((a, b) => b.total - a.total),
+    actualCommTrades,
+    actualComm,
   };
 }
 
 // A171: roots whose commission uses the FALLBACK per-side rate (root not in the fee table) — the
 // UI marks these with an asterisk so estimated commissions aren't indistinguishable from table rates.
-export const estimatedCommRoots = (c: CostModel): string[] => c.bySym.filter(s => !s.known).map(s => s.root);
+// A208: a root whose trades ALL carry actual CSV commissions never used the fallback — don't flag it.
+export const estimatedCommRoots = (c: CostModel): string[] => c.bySym.filter(s => !s.known && s.actual < s.count).map(s => s.root);

@@ -16,9 +16,23 @@ import {
   DEMO_STATE,
 } from '../../lib/core/core.ts';
 import { Adapters } from '../../lib/core/adapters.ts';
-import { cleanTags } from '../../lib/core/store.ts';
+import { cleanTags, fileId } from '../../lib/core/store.ts';
 import { demoCSV } from '../../lib/core/sampledata.ts';
-import type { Trade, FilterState, SavedFilter, SavedFilterDef, AppSetup, Setup, StoredTradeMeta, StoreLike } from '../../lib/core/types.ts';
+import type {
+  Trade,
+  FilterState,
+  SavedFilter,
+  SavedFilterDef,
+  AppSetup,
+  Setup,
+  StoredTradeMeta,
+  StoreLike,
+  CsvFileRec,
+  ParseResult,
+} from '../../lib/core/types.ts';
+
+/** Raw-CSV library budget (F37 owner decision): soft 50 MB cap, warn from 80%. */
+export const FILE_BUDGET_BYTES = 50 * 1024 * 1024;
 
 export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?: boolean }) {
   // Demo mounts the in-memory DemoStore (nothing persists by construction), but every write path is
@@ -26,6 +40,7 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   // never mutate, even if a real Store were passed by mistake.
   const isDemo = !!opts.isDemo;
   let allTrades = $state<Trade[]>([]);
+  let csvFiles = $state<CsvFileRec[]>([]); // F37: the imported-CSV library (metadata; texts stay in the Store)
   let loaded = $state(false);
   let error = $state('');
   let journalDates = $state<Set<string>>(new Set());
@@ -74,16 +89,49 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   const cost = $derived(costModel(metricsActive, costInputs));
   const dateRange = $derived(allTrades.length ? `${allTrades[0].date} → ${allTrades[allTrades.length - 1].date}` : '');
 
+  // F37: build the file record + provenance-stamped trades for a successful parse. `size`/`rows`
+  // come from the raw text; overlap is patched in after addTrades reports duplicates.
+  function fileRecFor(text: string, name: string, r: ParseResult): { rec: CsvFileRec; trades: Trade[] } {
+    const fid = fileId(text);
+    const trades = (r.trades || []).map(t => ({ ...t, fileIds: [fid] }));
+    const rec: CsvFileRec = {
+      id: fid,
+      name,
+      platform: r.platform || '',
+      platformLabel: r.label || 'CSV',
+      size: text.length,
+      rows: Math.max(0, text.trim().split(/\r?\n/).length - 1),
+      tradeCount: trades.length,
+      overlap: 0,
+      from: trades[0]?.date ?? '',
+      to: trades[trades.length - 1]?.date ?? '',
+      imported: new Date().toISOString(),
+      included: true,
+    };
+    return { rec, trades };
+  }
+
   async function seedIfEmpty() {
     if ((await store.tradeCount()) > 0) return;
-    const r = Adapters.parse(demoCSV(), 'tradingview');
+    const text = demoCSV();
+    const r = Adapters.parse(text, 'tradingview');
     if (r.ok && r.trades && r.trades.length) {
-      await store.addTrades(r.trades);
+      // Seed through the same per-file path as a real import, so the CSV Library shows a real
+      // sample-file row on demo/staging (in-memory on demo — never persists, by construction).
+      const { rec, trades } = fileRecFor(text, 'sample-trades.csv', r);
+      const res = await store.addTrades(trades);
+      await store.addFile({ ...rec, overlap: res.duplicate }, text);
       await store.setMeta('setup', { broker: DEMO_BROKER, feed: DEMO_FEED, state: DEMO_STATE, platform: '35' });
     }
   }
   async function reloadAll() {
-    allTrades = await store.getAllTrades();
+    // F37: the ACTIVE dataset excludes trades whose every contributing file is toggled off in the
+    // CSV Library. No fileIds (pre-F37 import) = always included; an id with no surviving record
+    // (defensive) counts as included rather than silently hiding data.
+    csvFiles = await store.getFiles();
+    const excluded = new Set(csvFiles.filter(f => !f.included).map(f => f.id));
+    const raw = await store.getAllTrades();
+    allTrades = excluded.size ? raw.filter(t => !t.fileIds?.length || t.fileIds.some(id => !excluded.has(id))) : raw;
     journalDates = await store.journalDates();
     journal = new Map(
       (await store.getAllJournal()).map(j => [j.date, { text: j.text || '', tags: j.tags || [], shots: j.shots || [] }] as const)
@@ -181,7 +229,9 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     if (!orig) return;
     const hhmmss = /^\d\d:\d\d$/.test(r.time) ? `${r.time}:00` : r.time || '00:00:00';
     const next: Trade = {
-      ...orig,
+      // snapshot, not spread — allTrades is deeply-reactive $state, so a spread would keep nested
+      // arrays (fileIds, F37) as Svelte proxies, which IndexedDB's structured clone rejects.
+      ...$state.snapshot(orig),
       date: r.date,
       time: `${r.date} ${hhmmss}`,
       // A154: force the editor's free-typed symbol through the same rootSym sanitizer every
@@ -206,6 +256,55 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     emit('data:imported', { added: res.added });
     return res;
   }
+  // F37: import a parsed CSV WITH provenance — stores the file record + raw text alongside the
+  // trades (every contributed trade carries the file's id), and records the overlap count.
+  async function importCsv(text: string, name: string, r: ParseResult) {
+    if (isDemo || !r.ok || !r.trades?.length) return { added: 0, duplicate: 0, total: allTrades.length };
+    const { rec, trades } = fileRecFor(text, name, r);
+    const res = await store.addTrades(trades);
+    await store.addFile({ ...rec, overlap: res.duplicate }, text);
+    await reloadAll();
+    emit('data:imported', { added: res.added });
+    return res;
+  }
+  /* ---- F37 CSV Library file actions (all demo-guarded, all behind the Store seam) ---- */
+  async function setFileIncluded(id: string, included: boolean) {
+    if (isDemo) return;
+    await store.updateFile(id, { included });
+    await reloadAll();
+  }
+  async function renameFile(id: string, label: string) {
+    if (isDemo) return;
+    await store.updateFile(id, { label: label.trim() || undefined });
+    await reloadAll();
+  }
+  async function deleteFile(id: string) {
+    if (isDemo) return;
+    const res = await store.deleteFile(id);
+    await reloadAll();
+    emit('trade:deleted', { count: res.removedTrades });
+  }
+  /** The stored raw text (download-original / re-import) — null when demo or missing. */
+  async function fileText(id: string) {
+    const t = await store.getFileText(id);
+    return t ?? null;
+  }
+  // Re-parse the stored raw text and re-add its trades (restores rows deleted from the Blotter;
+  // existing ones dedupe). Uses the recorded platform so detection can't drift from import time.
+  async function reimportFile(id: string) {
+    if (isDemo) return { added: 0, duplicate: 0 };
+    const rec = csvFiles.find(f => f.id === id);
+    const text = await store.getFileText(id);
+    if (!rec || text == null) return { added: 0, duplicate: 0 };
+    const r = Adapters.parse(text, rec.platform || undefined);
+    if (!r.ok || !r.trades?.length) return { added: 0, duplicate: 0 };
+    const fid = rec.id;
+    const res = await store.addTrades(r.trades.map(t => ({ ...t, fileIds: [fid] })));
+    await reloadAll();
+    emit('data:imported', { added: res.added });
+    return res;
+  }
+  const filesBytes = () => csvFiles.reduce((a, f) => a + (Number(f.size) || 0), 0);
   async function purgeAll() {
     if (isDemo) return;
     await store.purge();
@@ -302,6 +401,9 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     get allTrades() {
       return allTrades;
     },
+    get csvFiles() {
+      return csvFiles;
+    },
     get loaded() {
       return loaded;
     },
@@ -378,6 +480,13 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     deleteTrades,
     editTradeCore,
     importTrades,
+    importCsv,
+    setFileIncluded,
+    renameFile,
+    deleteFile,
+    fileText,
+    reimportFile,
+    filesBytes,
     purgeAll,
     exportBackup,
     importBackup,

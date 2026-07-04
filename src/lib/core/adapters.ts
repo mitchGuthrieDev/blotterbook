@@ -315,7 +315,9 @@ function pairFills(fills: Fill[]): Trade[] {
     const root = rootSym(sym),
       pv = pointValue(root),
       pvKnown = POINT[root] != null; // A113: an unknown root falls back to $1/point → flag those PnLs
-    type Lot = { dir: number; qty: number; price: number; time: string };
+    // commPerQty: the opening fill's per-contract commission share (A208) — undefined when the
+    // export carries no commission column, so a modeled rate applies downstream.
+    type Lot = { dir: number; qty: number; price: number; time: string; commPerQty?: number };
     const open: Lot[] = []; // FIFO lots (single-direction by construction: a flip closes all opposing lots first)
     for (const f of arr) {
       const dir = f.side === 'buy' ? 1 : -1;
@@ -359,6 +361,9 @@ function pairFills(fills: Fill[]): Trade[] {
           }
         }
       }
+      // A208: the closing fill's per-contract commission share (covers f.qty, including any
+      // flip remainder that opens a new lot — each closed contract carries m/f.qty of it).
+      const exitCommPerQty = f.commission != null ? f.commission / f.qty : undefined;
       for (let j = 0; j < plan.length; j++) {
         const p = plan[j];
         const t: Trade = {
@@ -373,13 +378,24 @@ function pairFills(fills: Fill[]): Trade[] {
           exitTime: f.time,
           holdMs: Math.max(0, tms(f.time) - tms(p.lot.time)),
         };
+        // A208: real round-turn commission = entry share + exit share, when the export provides
+        // either side (a missing side counts 0 — still real data, just one-sided).
+        if (p.lot.commPerQty != null || exitCommPerQty != null)
+          t.commission = Math.round(((p.lot.commPerQty || 0) + (exitCommPerQty || 0)) * p.m * 100) / 100;
         if (!useRealized && !pvKnown) t.pvEstimated = true; // price × $1/point guess — surfaced to the user (A113)
         trades.push(t);
         p.lot.qty -= p.m;
         if (p.lot.qty <= 1e-9) open.shift();
       }
       const remaining = f.qty - closeQty;
-      if (remaining > 1e-9) open.push({ dir, qty: remaining, price: f.price, time: f.time });
+      if (remaining > 1e-9)
+        open.push({
+          dir,
+          qty: remaining,
+          price: f.price,
+          time: f.time,
+          commPerQty: f.commission != null ? f.commission / f.qty : undefined,
+        });
     }
     OPEN_LOTS += open.length; // A174: dangling opens (truncated export / still-open position) — surfaced as a notice
   }
@@ -730,6 +746,9 @@ const ibkr: Adapter = {
     const cQty = ix('quantity');
     const cPx = ix('tradeprice') >= 0 ? ix('tradeprice') : ix('t. price') >= 0 ? ix('t. price') : ix('price');
     const cReal = ix('realized p/l') >= 0 ? ix('realized p/l') : ix('realizedpnl') >= 0 ? ix('realizedpnl') : ix('fifopnlrealized');
+    // A208: real per-fill commission when exported (Flex: IBCommission; Activity: Comm/Fee or
+    // Commission). finder is substring, so 'ibcommission' must be tried before bare 'commission'.
+    const cComm = ix('ibcommission') >= 0 ? ix('ibcommission') : ix('comm/fee') >= 0 ? ix('comm/fee') : ix('commission');
     if (cSym < 0 || cPx < 0 || (cBS < 0 && cQty < 0)) throw new Error('missing Symbol, price or Buy/Sell column');
     const fills = [];
     for (let r = 1; r < rows.length; r++) {
@@ -744,6 +763,12 @@ const ibkr: Adapter = {
       if (cReal >= 0) {
         const rp = num(row[cReal]);
         if (!isNaN(rp) && rp !== 0) f.realized = rp;
+      }
+      // A208: IBKR reports commission as a NEGATIVE cash amount — normalize to a positive cost.
+      // A parseable 0 is real data (a zero-commission fill), only NaN/blank is "not provided".
+      if (cComm >= 0) {
+        const cm = num(row[cComm]);
+        if (!isNaN(cm)) f.commission = Math.abs(cm);
       }
       fills.push(f);
     }

@@ -11,13 +11,15 @@
    store.js (A29) so they can never drift from the real backend. Backup restore (importAll) is a
    no-op in demo (restore is disabled), avoiding any duplication of store.js's sanitization. */
 import { tradeId, validShot, cleanTags } from './store.ts';
-import type { Annotation, Trade, StoredJournal, StoredTradeMeta, StoreLike } from './types.ts';
+import type { Annotation, Trade, StoredJournal, StoredTradeMeta, StoreLike, CsvFileRec } from './types.ts';
 
 export function createDemoStore(): StoreLike {
   const trades = new Map<string, Trade>(); // id -> {id, ...trade}
   const journal = new Map<string, StoredJournal>(); // date -> {date,text,tags,shots,updated}
   const meta = new Map<string, unknown>(); // key -> value
   const trademeta = new Map<string, StoredTradeMeta>(); // id -> {id,tags,note,shots,updated}
+  const files = new Map<string, CsvFileRec>(); // F37 parity: id -> file record (metadata)
+  const filetexts = new Map<string, string>(); // id -> raw CSV text
   const mem = new Map<string, unknown>(); // in-memory stand-in for Store.local (no localStorage)
 
   const sortByTime = (arr: Trade[]) => arr.slice().sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
@@ -37,8 +39,14 @@ export function createDemoStore(): StoreLike {
         duplicate = 0;
       for (const t of list) {
         const id = tradeId(t);
-        if (trades.has(id)) {
+        const prev = trades.get(id);
+        if (prev) {
           duplicate++;
+          // F37 parity: merge incoming provenance into the existing record's fileIds array.
+          if (t.fileIds?.length) {
+            const merged = [...new Set([...(prev.fileIds || []), ...t.fileIds])];
+            if (merged.length !== (prev.fileIds || []).length) trades.set(id, { ...prev, fileIds: merged });
+          }
           continue;
         }
         // A154 parity with Store.addTrades: computed id last, so an input `id` can't override it.
@@ -118,6 +126,40 @@ export function createDemoStore(): StoreLike {
       return [...trademeta.values()];
     },
 
+    /* ---- F37 per-file CSV provenance (in-memory parity with Store) ---- */
+    async getFiles() {
+      return [...files.values()].sort((a, b) => (a.imported < b.imported ? 1 : a.imported > b.imported ? -1 : 0));
+    },
+    async addFile(rec, text) {
+      files.set(rec.id, { ...rec, id: rec.id });
+      filetexts.set(rec.id, text);
+    },
+    async updateFile(id, patch) {
+      const prev = files.get(id);
+      if (prev) files.set(id, { ...prev, ...patch, id });
+    },
+    async deleteFile(id) {
+      files.delete(id);
+      filetexts.delete(id);
+      let removedTrades = 0;
+      for (const [tid, rec] of trades) {
+        if (!rec.fileIds || !rec.fileIds.includes(id)) continue;
+        const rest = rec.fileIds.filter(f => f !== id);
+        if (rest.length) trades.set(tid, { ...rec, fileIds: rest });
+        else {
+          trades.delete(tid);
+          removedTrades++;
+        }
+      }
+      return { removedTrades };
+    },
+    async getFileText(id) {
+      return filetexts.get(id);
+    },
+    async filesBytes() {
+      return [...files.values()].reduce((a, f) => a + (Number(f.size) || 0), 0);
+    },
+
     async exportAll() {
       return {
         app: 'blotterbook',
@@ -127,6 +169,8 @@ export function createDemoStore(): StoreLike {
         journal: await this.getAllJournal(),
         meta: await this.getAllMeta(),
         trademeta: await this.allTradeMeta(),
+        files: await this.getFiles(),
+        filetexts: [...filetexts.entries()].map(([id, text]) => ({ id, text })),
       };
     },
     // Restore is disabled on the demo surface; no-op (avoids duplicating store.js's sanitization).
@@ -139,6 +183,8 @@ export function createDemoStore(): StoreLike {
       journal.clear();
       meta.clear();
       trademeta.clear();
+      files.clear();
+      filetexts.clear();
       return true;
     },
 
