@@ -325,15 +325,23 @@
             ><span class="w-[7px] h-[7px] rounded-full bg-chart-2"></span>Tested on real data</span
           >
         </h2>
-        <p>Blotterbook's reference format. Works with the Paper Trading account and connected brokers.</p>
+        <p>Blotterbook's reference format. Works with the Paper Trading account and connected brokers. Two export types import:</p>
         <ol class="steps">
           <li>Open the <b>Trading Panel</b> at the bottom of the chart and select the <b>Account</b> (e.g. Paper Trading).</li>
           <li>Go to the <b>History</b> / <b>List of Trades</b> tab.</li>
           <li>Use the export / download icon to save a <b>CSV</b>.</li>
         </ol>
         <p>
-          Expected columns: <code>Time</code>, <code>Action</code>, <code>Realized PnL (value)</code>. Each row is a closed position, so
-          P&amp;L is exact and no hold time is derived.
+          <b>Balance history</b> (recommended) — columns <code>Time</code>, <code>Action</code>, <code>Realized PnL (value)</code>. Each row
+          is a closed position, so P&amp;L is exact and no hold time is derived.
+        </p>
+        <p>
+          <b>Order history</b> — columns <code>Symbol</code>, <code>Side</code>, <code>Fill price</code>, <code>Status</code>,
+          <code>Closing time</code>. A fills export: Blotterbook pairs entries→exits, which unlocks <b>hold time</b>, and reads the
+          <code>Commission</code> column when your broker fills it in. One caveat: this export only reaches back a limited number of orders —
+          if it starts mid-position, the earliest round trips can misprice (you'll see an open-lots notice on import). Prefer balance history
+          unless you want hold times; the two de-duplicate if you import both. The other exports on that panel (positions, orders, trading journal)
+          aren't trade data — Blotterbook will decline them.
         </p>
       </section>
 

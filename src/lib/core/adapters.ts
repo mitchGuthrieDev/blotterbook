@@ -469,6 +469,53 @@ const tradingview: Adapter = {
   },
 };
 
+/* TradingView — order history export (fills). One row per ORDER with Status + avg Fill price;
+   only Filled rows are executions. Verified against a real paper-trading export (A106, 2026-07-04);
+   `Closing time` is the fill moment, and the Commission column feeds A208 when populated (empty on
+   paper accounts; broker-integrated accounts may carry real costs). */
+const tradingviewOrders: Adapter = {
+  id: 'tradingview-orders',
+  label: 'TradingView (order history)',
+  kind: 'fills',
+  beta: false,
+  minScore: 4,
+  sniff(text, rows) {
+    const h = lc(rows[0] || []);
+    // 'placing time' is the TradingView-distinctive signal (Webull's is 'placed time' — the
+    // word-boundary matcher keeps them apart); status separates this from fills-only exports.
+    return hasAny(h, ['fill price']) && hasAny(h, ['placing time']) && hasAny(h, ['status']) ? 4 : 0;
+  },
+  toTrades(text, rows) {
+    const head = lc(rows[0]);
+    const ix = finder(head);
+    const cSym = ix('symbol'),
+      cSide = ix('side'),
+      cQty = ix('quantity') >= 0 ? ix('quantity') : ix('qty'),
+      cPx = ix('fill price'),
+      cStatus = ix('status'),
+      cComm = ix('commission'),
+      cT = ix('closing time') >= 0 ? ix('closing time') : ix('placing time');
+    if (cSym < 0 || cSide < 0 || cPx < 0 || cStatus < 0) throw new Error('missing Symbol, Side, Fill price or Status column');
+    const fills: Fill[] = [];
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row || !row[cSym]) continue;
+      if (!/^filled$/i.test((row[cStatus] || '').trim())) continue; // cancelled/rejected/working orders aren't executions
+      const side = sideWord(row[cSide]);
+      const price = num(row[cPx]);
+      const qty = cQty >= 0 ? Math.abs(num(row[cQty])) : 1;
+      if (!side || isNaN(price) || !(qty > 0)) continue;
+      const f: Fill = { time: normTime(row[cT]), symbol: row[cSym], side, qty, price };
+      if (cComm >= 0) {
+        const cm = num(row[cComm]);
+        if (!isNaN(cm)) f.commission = Math.abs(cm); // A208 — absent on paper accounts
+      }
+      fills.push(f);
+    }
+    return pairFills(fills);
+  },
+};
+
 /* MotiveWave — Trade Report (closed; entry+exit+P/L per row → native hold time). */
 const motivewave: Adapter = {
   id: 'motivewave',
@@ -814,7 +861,18 @@ const schwab: Adapter = {
   },
 };
 
-const ADAPTERS: Adapter[] = [tradingview, motivewave, tradovate, rithmic, sierrachart, tradestation, webull, ibkr, schwab];
+const ADAPTERS: Adapter[] = [
+  tradingview,
+  tradingviewOrders,
+  motivewave,
+  tradovate,
+  rithmic,
+  sierrachart,
+  tradestation,
+  webull,
+  ibkr,
+  schwab,
+];
 const byId = (id: string) => ADAPTERS.find(a => a.id === id);
 
 /* Best-guess platform for an export (or null). */

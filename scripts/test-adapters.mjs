@@ -29,6 +29,13 @@ const C = {
 2026-06-02 10:00:00,"Close long position for symbol MESM2025 at price 5310.00",50.00
 2026-06-02 11:30:00,"Close short position for symbol MNQM2025 at price 18000.00",-20.00`,
 
+  // Real export shape (paper-trading order history, 2026-07-04 — A106): newest-first, one row per
+  // ORDER, Status gates executions, Fill price is the avg, Closing time is the fill moment.
+  'tradingview-orders': `Symbol,Side,Type,Quantity,Limit price,Stop price,Fill price,Status,Commission,Placing time,Closing time,Order ID,Level ID,Leverage,Margin
+CME_MINI:MES1!,Sell,Market,1,,,7550.00,Filled,,2026-06-20 10:30:00,2026-06-20 10:30:00,3,,,
+CME_MINI:MES1!,Buy,Limit,1,7540.00,,7540.00,Filled,,2026-06-20 10:00:00,2026-06-20 10:05:00,2,,,
+CME_MINI:MES1!,Buy,Limit,1,7530.00,,,Cancelled,,2026-06-20 09:55:00,2026-06-20 10:04:00,1,,,`,
+
   motivewave: `Instrument,Side,Quantity,Entry Time,Entry Price,Exit Time,Exit Price,P/L
 MESM2025,Buy,1,2026-06-02 09:31:00,5300.00,2026-06-02 09:45:00,5310.00,50.00
 MNQM2025,Sell,1,2026-06-02 10:00:00,18010.00,2026-06-02 10:20:00,18000.00,20.00`,
@@ -316,6 +323,39 @@ ok(
   rdang.ok && rdang.openLots === 1 && rdang.trades.length === 1,
   JSON.stringify({ open: rdang.openLots, n: (rdang.trades || []).length })
 );
+
+/* ---------- A106: TradingView order-history adapter (verified vs real export 2026-07-04) ---------- */
+console.log('\nA106 TradingView order history:');
+{
+  const r = A.parse(C['tradingview-orders']);
+  ok(
+    'tv-orders: 1 long +$50 (MES pt=5, 10pts), cancelled row skipped',
+    r.ok && r.trades.length === 1 && r.trades[0].side === 'long' && approx(r.trades[0].pnl, 50),
+    JSON.stringify(r.trades)
+  );
+  ok('tv-orders: CME_MINI:MES1! resolves to root MES', r.ok && r.trades[0].root === 'MES');
+  ok('tv-orders: hold time from Closing times (25 min)', r.ok && r.trades[0].holdMs === 25 * 60 * 1000, r.ok && r.trades[0].holdMs);
+  ok('tv-orders: paper export (empty Commission) leaves trades unmarked', r.ok && r.trades[0].commission == null);
+  // A real (broker-integrated) export may populate Commission — captured per round trip (A208).
+  const withComm = C['tradingview-orders']
+    .replace('Filled,,2026-06-20 10:30:00', 'Filled,1.40,2026-06-20 10:30:00')
+    .replace('Filled,,2026-06-20 10:00:00', 'Filled,1.40,2026-06-20 10:00:00');
+  const rc2 = A.parse(withComm);
+  ok('tv-orders: populated Commission column → trade.commission ($2.80)', rc2.ok && rc2.trades[0].commission === 2.8);
+  // The real balance-history export uses exchange-prefixed continuous symbols — root must resolve.
+  const realBal = `Time,Balance before,Balance after,Realized PnL (value),Realized PnL (currency),Action
+2026-07-01 23:57:27,100217.25,100186,-31.25,USD,"Close short position for symbol CME_MINI:MES1! at price 7549.00 for 1 units. Position AVG Price was 7542.750000, currency: USD, rate: 1.000000, point value: 5.000000"`;
+  const rb2 = A.parse(realBal);
+  ok(
+    'tradingview balance-history (real shape): CME_MINI:MES1! → MES, pnl −31.25',
+    rb2.ok && rb2.trades[0].root === 'MES' && approx(rb2.trades[0].pnl, -31.25) && rb2.trades[0].side === 'short',
+    JSON.stringify(rb2.trades)
+  );
+  // The journal/positions exports are NOT trade data — the A178 gate must refuse, not misparse.
+  const journal = `Time,Text
+2026-07-01 23:57:27,Order 3246850422 for symbol CME_MINI:MES1! has been executed at price 7549.00 for 1 units`;
+  ok('tv trading-journal export refuses (no adapter claim)', A.detect(journal) === null && !A.parse(journal).ok);
+}
 
 /* ---------- A208: real per-fill commissions → per-trade commission ---------- */
 console.log('\nA208 commission capture (IBKR):');
