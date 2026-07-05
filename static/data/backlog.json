@@ -185,7 +185,7 @@
       "status": "open",
       "completedDate": null,
       "partial": false,
-      "prompt": "Spun off from the R1 audit (2026-06-29). Only the TradingView adapter is verified; the other adapters in src/lib/core/adapters.ts (Tradovate, Rithmic, SierraChart, TradeStation, MotiveWave, Webull, IBKR, Schwab) are marked beta. Validate each against a REAL export from that platform — symbol/root, side, qty, PnL, date/time, and (for fills exports) the FIFO round-trip pairing + holdMs — and add a representative fixture to scripts/test-adapters.mjs for each verified format. Drop the beta flag per adapter only once validated, and note it in data/changelog.json. Needs real statements (external dependency); ship incrementally, one adapter per pass. Done when: at least one more adapter is verified end-to-end with a fixture and its beta flag cleared. — UPDATE 2026-07-04: owner will supply TradingView's ADDITIONAL export types first (only Balance History verified today — feeds A106), then Quantower and Tradovate/NinjaTrader exports soon after. NOTE Quantower and NinjaTrader are NOT yet supported platforms — new-adapter work is filed as A209; this item stays the verification pass for the existing nine. — UPDATE 2026-07-04: TradingView is now verified against REAL exports for BOTH its types (balance history + the new A106 order-history adapter, cross-validated against each other to the cent). The nine-platform verification list is unchanged; Quantower/Tradovate/NinjaTrader exports are the owner's next supply (A209).",
+      "prompt": "Spun off from the R1 audit (2026-06-29). Only the TradingView adapter is verified; the other adapters in src/lib/core/adapters.ts (Tradovate, Rithmic, SierraChart, TradeStation, MotiveWave, Webull, IBKR, Schwab) are marked beta. Validate each against a REAL export from that platform — symbol/root, side, qty, PnL, date/time, and (for fills exports) the FIFO round-trip pairing + holdMs — and add a representative fixture to scripts/test-adapters.mjs for each verified format. Drop the beta flag per adapter only once validated, and note it in data/changelog.json. Needs real statements (external dependency); ship incrementally, one adapter per pass. Done when: at least one more adapter is verified end-to-end with a fixture and its beta flag cleared. — UPDATE 2026-07-04: owner will supply TradingView's ADDITIONAL export types first (only Balance History verified today — feeds A106), then Quantower and Tradovate/NinjaTrader exports soon after. NOTE Quantower and NinjaTrader are NOT yet supported platforms — new-adapter work is filed as A209; this item stays the verification pass for the existing nine. — UPDATE 2026-07-04: TradingView is now verified against REAL exports for BOTH its types (balance history + the new A106 order-history adapter, cross-validated against each other to the cent). The nine-platform verification list is unchanged; Quantower/Tradovate/NinjaTrader exports are the owner's next supply (A209). — UPDATE 2026-07-05: Tradovate is VERIFIED against real exports (docs/csv-examples/tradovate/): the Orders-export adapter reconciles to the cent with the platform's own Performance.csv ground truth (9 round trips, net -$13.75; sides/qty/entry-exit/holdMs correct), and NinjaTrader's identical-format exports reconcile too (2 trades, +$325.00). Clear the Tradovate beta flag as part of the A209 family work. Still unverified: Rithmic, SierraChart, TradeStation, MotiveWave, Webull, IBKR, Schwab.",
       "doneNote": null
     },
     {
@@ -257,7 +257,7 @@
       "status": "open",
       "completedDate": null,
       "partial": false,
-      "prompt": "Add platform adapters for Quantower and NinjaTrader — neither is among the nine supported platforms in src/lib/core/adapters.ts. Owner has accounts on both and will supply REAL exports (blocked until then — don't guess header shapes from docs alone). Per the 'Adding things' recipe: one adapter object each (sniff + toTrades) normalizing to the standard Trade shape { time, date, pnl, symbol, root, side[, qty, entryTime, exitTime, holdMs] } (use pairFills() if the export is fills-based), a representative fixture in scripts/test-adapters.mjs per format, beta-flagged until verified (A103 pattern). Mind the A178 strict-detection gate: each new sniff must clear its minimum-confidence bar on real files and not misfire on the other platforms' fixtures. Update the Howto import guide (A107) with each platform's export steps. Done when: both adapters detect + parse real exports with fixtures green, ship beta-flagged, and the supported-platform list/docs are updated.",
+      "prompt": "Add platform adapters for Quantower and NinjaTrader — neither is among the nine supported platforms in src/lib/core/adapters.ts. Owner has accounts on both and will supply REAL exports (blocked until then — don't guess header shapes from docs alone). Per the 'Adding things' recipe: one adapter object each (sniff + toTrades) normalizing to the standard Trade shape { time, date, pnl, symbol, root, side[, qty, entryTime, exitTime, holdMs] } (use pairFills() if the export is fills-based), a representative fixture in scripts/test-adapters.mjs per format, beta-flagged until verified (A103 pattern). Mind the A178 strict-detection gate: each new sniff must clear its minimum-confidence bar on real files and not misfire on the other platforms' fixtures. Update the Howto import guide (A107) with each platform's export steps. Done when: both adapters detect + parse real exports with fixtures green, ship beta-flagged, and the supported-platform list/docs are updated. — UPDATE 2026-07-05 (real exports in hand — analysis done): the owner supplied full export sets, staged at docs/csv-examples/{ninjatrader,tradovate,tradingview}/ (see its README for the findings). KEY FINDING: NinjaTrader and Tradovate exports are IDENTICAL formats (NinjaTrader runs the Tradovate platform) — build ONE adapter family for both, and headers cannot distinguish the platforms, so label it 'Tradovate / NinjaTrader' (matches brokers.json). The existing beta tradovate adapter already parses BOTH platforms' Orders.csv to the cent vs their own Performance.csv (Tradovate 9 trades net -$13.75; NT 2 trades net +$325.00). REMAINING SCOPE: add family adapters for Performance.csv (authoritative round trips w/ duration; '$275.00'-format pnl; sides derivable from buy/sell fill order) and Fills.csv (per-fill REAL commission 1.29 → Fill.commission, the A208 pipeline); classify Cash History / Account Balance History / Position History as recognized-non-trade (F47); extend A219-style reconciliation across Orders+Fills+Performance so a mixed batch never double-counts; fixtures per type in scripts/test-adapters.mjs; clear the Tradovate beta flag (A103). Quantower remains blocked (no exports yet).",
       "doneNote": null
     },
     {
@@ -426,6 +426,102 @@
       "completedDate": null,
       "partial": false,
       "prompt": "The adopted A141 recommendation (docs/changelog-email-a141.md — follow its design end-to-end). Build first-party: (1) a Pages Function signup endpoint writing to a D1 subscriber table (email + status + tokens; hard-delete on unsubscribe), Turnstile + a D1 cooldown for abuse (defense-in-depth only — S22); (2) double opt-in via a Resend confirmation email; (3) one-click unsubscribe + List-Unsubscribe(-Post) headers on every send; (4) the send trigger: a NEW paths-filtered GitHub Actions workflow on static/data/changelog.json pushes to main (not version-bump.yml — the curated entry lands in a separate commit) that diffs for a new prod entry and fan-outs sends under the A15 50-subrequest cap; (5) a small signup affordance on the Blotterlog page (src/site/components/Changelog.svelte). HARD constraint: email + changelog content only — never trade data. OWNER-GATED: needs the Resend account (free to ~100 subs; ~$20/mo toward 1k) + D1 binding; KV is rejected per A17. Done when: the full loop works in a test list (signup → confirm → release email → unsubscribe) with the privacy posture from the doc.",
+      "doneNote": null
+    },
+    {
+      "id": "CH37",
+      "title": "Review font weighting across the app + site",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Polish pass from the owner. The UI is mono-forward (Geist Mono serves both --font-sans and --font-mono), so WEIGHT — not family — carries the visual hierarchy. Audit the weights in use across src/app + src/site (grep font-medium/font-semibold/font-bold): KPI values vs labels, card/module headers, table headers vs cells, nav items, buttons, badge text; verify the self-hosted variable woff2 actually covers the weights used (no browser faux-bold synthesis), and that small text (10–11px) isn't too heavy or too light to read. Normalize to a small documented scale (e.g. 400 body / 500 labels / 600 emphasis / 700 numerals), fix outliers, and record the scale in the /dev styleguide. Done when: a consistent weight scale is applied (or explicitly confirmed) across app + site with no faux-bold, and the styleguide documents it.",
+      "doneNote": null
+    },
+    {
+      "id": "A225",
+      "title": "Header flavor text gets truncated — show the full message",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the owner. The rotating header flavor text (A179 — pickFlavor, rendered in App.svelte's topbar actions with max-w-52 truncate) cuts most phrases off mid-sentence. Show the full message WITHOUT reintroducing the problem truncate was added to prevent (header layout shift): candidate approaches — let it flex into the header's actual free space (min-w-0 flex-1 + truncate as the fallback rather than a fixed 13rem cap), pick only phrases that fit the measured space, and/or an accessible title/tooltip with the full phrase. Keep it hidden on narrow viewports as today (lg:inline) and keep the single-line no-reflow guarantee. Done when: full flavor phrases are readable on desktop, the header never reflows or wraps, and e2e stays green.",
+      "doneNote": null
+    },
+    {
+      "id": "R22",
+      "title": "Documentation + comment accuracy audit, with a /docs archive sweep",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the owner. Audit ALL documentation and code comments for accuracy after the 2026-07-04/05 feature run (F37/A208/A211/A219 data layer; A197 interactivity; A198/A200/A201/A203/A205/A206 batch; the Wave-3 eval docs): README.md, CLAUDE.md, docs/*.md (architecture, data-flow, ui-redesign, the ADRs, the assessment/eval docs), functions/README.md, and the load-bearing file-header comments in src/ (App.svelte, dashboard.svelte.ts, core modules). Fix drift: stale module lists, retired flags, wrong paths, outdated numbers (bundle sizes, version examples, item counts). ADDITIONALLY sweep /docs for files that can move to docs/archive/ — superseded assessments, one-shot audit reports already fully actioned, and the temporary docs/csv-examples/ once the A209 adapters + fixtures ship. Done when: every doc/comment is checked or fixed, the archive sweep is done, and a short written summary lists what moved and what changed.",
+      "doneNote": null
+    },
+    {
+      "id": "F45",
+      "title": "(staging) Loading splash + animation on initial page load",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "(STAGING) Visual flair from the owner: a quick branded loading splash + animation on the app's initial page load — a brief moment (logo mark + subtle motion) over the boot sequence, before/above the A206 skeletons resolve into data. Constraints: staging-gated (isStaging) until promoted via CH16; purely decorative — never blocks or delays boot, and disappears the instant the shell is ready (target <400ms perceived); reduced-motion collapses it (A146 dur()); CSP style-src 'self' (Svelte transitions / tw-animate classes, no inline style); no new deps (the ~22 KiB budget headroom is tight); demo/prod unaffected until promotion. Coordinate with F41 (static first-paint skeleton in the HTML shell) so they compose — the splash overlays the skeleton, it doesn't replace it. Done when: staging shows the splash on load, it vanishes on ready, gates stay green, and CH16 can promote it later.",
+      "doneNote": null
+    },
+    {
+      "id": "A226",
+      "title": "Remove TradingView PaperTrade from the Commission Compare module",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the owner. The Commission Compare dashboard module (A203 — compareRows in src/app/screens/Dashboard.svelte) ranks TradingView PaperTrade against real brokers, but paper trading incurs no real commissions or fees, so it always 'wins' meaninglessly. Exclude TVPAPER from the module's rows while keeping it available everywhere else (the cost setup legitimately uses it to zero modeled costs for paper traders). Make the exclusion DATA-DRIVEN — e.g. a `paper: true` flag on the brokers.json entry that the module filters on — rather than hardcoding the key, so future sim/paper brokers are excluded too; run build-manifest.mjs after the brokers.json edit. Update the e2e compare spec if it counts rows. Related: A227 (paper brokers must model $0 all-in everywhere). Done when: Commission Compare lists only real brokers via the data flag and gates stay green.",
+      "doneNote": null
+    },
+    {
+      "id": "A227",
+      "title": "Paper-trading brokers must model $0 all-in cost (no exchange/NFA fees)",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the owner's Commission Compare question (answered 2026-07-05): TVPAPER's non-zero 'All-in /side' came from exchOf() — rateFor() adds the CME exchange/clearing/NFA per-side fee to EVERY broker, including paper brokers whose commission is 0, so paper trades cost out at the exchange fee instead of $0 (this affects costModel()/the cost module/blotter fees too, not just Commission Compare). Implement: a broker-level `paper: true` flag in data/brokers.json (shared with A226) that makes the WHOLE all-in rate $0 in rateFor() — nothing real is charged in sim — with the cost surfaces showing $0 for those trades. Keep the pure core node-tested: a fixture asserting a TVPAPER trade models $0 all-in while a real broker is unchanged, and totals still reconcile (curveseries/costModel/blotter use the same rateFor seam). Run build-manifest.mjs after the data edit. Done when: paper-broker trades model $0 total cost everywhere, fixtures pin it, and gates stay green.",
+      "doneNote": null
+    },
+    {
+      "id": "F46",
+      "title": "Trade Editor: platform column from file provenance",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the owner. The Trade Editor (src/app/screens/TradeEditor.svelte; rows built in App.svelte editorRows) has no column showing which PLATFORM a trade came from. Add a read-only platform column resolved from F37 provenance: trade.fileIds → the contributing CsvFileRec(s) → rec.platform, rendered via platformLabel(); an overlap trade contributed by multiple files shows its platforms combined (or the primary), and a legacy no-fileIds trade shows '—'. Not an editable field (it's provenance metadata, not trade data). Consider offering the same column on the Blotter behind its existing Columns picker. Keep the wide table mobile-safe (inside the overflow-x-auto wrapper). Done when: the Trade Editor shows the provenance platform per trade, overlap/legacy trades degrade gracefully, and e2e stays green.",
+      "doneNote": null
+    },
+    {
+      "id": "F47",
+      "title": "Batch CSV upload + per-file detection status & capability relay (onboarding + CSV Library)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From the owner (spec) — revamp the first-run upload flow into a BATCH, multi-platform intake with a live detection-status module. (1) BATCH: the Onboarding dropzone + file picker AND the CSV Library upload accept MULTIPLE files in one action (e.g. a whole export folder); each file runs the existing intake gates → Adapters.detect → import pipeline (A177/A178), with A219 cross-export reconciliation applied ACROSS the batch. (2) DETECTION STATUS: a list module headed 'Detecting data…' that populates one row per file — detected platform + export type + outcome (e.g. 'TradingView — Balance History ✓', 'Tradovate — Performance ✓', 'NinjaTrader — Cash History — recognized, not a trade file', 'foo.csv — not a supported export ✗') — using the per-type classification from docs/csv-examples/README.md: trade-bearing types import; recognized NON-trade types (Cash History, Account Balance History, positions, trading-journal) are named and skipped gracefully instead of getting the generic A178 refusal. (3) CAPABILITY RELAY (extends the A176 model): after the batch, state what the imported mix unlocks or limits — e.g. 'No fills-type export detected: hold times, hour-of-day and real commissions unavailable; import Fills / order-history to unlock' — so users know which modules will be degraded/incomplete. (4) The same status/capability module also renders on the CSV Library screen as a post-hoc view of the library's coverage. Demo stays non-mutating; intake caps apply per file AND per batch; everything client-side (the moat holds). Depends on A209 (the Tradovate/NinjaTrader family adapters) for the richest classification but ships value with today's platforms. Done when: mixed-platform batches import in one action with a per-file status list + capability summary on Onboarding AND CSV Library, and gates stay green.",
       "doneNote": null
     }
   ],

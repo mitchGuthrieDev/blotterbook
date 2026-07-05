@@ -1,0 +1,3 @@
+symbol,_priceFormat,_priceFormatType,_tickSize,buyFillId,sellFillId,qty,buyPrice,sellPrice,pnl,boughtTimestamp,soldTimestamp,duration
+ESU6,-2,0,0.25,544176970024,544176970034,1,7629.75,7635.25,$275.00,06/16/2026 08:31:41,06/16/2026 08:33:10,1min 29sec
+ESU6,-2,0,0.25,544176970045,544176970054,1,7630.00,7631.00,$50.00,06/16/2026 08:44:34,06/16/2026 08:45:19,44sec
