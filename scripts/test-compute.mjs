@@ -243,6 +243,21 @@ const t = (time, pnl, side = 'long', root = 'MES', qty = 1) => ({ time, date: ti
   ok('A208: curve endpoint reconciles with actual commissions', approx(pts[pts.length - 1].net, c.gross - c.totalComm, 1e-9));
 }
 
+// ── A227: paper/sim brokers model $0 all-in (no commission AND no exchange/NFA fees) ──
+{
+  const { rateFor } = core;
+  ok(
+    'A227: paper broker all-in rate is exactly $0 (not a fallback estimate)',
+    rateFor('TVPAPER', 'MES').rate === 0 && rateFor('TVPAPER', 'MES').known === true
+  );
+  ok('A227: paper $0 holds on standard-tier roots too', rateFor('TVPAPER', 'ES').rate === 0);
+  const m = compute([t('2026-01-05 10:00:00', 100, 'long', 'MES', 1)]);
+  const paper = costModel(m, { broker: 'TVPAPER', platform: 0, feedCost: 0, stateRate: 0 });
+  ok('A227: paper broker models $0 total commission', paper.totalComm === 0, paper.totalComm);
+  const real = costModel(m, { broker: 'AMP', platform: 0, feedCost: 0, stateRate: 0 });
+  ok('A227: real broker unchanged (AMP micro RT $1.20)', approx(real.totalComm, 1.2, 1e-9), real.totalComm);
+}
+
 // ── F30/F35: effective-dated rates + the Discount Trading broker ──
 {
   const { rateFor, BROKERS, estimatedCommRoots } = core;

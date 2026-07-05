@@ -4132,6 +4132,39 @@
       "completedDate": "2026-07-05",
       "partial": false,
       "doneNote": "Delivered 2026-07-05: docs/app-first-paint-a207.md. TOP RECOMMENDATION: put static skeleton markup (shape-matched to the A206 screenSkeleton, existing Tailwind utility classes only) directly inside <div id='app'> in the three hand-authored shells, cleared via replaceChildren() in main.ts — it paints after the ~73 KiB CSS instead of the ~427 KiB boot JS, is CSP-clean, and costs nothing against the size budget. Adopt alongside: font + versions.json preloads, and drop the redundant ?t=Date.now() on the manifest fetch (already cache:'no-cache') so it becomes preloadable. Verified: no modulepreload gap exists (the boot graph ships as parallel module tags in <head>). Phase 2 (viable, later): SSG-prerender a data-free AppShell-chrome sibling via the existing vite-ssg.mjs (never App.svelte — it reads document.body/Store at init), replace-not-hydrate. REJECTED: inline critical CSS (breaks style-src 'self') and any SvelteKit/SSR route (A62). Follow-up filed: F41; service-worker caching left for a future item."
+    },
+    {
+      "id": "A226",
+      "title": "Remove TradingView PaperTrade from the Commission Compare module",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (budget sprint). Commission Compare (Dashboard.svelte compareRows) now filters out paper/sim brokers via the new data-driven `paper: true` flag on the brokers.json entry (TVPAPER carries it) — cost setup keeps them selectable. Manifest regenerated. Shares the flag with A227."
+    },
+    {
+      "id": "A227",
+      "title": "Paper-trading brokers must model $0 all-in cost (no exchange/NFA fees)",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (budget sprint), answering the owner's Commission Compare question: TVPAPER's non-zero All-in/side was exchOf() — rateFor() added the CME exchange/clearing/NFA per-side fee to every broker including $0-commission paper brokers. Now a broker with `paper: true` (brokers.json; Broker.paper in types.ts) returns rate 0 / known true from rateFor(), so costModel/curveseries/blotter/compare all model $0 for paper trades — nothing real is charged in sim. Fixtures in test-compute.mjs pin paper=$0 (micro + std tiers) and a real broker unchanged."
+    },
+    {
+      "id": "F46",
+      "title": "Trade Editor: platform column from file provenance",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (budget sprint). EditorRow gained a read-only `platform` field; App.svelte resolves it per trade from F37 provenance (fileIds → CsvFileRec.platformLabel, family-adapter type suffixes stripped, distinct platforms joined with ' · '; legacy/manual rows show '—'). Rendered as a muted Platform column between Fees and Tags in TradeEditor.svelte; never editable, ignored by the save diff. Blotter column deferred (its Columns picker is a natural follow-on if wanted)."
     }
   ]
 }

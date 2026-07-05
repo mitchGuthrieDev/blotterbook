@@ -409,19 +409,32 @@
 
       <section id="imp-tradovate" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">
-          Tradovate
+          Tradovate / NinjaTrader
           <span
-            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-chart-4/35 bg-chart-4/10 text-chart-4"
-            ><span class="w-[7px] h-[7px] rounded-full bg-chart-4"></span>Beta · synthetic-tested</span
+            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-chart-2/35 bg-chart-2/10 text-chart-2"
+            ><span class="w-[7px] h-[7px] rounded-full bg-chart-2"></span>Verified · real exports</span
           >
         </h2>
+        <p>
+          NinjaTrader (web) runs on the Tradovate platform, so both apps produce the <b>same</b> export files — everything below applies to either.
+          Blotterbook reads three of the export types; import any or all of them (overlapping trades merge, never double-count):
+        </p>
         <ol class="steps">
-          <li>In the Tradovate web app, open the <b>Orders</b> tab (not Performance).</li>
-          <li>Set your date range and filters, then click <b>Download Report</b> to get <code>Orders.csv</code>.</li>
+          <li>
+            <b>Performance</b> — the platform's own round-trip pairing (P&amp;L, quantities, entry/exit times, hold time). The best single file
+            to import.
+          </li>
+          <li>
+            <b>Fills</b> — per-fill executions <b>with your real commissions</b>, which override Blotterbook's modeled rates per trade.
+          </li>
+          <li>
+            <b>Orders</b> — also supported (<code>Orders.csv</code> via <b>Download Report</b>); no commission column, so modeled rates
+            apply.
+          </li>
         </ol>
         <p>
-          Detected columns: <code>B/S</code>, <code>Contract</code>, <code>Avg Fill Price</code>, <code>Fill Time</code> (a fills export — Blotterbook
-          pairs entries→exits and computes hold time). Tradovate doesn't include commissions in this file, so set them via the broker selector.
+          The other exports on that panel (Cash History, Account Balance History, Position History) aren't per-trade data — Blotterbook will
+          decline them.
         </p>
       </section>
 
