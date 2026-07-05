@@ -1,9 +1,9 @@
 {
-  "schemaVersion": 1,
-  "_comment": "CME exchange + clearing + NFA fee per side, by futures root. Snapshot estimate (mid-2026). A171 expanded coverage: CBOT treasuries/grains, remaining FX majors, micro metals/yields/crypto. notMicro pins full-size roots whose ticker starts with M (MGEX wheat) so the tier heuristic can't misprice them. Edit values here, then run scripts/build-manifest.mjs to refresh the cache-busting hash.",
+  "schemaVersion": 2,
+  "_comment": "CME exchange + clearing + NFA fee per side, by futures root. `exchange` holds the CURRENT composite (snapshot mid-2026); `history` (F30) holds effective-dated prior periods, oldest first — each entry lists ONLY the roots a documented change moved (as { until: last day inclusive, exchange, source }); anything absent falls through to the next-newer period and finally the current map. CME adjusts transaction fees roughly every February. A171 expanded coverage; notMicro pins full-size roots whose ticker starts with M (MGEX wheat) so the tier heuristic can't misprice them. Edit values here, then run scripts/build-manifest.mjs to refresh the cache-busting hash.",
   "exchange": {
     "MES": 0.35, "MNQ": 0.35, "M2K": 0.35, "MYM": 0.35,
-    "MCL": 0.50, "MGC": 0.50, "SIL": 0.50,
+    "MCL": 0.50, "MGC": 0.62, "SIL": 0.50,
     "M6E": 0.24, "M6A": 0.24, "M6B": 0.24,
     "MBT": 2.50, "MET": 0.75,
     "2YY": 0.34, "5YY": 0.34, "10Y": 0.34, "30Y": 0.34,
@@ -11,9 +11,21 @@
     "CL": 1.62, "GC": 1.67,
     "6E": 1.72, "6J": 1.72, "6B": 1.72, "6A": 1.72, "6S": 1.72,
     "ZT": 0.72, "ZF": 0.72, "ZN": 0.82, "ZB": 0.82, "TN": 0.82,
-    "ZC": 2.05, "ZS": 2.05, "ZW": 2.05
+    "ZC": 2.15, "ZS": 2.15, "ZW": 2.15
   },
   "micro": ["MES", "MNQ", "M2K", "MYM", "MCL", "MGC", "SIL", "M6E", "M6A", "M6B", "MBT", "MET", "2YY", "5YY", "10Y", "30Y"],
   "notMicro": ["MWE"],
-  "fallback": { "micro": 0.37, "std": 1.50 }
+  "fallback": { "micro": 0.37, "std": 1.50 },
+  "history": [
+    {
+      "until": "2024-01-31",
+      "exchange": { "ES": 1.40, "NQ": 1.40, "RTY": 1.40, "YM": 1.40, "CL": 1.52, "GC": 1.62 },
+      "source": "CME transaction-fee change effective 2024-02-01 (AMP Futures notice, ampfutures.com/news/cme-exchange-fee-increase-effective-february-1-2024): CME/CBOT equity 1.33→1.38, NYMEX energy 1.50→1.60, COMEX/NYMEX metals 1.55→1.60 per contract — composites here shift by the same deltas (equity/metals −0.05, energy −0.10); all other symbols unchanged"
+    },
+    {
+      "until": "2025-01-31",
+      "exchange": { "ZC": 2.12, "ZS": 2.12, "ZW": 2.12, "MGC": 0.52 },
+      "source": "CME transaction-fee change effective 2025-02-01 (AMP Futures notice, ampfutures.com/news/cme-exchange-fee-increase-effective-february-1-2025): CBOT ag futures 2.10→2.13, COMEX micro gold 0.50→0.60 per contract (raw + 0.02 NFA composite); NO change to CME/CBOT equity incl. micros. Same notice drove the 2026-07-04 correction of the stale current ZC/ZS/ZW (2.05→2.15) and MGC (0.50→0.62) composites"
+    }
+  ]
 }
