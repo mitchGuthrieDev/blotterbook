@@ -130,6 +130,13 @@ export function fileId(text: string): string {
   return fnv(`${text.length}|${text}`);
 }
 
+/** Key-correlated field copy for the duplicate-enrichment merge (A176) — a typed same-key
+ *  assignment (`obj[key] = val`) that avoids widening either side to `any`/`Record`. Exported so
+ *  DemoStore reuses it verbatim (no drift), like tradeId/validShot. */
+export function setField<K extends keyof Trade>(obj: Trade, key: K, val: Trade[K]): void {
+  obj[key] = val;
+}
+
 /* A153: one-shot canonicalization of tags persisted BEFORE A130 made cleanTags the single write
    form. Older live saves stored raw case/markup ('Scalp'), which no longer matches new writes,
    the lowercase tag filter/chips, or a saved filter's tag — so on first boot after the change we
@@ -201,7 +208,12 @@ export const Store: StoreLike = {
     // throws TransactionInactiveError). The id map also dedupes rows repeated within a batch.
     // F37: a duplicate isn't a pure no-op anymore — when the incoming copy carries fileIds, they
     // MERGE into the existing record's provenance (the fileIds-array overlap decision), so a trade
-    // present in two exports lists both files.
+    // present in two exports lists both files. And richer duplicates ENRICH: a platform can export
+    // the same trade at different fidelity (TradingView balance history has exact P&L but no
+    // qty/hold; its order history adds qty/entry/exit/holdMs/commission), so a duplicate fills in
+    // fields the stored record LACKS — identity fields (time/symbol/side/pnl, the id inputs) are
+    // never touched and existing values never overwritten, so import order doesn't matter.
+    const ENRICH = ['qty', 'entryTime', 'exitTime', 'holdMs', 'commission'] as const;
     const store = await tx(TRADES, 'readwrite');
     let added = 0,
       duplicate = 0;
@@ -215,13 +227,19 @@ export const Store: StoreLike = {
           const prev = existing.get(id);
           if (prev) {
             duplicate++;
+            let next: Trade | null = null;
             if (t.fileIds?.length) {
               const merged = [...new Set([...(prev.fileIds || []), ...t.fileIds])];
-              if (merged.length !== (prev.fileIds || []).length) {
-                const next = { ...prev, fileIds: merged };
-                existing.set(id, next);
-                store.put(next);
+              if (merged.length !== (prev.fileIds || []).length) next = { ...prev, fileIds: merged };
+            }
+            for (const k of ENRICH)
+              if (prev[k] == null && t[k] != null) {
+                next = next ?? { ...prev };
+                setField(next, k, t[k]);
               }
+            if (next) {
+              existing.set(id, next);
+              store.put(next);
             }
             continue;
           }

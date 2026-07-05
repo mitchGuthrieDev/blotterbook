@@ -136,6 +136,23 @@ ok('duplicate import merges fileIds (overlap keeps both files)', merged[0].fileI
 const del = await s.deleteFile('f2');
 ok('deleteFile removes exclusive trades, keeps shared ones', del.removedTrades === 1 && (await s.tradeCount()) === 1);
 ok('surviving trade lost the deleted file id', (await s.getAllTrades())[0].fileIds.join() === 'f1');
+// A176: a RICHER duplicate enriches missing fields (either import order) without touching identity.
+await s.purge();
+await s.addTrades([t('2025-03-01 10:00:00', 25)]); // balance-history fidelity: no qty/hold/comm
+await s.addTrades([{ ...t('2025-03-01 10:00:00', 25), qty: 2, holdMs: 60000, entryTime: '2025-03-01 09:59:00', commission: 1.5 }]);
+{
+  const e = (await s.getAllTrades())[0];
+  ok(
+    'richer duplicate enriches qty/holdMs/entryTime/commission',
+    e.qty === 2 && e.holdMs === 60000 && e.entryTime === '2025-03-01 09:59:00' && e.commission === 1.5 && e.pnl === 25
+  );
+}
+// …and never OVERWRITES a value the stored record already has.
+await s.addTrades([{ ...t('2025-03-01 10:00:00', 25), qty: 9, holdMs: 1, commission: 99 }]);
+{
+  const e = (await s.getAllTrades())[0];
+  ok('enrichment never overwrites existing values', e.qty === 2 && e.holdMs === 60000 && e.commission === 1.5);
+}
 
 // local shim is in-memory (no localStorage)
 s.local.set('k', { v: 1 });

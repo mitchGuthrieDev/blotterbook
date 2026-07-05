@@ -439,6 +439,11 @@ const tradingview: Adapter = {
   kind: 'closed',
   beta: false,
   minScore: 5,
+  // A176 first slice: this export has exact P&L but no quantities/hold times — point at the
+  // sibling export that adds them (overlapping trades de-duplicate and enrich, so importing
+  // both is safe in either order).
+  upgradeHint:
+    'TradingView’s order-history export adds hold times, quantities and broker-reported commissions — import both; overlapping trades merge automatically.',
   sniff(text, rows) {
     const h = lc(rows[0] || []);
     return hasAny(h, ['action']) && hasAny(h, ['realized pnl']) ? 5 : 0;
@@ -466,6 +471,53 @@ const tradingview: Adapter = {
       out.push({ time: normTime(row[cT]), date: normTime(row[cT]).slice(0, 10), pnl, symbol, root: rootSym(symbol), side });
     }
     return out;
+  },
+};
+
+/* TradingView — order history export (fills). One row per ORDER with Status + avg Fill price;
+   only Filled rows are executions. Verified against a real paper-trading export (A106, 2026-07-04);
+   `Closing time` is the fill moment, and the Commission column feeds A208 when populated (empty on
+   paper accounts; broker-integrated accounts may carry real costs). */
+const tradingviewOrders: Adapter = {
+  id: 'tradingview-orders',
+  label: 'TradingView (order history)',
+  kind: 'fills',
+  beta: false,
+  minScore: 4,
+  sniff(text, rows) {
+    const h = lc(rows[0] || []);
+    // 'placing time' is the TradingView-distinctive signal (Webull's is 'placed time' — the
+    // word-boundary matcher keeps them apart); status separates this from fills-only exports.
+    return hasAny(h, ['fill price']) && hasAny(h, ['placing time']) && hasAny(h, ['status']) ? 4 : 0;
+  },
+  toTrades(text, rows) {
+    const head = lc(rows[0]);
+    const ix = finder(head);
+    const cSym = ix('symbol'),
+      cSide = ix('side'),
+      cQty = ix('quantity') >= 0 ? ix('quantity') : ix('qty'),
+      cPx = ix('fill price'),
+      cStatus = ix('status'),
+      cComm = ix('commission'),
+      cT = ix('closing time') >= 0 ? ix('closing time') : ix('placing time');
+    if (cSym < 0 || cSide < 0 || cPx < 0 || cStatus < 0) throw new Error('missing Symbol, Side, Fill price or Status column');
+    const fills: Fill[] = [];
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row || !row[cSym]) continue;
+      if (!/^filled$/i.test((row[cStatus] || '').trim())) continue; // cancelled/rejected/working orders aren't executions
+      const side = sideWord(row[cSide]);
+      const price = num(row[cPx]);
+      const qty = cQty >= 0 ? Math.abs(num(row[cQty])) : 1;
+      if (!side || isNaN(price) || !(qty > 0)) continue;
+      const f: Fill = { time: normTime(row[cT]), symbol: row[cSym], side, qty, price };
+      if (cComm >= 0) {
+        const cm = num(row[cComm]);
+        if (!isNaN(cm)) f.commission = Math.abs(cm); // A208 — absent on paper accounts
+      }
+      fills.push(f);
+    }
+    return pairFills(fills);
   },
 };
 
@@ -814,7 +866,18 @@ const schwab: Adapter = {
   },
 };
 
-const ADAPTERS: Adapter[] = [tradingview, motivewave, tradovate, rithmic, sierrachart, tradestation, webull, ibkr, schwab];
+const ADAPTERS: Adapter[] = [
+  tradingview,
+  tradingviewOrders,
+  motivewave,
+  tradovate,
+  rithmic,
+  sierrachart,
+  tradestation,
+  webull,
+  ibkr,
+  schwab,
+];
 const byId = (id: string) => ADAPTERS.find(a => a.id === id);
 
 /* Best-guess platform for an export (or null). */
@@ -921,6 +984,7 @@ function parse(text: string, platformId?: string): ParseResult {
     // A168/A174 import-quality notices (fills-based adapters only; 0/absent for close-event exports).
     ...(SKIPPED_FILLS ? { skippedFills: SKIPPED_FILLS } : {}),
     ...(OPEN_LOTS ? { openLots: OPEN_LOTS } : {}),
+    ...(adapter.upgradeHint ? { upgradeHint: adapter.upgradeHint } : {}),
   };
 }
 
