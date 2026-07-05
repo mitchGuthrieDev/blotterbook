@@ -4264,6 +4264,72 @@
       "completedDate": "2026-07-05",
       "partial": false,
       "doneNote": "Shipped 2026-07-05 (session sprint). Onboarding now keys off a truly fresh app (no trades AND no files) instead of an empty ACTIVE dataset, so excluding the only CSV keeps the normal shell — with a new amber banner ('All imported files are excluded…' linking the CSV Library) — and only Erase all data returns to the initial state. e2e: the app-surface boot spec now imports, excludes the only file, asserts no onboarding + the banner, and re-includes."
+    },
+    {
+      "id": "A223",
+      "title": "Perf quick wins: $state.raw collections, boot IndexedDB consolidation, underwater-curve downsampling",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (mega-batch). (1) The four big reassignment-only collections in dashboard.svelte.ts (allTrades/csvFiles/journal/tradeMeta + journalDates) are $state.raw — compute()/costModel()'s ~20 O(n) passes read plain objects, not deep proxies (comment pins the reassignment-only contract). (2) reloadAll() runs its five store reads under Promise.all and derives journalDates from the journal read (the duplicate journalDates() store hit is gone). (3) New decimateMinMax() in curveseries.ts (min/max bucket decimation, endpoints + planted extrema pinned by fixtures) — the Analytics underwater curve caps at ~1.5k path points instead of one per trade. ALSO: the bundle budget moved 640→840 KiB with the owner's +200 KiB grant (rationale in check-bundle-size.mjs) — post-batch total 647.8/840."
+    },
+    {
+      "id": "F47",
+      "title": "Batch CSV upload + per-file detection status & capability relay (onboarding + CSV Library)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (mega-batch). BATCH intake everywhere: the Onboarding dropzone/picker and the CSV Library accept multiple files in one action (a multi-file drop on the Library batch-imports directly; a single file keeps the preview flow). App.importBatch() runs each file through gates → parse → import sequentially (A219 reconciliation applies in order; F52 xlsx files convert first via the lazy chunk). DETECTION STATUS: the new DetectionStatus part renders one row per file — imported ✓ (platform · N trades), recognized-non-trade · (named via classifyNonTrade in src/app/lib/batch.ts: Cash History, Account Balance History, Position History, Orders history, Trading journal, Empty file), refused ✗ (the A178 reason) — used by Onboarding's Review & Launch step and the Library. CAPABILITY RELAY (A176 model): dataset-level coverage lines (hold-time %, real-commission %, with unlock hints naming fills-type exports) render after an onboarding batch and as the always-on 'Dataset coverage' module on the CSV Library. e2e: the boot spec drives a 2-file batch (trade file imports, Cash History named not refused)."
+    },
+    {
+      "id": "F50",
+      "title": "Blotter: Platform column, group-by-platform, tighter column widths",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (mega-batch). Blotter: (1) a Platform column (provenance via the shared platformOf resolver) in the Context column group (Columns picker toggles it with Tags/Session); (2) 'Group by platform' joins day/symbol in the grouping select (files with no provenance group under 'No platform'); (3) tighter columns — explicit width classes across the header (date/time w-28, sym w-16, side w-14, qty w-10, prices w-16, hold w-14) and cell padding reduced via [&_td]:px-2 [&_td]:py-1.5 on the table root; the A183 overflow wrapper still guards narrow screens."
+    },
+    {
+      "id": "F51",
+      "title": "Compact Blotter dashboard module (addable via the picker)",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (mega-batch). New 'Recent Trades' dashboard module (picker-addable via A189, own thumbnail — dense rows with green/red ticks): the 12 most recent trades under the LIVE filter set (dash.filtered, newest first) in a compact table (date/time, symbol, side badge, qty, P&L, platform) with a 'View all in the Blotter →' link; no pagination/editing (the screen's job). Read-only — demo-safe."
+    },
+    {
+      "id": "F52",
+      "title": "ATAS X importer — xlsx statistics export (Journal round trips + Executions fills)",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (mega-batch; agent-built, verified). The xlsx path decision: a MINIMAL dependency-free reader (src/lib/core/xlsx.ts — ZIP central-directory walk + DecompressionStream('deflate-raw'), sharedStrings/inline strings, excelSerialToTime; 3.8 KB lazy chunk, ATAS-scoped by design). atasXlsxToCsv() extracts the Journal sheet (closed round trips) to CSV text which rides the NORMAL pipeline: the new non-beta 'atas' adapter (sniff open time + close time + price pnl, minScore 5; exact-match pnl column; side derived from price-move-vs-PnL-sign agreement; '@CME_Ind' suffix stripped) — VERIFIED on the real workbook: 20 trades, net -$26.25 == the sheet's own PnL sum, sides agreeing with ATAS's signed volumes on all rows. Intake: isXlsxFile/checkXlsxFile (10 MB cap; the text-path binary rejection untouched); both app intake surfaces accept .xlsx and convert lazily; the derived CSV persists as the file's raw text so F37 re-import/provenance work unchanged. Fixtures (real-file + synthetic side-derivation) in test-adapters.mjs; ATAS X Howto section added."
+    },
+    {
+      "id": "F53",
+      "title": "Accounts Phase 1: passkey register/login + D1 sessions + Account sidebar screen (staging)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (mega-batch; agent-built per the approved docs/accounts-architecture.md). SERVER: functions/schema.sql (users/credentials/sessions/challenges; apply via wrangler — steps in the header), functions/_lib/accounts.ts (opaque id.secret session tokens with SHA-256(secret) in D1, __Host-bb_session HttpOnly/Secure/Lax 30-day sliding cookie, single-use TTL'd challenges, Origin checks, fail-closed 503s when ACCOUNTS_DB is unbound), five endpoints under functions/api/account/* on @simplewebauthn/server 13.3.2 (usernameless login; add-another-passkey), /api/me extended (legacy shape untouched; authed adds user + passkeys). CLIENT: src/app/lib/account.svelte.ts (runes auth state; @simplewebauthn/browser via lazy import — out of boot) + src/app/screens/Account.svelte (login/create-account cards; account info + donation-badge placeholder + passkey management + sign-out + Workspaces stub when authed; isDemo disables all). STAGING-gated: the Account sidebar item + route render only on staging until CH16 promotes (needs the owner's D1 setup: wrangler d1 create blotterbook-accounts → execute schema.sql → bind ACCOUNTS_DB in Pages). Tests: scripts/test-accounts.mjs (58 assertions — session round-trip, challenge single-use/TTL, Origin 403s, 503 fail-closed, /api/me shapes) joined the test:unit chain. Guardrail S25 honored: identity + entitlements only. F54 (donations), F55 (recovery), F56 (login gate) build on this."
     }
   ]
 }

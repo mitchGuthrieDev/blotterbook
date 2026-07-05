@@ -66,3 +66,32 @@ export function dailySeries(
   }
   return { pts };
 }
+
+/* A223: min/max decimation for per-trade SVG paths (the Analytics underwater curve emits one path
+   command per trade — a 50k-fill import means a 50k-segment path). Buckets the series and keeps
+   each bucket's min AND max in first-seen order (plus the first/last points verbatim), so peaks,
+   troughs and endpoints survive while the path stays ≤ maxPoints. Returns [originalIndex, value]
+   pairs so the caller's x-axis mapping is unchanged. A series already within budget passes through. */
+export function decimateMinMax(values: number[], maxPoints = 1500): Array<[number, number]> {
+  const n = values.length;
+  if (n <= maxPoints) return values.map((v, i) => [i, v]);
+  const buckets = Math.max(1, Math.floor(maxPoints / 2) - 1);
+  const out: Array<[number, number]> = [[0, values[0]]];
+  const per = (n - 2) / buckets;
+  for (let b = 0; b < buckets; b++) {
+    const start = 1 + Math.floor(b * per);
+    const end = Math.min(n - 1, 1 + Math.floor((b + 1) * per));
+    if (start >= end) continue;
+    let loI = start,
+      hiI = start;
+    for (let i = start + 1; i < end; i++) {
+      if (values[i] < values[loI]) loI = i;
+      if (values[i] > values[hiI]) hiI = i;
+    }
+    if (loI === hiI) out.push([loI, values[loI]]);
+    else if (loI < hiI) out.push([loI, values[loI]], [hiI, values[hiI]]);
+    else out.push([hiI, values[hiI]], [loI, values[loI]]);
+  }
+  out.push([n - 1, values[n - 1]]);
+  return out;
+}

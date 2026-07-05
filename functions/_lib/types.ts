@@ -4,6 +4,14 @@
    come from @cloudflare/workers-types. */
 export interface Env {
   STATUS_KV?: KVNamespace;
+  /** D1 database for accounts (F53) — users/credentials/sessions/challenges (see functions/schema.sql).
+   *  Unbound → every /api/account/* endpoint fails closed with a 503 JSON body (never a crash).
+   *  Guardrail S25: identity + entitlements only — no trade data is ever stored here. */
+  ACCOUNTS_DB?: D1Database;
+  /** Optional WebAuthn relying-party overrides — default to the request URL's hostname/origin.
+   *  Set RP_ID to the apex domain (e.g. `blotterbook.com`) if passkeys must span subdomains. */
+  RP_ID?: string;
+  RP_ORIGIN?: string;
   ADMIN_KEY?: string;
   TOKEN_SECRET?: string;
   ADMIN_TOKEN_TTL_SEC?: string;

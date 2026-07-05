@@ -138,6 +138,8 @@
     /** Visible dashboard modules in order (persisted to Store.local); defaults to all shown. */
     modules?: string[];
     onmoduleschange?: (order: string[]) => void;
+    /** F51: the compact Recent Trades module's rows (newest first, pre-capped by the app). */
+    recentTrades?: { date: string; time: string; sym: string; side: 'Long' | 'Short'; qty: number; pnl: number; platform: string }[];
     /** Named workspace layout templates (R12 parity) — save/apply/delete/revert the module layout. */
     layouts?: {
       names: string[];
@@ -174,6 +176,7 @@
     costDisabled = false,
     modules,
     onmoduleschange,
+    recentTrades = [],
     layouts,
   }: Props = $props();
 
@@ -193,6 +196,7 @@
     { key: 'cost', label: 'Break-even & Cost' },
     { key: 'adv', label: 'Advanced Statistics' },
     { key: 'compare', label: 'Commission Compare' }, // A203 — picker-addable, not in the default layout
+    { key: 'blotter', label: 'Recent Trades' }, // F51 — compact blotter; picker-addable, not in the default layout
   ];
   const validKeys = (ks?: string[]) => (ks ?? DEFAULT_MODULE_KEYS).filter(k => MODULES.some(m => m.key === k));
   // svelte-ignore state_referenced_locally — initial layout only; the app re-seeds via the prop below.
@@ -1113,6 +1117,51 @@
     </p>
   {/snippet}
 
+  {#snippet blotterBody()}
+    <!-- F51: the compact blotter — the most recent trades under the live filter set, no
+         pagination/editing (that's the Blotter screen's job; the link hands off). -->
+    {#if recentTrades.length}
+      <div class="overflow-x-auto">
+        <Table.Root class="[&_td]:px-2 [&_td]:py-1 [&_th]:px-2">
+          <Table.Header>
+            <Table.Row class="hover:bg-transparent">
+              <Table.Head class="w-28 whitespace-nowrap">Date / time</Table.Head>
+              <Table.Head class="w-16">Symbol</Table.Head>
+              <Table.Head class="w-14">Side</Table.Head>
+              <Table.Head class="w-10 text-right">Qty</Table.Head>
+              <Table.Head class="w-20 text-right">P&L</Table.Head>
+              <Table.Head class="w-24">Platform</Table.Head>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
+            {#each recentTrades as t, i (i)}
+              <Table.Row>
+                <Table.Cell class="whitespace-nowrap text-xs text-muted-foreground">{t.date.slice(5)} {t.time}</Table.Cell>
+                <Table.Cell class="text-xs font-medium">{t.sym}</Table.Cell>
+                <Table.Cell>
+                  <Badge
+                    variant="outline"
+                    class={t.side === 'Long' ? 'border-chart-2/40 text-chart-2' : 'border-destructive/40 text-destructive'}>{t.side}</Badge
+                  >
+                </Table.Cell>
+                <Table.Cell class="text-right text-xs tabular-nums">{t.qty}</Table.Cell>
+                <Table.Cell class={['text-right text-xs font-semibold tabular-nums', t.pnl >= 0 ? 'text-chart-2' : 'text-destructive']}>
+                  {usd(t.pnl)}
+                </Table.Cell>
+                <Table.Cell class="whitespace-nowrap text-xs text-muted-foreground">{t.platform || '—'}</Table.Cell>
+              </Table.Row>
+            {/each}
+          </Table.Body>
+        </Table.Root>
+      </div>
+    {:else}
+      <p class="text-xs text-muted-foreground">No trades under the current filters.</p>
+    {/if}
+    <div class="mt-2 text-right">
+      <a href="#blotter" class="text-xs text-muted-foreground underline hover:text-foreground">View all in the Blotter →</a>
+    </div>
+  {/snippet}
+
   <!-- A189: tiny stylized per-module thumbnails for the picker — inline SVG in the chart tokens
        (geometry attrs + fill/stroke utilities only; CSP-clean). -->
   {#snippet moduleThumb(key: string)}
@@ -1141,6 +1190,12 @@
         {#each [16, 24, 32] as w, i (w)}
           <rect x="4" y={5 + i * 7} width={w} height="4" rx="1" class={i === 0 ? 'fill-chart-2/70' : 'fill-secondary'} />
         {/each}
+      {:else if key === 'blotter'}
+        <!-- F51: dense trade rows, green/red P&L ticks at the right edge -->
+        {#each [4, 9, 14, 19, 24] as y, i (y)}
+          <rect x="4" {y} width="24" height="3" rx="1" class="fill-secondary" />
+          <rect x="31" {y} width="5" height="3" rx="1" class={i % 2 === 0 ? 'fill-chart-2/70' : 'fill-destructive/70'} />
+        {/each}
       {:else}
         {#each [0, 1] as r (r)}
           {#each [0, 1, 2] as c (c)}
@@ -1166,7 +1221,7 @@
         <Card.Root id="dashmod-{key}" class="h-full">
           {@render moduleHeader(key)}
           <Card.Content>
-            {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'compare'}{@render compareBody()}{/if}
+            {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'compare'}{@render compareBody()}{:else if key === 'blotter'}{@render blotterBody()}{/if}
           </Card.Content>
         </Card.Root>
       </div>

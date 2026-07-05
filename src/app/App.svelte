@@ -30,7 +30,8 @@
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import { createDashboard } from './lib/dashboard.svelte.ts';
   import { dailySeries } from '../lib/core/curveseries.ts';
-  import { navSections, navLabel, navItems } from './lib/nav';
+  import { navSections, navLabel } from './lib/nav';
+  import { UserRound } from '@lucide/svelte';
   import { fade } from 'svelte/transition';
   import { dur } from './lib/motion.ts';
   import Dashboard, {
@@ -58,6 +59,8 @@
   import { loadFlags, APP_FLAGS, type AppFlags } from './lib/flags.ts';
   import { pickFlavor } from './lib/flavor.ts';
   import { Adapters } from '../lib/core/adapters.ts';
+  import { checkCsvFile, checkXlsxFile, isXlsxFile } from '../lib/core/intake.ts';
+  import { classifyNonTrade, type BatchRow } from './lib/batch.ts';
   import type { Trade, ParseResult } from '../lib/core/types.ts';
 
   // Mode-aware persistence seam (parity with the legacy App.svelte):
@@ -81,11 +84,19 @@
     trades: () => import('./screens/TradeEditor.svelte'),
     reports: () => import('./screens/Reports.svelte'),
     csv: () => import('./screens/CsvLibrary.svelte'),
+    account: () => import('./screens/Account.svelte'), // F53 — staging-gated route below
   };
+
+  // F53: the Account item is STAGING-gated until CH16 promotes it (the accounts backend needs the
+  // ACCOUNTS_DB binding; the gate is a UX switch, not a security boundary — A111 model).
+  const sections = isStaging
+    ? [...navSections, { label: 'Account', items: [{ key: 'account', label: 'Account', icon: UserRound }] }]
+    : navSections;
+  const allNavKeys = $derived(new Set(sections.flatMap(s => s.items.map(i => i.key))));
 
   const fromHash = (): string => {
     const h = typeof location !== 'undefined' ? location.hash.replace(/^#/, '') : '';
-    return navItems.some(i => i.key === h) ? h : 'dashboard';
+    return allNavKeys.has(h) ? h : 'dashboard';
   };
   let active = $state(fromHash());
   $effect(() => {
@@ -556,6 +567,7 @@
         note: !!b.meta?.note,
         noteText: b.meta?.note ?? '',
         session: dash.sessionOf(t) === 'rth' ? 'RTH' : 'ETH',
+        platform: platformOf(t), // F50 — provenance platform (same resolver as the Trade Editor)
       };
     })
   );
@@ -762,27 +774,90 @@
   // all-excluded library (the include toggles off) keeps the normal shell with empty-state
   // dashboards + the banner below; only Erase all data returns to this initial state.
   // F48: `onboardingActive` (armed by freshness, cleared by the Launch button) keeps the review
-  // step up after an import instead of auto-entering the app.
-  let onboardImports = $state<{ name: string; platform: string; trades: number }[]>([]);
+  // step up after an import instead of auto-entering the app (the review list itself lives in
+  // Onboarding — F47's DetectionStatus rows).
   let onboardingActive = $state(false);
   const freshApp = $derived(!isDemo && !isStaging && dash.loaded && !dash.allTrades.length && !dash.csvFiles.length);
   const needsOnboarding = $derived(!isDemo && !isStaging && dash.loaded && onboardingActive);
   $effect(() => {
-    if (freshApp) {
-      onboardingActive = true;
-      onboardImports = [];
-    }
+    if (freshApp) onboardingActive = true;
   });
-  async function onboardImport(file: File): Promise<string> {
-    const text = await file.text();
-    const r = Adapters.parse(text);
-    if (!r.ok || !r.trades || !r.trades.length)
-      return r.ok ? 'No completed trades found in that CSV.' : r.error || 'Could not read that CSV.';
-    await dash.importCsv(text, file.name, r); // F37: onboarding import carries provenance too
-    // F48: record the success for the onboarding review list (name + platform + trade count).
-    onboardImports = [...onboardImports, { name: file.name, platform: r.label || 'CSV', trades: r.trades.length }];
-    return '';
+  // F47: batch intake — every file runs gates → parse → import; recognized non-trade exports are
+  // NAMED (Cash History, Account Balance History, …) instead of getting the generic A178 refusal.
+  // Sequential on purpose: imports hit the same Store and A219 reconciliation applies in order.
+  async function importBatch(files: File[]): Promise<BatchRow[]> {
+    const out: BatchRow[] = [];
+    for (const file of files) {
+      // F52: an .xlsx (ATAS X) converts to CSV text first (lazy chunk), then rides the normal
+      // pipeline — the derived text persists as the file's raw text so F37 re-import/provenance work.
+      let text: string;
+      if (isXlsxFile(file)) {
+        const veto = checkXlsxFile(file);
+        if (veto) {
+          out.push({ name: file.name, state: 'refused', label: '', detail: veto });
+          continue;
+        }
+        try {
+          const { atasXlsxToCsv } = await import('../lib/core/xlsx.ts');
+          text = await atasXlsxToCsv(await file.arrayBuffer());
+        } catch (e) {
+          out.push({ name: file.name, state: 'refused', label: '', detail: `Could not read this workbook: ${(e as Error).message}` });
+          continue;
+        }
+      } else {
+        const veto = checkCsvFile(file);
+        if (veto) {
+          out.push({ name: file.name, state: 'refused', label: '', detail: veto });
+          continue;
+        }
+        text = await file.text();
+      }
+      const r = Adapters.parse(text);
+      if (r.ok && r.trades && r.trades.length) {
+        await dash.importCsv(text, file.name, r); // F37 provenance + A219 reconciliation
+        out.push({
+          name: file.name,
+          state: 'ok',
+          label: r.label || 'CSV',
+          detail: `${r.trades.length} trade${r.trades.length === 1 ? '' : 's'}`,
+        });
+      } else {
+        const nt = classifyNonTrade(text);
+        out.push(
+          nt
+            ? { name: file.name, state: 'nontrade', label: nt, detail: 'recognized, not a trade file' }
+            : {
+                name: file.name,
+                state: 'refused',
+                label: '',
+                detail: r.ok ? 'No completed trades found.' : r.error || 'Could not read this file.',
+              }
+        );
+      }
+    }
+    return out;
   }
+
+  // F47 capability relay (the A176 model, dataset-level): what the imported mix unlocks or limits.
+  const coverageLines = $derived.by(() => {
+    const all = dash.allTrades;
+    if (!all.length) return [];
+    const hold = all.filter(t => t.holdMs != null).length / all.length;
+    const comm = all.filter(t => t.commission != null).length / all.length;
+    const lines: string[] = [];
+    if (hold <= 0.005)
+      lines.push(
+        'No hold-time data detected — hold-time and duration stats are unavailable. Fills-type exports unlock them (overlapping trades merge).'
+      );
+    else if (hold < 0.995) lines.push(`Hold times cover ${Math.round(hold * 100)}% of trades — fills-type exports fill the gap.`);
+    if (comm <= 0.005)
+      lines.push(
+        'No real commission data detected — costs use modeled rates. Fills-type exports (Tradovate/NinjaTrader Fills, Quantower Trades, TradingView order history) carry your actual costs.'
+      );
+    else if (comm < 0.995) lines.push(`Real commissions cover ${Math.round(comm * 100)}% of trades; the rest use modeled rates.`);
+    if (!lines.length) lines.push('Full coverage: hold times and real commissions are available for every trade.');
+    return lines;
+  });
 
   // Data management (backup / restore / erase) — parity with the legacy ManageData. Neutral file name
   // on prod/demo, staging-branded on staging. Restore/erase are demo-guarded in dash; erase confirms.
@@ -900,7 +975,7 @@
   </div>
 {/snippet}
 
-<AppShell sections={navSections} {active} onnavigate={navigate} title={navLabel(active)} hideNav={needsOnboarding}>
+<AppShell {sections} {active} onnavigate={navigate} title={active === 'account' ? 'Account' : navLabel(active)} hideNav={needsOnboarding}>
   {#snippet actions()}
     <div class="flex min-w-0 flex-1 items-center gap-2">
       <!-- A179/A225: rotating flavor text — one phrase per page load; hidden on narrow viewports.
@@ -961,8 +1036,8 @@
         <Onboarding
           setup={dash.setup}
           onsetupsave={s => dash.saveSetup(s)}
-          onimport={onboardImport}
-          imported={onboardImports}
+          onbatch={importBatch}
+          capability={coverageLines}
           onlaunch={() => (onboardingActive = false)}
         />
       {:else if active === 'dashboard'}
@@ -1007,6 +1082,18 @@
           costDisabled={dash.isDemo}
           modules={dashModules}
           onmoduleschange={saveModules}
+          recentTrades={dash.filtered
+            .slice(-12)
+            .reverse()
+            .map(t => ({
+              date: t.date,
+              time: (t.time || '').slice(11, 16),
+              sym: t.root,
+              side: (t.side === 'short' ? 'Short' : 'Long') as 'Long' | 'Short',
+              qty: t.qty ?? 1,
+              pnl: t.pnl,
+              platform: platformOf(t),
+            }))}
           layouts={dashLayouts}
         />
       {:else if active === 'calendar'}
@@ -1129,7 +1216,16 @@
             onerase={doErase}
             dataDisabled={dash.isDemo}
             {restoreMsg}
+            onbatch={importBatch}
+            coverage={coverageLines}
           />
+        {/await}
+      {:else if active === 'account' && isStaging}
+        <!-- F53 (staging): passkey accounts phase 1 — promote via CH16 once the D1 binding is live. -->
+        {#await SCREEN_LOADERS.account()}
+          {@render screenSkeleton()}
+        {:then Account}
+          <Account.default {isDemo} />
         {/await}
       {:else}
         <div class="grid min-h-[60vh] place-items-center">

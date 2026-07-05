@@ -541,5 +541,142 @@ ok('intake: normal CSV text passes', I.checkCsvText('Time,Action,Realized PnL\n2
 ok('intake: NUL byte rejects as binary', I.checkCsvText('Time,Act\u0000ion,PnL\n1,2,3') !== null);
 ok('intake: row cap rejects', I.checkCsvText('h\n' + '\n'.repeat(I.CSV_MAX_ROWS + 1)) !== null);
 
+/* ---------- F52: ATAS X — the .xlsx importer (minimal reader + adapter) ---------- */
+console.log('\nF52 ATAS X (.xlsx → Journal CSV → adapter):');
+{
+  const fs = await import('node:fs');
+  const X = await import('../src/lib/core/xlsx.ts');
+
+  // Excel-serial conversion: the 1900-system anchor (25569 = Unix epoch) + second rounding.
+  ok(
+    'excelSerialToTime: serial 25569 → 1970-01-01 00:00:00',
+    X.excelSerialToTime(25569) === '1970-01-01 00:00:00',
+    X.excelSerialToTime(25569)
+  );
+  ok(
+    'excelSerialToTime: float noise rounds to whole seconds (46191.5493634259 → 13:11:05)',
+    X.excelSerialToTime(46191.5493634259) === '2026-06-18 13:11:05',
+    X.excelSerialToTime(46191.5493634259)
+  );
+
+  // (a) THE REAL FILE — docs/csv-examples/atas-x/ is the permanent ground truth for this format.
+  const atasDir = new URL('../docs/csv-examples/atas-x/', import.meta.url);
+  const xlsxName = fs.readdirSync(atasDir).find(f => f.toLowerCase().endsWith('.xlsx'));
+  ok('real ATAS xlsx present in docs/csv-examples/atas-x/', !!xlsxName, xlsxName);
+  const nb = fs.readFileSync(new URL(xlsxName, atasDir));
+  const buf = nb.buffer.slice(nb.byteOffset, nb.byteOffset + nb.byteLength);
+
+  const sheets = await X.xlsxSheets(buf);
+  ok(
+    'xlsxSheets: all three sheets by name (Statistics/Journal/Executions)',
+    sheets.has('Statistics') && sheets.has('Journal') && sheets.has('Executions'),
+    JSON.stringify([...sheets.keys()])
+  );
+  const journal = sheets.get('Journal') || [];
+  const jHead = (journal[0] || []).map(h => String(h).trim().toLowerCase());
+  ok(
+    'Journal sheet header matches the documented ATAS columns',
+    [
+      'account',
+      'instrument',
+      'open time',
+      'open price',
+      'open volume',
+      'close time',
+      'close price',
+      'close volume',
+      'price pnl',
+      'pnl',
+    ].every(c => jHead.includes(c)),
+    JSON.stringify(jHead)
+  );
+
+  const csv = await X.atasXlsxToCsv(buf);
+  ok('atasXlsxToCsv output passes the text intake gate', I.checkCsvText(csv) === null);
+  ok('real ATAS xlsx detects as atas', (A.detect(csv) || {}).id === 'atas', JSON.stringify(A.detect(csv)));
+  const r = A.parse(csv);
+  ok('real ATAS xlsx parses ok (non-beta, closed)', r.ok && r.platform === 'atas' && !r.beta && r.kind === 'closed', r.error);
+  const jRows = journal.slice(1).filter(row => row.some(c => c !== ''));
+  ok('one trade per Journal data row (20)', r.ok && r.trades.length === jRows.length && r.trades.length > 0, r.ok && r.trades.length);
+  ok('every trade has a valid shape', r.ok && r.trades.every(shape));
+  ok(
+    'every trade carries qty, entry/exit times and a non-negative holdMs',
+    r.ok && r.trades.every(t => t.qty >= 1 && t.entryTime && t.exitTime && Number.isFinite(t.holdMs) && t.holdMs >= 0)
+  );
+  // Net assertion: the sheet's own PnL column is the expected sum — consistency, and no NaN leaks.
+  const kPnl = jHead.indexOf('pnl');
+  const expNet = jRows.reduce((a, row) => a + Number(row[kPnl]), 0);
+  const net = r.ok ? r.trades.reduce((a, t) => a + t.pnl, 0) : NaN;
+  ok('no NaN in the sheet PnL column or the parsed trades', !isNaN(expNet) && !isNaN(net));
+  ok(`net PnL matches the sheet PnL column sum (${expNet.toFixed(2)})`, r.ok && approx(net, expNet), String(net));
+  // Side derivation cross-check: ATAS also signs Open volume (+1 long entry, −1 short entry) —
+  // the price-move/PnL-sign derivation must agree with it on EVERY row of the real file.
+  const kOV = jHead.indexOf('open volume');
+  const volSides = jRows.map(row => (Number(row[kOV]) > 0 ? 'long' : 'short'));
+  ok(
+    'derived side agrees with the signed Open volume on all rows',
+    r.ok && r.trades.every((t, i) => t.side === volSides[i]),
+    r.ok && JSON.stringify(r.trades.map(t => t.side))
+  );
+  // Spot-check the first trade against the sheet (row 2: MES@CME_Ind long, 13:11:05 → 13:11:30, +6.25).
+  const t0 = r.ok ? r.trades[0] : {};
+  ok(
+    'first trade fields match the sheet (time/symbol/root/side/qty/pnl/holdMs)',
+    r.ok &&
+      t0.entryTime === '2026-06-18 13:11:05' &&
+      t0.time === '2026-06-18 13:11:30' &&
+      t0.symbol === 'MES' && // '@CME_Ind' venue suffix stripped
+      t0.root === 'MES' &&
+      t0.side === 'long' &&
+      t0.qty === 1 &&
+      approx(t0.pnl, 6.25) &&
+      t0.holdMs === 25000,
+    JSON.stringify(t0)
+  );
+  ok(
+    'expiry-coded instrument keeps its symbol, resolves the root (MESU6@CME_Ind → MESU6/MES)',
+    r.ok && r.trades.some(t => t.symbol === 'MESU6' && t.root === 'MES')
+  );
+
+  // (b) Synthetic Journal-CSV fixture — side derivation both ways + the '@CME_Ind' strip.
+  const atasCsv = `Account,Instrument,Open time,Open price,Open volume,Close time,Close price,Close volume,Price PnL,Profit (ticks),PnL,Comment
+DEMO1,MESU6@CME_Ind,2026-06-18 13:11:05,7565,1,2026-06-18 13:11:30,7566.25,-1,1.25,5,6.25,
+DEMO1,MESU6@CME_Ind,2026-06-18 13:50:20,7566,2,2026-06-18 13:50:36,7564.5,-2,-1.5,-6,-15,
+DEMO1,MESU6@CME_Ind,2026-06-18 14:00:00,7565,-1,2026-06-18 14:01:00,7564,1,1,4,5,
+DEMO1,MESU6@CME_Ind,2026-06-18 14:10:00,7564,-1,2026-06-18 14:11:00,7565.25,1,-1.25,-5,-6.25,
+DEMO1,MESU6@CME_Ind,2026-06-18 15:00:00,7565,1,2026-06-18 15:01:00,7565,-1,0,0,0,scratch`;
+  ok('synthetic Journal CSV detects as atas', (A.detect(atasCsv) || {}).id === 'atas', JSON.stringify(A.detect(atasCsv)));
+  const rs = A.parse(atasCsv);
+  const sides = rs.ok ? rs.trades.map(t => t.side) : [];
+  ok(
+    'long win + long loss both derive long (move sign agrees with pnl sign)',
+    rs.ok && sides[0] === 'long' && sides[1] === 'long',
+    JSON.stringify(sides)
+  );
+  ok(
+    'short win + short loss both derive short (signs disagree)',
+    rs.ok && sides[2] === 'short' && sides[3] === 'short',
+    JSON.stringify(sides)
+  );
+  ok('zero-move/zero-pnl scratch row gets side "" (unknown)', rs.ok && sides[4] === '', JSON.stringify(sides));
+  ok(
+    'PnL column (dollars) wins over Price PnL (points); qty from |Open volume|',
+    rs.ok && approx(rs.trades[1].pnl, -15) && rs.trades[1].qty === 2,
+    rs.ok && JSON.stringify(rs.trades[1])
+  );
+  ok('synthetic symbols strip the venue suffix before rootSym', rs.ok && rs.trades.every(t => t.symbol === 'MESU6' && t.root === 'MES'));
+
+  // F52 intake routing: .xlsx takes the allowlisted binary path; the text gates stay strict.
+  ok('intake: isXlsxFile routes the real export by extension', I.isXlsxFile({ name: xlsxName, type: '' }) === true);
+  ok(
+    'intake: isXlsxFile routes on the xlsx MIME even without the extension',
+    I.isXlsxFile({ name: 'export', type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }) === true
+  );
+  ok('intake: a .csv does not route to the xlsx path', I.isXlsxFile({ name: 'trades.csv', type: 'text/csv' }) === false);
+  ok('intake: xlsx within the cap passes checkXlsxFile', I.checkXlsxFile({ name: xlsxName, size: nb.byteLength, type: '' }) === null);
+  ok('intake: oversize xlsx rejects', I.checkXlsxFile({ name: 'huge.xlsx', size: I.XLSX_MAX_BYTES + 1, type: '' }) !== null);
+  ok('intake: the text gates still reject raw xlsx bytes as binary', I.checkCsvText(nb.toString('latin1')) !== null);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

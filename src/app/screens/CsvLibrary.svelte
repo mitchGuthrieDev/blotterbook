@@ -90,7 +90,7 @@
   } from '@lucide/svelte';
   import { cn } from '$lib/utils';
   import { usd } from '../../lib/core/core.ts';
-  import { checkCsvFile } from '../../lib/core/intake.ts';
+  import { checkCsvFile, checkXlsxFile, isXlsxFile } from '../../lib/core/intake.ts';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Switch } from '$lib/components/ui/switch';
@@ -102,6 +102,8 @@
   import * as AlertDialog from '$lib/components/ui/alert-dialog';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import IconTip from '$lib/components/IconTip.svelte';
+  import DetectionStatus from '../parts/DetectionStatus.svelte';
+  import type { BatchRow } from '../lib/batch.ts';
   import * as Select from '$lib/components/ui/select';
   import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 
@@ -136,6 +138,10 @@
     dataDisabled?: boolean;
     /** Result message from a restore, rendered if non-empty (parent-owned). */
     restoreMsg?: string;
+    /** F47: batch-import multiple files (gates + parse + import per file) → one status row each. */
+    onbatch?: (files: File[]) => Promise<BatchRow[]>;
+    /** F47 capability relay — dataset-level coverage lines (always shown as the coverage module). */
+    coverage?: string[];
   }
   let {
     files,
@@ -154,6 +160,8 @@
     onerase,
     dataDisabled = false,
     restoreMsg = '',
+    onbatch,
+    coverage = [],
   }: Props = $props();
 
   // Internal working copy of the listed files; reseed when the incoming set changes (external import/delete).
@@ -222,21 +230,56 @@
     if (!file || !parse || dataDisabled) return;
     // A177: pre-read gate (extension/MIME allowlist + size cap) — reject before reading a 200 MB
     // drop into memory; the post-read text checks run inside Adapters.parse.
-    const veto = checkCsvFile(file);
-    if (veto) {
-      preview = errorPreview(file.name, veto);
-      uploadOpen = true;
-      return;
+    // F52: an ATAS .xlsx converts to CSV text first (lazy chunk), then previews like any CSV.
+    let text: string;
+    if (isXlsxFile(file)) {
+      const veto = checkXlsxFile(file);
+      if (veto) {
+        preview = errorPreview(file.name, veto);
+        uploadOpen = true;
+        return;
+      }
+      try {
+        const { atasXlsxToCsv } = await import('../../lib/core/xlsx.ts');
+        text = await atasXlsxToCsv(await file.arrayBuffer());
+      } catch (e) {
+        preview = errorPreview(file.name, `Could not read this workbook: ${(e as Error).message}`);
+        uploadOpen = true;
+        return;
+      }
+    } else {
+      const veto = checkCsvFile(file);
+      if (veto) {
+        preview = errorPreview(file.name, veto);
+        uploadOpen = true;
+        return;
+      }
+      text = await file.text();
     }
-    const text = await file.text();
     preview = parse(text, file.name);
     uploadOpen = true;
   }
+  // F47: a multi-file pick/drop batch-imports directly with a per-file status list; a single file
+  // keeps the existing parse-preview-confirm flow.
+  let batchRows = $state<BatchRow[]>([]);
+  let batchBusy = $state(false);
+  async function handleBatch(fileList: FileList | File[] | null | undefined) {
+    const arr = fileList ? [...fileList] : [];
+    if (!arr.length || dataDisabled) return;
+    if (arr.length === 1 || !onbatch) {
+      await handleFile(arr[0]);
+      return;
+    }
+    batchBusy = true;
+    batchRows = [...batchRows, ...(await onbatch(arr))];
+    batchBusy = false;
+  }
   async function onFilePicked(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
+    const picked = input.files;
+    const arr = picked ? [...picked] : [];
     input.value = '';
-    await handleFile(file);
+    await handleBatch(arr);
   }
   // A160: the dropzone advertised drag & drop but implemented none — the browser default then
   // NAVIGATED the tab to the dropped file. The wrapper (not the disable-able button) owns the drag
@@ -250,7 +293,7 @@
     e.preventDefault();
     dragging = false;
     if (dataDisabled) return; // demo: reject the drop (and the navigation default)
-    void handleFile(e.dataTransfer?.files?.[0]);
+    void handleBatch(e.dataTransfer?.files);
   }
   async function confirmImport() {
     if (!preview || preview.error || dataDisabled) return;
@@ -330,7 +373,14 @@
     </Breadcrumb.List>
   </Breadcrumb.Root>
 
-  <input bind:this={fileInput} type="file" accept=".csv,.txt,.tsv,text/csv,text/plain" class="hidden" onchange={onFilePicked} />
+  <input
+    bind:this={fileInput}
+    type="file"
+    multiple
+    accept=".csv,.txt,.tsv,.xlsx,text/csv,text/plain"
+    class="hidden"
+    onchange={onFilePicked}
+  />
 
   <!-- Upload dropzone (A134: disabled in demo — the demo dataset is fixed; A160: real drop handling) -->
   <!-- svelte-ignore a11y_no_static_element_interactions — drag-only wrapper; the button inside is the control -->
@@ -347,14 +397,27 @@
       <span class="grid size-10 place-items-center rounded-full border border-border text-muted-foreground"
         ><CloudUpload class="size-5" /></span
       >
-      <span class="text-sm font-medium text-foreground">Drag &amp; drop CSVs, or click to browse</span>
+      <span class="text-sm font-medium text-foreground">Drag &amp; drop CSVs (several at once is fine), or click to browse</span>
       <span class="text-xs text-muted-foreground"
         >{dataDisabled
           ? 'Importing is disabled in the demo — explore the sample dataset'
-          : 'TradingView, Tradovate, NinjaTrader, Apex… — auto-detected'}</span
+          : 'TradingView, Tradovate / NinjaTrader, Quantower… — auto-detected per file'}</span
       >
     </button>
   </div>
+
+  <!-- F47: batch detection status (multi-file drops) + the always-on dataset-coverage module -->
+  {#if batchRows.length || batchBusy}
+    <DetectionStatus rows={batchRows} busy={batchBusy} />
+  {/if}
+  {#if coverage.length && files.length}
+    <div class="rounded-md border border-border bg-background p-3" data-testid="coverage-module">
+      <p class="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Dataset coverage</p>
+      {#each coverage as line, i (i)}
+        <p class="text-[11px] text-muted-foreground">{line}</p>
+      {/each}
+    </div>
+  {/if}
 
   <!-- File table -->
   <Card.Root>

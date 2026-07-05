@@ -56,6 +56,10 @@
       >
       <a
         class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
+        href="#imp-atas">ATAS X</a
+      >
+      <a
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#imp-rithmic">Rithmic R|Trader</a
       >
       <a
@@ -458,6 +462,32 @@
           Detected columns: <code>Side</code>, <code>Symbol</code>, <code>Price</code>, <code>Gross P/L</code>, <code>Fee</code>,
           <code>Date/Time</code>. Each fill carries its own realized P&amp;L — Blotterbook uses those exact figures when pairing your round
           trips — and the <code>Fee</code> column supplies your real per-fill costs, which override the modeled commission rates.
+        </p>
+      </section>
+
+      <section id="imp-atas" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
+        <h2 class="mt-0">
+          ATAS X
+          <span
+            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-chart-2/35 bg-chart-2/10 text-chart-2"
+            ><span class="w-[7px] h-[7px] rounded-full bg-chart-2"></span>Verified · real exports</span
+          >
+        </h2>
+        <ol class="steps">
+          <li>
+            In ATAS X, open your account <b>Statistics</b> and use <b>Export</b> — the platform writes a single <code>.xlsx</code> workbook
+            (e.g. <code>ATAS X_statistics_….xlsx</code>).
+          </li>
+          <li>
+            Import that <code>.xlsx</code> file directly — no need to re-save it as CSV. Like everything else, it's read entirely in your browser.
+          </li>
+        </ol>
+        <p>
+          The workbook carries three sheets — Statistics (aggregates), <b>Journal</b> (closed round trips — the part that imports), and
+          Executions. Detected columns: <code>Instrument</code>, <code>Open time</code>/<code>Close time</code>,
+          <code>Open price</code>/<code>Close price</code>, <code>Open volume</code>, <code>PnL</code>. Each row is a finished round trip,
+          so P&amp;L is exact and <b>hold time</b> comes straight from the open/close timestamps; the export carries no explicit direction column,
+          so long/short is derived from the price move against the P&amp;L sign. The export has no commission column — modeled rates apply.
         </p>
       </section>
 
