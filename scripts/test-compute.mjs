@@ -288,6 +288,23 @@ const t = (time, pnl, side = 'long', root = 'MES', qty = 1) => ({ time, date: ti
   ok('F30: curve endpoint reconciles with dated rates', approx(pts30[pts30.length - 1].net, cm.gross - cm.totalComm, 1e-9));
 }
 
+// ── A211: per-file broker override — costModel prices each trade at ITS broker ──
+{
+  // AMP micro RT = (0.25+0.35)*2 = 1.20; SCHWAB micro RT = (2.25+0.35)*2 = 5.20 (MES).
+  const oldEra = { ...t('2026-01-05 10:00:00', 100), fileIds: ['aaaa1111'] };
+  const newEra = { ...t('2026-01-06 10:00:00', 50), fileIds: ['bbbb2222'] };
+  const m = compute([oldEra, newEra]);
+  const brokerFor = tr => (tr.fileIds?.includes('aaaa1111') ? 'SCHWAB' : undefined);
+  const c = costModel(m, { broker: 'AMP', platform: 0, feedCost: 0, stateRate: 0, brokerFor });
+  ok('A211: override file at SCHWAB, rest at global AMP', approx(c.totalComm, 5.2 + 1.2, 1e-9), c.totalComm);
+  const cNo = costModel(m, { broker: 'AMP', platform: 0, feedCost: 0, stateRate: 0 });
+  ok('A211: no resolver = global broker for all', approx(cNo.totalComm, 2.4, 1e-9));
+  // The curve applies the same rule — endpoint reconciles.
+  const { dailySeries: dsB } = await import('../src/lib/core/curveseries.ts');
+  const ptsB = dsB(m, { broker: 'AMP', tEff: 0, fixedMo: 0, brokerFor }).pts;
+  ok('A211: curve endpoint reconciles with broker overrides', approx(ptsB[ptsB.length - 1].net, c.gross - c.totalComm, 1e-9));
+}
+
 // ── A188: the event bus replay buffer — late subscribers can backfill boot events ──
 {
   const { emit, busLog, onEvent } = core;

@@ -31,9 +31,6 @@ import type {
   ParseResult,
 } from '../../lib/core/types.ts';
 
-/** Raw-CSV library budget (F37 owner decision): soft 50 MB cap, warn from 80%. */
-export const FILE_BUDGET_BYTES = 50 * 1024 * 1024;
-
 export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?: boolean }) {
   // Demo mounts the in-memory DemoStore (nothing persists by construction), but every write path is
   // ALSO isDemo-guarded here (A87 belt-and-suspenders) and the UI disables the controls — so demo can
@@ -80,11 +77,25 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   // The day-journal (context) tag vocabulary — feeds the Calendar tag-input autocomplete (A167);
   // kept separate from the per-trade `tags` above per the R17 two-scope model.
   const journalTags = $derived([...new Set([...journal.values()].flatMap(j => j.tags || []))].sort());
+  // A211: per-file broker overrides → a per-trade resolver. A trade's broker = the override of
+  // its NEWEST-imported contributing file that has one (csvFiles is already newest-first), else
+  // undefined → costModel falls back to the global setup broker. No overrides = no resolver, so
+  // the common case costs nothing.
+  const brokerFor = $derived.by(() => {
+    const overridden = new Map(csvFiles.filter(f => f.broker).map(f => [f.id, f.broker as string]));
+    if (!overridden.size) return undefined;
+    return (t: Trade) => {
+      if (!t.fileIds?.length) return undefined;
+      for (const f of csvFiles) if (overridden.has(f.id) && t.fileIds.includes(f.id)) return overridden.get(f.id);
+      return undefined;
+    };
+  });
   const costInputs = $derived({
     broker: setup.broker,
     platform: setup.platform,
     feedCost: setup.feed ? parseFloat(setup.feed.split('|')[1]) || 0 : 0,
     stateRate: STATES.find(s => s[0] === setup.stateAbbr)?.[1] ?? 0,
+    brokerFor,
   });
   const cost = $derived(costModel(metricsActive, costInputs));
   const dateRange = $derived(allTrades.length ? `${allTrades[0].date} → ${allTrades[allTrades.length - 1].date}` : '');
@@ -205,7 +216,10 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   }
   async function deleteTrades(ids: string[]) {
     if (isDemo) return;
-    for (const id of ids) await store.deleteTrade(id);
+    for (const id of ids) {
+      await store.deleteTrade(id);
+      await store.deleteTradeMeta(id); // A216: tags/note/screenshots go with the trade
+    }
     await reloadAll();
     emit('trade:deleted', { count: ids.length });
   }
@@ -278,6 +292,12 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     await store.updateFile(id, { label: label.trim() || undefined });
     await reloadAll();
   }
+  // A211: set/clear a file's broker override ('' clears → global setup broker applies again).
+  async function setFileBroker(id: string, broker: string) {
+    if (isDemo) return;
+    await store.updateFile(id, { broker: broker || undefined });
+    await reloadAll();
+  }
   async function deleteFile(id: string) {
     if (isDemo) return;
     const res = await store.deleteFile(id);
@@ -304,7 +324,6 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     emit('data:imported', { added: res.added });
     return res;
   }
-  const filesBytes = () => csvFiles.reduce((a, f) => a + (Number(f.size) || 0), 0);
   async function purgeAll() {
     if (isDemo) return;
     await store.purge();
@@ -483,10 +502,10 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     importCsv,
     setFileIncluded,
     renameFile,
+    setFileBroker,
     deleteFile,
     fileText,
     reimportFile,
-    filesBytes,
     purgeAll,
     exportBackup,
     importBackup,

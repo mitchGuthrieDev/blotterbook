@@ -397,16 +397,19 @@ export const Store: StoreLike = {
     return done(store);
   },
   async deleteFile(id) {
-    // One readwrite tx over FILES + FILETEXT + TRADES: drop the record + raw text, strip this id
-    // from every trade's provenance, and DELETE trades whose provenance becomes empty — a trade
-    // another file also contributed survives (the fileIds-array overlap model). Trades with NO
-    // fileIds (imported pre-F37) are untouched. All puts/deletes are issued synchronously inside
-    // getAll().onsuccess (B6 — no await mid-tx).
+    // One readwrite tx over FILES + FILETEXT + TRADES + TRADEMETA: drop the record + raw text,
+    // strip this id from every trade's provenance, and DELETE trades whose provenance becomes
+    // empty — a trade another file also contributed survives (the fileIds-array overlap model).
+    // Trades with NO fileIds (imported pre-F37) are untouched. A216: a removed trade's per-trade
+    // meta (tags/note/screenshots — base64 can be large) goes with it instead of orphaning in
+    // IndexedDB. All puts/deletes are issued synchronously inside getAll().onsuccess (B6 — no
+    // await mid-tx).
     const db = await open();
-    const t = db.transaction([FILES, FILETEXT, TRADES], 'readwrite');
+    const t = db.transaction([FILES, FILETEXT, TRADES, TRADEMETA], 'readwrite');
     t.objectStore(FILES).delete(id);
     t.objectStore(FILETEXT).delete(id);
     const tradeStore = t.objectStore(TRADES);
+    const metaStore = t.objectStore(TRADEMETA);
     let removedTrades = 0;
     await new Promise<void>((resolve, reject) => {
       const r = tradeStore.getAll();
@@ -418,6 +421,7 @@ export const Store: StoreLike = {
           if (rest.length) tradeStore.put({ ...rec, fileIds: rest });
           else {
             tradeStore.delete(rec.id as string);
+            metaStore.delete(rec.id as string);
             removedTrades++;
           }
         }
@@ -613,6 +617,8 @@ export const Store: StoreLike = {
           to: validDate(f.to) ? (f.to as string).slice(0, 10) : '',
           imported: typeof f.imported === 'string' ? f.imported.slice(0, 32) : new Date().toISOString(),
           included: f.included !== false,
+          // A211: broker override — key charset only (rateFor falls back safely on unknown keys).
+          ...(typeof f.broker === 'string' && /^[A-Z0-9_]{1,32}$/.test(f.broker) ? { broker: f.broker } : {}),
         };
         await this.addFile(rec, text);
       }

@@ -296,7 +296,9 @@ conforms to the rules below; keep it that way.
       sampledata.ts     demo CSV sample data  ·  curveseries.ts  pure daily gross/net/take series
       demostore.ts      in-memory Store implementation for demo (never persists)
       adapters.ts       platform CSV adapters + format auto-detection + fills matcher
-      store.ts          IndexedDB persistence (trades, journal, meta, trademeta) + Store.local seam
+      intake.ts         CSV intake gates — file/MIME/size + binary/row-cap checks (A177)
+      store.ts          IndexedDB persistence (trades, journal, meta, trademeta, files, filetext —
+                        F37 per-file CSV provenance) + Store.local seam
       entitlements.ts   storage-tier resolver (scaffold; INTENTIONALLY not loaded)
       format.ts         shared esc/platformLabel + version-badge IIFE (ex assets/util.js — A76)
       types.ts          shared TS interfaces (Trade/Fill/CostModel/Metrics/StoreLike/… — A61)
@@ -371,14 +373,22 @@ LICENSE                 proprietary — all rights reserved
 ```
 loadRefData()   manifest.json → brokers/exchange-fees/feeds/state-tax (cache-busted by hash)
 CSV text
-  → Adapters.detect()  sniff header → platform
+  → intake gates       checkCsvFile/checkCsvText — type/size/binary/row caps (A177)
+  → Adapters.detect()  sniff header → platform (per-adapter minScore gate — A178)
   → Adapters.parse()   platform adapter → normalized trades (fills go through pairFills())
-  → Store.addTrades / getAllTrades   delta-merge + persist (IndexedDB)
-  → applyFilters()  active filter set → working trade list
+  → Store.addTrades / getAllTrades   delta-merge + persist (IndexedDB); duplicates MERGE
+                       provenance + ENRICH missing fields; the file record + raw text persist
+                       alongside (F37), trades carry fileIds
+  → applyFilters()  active filter set (per-file include/exclude applies at load) → working list
   → compute()       trades → metrics (PnL, win rate, drawdown, curve, expectancy, …)
   → costModel()     metrics + setup inputs → commissions, subscriptions, tax, take-home
+                    (a trade's REAL CSV commission wins — A208; else the modeled rate, dated
+                    per trade — F30, at the trade's per-file broker override — A211)
   → Svelte app      → reactive components render cards / curve / calendar / advanced / break-even
 ```
+
+The full prose walkthrough (intake → adapters → Store/IndexedDB object stores → ref data →
+recompute → modes → the no-egress guarantee) is [docs/data-flow.md](docs/data-flow.md).
 
 The compute pipeline (`adapters`/`compute`/`costModel`) is the **pure-logic core**, reused
 verbatim (A29). The Svelte app drives it: reactive state lives in runes (`$state`/`$derived`)
@@ -398,10 +408,12 @@ otherwise a no-op with no subscriber.
 
 ## Adding things
 
-- **A platform adapter:** one object in `src/lib/core/adapters.ts` (`sniff` + `toTrades`)
-  plus a fixture in `scripts/test-adapters.mjs`. Every adapter normalizes to the
+- **A platform adapter:** one object in `src/lib/core/adapters.ts` (`sniff` + `toTrades` +
+  `minScore`, A178) plus a fixture in `scripts/test-adapters.mjs`. Every adapter normalizes to the
   same trade shape `{ time, date, pnl, symbol, root, side[, qty, entryTime,
-  exitTime, holdMs] }` so `compute()`/`costModel()` never change.
+  exitTime, holdMs, commission] }` so `compute()`/`costModel()` never change (fills exports
+  populate `Fill.commission` when the export carries real costs — A208; `fileIds` provenance is
+  stamped at import, not by adapters).
 - **A rate change:** edit the relevant `data/*.json`, then run
   `build-manifest.mjs`. No app code changes.
 - **A new feature:** add/extend a Svelte screen/part in `src/app/`; it ships to all three

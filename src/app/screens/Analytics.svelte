@@ -16,7 +16,7 @@
   // tables expand past their top-N cut. Everything degrades to read-only when no filterModel
   // arrives (defensive — App always passes it).
   import { cn } from '$lib/utils';
-  import { usdWhole } from '../../lib/core/core.ts';
+  import { usdWhole, DOW_LABEL } from '../../lib/core/core.ts';
   import { X } from '@lucide/svelte';
   import * as Card from '$lib/components/ui/card';
   import type { Kpi, DistBar, SignedBar, SymbolRow, TagRow, StatRow } from '../lib/analytics.ts';
@@ -85,7 +85,6 @@
   const maxTag = $derived(Math.max(1, ...tagShown.map(r => Math.abs(r.pnl)), Math.abs(untagged?.pnl ?? 0)));
 
   // ── A197 click-to-filter: every interaction TOGGLES its field on the shared filter set ──
-  const DOW_NAME = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const toggleRoot = (sym: string) => filterModel?.set({ root: filterModel.root === sym ? '' : sym });
   const toggleTag = (tag: string) => filterModel?.set({ tag: filterModel.tag === tag ? '' : tag });
   const toggleSide = (s: string) => filterModel?.set({ side: filterModel.side === s ? '' : s });
@@ -109,7 +108,7 @@
         key: 'dows',
         label: [...f.dows]
           .sort()
-          .map(d => DOW_NAME[d])
+          .map(d => DOW_LABEL[d])
           .join(' · '),
         clear: () => f.set({ dows: [] }),
       });

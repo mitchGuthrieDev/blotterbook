@@ -15,6 +15,8 @@
     ratio,
     rateFor,
     roundTurn,
+    BROKERS,
+    BROKER_ORDER,
     estimatedCommRoots,
     emit,
     PAGE_MODE,
@@ -120,7 +122,12 @@
   // Daily cumulative gross/net/take series for the Performance chart — same cost/tax-adjusted math as
   // the cost panel (tEff/fixedMo from costModel), so the Net/Take-home overlays reconcile.
   const dashSeries = $derived(
-    dailySeries(dash.metricsActive, { broker: String(dash.costInputs.broker ?? ''), tEff: dash.cost.tEff, fixedMo: dash.cost.fixedMo }).pts
+    dailySeries(dash.metricsActive, {
+      broker: String(dash.costInputs.broker ?? ''),
+      tEff: dash.cost.tEff,
+      fixedMo: dash.cost.fixedMo,
+      brokerFor: dash.costInputs.brokerFor, // A211 — per-file overrides, same rule as costModel
+    }).pts
   );
   // Live filter model for the dashboard Filters popover — reads the app's filter state; the setters
   // mutate it in place so filtered/metrics/series/calendar all re-derive.
@@ -512,7 +519,9 @@
     const id = dash.tradeId(t);
     const qty = t.qty ?? 1;
     const meta = dash.tradeMeta.get(id);
-    const r = dash.setup.broker ? rateFor(dash.setup.broker, t.root, t.date) : null; // F30: dated rate
+    // F30: dated rate; A211: at the trade's own broker when its source file carries an override.
+    const rowBroker = dash.costInputs.brokerFor?.(t) ?? dash.setup.broker;
+    const r = rowBroker ? rateFor(rowBroker, t.root, t.date) : null;
     return {
       id,
       qty,
@@ -635,6 +644,7 @@
       sizeKb: Math.max(1, Math.round(f.size / 1024)),
       overlap: f.overlap,
       included: f.included,
+      broker: f.broker, // A211
     })),
     ...(legacyTradeCount
       ? [
@@ -961,6 +971,8 @@
             onreimport={async id => {
               await dash.reimportFile(id);
             }}
+            brokers={BROKER_ORDER.map(k => [k, BROKERS[k]?.name ?? k])}
+            onbroker={(id, key) => dash.setFileBroker(id, key)}
             onbackup={doBackup}
             onrestore={doRestore}
             onerase={doErase}
