@@ -3890,6 +3890,50 @@
       "completedDate": "2026-07-04",
       "partial": false,
       "doneNote": "Shipped 2026-07-04 (PR #104, together with F37), per the owner's 2026-07-04 decision: ALWAYS-OVERRIDE, no global toggle. Optional `commission` (round-turn commission+fees, $ positive = cost) added to Trade and Fill in types.ts; adapters that expose real costs populate it (fills exports via pairFills — e.g. IBKR). costModel() prices a commission-bearing trade at its ACTUAL CSV amount verbatim and falls back to the modeled tier rate otherwise, with the mix reflected in the bySym breakdown so totals reconcile. UI surfaces the distinction: a dagger footnote on the dashboard cost module ('N of M trades priced at actual commissions from your CSV'), per-trade actual-vs-modeled display in the blotter, and CSV Library copy noting real-commission trades ignore the broker setting. Node fixtures assert commission-bearing vs bare CSVs cost out correctly."
+    },
+    {
+      "id": "A198",
+      "title": "Auto-name new dashboard tabs \"New tab N\" instead of prompting for a name",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (quick-win batch). createDashTab() in src/app/App.svelte no longer opens a blocking prompt — '+ New tab' instantly creates the tab named 'New tab N' (lowest N unused among existing tab names), keeping the id generation, selectDashTab persist, and the emit('tab:created') activity-log line. renameDashTab (DashTabs menu → Rename) is untouched for the real name afterward."
+    },
+    {
+      "id": "A201",
+      "title": "Wire up /api/geo — prefill the tax-estimate US state from the visitor's edge region",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (quick-win batch). createDashboard's boot() (src/app/lib/dashboard.svelte.ts) fires a non-blocking prefillStateFromGeo() when no state is saved yet: fetch('/api/geo') → if country==='US' and the regionCode matches a STATES entry, setup.stateAbbr is pre-selected IN MEMORY only (it persists with the user's next setup save, never by itself). Skipped on demo (seeded); any failure (offline, non-US, unknown region, dev server without functions) is silent; a state picked while the fetch is in flight wins. No trade data leaves the browser — the endpoint returns only Cloudflare's coarse edge region."
+    },
+    {
+      "id": "A205",
+      "title": "Add tooltips to icon/ambiguous buttons across the app",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (quick-win batch). New reusable wrapper src/lib/components/IconTip.svelte — composes the canonical shadcn-svelte tooltip (self-contained Provider, 300 ms delay, portal to body, keyboard/focus accessible) and hands the trigger props to the caller's real element via the bits-ui child pattern; for dropdown triggers the tooltip's child props feed DropdownMenu.Trigger so bits-ui merges both onto one button. Applied to: the AppShell sidebar collapse/expand toggle, DashTabs tab-options menu + close ✕, the Dashboard module-options menu + rename/delete-filter + delete-layout buttons, Calendar month prev/next + target stepper + remove-screenshot, and the CSV Library file-actions menu. Buttons with visible text labels were deliberately left alone; aria-labels remain for touch/AT users."
+    },
+    {
+      "id": "A206",
+      "title": "Add skeleton loaders for boot/async surfaces",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (quick-win batch). App.svelte gains a shape-matched screenSkeleton snippet (tab strip + card modules built from the shadcn-svelte Skeleton primitive, role='status') rendered (a) during boot in place of the old bare 'Loading…' line and (b) as the pending branch of all six code-split screen {#await import()} blocks (Calendar/Analytics/Blotter/TradeEditor/Reports/CsvLibrary) — no artificial delay, it only shows while genuinely pending (chunks are idle-prefetched so later navigations rarely see it). The skeleton primitive itself now carries motion-reduce:animate-none so the pulse collapses under reduced motion (A146)."
     }
   ]
 }

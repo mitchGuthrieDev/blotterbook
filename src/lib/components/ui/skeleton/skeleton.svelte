@@ -6,6 +6,11 @@
   let { ref = $bindable(null), class: className, children, ...restProps }: WithElementRef<HTMLAttributes<HTMLDivElement>> = $props();
 </script>
 
-<div bind:this={ref} data-slot="skeleton" class={cn('bg-accent animate-pulse rounded-md', className)} {...restProps}>
+<div
+  bind:this={ref}
+  data-slot="skeleton"
+  class={cn('bg-accent animate-pulse rounded-md motion-reduce:animate-none', className)}
+  {...restProps}
+>
   {@render children?.()}
 </div>

@@ -54,6 +54,7 @@
   import * as Popover from '$lib/components/ui/popover';
   import * as Select from '$lib/components/ui/select';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+  import IconTip from '$lib/components/IconTip.svelte';
   import { ChevronUp, ChevronDown, EyeOff } from '@lucide/svelte';
   import { X } from '@lucide/svelte';
   import * as Dialog from '$lib/components/ui/dialog';
@@ -383,18 +384,23 @@
     <GripVertical class="size-4 text-muted-foreground" />
     <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{moduleLabel(key)}</span>
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger>
-        {#snippet child({ props })}
-          <button
-            {...props}
-            type="button"
-            class="ml-auto grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label="Module menu"
-          >
-            <MoreHorizontal class="size-4" />
-          </button>
+      <!-- A205: tooltip composed onto the menu trigger (tooltip child props → DropdownMenu.Trigger). -->
+      <IconTip label="Module options">
+        {#snippet button(tip)}
+          <DropdownMenu.Trigger {...tip}>
+            {#snippet child({ props })}
+              <button
+                {...props}
+                type="button"
+                class="ml-auto grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                aria-label="Module menu"
+              >
+                <MoreHorizontal class="size-4" />
+              </button>
+            {/snippet}
+          </DropdownMenu.Trigger>
         {/snippet}
-      </DropdownMenu.Trigger>
+      </IconTip>
       <DropdownMenu.Content align="end" class="min-w-[150px]">
         <DropdownMenu.Item disabled={modOrder.indexOf(key) === 0} onSelect={() => moveModule(key, -1)}
           ><ChevronUp class="size-4" /> Move up</DropdownMenu.Item
@@ -562,22 +568,32 @@
                   {v.name}
                 </button>
                 {#if canSaveView}
-                  <button
-                    type="button"
-                    aria-label="Rename filter"
-                    class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-                    onclick={() => doRenameView(v.id, v.name)}
-                  >
-                    <Pencil class="size-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Delete filter"
-                    class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-destructive"
-                    onclick={() => filterModel.deleteView?.(v.id)}
-                  >
-                    <X class="size-3.5" />
-                  </button>
+                  <IconTip label="Rename filter">
+                    {#snippet button(tip)}
+                      <button
+                        {...tip}
+                        type="button"
+                        aria-label="Rename filter"
+                        class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                        onclick={() => doRenameView(v.id, v.name)}
+                      >
+                        <Pencil class="size-3.5" />
+                      </button>
+                    {/snippet}
+                  </IconTip>
+                  <IconTip label="Delete filter">
+                    {#snippet button(tip)}
+                      <button
+                        {...tip}
+                        type="button"
+                        aria-label="Delete filter"
+                        class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-destructive"
+                        onclick={() => filterModel.deleteView?.(v.id)}
+                      >
+                        <X class="size-3.5" />
+                      </button>
+                    {/snippet}
+                  </IconTip>
                 {/if}
               </div>
             {/each}
@@ -616,17 +632,22 @@
               <div class="flex items-center">
                 <DropdownMenu.Item class="flex-1" onSelect={() => layouts.apply(name)}>{name}</DropdownMenu.Item>
                 {#if layouts.canSave}
-                  <button
-                    type="button"
-                    aria-label="Delete layout"
-                    class="mr-1 grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-destructive"
-                    onclick={e => {
-                      e.stopPropagation();
-                      layouts.remove(name);
-                    }}
-                  >
-                    <X class="size-3.5" />
-                  </button>
+                  <IconTip label="Delete layout">
+                    {#snippet button(tip)}
+                      <button
+                        {...tip}
+                        type="button"
+                        aria-label="Delete layout"
+                        class="mr-1 grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-destructive"
+                        onclick={e => {
+                          e.stopPropagation();
+                          layouts.remove(name);
+                        }}
+                      >
+                        <X class="size-3.5" />
+                      </button>
+                    {/snippet}
+                  </IconTip>
                 {/if}
               </div>
             {/each}

@@ -19,6 +19,8 @@
         <a class="text-[13px] text-muted-foreground no-underline hover:underline" href="legal.html">Legal</a>
       </div>
       <p class="mt-1.5 mb-0 w-full text-[11.5px] leading-[1.6] text-muted-foreground">Internal admin page — not for public use.</p>
+      <!-- CH22: brand-only until the operating entity is decided (R7) — then name it here + on Legal. -->
+      <p class="mb-0 w-full text-[11.5px] text-muted-foreground">© 2026 Blotterbook. All rights reserved.</p>
     {:else}
       <div class="flex flex-wrap gap-4">
         <a class="text-[13px] text-muted-foreground no-underline hover:underline" href="index.html">Home</a>
@@ -35,6 +37,8 @@
         Blotterbook is a trading journal and estimation tool — <b>not a broker</b>, and not financial, investment, or tax advice. All
         figures are estimates. Trading involves risk of loss.
       </p>
+      <!-- CH22: brand-only until the operating entity is decided (R7) — then name it here + on Legal. -->
+      <p class="mb-0 w-full text-[11.5px] text-muted-foreground">© 2026 Blotterbook. All rights reserved.</p>
     {/if}
   </div>
 </footer>

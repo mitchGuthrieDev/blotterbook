@@ -26,6 +26,7 @@
   } from '../lib/core/core.ts';
   import { isBetaPhase } from '../lib/core/format.ts';
   import { Badge } from '$lib/components/ui/badge';
+  import { Skeleton } from '$lib/components/ui/skeleton';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import { createDashboard } from './lib/dashboard.svelte.ts';
   import { dailySeries } from '../lib/core/curveseries.ts';
@@ -187,12 +188,16 @@
     clearDirty(activeDashTab);
   }
   function createDashTab() {
-    const name = typeof prompt === 'function' ? prompt('New dashboard tab name…') : null;
-    if (!name || !name.trim()) return;
+    // A198: no naming prompt — create immediately as "New tab N" (lowest unused N);
+    // the DashTabs menu → Rename covers the real name afterward.
+    let n = 1;
+    const names = new Set(dashTabs.map(t => t.name));
+    while (names.has(`New tab ${n}`)) n++;
+    const name = `New tab ${n}`;
     const id = Date.now().toString(36) + dashTabs.length;
-    dashTabs = [...dashTabs, { id, name: name.trim() }];
+    dashTabs = [...dashTabs, { id, name }];
     selectDashTab(id); // persists tabs + active
-    emit('tab:created', { name: name.trim() }); // A188 — activity-log line
+    emit('tab:created', { name }); // A188 — activity-log line
   }
   function renameDashTab(id: string) {
     const cur = dashTabs.find(t => t.id === id);
@@ -813,6 +818,30 @@
   });
 </script>
 
+<!-- A206: shape-matched placeholder while data/chunks resolve — boot (loadRefData → Store.init →
+     restore) and the code-split screens' pending state. Card-shaped like every screen's layout, so
+     content arriving causes no layout shift; the pulse collapses under reduced motion. -->
+{#snippet screenSkeleton()}
+  <div role="status" aria-label="Loading">
+    <div class="mb-4 flex items-center gap-2" aria-hidden="true">
+      <Skeleton class="h-7 w-28" />
+      <Skeleton class="h-7 w-20" />
+    </div>
+    <div class="flex flex-col gap-4" aria-hidden="true">
+      {#each [0, 1] as i (i)}
+        <div class="rounded-md border border-border bg-card">
+          <div class="border-b border-border px-4 py-2.5"><Skeleton class="h-4 w-40" /></div>
+          <div class="space-y-3 p-4">
+            <Skeleton class="h-4 w-full" />
+            <Skeleton class="h-4 w-2/3" />
+            {#if i === 0}<Skeleton class="h-40 w-full" />{/if}
+          </div>
+        </div>
+      {/each}
+    </div>
+  </div>
+{/snippet}
+
 <AppShell sections={navSections} {active} onnavigate={navigate} title={navLabel(active)} hideNav={needsOnboarding}>
   {#snippet actions()}
     <div class="flex min-w-0 items-center gap-2">
@@ -835,7 +864,7 @@
       {#if dash.error}
         <p class="text-sm text-destructive" role="alert">Could not start the app: {dash.error}</p>
       {:else if !dash.loaded}
-        <p class="text-sm text-muted-foreground">Loading…</p>
+        {@render screenSkeleton()}
       {:else if needsOnboarding}
         <Onboarding setup={dash.setup} onsetupsave={s => dash.saveSetup(s)} onimport={onboardImport} />
       {:else if active === 'dashboard'}
@@ -883,7 +912,9 @@
           layouts={dashLayouts}
         />
       {:else if active === 'calendar'}
-        {#await SCREEN_LOADERS.calendar() then Calendar}
+        {#await SCREEN_LOADERS.calendar()}
+          {@render screenSkeleton()}
+        {:then Calendar}
           <Calendar.default
             monthDays={calMonthDays}
             year={dash.calYear}
@@ -900,7 +931,9 @@
           />
         {/await}
       {:else if active === 'analytics'}
-        {#await SCREEN_LOADERS.analytics() then Analytics}
+        {#await SCREEN_LOADERS.analytics()}
+          {@render screenSkeleton()}
+        {:then Analytics}
           <Analytics.default
             kpis={analytics.kpis}
             dist={analytics.dist}
@@ -924,7 +957,9 @@
           />
         {/await}
       {:else if active === 'blotter'}
-        {#await SCREEN_LOADERS.blotter() then Blotter}
+        {#await SCREEN_LOADERS.blotter()}
+          {@render screenSkeleton()}
+        {:then Blotter}
           <Blotter.default
             rows={blotterRows}
             tagVocab={dash.tags}
@@ -934,7 +969,9 @@
           />
         {/await}
       {:else if active === 'trades'}
-        {#await SCREEN_LOADERS.trades() then TradeEditor}
+        {#await SCREEN_LOADERS.trades()}
+          {@render screenSkeleton()}
+        {:then TradeEditor}
           <TradeEditor.default
             rows={editorRows}
             coreEditable={false}
@@ -946,7 +983,9 @@
           />
         {/await}
       {:else if active === 'reports'}
-        {#await SCREEN_LOADERS.reports() then Reports}
+        {#await SCREEN_LOADERS.reports()}
+          {@render screenSkeleton()}
+        {:then Reports}
           <Reports.default
             defaultTitle="Performance report"
             defaultAccount={dash.brokerName(dash.setup.broker)}
@@ -959,7 +998,9 @@
           />
         {/await}
       {:else if active === 'csv'}
-        {#await SCREEN_LOADERS.csv() then CsvLibrary}
+        {#await SCREEN_LOADERS.csv()}
+          {@render screenSkeleton()}
+        {:then CsvLibrary}
           <CsvLibrary.default
             files={csvFiles}
             blotterHref="#blotter"

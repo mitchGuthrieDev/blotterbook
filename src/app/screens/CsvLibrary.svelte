@@ -101,6 +101,7 @@
   import * as Dialog from '$lib/components/ui/dialog';
   import * as AlertDialog from '$lib/components/ui/alert-dialog';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+  import IconTip from '$lib/components/IconTip.svelte';
   import * as Select from '$lib/components/ui/select';
   import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 
@@ -436,18 +437,23 @@
                 </Table.Cell>
                 <Table.Cell onclick={e => e.stopPropagation()}>
                   <DropdownMenu.Root>
-                    <DropdownMenu.Trigger>
-                      {#snippet child({ props })}
-                        <button
-                          {...props}
-                          type="button"
-                          class="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-                          aria-label="File actions"
-                        >
-                          <MoreHorizontal class="size-4" />
-                        </button>
+                    <!-- A205: tooltip composed onto the menu trigger (tooltip child props → DropdownMenu.Trigger). -->
+                    <IconTip label="File actions">
+                      {#snippet button(tip)}
+                        <DropdownMenu.Trigger {...tip}>
+                          {#snippet child({ props })}
+                            <button
+                              {...props}
+                              type="button"
+                              class="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                              aria-label="File actions"
+                            >
+                              <MoreHorizontal class="size-4" />
+                            </button>
+                          {/snippet}
+                        </DropdownMenu.Trigger>
                       {/snippet}
-                    </DropdownMenu.Trigger>
+                    </IconTip>
                     <DropdownMenu.Content align="end" class="min-w-[160px]">
                       {#if !f.legacy}
                         <DropdownMenu.Item disabled={dataDisabled} onSelect={() => onreimport?.(f.id)}>

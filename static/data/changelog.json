@@ -4,6 +4,33 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.52.0",
+      "date": "2026-07-05",
+      "title": "Little things that add up",
+      "summary": "A quick polish pass: tooltips on the icon buttons, loading skeletons instead of blank screens, instant dashboard tabs, and your state pre-selected for the tax estimate. Your trade data still never leaves the browser.",
+      "highlights": [
+        "New dashboard tabs appear instantly as 'New tab 1' — no naming dialog; rename any time from the tab's menu.",
+        "US visitors get their state pre-selected in the tax estimate (from Cloudflare's coarse edge region — no IP stored, and you can always change it).",
+        "Icon buttons across the app — the sidebar toggle, tab menus, module menus, calendar controls, file actions — now explain themselves with tooltips.",
+        "Loading screens show shape-matched placeholders instead of a bare 'Loading…' or a blank flash.",
+        "The site footer now carries a copyright line."
+      ]
+    },
+    {
+      "version": "0.51.0",
+      "date": "2026-07-04",
+      "title": "A real CSV Library, your broker's actual commissions, and safer imports",
+      "summary": "One big data-management day: every CSV you import is now kept as its own file with full provenance, real commissions from your exports override the estimates, historical rate changes are dated correctly, and TradingView order-history exports import (and reconcile) alongside balance history. Analytics gets click-to-filter. Your trade data still never leaves the browser.",
+      "highlights": [
+        "The CSV Library is now a real library: each imported file gets its own row with platform, trade counts, date coverage, and size — include/exclude a file's trades with a switch, rename it, re-import it, download the original, or delete just that file. Everything still lives only in your browser (soft 50 MB budget with a heads-up as you approach it).",
+        "Real commissions win: when your export carries actual commission/fee amounts (e.g. fills exports), those trades are priced at the real cost instead of the modeled rate — with a footnote telling you how many trades use actual vs estimated costs. You can also set a per-file broker override for files imported from a different broker.",
+        "Commission and fee estimates are now effective-dated: a trade from last March is priced at last March's rates, not today's. Discount Trading joins the broker list.",
+        "TradingView order-history exports (\"History\" tab) now import — with entry/exit times, quantities, and per-trade commissions — and cross-reconcile automatically with balance-history imports, so uploading both never double-counts or invents trades.",
+        "Safer imports: files are validated before parsing (type, size, and binary checks with readable errors), and a CSV that doesn't match a supported platform export is refused with a clear message instead of importing garbage.",
+        "Analytics is interactive: click a symbol, tag, weekday, or the long/short cards to filter every screen; active filters show as removable chips, and the symbol/tag tables can expand to show everything."
+      ]
+    },
+    {
       "version": "0.44.0",
       "date": "2026-07-02",
       "title": "Dashboard tabs, a friendlier dashboard, and mobile fixes",

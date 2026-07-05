@@ -162,6 +162,9 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     await reloadAll();
     const su = ((await store.getMeta('setup')) as Partial<Setup>) || {};
     setup = { broker: su.broker || '', feed: su.feed || '', stateAbbr: su.state || '', platform: Number(su.platform) || 0 };
+    // A201: no saved state yet → prefill from the visitor's coarse edge region. Fire-and-forget so
+    // boot never blocks on it; skipped on demo (seeded with its own state).
+    if (!isDemo && !setup.stateAbbr) void prefillStateFromGeo();
     const last = allTrades.length ? allTrades[allTrades.length - 1].date : null;
     calYear = last ? +last.slice(0, 4) : new Date().getFullYear();
     calMonth = last ? +last.slice(5, 7) - 1 : new Date().getMonth();
@@ -169,6 +172,22 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     // A151: the shared actions fire bus events for the ActivityTerminal (every emit is a no-op
     // with no subscriber; app:ready leads boot() — A195).
     emit('data:loaded', { count: allTrades.length });
+  }
+
+  // A201: convenience-only tax-state prefill from /api/geo (coarse edge region — no IP, no trade
+  // data). In-memory only: it persists with the user's NEXT setup save, never by itself. Any
+  // failure (offline, non-US, unknown region, dev server without functions) is silent.
+  async function prefillStateFromGeo() {
+    try {
+      const res = await fetch('/api/geo');
+      if (!res.ok) return;
+      const geo = (await res.json()) as { country?: string | null; regionCode?: string | null };
+      if (geo.country !== 'US' || !geo.regionCode) return;
+      if (setup.stateAbbr) return; // the user picked one while the fetch was in flight
+      if (STATES.some(s => s[0] === geo.regionCode)) setup = { ...setup, stateAbbr: geo.regionCode };
+    } catch {
+      // convenience only — never surface an error
+    }
   }
 
   function navMonth(delta: number) {

@@ -12,6 +12,7 @@
   // metrics + journal, wired by App.svelte on all surfaces). Color only in the P&L.
   import { ChevronLeft, ChevronRight, X, Minus, Plus, Paperclip, ImagePlus, Check } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
+  import IconTip from '$lib/components/IconTip.svelte';
   import { Badge } from '$lib/components/ui/badge';
   import * as Card from '$lib/components/ui/card';
   import { cn } from '$lib/utils';
@@ -223,35 +224,53 @@
     />
     {#if view === 'month'}
       <div class="flex items-center gap-1.5">
-        <Button variant="outline" size="icon" class="size-8" aria-label="Previous month" onclick={() => onprev?.()}
-          ><ChevronLeft class="size-4" /></Button
-        >
+        <IconTip label="Previous month">
+          {#snippet button(tip)}
+            <Button {...tip} variant="outline" size="icon" class="size-8" aria-label="Previous month" onclick={() => onprev?.()}
+              ><ChevronLeft class="size-4" /></Button
+            >
+          {/snippet}
+        </IconTip>
         <span class="min-w-[8.5rem] text-center text-sm font-semibold">{monthLabel}</span>
-        <Button variant="outline" size="icon" class="size-8" aria-label="Next month" onclick={() => onnext?.()}
-          ><ChevronRight class="size-4" /></Button
-        >
+        <IconTip label="Next month">
+          {#snippet button(tip)}
+            <Button {...tip} variant="outline" size="icon" class="size-8" aria-label="Next month" onclick={() => onnext?.()}
+              ><ChevronRight class="size-4" /></Button
+            >
+          {/snippet}
+        </IconTip>
         <Button variant="secondary" size="sm" onclick={() => onlatest?.()}>Latest</Button>
       </div>
       <!-- Daily target stepper -->
       <div class="flex items-center gap-1.5 rounded-md border border-border px-2 py-1">
         <span class="text-[11px] text-muted-foreground">Target/day</span>
-        <button
-          type="button"
-          class="grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-          aria-label="Lower target"
-          onclick={() => (target = Math.max(0, target - 50))}
-        >
-          <Minus class="size-3" />
-        </button>
+        <IconTip label="Lower target by $50">
+          {#snippet button(tip)}
+            <button
+              {...tip}
+              type="button"
+              class="grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+              aria-label="Lower target"
+              onclick={() => (target = Math.max(0, target - 50))}
+            >
+              <Minus class="size-3" />
+            </button>
+          {/snippet}
+        </IconTip>
         <span class="w-12 text-center text-xs tabular-nums">${target}</span>
-        <button
-          type="button"
-          class="grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-          aria-label="Raise target"
-          onclick={() => (target += 50)}
-        >
-          <Plus class="size-3" />
-        </button>
+        <IconTip label="Raise target by $50">
+          {#snippet button(tip)}
+            <button
+              {...tip}
+              type="button"
+              class="grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+              aria-label="Raise target"
+              onclick={() => (target += 50)}
+            >
+              <Plus class="size-3" />
+            </button>
+          {/snippet}
+        </IconTip>
       </div>
     {:else}
       <span class="text-sm font-semibold">{year}</span>
@@ -464,12 +483,17 @@
                       <button type="button" class="block" onclick={() => (zoomShot = shot)} aria-label="Enlarge screenshot {i + 1}">
                         <img src={shot} alt="screenshot {i + 1}" class="block h-12 rounded-md border border-border" />
                       </button>
-                      <button
-                        type="button"
-                        class="absolute -right-1.5 -top-1.5 grid size-[18px] place-items-center rounded-full bg-destructive text-white"
-                        aria-label="Remove screenshot"
-                        onclick={() => removeShot(i)}><X class="size-3" /></button
-                      >
+                      <IconTip label="Remove screenshot">
+                        {#snippet button(tip)}
+                          <button
+                            {...tip}
+                            type="button"
+                            class="absolute -right-1.5 -top-1.5 grid size-[18px] place-items-center rounded-full bg-destructive text-white"
+                            aria-label="Remove screenshot"
+                            onclick={() => removeShot(i)}><X class="size-3" /></button
+                          >
+                        {/snippet}
+                      </IconTip>
                     </span>
                   {/each}
                   <label

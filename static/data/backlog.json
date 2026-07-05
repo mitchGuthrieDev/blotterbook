@@ -112,8 +112,8 @@
       "effort": "small",
       "status": "open",
       "completedDate": null,
-      "partial": false,
-      "prompt": "From R7. The shared site footer (src/site/lib/Footer.svelte — partials/footer.html was retired by A69) has no copyright line and never names the operating entity. Add a '© 2026 <name>' line (and, on legal.html / src/site/components/Legal.svelte, a 'Blotterbook is operated by <entity>' note). The exact entity display name is a pending owner decision (TBD as of R7 — 'Scaline Audio' per LICENSE); ship brand-only '© 2026 Blotterbook' now if undecided and swap in the entity once chosen. Since A69 the footer is a Svelte component prerendered by scripts/vite-ssg.mjs, so `npm run build` regenerates every page's footer automatically (no build-includes step). Done when: every page footer shows a copyright line and the operator is named once the entity is decided.",
+      "partial": true,
+      "prompt": "From R7. The shared site footer (src/site/lib/Footer.svelte — partials/footer.html was retired by A69) has no copyright line and never names the operating entity. Add a '© 2026 <name>' line (and, on legal.html / src/site/components/Legal.svelte, a 'Blotterbook is operated by <entity>' note). The exact entity display name is a pending owner decision (TBD as of R7 — 'Scaline Audio' per LICENSE); ship brand-only '© 2026 Blotterbook' now if undecided and swap in the entity once chosen. Since A69 the footer is a Svelte component prerendered by scripts/vite-ssg.mjs, so `npm run build` regenerates every page's footer automatically (no build-includes step). Done when: every page footer shows a copyright line and the operator is named once the entity is decided. — PARTIAL 2026-07-05 (owner chose brand-only for now): '© 2026 Blotterbook. All rights reserved.' ships in both footer variants (full + admin). REMAINING: swap in the entity + add the 'operated by' note on Legal once the owner decides the entity (ties to F18/A202).",
       "doneNote": null
     },
     {
@@ -393,18 +393,6 @@
       "doneNote": null
     },
     {
-      "id": "A198",
-      "title": "Auto-name new dashboard tabs \"New tab N\" instead of prompting for a name",
-      "category": "FIXES",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Small UX fix. createDashTab() in src/app/App.svelte (~line 183) currently opens a blocking prompt('New dashboard tab name…') and aborts tab creation if the user cancels/enters nothing. Change it to create the tab immediately with an auto-generated default name — 'New tab N' where N makes the name unique among existing dashTabs (e.g. lowest unused index, or dashTabs.length+1) — no prompt. The existing renameDashTab() flow (the DashTabs menu → Rename) already lets the user rename afterward, so keep that untouched. Preserve the rest of createDashTab (id generation, selectDashTab persist, the emit('tab:created') activity-log line). Done when: clicking '+ New tab' instantly adds a uniquely-named 'New tab N' with no dialog, and rename still works.",
-      "doneNote": null
-    },
-    {
       "id": "A199",
       "title": "(Discussion) Audit our mobile approach — is it best-practice or does it need re-architecting?",
       "category": "LAYOUT (web vs mobile)",
@@ -426,18 +414,6 @@
       "completedDate": null,
       "partial": false,
       "prompt": "On mobile, replace the vertically-stacked top-five dashboard modules (the summary/stat modules at the top of src/app/screens/Dashboard.svelte) with a single card-stack component that shows ONE module at a time and lets the user swipe left/right (touch) or tap left/right arrow controls to move between them, with a dot/index indicator. It's a cleaner, less scroll-heavy view on small screens. Constraints: mobile only — keep the existing multi-module layout at desktop breakpoints (render the stack under a Tailwind breakpoint / container query, the grid above); reuse chart-1..5 tokens and shadcn-svelte primitives; support keyboard (arrow keys) + reduced-motion (A146 pattern); CSP style-src 'self' (no inline style — use the styleProps action for any dynamic transform). Consider a small reusable ModuleCarousel component so other screens can reuse it. Related: A199 (mobile audit). Done when: on a mobile viewport the top modules render as a swipeable/arrow-navigable one-at-a-time stack, desktop is unchanged, and e2e + size-budget gates stay green.",
-      "doneNote": null
-    },
-    {
-      "id": "A201",
-      "title": "Wire up /api/geo — prefill the tax-estimate US state from the visitor's edge region",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "The Cloudflare Pages Function functions/api/geo.ts already returns the visitor's coarse { country, region, regionCode } from request.cf (private-cached, no IP stored), but NOTHING in src/ calls it. Wire it into the app: on the cost/tax setup path (CostSetup part / state-tax selection), fetch('/api/geo'), and when country==='US' pre-select the matching state (regionCode → state-tax.json entry) as a convenience default the user can still change. Constraints: purely a convenience prefill — never block on the request, tolerate failure/offline/non-US silently (no error UI), and don't call it in demo if it adds noise (or guard by PAGE_MODE if appropriate). Keep the moat: the request carries no trade data; it only reads coarse geo. Done when: a US visitor sees their state pre-selected in the tax estimate, the fetch fails gracefully everywhere else, and demo stays non-mutating.",
       "doneNote": null
     },
     {
@@ -474,30 +450,6 @@
       "completedDate": null,
       "partial": false,
       "prompt": "DISCUSSION/EVALUATION. Assess libraries that could make the app feel more modern/polished, specifically anime.js (JS animation engine), Kokonut UI, and bklit UI (component/animation collections) — plus note any obvious peers. For EACH: what it offers, how it fits our stack (Svelte 5 runes + Tailwind v4 + shadcn-svelte/bits-ui), license, bundle-size cost against the 600 KiB /app/ budget (A96/A136), and CSP compatibility (style-src 'self' — no inline style; motion via CSSOM/styleProps action, A55). Note that Svelte transitions + FLIP + tw-animate-css already landed (A146) and shadcn-svelte owns our primitives — so frame each as 'what does it add beyond what we have, and where'. Recommendation per library: adopt / selectively borrow patterns / skip. Done when: a written comparison + recommendation is delivered; anything adopted is spun off as its own item.",
-      "doneNote": null
-    },
-    {
-      "id": "A205",
-      "title": "Add tooltips to icon/ambiguous buttons across the app",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Polish pass. The shadcn-svelte tooltip primitive is installed ($lib/components/ui/tooltip) but isn't used in src/app. Add tooltips to buttons whose purpose isn't obvious from a visible label — icon-only buttons (sidebar toggle, dashboard tab close/menu, module controls, blotter row actions, reorder/save/dirty affordances). Use the canonical Tooltip (portals to body; keyboard/focus + hover accessible) with concise text; don't tooltip buttons that already have clear text labels. Keep it consistent (delay, side) and CSP-safe. Consider a small wrapper/snippet if the pattern repeats. Related: A199/A200 (mobile — tooltips are hover-only, so ensure touch users still get the affordance). Done when: icon/ambiguous buttons across the app surfaces have accessible tooltips, e2e stays green, and no inline style is introduced.",
-      "doneNote": null
-    },
-    {
-      "id": "A206",
-      "title": "Add skeleton loaders for boot/async surfaces",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Polish pass. The shadcn-svelte skeleton primitive is installed ($lib/components/ui/skeleton) but isn't used in src/app. Add skeleton placeholders on the surfaces that briefly show empty/blank while data resolves — dashboard modules/curve during boot (loadRefData → Store.init → restoreSession), the code-split lazy screens ({#await import()} fallbacks: Analytics/Reports/etc.), and any async table load. Match the real layout's shape/spacing so there's no layout shift when content arrives; respect reduced-motion (A146); keep CSP style-src 'self'. Don't add artificial delay — only show skeletons while genuinely pending. Done when: boot and lazy-screen loads show shape-matched skeletons instead of blank/flash, no CLS regression, and gates stay green.",
       "doneNote": null
     },
     {
