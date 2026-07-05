@@ -10,6 +10,11 @@
   }
   let { active = '', variant = 'full' }: Props = $props();
 
+  // A233: identical header treatment to the homepage's bespoke header (the border fades in on
+  // scroll) so the chrome doesn't change between / and the info pages. SSR renders scrolled=false —
+  // the same initial state Home hydrates from.
+  let scrolled = $state(false);
+
   const links = [
     { key: 'features', href: 'index.html#features', label: 'Features' },
     { key: 'platforms', href: 'index.html#platforms', label: 'Platforms' },
@@ -21,10 +26,16 @@
   ];
 </script>
 
-<header class="sticky top-0 z-50 border-b border-border bg-background/86 backdrop-blur-[10px] backdrop-saturate-150">
-  <!-- A164: sized to match Home's A145 header (h-12, text-sm font-semibold wordmark, h-2 dot) so the
-       chrome doesn't visibly jump between / and the info pages. -->
-  <nav class="nav relative mx-auto flex h-12 max-w-[1080px] items-center px-[22px]">
+<svelte:window onscroll={() => (scrolled = window.scrollY > 8)} />
+
+<header
+  class="sticky top-0 z-50 border-b backdrop-blur-[10px] backdrop-saturate-150 transition-[border-color,background] duration-[250ms] {scrolled
+    ? 'border-border bg-background/86'
+    : 'border-transparent bg-background/72'}"
+>
+  <!-- A164/A233: sized + styled to MATCH Home's A145 header exactly (h-12 · 1180px column ·
+       18px gap · scroll-border) so the chrome doesn't visibly jump between / and the info pages. -->
+  <nav class="nav relative mx-auto flex h-12 max-w-[1180px] items-center px-[22px]">
     <a
       class="wordmark inline-flex items-center gap-[9px] text-sm font-semibold tracking-[0.01em] text-foreground no-underline hover:no-underline"
       href="index.html"
@@ -36,7 +47,7 @@
       class="navtoggle pointer-events-none absolute h-px w-px opacity-0"
       aria-label="Toggle navigation menu"
     />
-    <div class="navlinks ml-[6px] flex-wrap gap-1">
+    <div class="navlinks ml-2 flex-wrap gap-1">
       {#if variant === 'admin'}
         <a href="index.html">Home</a>
         <a href="changelog.html">Changelog</a>
@@ -63,7 +74,7 @@
   /* Layout/display props the responsive block below toggles stay scoped to avoid utility-vs-scoped
      specificity fights at the bespoke 760px breakpoint; the rest moved to Tailwind utilities. */
   .nav {
-    gap: 16px;
+    gap: 18px; /* A233: matches Home's gap-[18px] */
   }
   .navlinks {
     display: flex;

@@ -8,7 +8,8 @@
 </script>
 
 <footer class="border-t border-border px-[22px] py-[34px] text-[12.5px] text-muted-foreground">
-  <div class="mx-auto flex max-w-[1080px] flex-wrap items-center justify-between gap-4">
+  <!-- A233: 1180px column to match the unified header (and Home's footer column). -->
+  <div class="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-4">
     <span class="inline-flex items-center gap-2 font-bold text-foreground"
       ><span class="h-2 w-2 rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--chart-3))]"></span>Blotterbook</span
     >

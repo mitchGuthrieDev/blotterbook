@@ -886,7 +886,9 @@
             onclick={() => t && pickDay(day)}
             disabled={!t}
             class={[
-              'aspect-square min-w-0 overflow-hidden rounded-md border p-1 text-left transition-colors sm:aspect-auto sm:min-h-16 sm:p-1.5',
+              // A232: the cells grow on desktop so the month grid fills the module's vertical room
+              // instead of squishing (A182's bounded mobile cells are unchanged below sm).
+              'aspect-square min-w-0 overflow-hidden rounded-md border p-1 text-left transition-colors sm:aspect-auto sm:min-h-16 sm:p-1.5 lg:min-h-[5.5rem] xl:min-h-24',
               t ? (up ? 'border-chart-2/30 bg-chart-2/10' : 'border-destructive/30 bg-destructive/10') : 'cursor-default border-border',
               selectedDay === day && 'ring-2 ring-primary',
             ]}
@@ -1150,17 +1152,26 @@
   {/snippet}
 
   <!-- Modules — reorderable / hideable / re-addable (persisted to Store.local). A146: reorders
-       FLIP into place and add/remove fades (durations collapse under reduced motion). -->
-  {#each modOrder as key (key)}
-    <div animate:flip={{ duration: dur(180) }} transition:fade={{ duration: dur(140) }}>
-      <Card.Root id="dashmod-{key}">
-        {@render moduleHeader(key)}
-        <Card.Content>
-          {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'compare'}{@render compareBody()}{/if}
-        </Card.Content>
-      </Card.Root>
-    </div>
-  {/each}
+       FLIP into place and add/remove fades (durations collapse under reduced motion).
+       A228: at lg+ the stack becomes a 2-track grid — Trading Calendar and Break-Even & Cost are
+       half-width (side by side when adjacent in the order, as in the default layout); every other
+       module spans both tracks. Narrow viewports keep the single-column stack. -->
+  <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+    {#each modOrder as key (key)}
+      <div
+        class={['min-w-0', key !== 'cal' && key !== 'cost' && 'lg:col-span-2']}
+        animate:flip={{ duration: dur(180) }}
+        transition:fade={{ duration: dur(140) }}
+      >
+        <Card.Root id="dashmod-{key}" class="h-full">
+          {@render moduleHeader(key)}
+          <Card.Content>
+            {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'compare'}{@render compareBody()}{/if}
+          </Card.Content>
+        </Card.Root>
+      </div>
+    {/each}
+  </div>
 
   <!-- Add-modules affordance (A189) — ALWAYS visible (the A139 dropdown only rendered when a module
        was hidden, so a default dashboard offered no way to discover it). Opens an illustrated

@@ -713,6 +713,58 @@ const tradovateFills: Adapter = {
   },
 };
 
+/* Quantower — Trades export (per-fill executions WITH per-fill realized P/L + Fee). Verified
+   against a real export 2026-07-05 (docs/csv-examples/quantower/): 12-hour AM/PM timestamps
+   (normTime handles them), newest-first rows, signed Quantity, full contract codes (MESU26), a
+   UTF-8 BOM on the header, and '…,ticks' twin columns plus 'Strike price' that substring lookups
+   would hijack — hence the exact-match column resolution. 'Orders history.csv' (order lifecycle)
+   is NOT trade data. Scores 5 so it out-ranks TradeStation's generic date/time match (the real
+   file used to MISDETECT as TradeStation and refuse). */
+const quantower: Adapter = {
+  id: 'quantower',
+  label: 'Quantower',
+  kind: 'fills',
+  beta: false,
+  minScore: 5,
+  sniff(text, rows) {
+    const h = lc(rows[0] || []);
+    return hasAny(h, ['gross p/l']) && hasAny(h, ['net p/l']) && hasAny(h, ['trade id']) ? 5 : 0;
+  },
+  toTrades(text, rows) {
+    const head = lc(rows[0]);
+    const ix = finder(head);
+    const exact = (name: string) => head.findIndex(h => h === name);
+    const cT = ix('date/time'),
+      cSym = exact('symbol') >= 0 ? exact('symbol') : ix('symbol'),
+      cSide = exact('side'),
+      cQty = exact('quantity'),
+      cPx = exact('price'), // exact — 'strike price' contains 'price'
+      cPnl = exact('gross p/l'), // exact — the '"Gross P/L,ticks"' twins contain it too
+      cFee = exact('fee');
+    if (cT < 0 || cSide < 0 || cPx < 0 || cPnl < 0) throw new Error('missing Date/Time, Side, Price or Gross P/L column');
+    const fills: Fill[] = [];
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row || !row[cSide]) continue;
+      const side = sideWord(row[cSide]);
+      const price = num(row[cPx]);
+      const qty = cQty >= 0 ? Math.abs(num(row[cQty])) : 1;
+      if (!side || isNaN(price) || !(qty > 0)) continue;
+      const f: Fill = { time: normTime(row[cT]), symbol: cSym >= 0 ? row[cSym] : '', side, qty, price };
+      // Per-fill realized GROSS P/L (0 on opening fills — pairFills only reads it on closes);
+      // the Fee column is the real per-fill cost (A208; explicit 0 in the simulator is honored).
+      const rz = num(row[cPnl]);
+      if (!isNaN(rz)) f.realized = rz;
+      if (cFee >= 0) {
+        const fee = num(row[cFee]);
+        if (!isNaN(fee)) f.commission = Math.abs(fee);
+      }
+      fills.push(f);
+    }
+    return pairFills(fills);
+  },
+};
+
 /* Rithmic R|Trader — Completed Orders (fills). */
 const rithmic: Adapter = {
   id: 'rithmic',
@@ -977,6 +1029,7 @@ const ADAPTERS: Adapter[] = [
   tradovate,
   tradovatePerf,
   tradovateFills,
+  quantower,
   rithmic,
   sierrachart,
   tradestation,
