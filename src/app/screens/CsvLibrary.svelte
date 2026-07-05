@@ -18,6 +18,9 @@
   export type ImportPreview = {
     name: string;
     platform: string;
+    /** Detected adapter is beta (unverified against a real export) — shown in the preview so a
+     *  wrong detection is visible BEFORE confirm (A178). */
+    beta?: boolean;
     rows: number;
     tradeCount: number;
     from: string;
@@ -30,6 +33,22 @@
     sample: { time: string; sym: string; side: string; qty: number; pnl: number; up: boolean }[];
     error?: string;
   };
+  /** An error-only preview (intake rejection / failed parse) in the shape the preview sheet renders. */
+  export function errorPreview(name: string, error: string): ImportPreview {
+    return {
+      name,
+      platform: '',
+      rows: 0,
+      tradeCount: 0,
+      from: '',
+      to: '',
+      estimatedRoots: [],
+      skippedFills: 0,
+      openLots: 0,
+      sample: [],
+      error,
+    };
+  }
 </script>
 
 <script lang="ts">
@@ -56,6 +75,7 @@
   } from '@lucide/svelte';
   import { cn } from '$lib/utils';
   import { usd } from '../../lib/core/core.ts';
+  import { checkCsvFile } from '../../lib/core/intake.ts';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Switch } from '$lib/components/ui/switch';
@@ -162,6 +182,14 @@
   }
   async function handleFile(file: File | undefined) {
     if (!file || !parse || dataDisabled) return;
+    // A177: pre-read gate (extension/MIME allowlist + size cap) — reject before reading a 200 MB
+    // drop into memory; the post-read text checks run inside Adapters.parse.
+    const veto = checkCsvFile(file);
+    if (veto) {
+      preview = errorPreview(file.name, veto);
+      uploadOpen = true;
+      return;
+    }
     const text = await file.text();
     preview = parse(text, file.name);
     uploadOpen = true;
@@ -250,7 +278,7 @@
     </Breadcrumb.List>
   </Breadcrumb.Root>
 
-  <input bind:this={fileInput} type="file" accept=".csv,text/csv" class="hidden" onchange={onFilePicked} />
+  <input bind:this={fileInput} type="file" accept=".csv,.txt,.tsv,text/csv,text/plain" class="hidden" onchange={onFilePicked} />
 
   <!-- Upload dropzone (A134: disabled in demo — the demo dataset is fixed; A160: real drop handling) -->
   <!-- svelte-ignore a11y_no_static_element_interactions — drag-only wrapper; the button inside is the control -->
@@ -473,7 +501,9 @@
         <div class="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
           <FileText class="size-4 text-muted-foreground" />
           <span class="font-medium">{preview.name}</span>
+          <!-- A178: always name the detected platform + beta status so a wrong detection is visible before confirm -->
           <Badge variant="secondary" class="ml-auto">{preview.platform}</Badge>
+          {#if preview.beta}<Badge variant="outline" class="border-chart-4/40 text-chart-4">beta</Badge>{/if}
         </div>
         <p class="text-sm text-muted-foreground">
           Parsed <b class="text-foreground">{fmt(preview.rows)} rows</b> → <b class="text-foreground">{fmt(preview.tradeCount)} trades</b> ·

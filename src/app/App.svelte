@@ -625,6 +625,8 @@
     const r = Adapters.parse(text);
     if (!r.ok || !r.trades) {
       pendingTrades = [];
+      // (an error-only preview — keep the shape aligned with CsvLibrary's errorPreview(); a value
+      //  import of it here would pull the lazy-loaded screen into the boot chunk)
       return {
         name,
         platform: '',
@@ -653,6 +655,7 @@
     return {
       name,
       platform: r.label ?? 'CSV',
+      beta: !!r.beta, // A178: surface beta detection in the preview, before confirm
       rows,
       tradeCount: trades.length,
       from: trades[0]?.date ?? '',

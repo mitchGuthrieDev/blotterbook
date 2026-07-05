@@ -1,5 +1,6 @@
 'use strict';
 import { pad2 } from './core.ts';
+import { checkCsvText } from './intake.ts';
 import type { Trade, Fill, Row, Adapter, Detected, ParseResult } from './types.ts';
 /* ============================================================
    Platform CSV adapters + format auto-detection
@@ -421,6 +422,7 @@ const tradingview: Adapter = {
   label: 'TradingView',
   kind: 'closed',
   beta: false,
+  minScore: 5,
   sniff(text, rows) {
     const h = lc(rows[0] || []);
     return hasAny(h, ['action']) && hasAny(h, ['realized pnl']) ? 5 : 0;
@@ -457,6 +459,7 @@ const motivewave: Adapter = {
   label: 'MotiveWave',
   kind: 'closed',
   beta: true,
+  minScore: 5,
   sniff(text, rows) {
     const h = lc(rows[0] || []);
     return hasAny(h, ['entry price', 'entry time']) && hasAny(h, ['exit price', 'exit time']) && hasAny(h, ['p/l', 'pnl', 'profit'])
@@ -506,6 +509,7 @@ const tradovate: Adapter = {
   label: 'Tradovate',
   kind: 'fills',
   beta: true,
+  minScore: 4,
   sniff(text, rows) {
     const h = lc(rows[0] || []);
     return hasAny(h, ['b/s']) &&
@@ -543,6 +547,7 @@ const rithmic: Adapter = {
   label: 'Rithmic R|Trader',
   kind: 'fills',
   beta: true,
+  minScore: 4,
   sniff(text, rows) {
     const h = lc(rows[0] || []);
     return hasAny(h, ['buy/sell']) && hasAny(h, ['symbol']) && hasAny(h, ['qty filled', 'avg fill price']) ? 4 : 0;
@@ -576,6 +581,7 @@ const sierrachart: Adapter = {
   label: 'Sierra Chart',
   kind: 'fills',
   beta: true,
+  minScore: 3,
   sniff(text, rows) {
     const h = lc(rows[0] || []);
     const distinctive = hasAny(h, ['buysell', 'fillprice', 'internalorderid', 'activitytype', 'openclose']);
@@ -615,6 +621,7 @@ const tradestation: Adapter = {
   label: 'TradeStation',
   kind: 'fills',
   beta: true,
+  minScore: 3,
   sniff(text, rows) {
     const h = lc(rows[0] || []);
     // Require the combined 'date/time' column — the TradeStation-distinctive signal. Without it
@@ -661,6 +668,7 @@ const webull: Adapter = {
   label: 'Webull',
   kind: 'fills',
   beta: true,
+  minScore: 3,
   sniff(text, rows) {
     const h = lc(rows[0] || []);
     return hasAny(h, ['symbol']) &&
@@ -702,6 +710,7 @@ const ibkr: Adapter = {
   label: 'Interactive Brokers',
   kind: 'fills',
   beta: true,
+  minScore: 3,
   sniff(text, rows) {
     const h = lc(rows[0] || []);
     const distinctive = hasAny(h, ['buy/sell', 'proceeds', 'ibcommission', 'realized p/l', 'realizedpnl', 'fifopnlrealized']);
@@ -748,6 +757,7 @@ const schwab: Adapter = {
   label: 'Schwab / thinkorswim',
   kind: 'fills',
   beta: true,
+  minScore: 3,
   sniff(text, rows) {
     if (/account trade history/i.test(text)) return 4;
     return headerRow(rows, ['exec time', 'side', 'symbol']) >= 0 ? 3 : 0;
@@ -799,7 +809,9 @@ function detect(text: string): Detected | null {
     } catch (_) {
       /* unscorable adapter → leave 0 */
     }
-    if (score >= 2 && (!best || score > best.score)) best = { id: a.id, label: a.label, beta: !!a.beta, kind: a.kind, score };
+    // A178 strict gate: each adapter sets the minimum score it will auto-claim at — a weak
+    // partial match refuses (falls through to the "unrecognized" error) instead of misparsing.
+    if (score >= a.minScore && (!best || score > best.score)) best = { id: a.id, label: a.label, beta: !!a.beta, kind: a.kind, score };
   }
   return best;
 }
@@ -807,6 +819,10 @@ function detect(text: string): Detected | null {
 /* Parse an export into normalized trades. platformId optional — when omitted, auto-detect. */
 function parse(text: string, platformId?: string): ParseResult {
   if (!text || !text.trim()) return { ok: false, error: 'The file is empty.' };
+  // A177 belt-and-braces: the intake points run checkCsvFile/checkCsvText before reaching here,
+  // but every path through parse() gets the binary-sniff + size/row caps regardless.
+  const veto = checkCsvText(text);
+  if (veto) return { ok: false, error: veto };
   let rows: Row[];
   try {
     rows = parseCSV(text);
@@ -825,9 +841,14 @@ function parse(text: string, platformId?: string): ParseResult {
     if (!adapter) return { ok: false, error: 'Unknown platform "' + platformId + '".' };
   } else if (detected) adapter = byId(detected.id);
   else
+    // A178: explicit refusal — name the supported platforms instead of importing garbage through
+    // a weak match (the old copy also pointed at a platform dropdown the redesigned UI no longer has).
     return {
       ok: false,
-      error: 'Could not recognize this platform’s export format. Choose your platform from the dropdown and try again.',
+      error:
+        'This CSV doesn’t match a supported platform export. Supported: ' +
+        ADAPTERS.map(a => a.label).join(', ') +
+        '. See the How-To guide for per-platform export steps.',
       detected: null,
     };
   // Unreachable in practice (detect() ids always resolve), but narrows `adapter` for the rest.
