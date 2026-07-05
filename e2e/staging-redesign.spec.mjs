@@ -657,3 +657,56 @@ test('staging redesign: Analytics click-to-filter narrows every screen and the c
   await gotoScreen(page, 'Blotter');
   await expect.poll(countOf).toBe(before);
 });
+
+test('staging redesign: Analytics histogram drill-down + sortable breakdown columns (A197)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await bootDashboard(page);
+  await gotoScreen(page, 'Analytics');
+
+  // Clicking a P&L bucket label opens the drill-down panel naming the bucket + its trade count;
+  // clicking again (or ✕) closes it.
+  await page.locator('button[title^="Show the"]').first().click();
+  const panel = page.locator('text=/— \\d+ trades?/');
+  await expect(panel).toBeVisible();
+  await page.getByRole('button', { name: 'Close bucket detail' }).click();
+  await expect(panel).toHaveCount(0);
+
+  // Sortable columns: the symbol table re-sorts alphabetically on the Sym header (default is
+  // impact order), and flips direction on a second click.
+  const symCard = page.locator('[data-slot="card"]', { hasText: 'Performance by symbol' });
+  const syms = () => symCard.locator('button[aria-pressed] > span:first-child').allTextContents();
+  // The header buttons' accessible name is their column label (the title attr is supplementary).
+  await symCard.getByRole('button', { name: 'Sym', exact: true }).click();
+  await expect
+    .poll(async () => {
+      const s = await syms();
+      return s.every((v, i) => i === 0 || s[i - 1].localeCompare(v) <= 0);
+    })
+    .toBe(true);
+  await symCard.getByRole('button', { name: 'Sym', exact: true }).click();
+  await expect
+    .poll(async () => {
+      const s = await syms();
+      return s.every((v, i) => i === 0 || s[i - 1].localeCompare(v) >= 0);
+    })
+    .toBe(true);
+});
+
+test('staging redesign: Commission Compare module adds via the picker and ranks brokers (A203)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await bootDashboard(page);
+
+  // Add the module through the A189 picker (it's not in the default layout).
+  await page.getByRole('button', { name: 'Add modules' }).click();
+  const dlg = page.getByRole('dialog');
+  await dlg.locator('label', { hasText: 'Commission Compare' }).locator('input[type=checkbox]').check();
+  await dlg.getByRole('button', { name: /Add module/ }).click();
+
+  // The table renders every broker, cheapest-first with the Cheapest badge on row 1.
+  const mod = page.locator('#dashmod-compare');
+  await expect(mod).toBeVisible();
+  const rows = mod.locator('tbody tr');
+  expect(await rows.count()).toBeGreaterThan(3);
+  await expect(rows.first().getByText('Cheapest')).toBeVisible();
+  await expect(mod.getByText(/exchange\/clearing\/NFA \$\d/)).toBeVisible();
+});

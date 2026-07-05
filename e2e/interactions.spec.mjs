@@ -175,6 +175,31 @@ test('demo: dashboard tabs render and work in-memory (A135, promoted) — but ne
   await expect(page.getByRole('button', { name: 'New tab 1', exact: true })).toHaveCount(0);
 });
 
+test('demo (mobile): top stat cards render as a one-at-a-time carousel with arrows + dots (A200)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 360, height: 780 });
+  await bootDashboard(page);
+
+  // One card at a time: card 1 (Net P&L) shows; card 2 (Win rate) doesn't exist inside the
+  // carousel until we move to it (the desktop grid renders it, but hidden at this width).
+  const carousel = page.getByRole('group', { name: 'Key stats' });
+  await expect(carousel).toBeVisible();
+  await expect(carousel.getByText('Net P&L', { exact: true })).toBeVisible();
+  await expect(carousel.getByText('Win rate', { exact: true })).toHaveCount(0);
+
+  // Arrows + dots navigate; the dot for the active card is marked current.
+  await carousel.getByRole('button', { name: 'Next card' }).click();
+  await expect(carousel.getByText('Win rate', { exact: true })).toBeVisible();
+  await expect(carousel.getByRole('button', { name: /Go to card 2 of/ })).toHaveAttribute('aria-current', 'true');
+  await carousel.getByRole('button', { name: 'Previous card' }).click();
+  await expect(carousel.getByText('Net P&L', { exact: true })).toBeVisible();
+
+  // Desktop is unchanged: at sm+ the grid returns and the carousel unmounts.
+  await page.setViewportSize({ width: 1280, height: 780 });
+  await expect(page.getByRole('group', { name: 'Key stats' })).not.toBeVisible();
+  await expect(page.getByText('Win rate', { exact: true })).toBeVisible();
+});
+
 test('demo (mobile): no screen scrolls horizontally at 360px (A183) and both calendars fit (A182)', async ({ page }) => {
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 360, height: 780 });

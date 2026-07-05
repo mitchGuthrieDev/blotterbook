@@ -1,5 +1,7 @@
 <script lang="ts" module>
   export type { Kpi, DistBar, SignedBar, SymbolRow, TagRow, StatRow } from '../lib/analytics.ts';
+  /** A197 histogram drill-down row — a light projection of the trades in a clicked P&L bucket. */
+  export type BucketTrade = { date: string; time: string; sym: string; side: string; qty: number; pnl: number };
 </script>
 
 <script lang="ts">
@@ -16,8 +18,8 @@
   // tables expand past their top-N cut. Everything degrades to read-only when no filterModel
   // arrives (defensive — App always passes it).
   import { cn } from '$lib/utils';
-  import { usdWhole, DOW_LABEL } from '../../lib/core/core.ts';
-  import { X } from '@lucide/svelte';
+  import { usd, usdWhole, DOW_LABEL } from '../../lib/core/core.ts';
+  import { X, ChevronUp, ArrowUpDown } from '@lucide/svelte';
   import * as Card from '$lib/components/ui/card';
   import type { Kpi, DistBar, SignedBar, SymbolRow, TagRow, StatRow } from '../lib/analytics.ts';
   import type { FilterModel } from './Dashboard.svelte';
@@ -48,6 +50,9 @@
     filterModel?: FilterModel;
     /** A176: fraction (0..1) of trades carrying hold times — capability footnote on the stats grid. */
     holdCoverage?: number;
+    /** A197 drill-down: resolves a histogram bucket's [lo, hi) bounds to its matching trades
+     *  (computed lazily by the app from the active trade list — only on click). */
+    bucketTrades?: (lo: number | null, hi: number | null) => BucketTrade[];
   }
   let {
     kpis,
@@ -69,6 +74,7 @@
     statRows,
     filterModel,
     holdCoverage = 1,
+    bucketTrades,
   }: Props = $props();
 
   const winShare = $derived(wins + losses ? Math.round((wins / (wins + losses)) * 100) : 0);
@@ -79,10 +85,32 @@
     TAG_CUT = 10;
   let allSyms = $state(false);
   let allTags = $state(false);
-  const symShown = $derived(allSyms ? symbols : symbols.slice(0, SYM_CUT));
-  const tagShown = $derived(allTags ? byTag : byTag.slice(0, TAG_CUT));
+
+  // ── A197 sortable columns: null col = the builder's |P&L| impact order; a header click sorts
+  // the FULL breakdown (before the top-N cut) by that column, toggling direction on re-click. ──
+  type SortCol = 'name' | 'trades' | 'win' | 'pnl';
+  type Sort = { col: SortCol | null; dir: 1 | -1 };
+  let symSort = $state<Sort>({ col: null, dir: -1 });
+  let tagSort = $state<Sort>({ col: null, dir: -1 });
+  const applySort = (s: Sort, col: SortCol): Sort =>
+    s.col === col ? { col, dir: -s.dir as 1 | -1 } : { col, dir: col === 'name' ? 1 : -1 };
+  function sortRows<T extends { trades: number; win: number; pnl: number }>(rows: T[], s: Sort, name: (r: T) => string): T[] {
+    if (!s.col) return rows; // builder order (|P&L| desc)
+    const { col, dir } = s;
+    return [...rows].sort((a, b) => dir * (col === 'name' ? name(a).localeCompare(name(b)) : a[col] - b[col]));
+  }
+  const symSorted = $derived(sortRows(symbols, symSort, r => r.sym));
+  const tagSorted = $derived(sortRows(byTag, tagSort, r => r.tag));
+  const symShown = $derived(allSyms ? symSorted : symSorted.slice(0, SYM_CUT));
+  const tagShown = $derived(allTags ? tagSorted : tagSorted.slice(0, TAG_CUT));
   const maxSym = $derived(Math.max(1, ...symShown.map(s => Math.abs(s.pnl))));
   const maxTag = $derived(Math.max(1, ...tagShown.map(r => Math.abs(r.pnl)), Math.abs(untagged?.pnl ?? 0)));
+
+  // ── A197 histogram drill-down: a clicked bucket lists its matching trades (lazy via the
+  // bucketTrades prop; re-derives with the live filter set; toggles off on re-click). ──
+  const BUCKET_ROW_CAP = 12;
+  let bucketSel = $state<number | null>(null);
+  const bucketRows = $derived(bucketSel != null && bucketTrades ? bucketTrades(dist[bucketSel].lo, dist[bucketSel].hi) : []);
 
   // ── A197 click-to-filter: every interaction TOGGLES its field on the shared filter set ──
   const toggleRoot = (sym: string) => filterModel?.set({ root: filterModel.root === sym ? '' : sym });
@@ -141,19 +169,70 @@
   <div class="border-b border-border px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</div>
 {/snippet}
 
-{#snippet countBars(items: DistBar[])}
+{#snippet countBars(items: DistBar[], onbar?: (i: number) => void, activeBar?: number | null)}
   {@const max = Math.max(1, ...items.map(d => d.value))}
   {@const step = 100 / items.length}
   <svg viewBox="0 0 100 60" class="h-32 w-full" preserveAspectRatio="none" aria-hidden="true">
     {#each items as d, i (i)}
       {@const bw = step * 0.62}
       {@const h = (d.value / max) * 56}
-      <rect x={i * step + (step - bw) / 2} y={58 - h} width={bw} height={h} class={d.neg ? 'fill-destructive' : 'fill-chart-2'} />
+      <!-- A197: bars are clickable when a drill-down handler arrives. The whole SVG is aria-hidden
+           (decorative), so the bucket labels below are the keyboard/AT triggers — the rect click is
+           a pointer-only convenience, hence the a11y ignores. -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <rect
+        x={i * step + (step - bw) / 2}
+        y={58 - h}
+        width={bw}
+        height={h}
+        class={cn(
+          d.neg ? 'fill-destructive' : 'fill-chart-2',
+          onbar && 'cursor-pointer',
+          onbar && activeBar != null && activeBar !== i && 'opacity-40'
+        )}
+        onclick={onbar ? () => onbar(i) : undefined}
+      />
     {/each}
   </svg>
   <div class="mt-1 flex justify-between text-[9px] text-muted-foreground">
-    {#each items as d (d.label)}<span>{d.label}</span>{/each}
+    {#each items as d, i (d.label)}
+      {#if onbar}
+        <button
+          type="button"
+          class={cn(
+            'rounded px-0.5 hover:bg-accent hover:text-foreground',
+            activeBar === i && 'bg-secondary font-semibold text-foreground'
+          )}
+          aria-pressed={activeBar === i}
+          title={activeBar === i ? 'Hide these trades' : `Show the ${d.label} trades`}
+          onclick={() => onbar(i)}>{d.label}</button
+        >
+      {:else}
+        <span>{d.label}</span>
+      {/if}
+    {/each}
   </div>
+{/snippet}
+
+{#snippet sortBtn(label: string, col: 'name' | 'trades' | 'win' | 'pnl', sort: { col: string | null; dir: 1 | -1 }, onsort: () => void, cls = '')}
+  <!-- A197: column-sort control (Blotter's sort affordance — chevron flips for desc). -->
+  <button
+    type="button"
+    class={cn(
+      'flex items-center gap-0.5 whitespace-nowrap hover:text-foreground',
+      sort.col === col && 'font-semibold text-foreground',
+      cls
+    )}
+    aria-pressed={sort.col === col}
+    title="Sort by {label}"
+    onclick={onsort}
+  >
+    {label}
+    {#if sort.col === col}<ChevronUp class={cn('size-3', sort.dir === -1 && 'rotate-180')} />{:else}<ArrowUpDown
+        class="size-3 opacity-40"
+      />{/if}
+  </button>
 {/snippet}
 
 {#snippet signedBars(items: SignedBar[], onbar?: (key: number) => void, activeKeys?: number[])}
@@ -240,7 +319,45 @@
     <Card.Root class="lg:col-span-2">
       {@render head('P&L distribution (per trade)')}
       <Card.Content>
-        {@render countBars(dist)}
+        {@render countBars(dist, bucketTrades ? i => (bucketSel = bucketSel === i ? null : i) : undefined, bucketSel)}
+        {#if bucketSel != null}
+          <!-- A197 drill-down: the clicked bucket's matching trades (live — re-narrows with the filter set) -->
+          <div class="mt-3 rounded-md border border-border bg-background p-3">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-semibold">
+                {dist[bucketSel].label} — {bucketRows.length} trade{bucketRows.length === 1 ? '' : 's'}
+              </span>
+              <button
+                type="button"
+                class="grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                aria-label="Close bucket detail"
+                onclick={() => (bucketSel = null)}><X class="size-3" /></button
+              >
+            </div>
+            {#if bucketRows.length}
+              <div class="mt-2 space-y-0.5">
+                {#each bucketRows.slice(0, BUCKET_ROW_CAP) as t, i (i)}
+                  <div class="flex items-center gap-3 text-xs tabular-nums">
+                    <span class="w-20 text-muted-foreground">{t.date}</span>
+                    <span class="w-10 text-muted-foreground">{t.time}</span>
+                    <span class="w-12 font-medium">{t.sym}</span>
+                    <span class="w-12 text-muted-foreground">{t.side}</span>
+                    <span class="w-10 text-right text-muted-foreground">×{t.qty}</span>
+                    <span class={cn('flex-1 text-right font-semibold', t.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}>{usd(t.pnl)}</span
+                    >
+                  </div>
+                {/each}
+              </div>
+              {#if bucketRows.length > BUCKET_ROW_CAP}
+                <p class="mt-2 text-[11px] text-muted-foreground">
+                  …and {bucketRows.length - BUCKET_ROW_CAP} more — the Blotter shows the full list (filter it to match).
+                </p>
+              {/if}
+            {:else}
+              <p class="mt-2 text-[11px] text-muted-foreground">No trades in this bucket under the current filters.</p>
+            {/if}
+          </div>
+        {/if}
         <div class="mt-3 flex items-center gap-4 text-xs">
           <span class="text-muted-foreground">Win / loss</span>
           <div class="flex h-2 flex-1 overflow-hidden rounded-full">
@@ -343,6 +460,16 @@
     <Card.Root class="lg:col-span-2">
       {@render head('Performance by symbol')}
       <Card.Content class="space-y-1">
+        <!-- A197: sortable columns — default is the builder's impact (|P&L|) order -->
+        <div class="-mx-1 flex items-center gap-3 px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+          {@render sortBtn('Sym', 'name', symSort, () => (symSort = applySort(symSort, 'name')), 'w-10')}
+          <span class="flex w-28 items-center gap-2">
+            {@render sortBtn('Trades', 'trades', symSort, () => (symSort = applySort(symSort, 'trades')))}
+            {@render sortBtn('Win', 'win', symSort, () => (symSort = applySort(symSort, 'win')))}
+          </span>
+          <span class="flex-1"></span>
+          {@render sortBtn('P&L', 'pnl', symSort, () => (symSort = applySort(symSort, 'pnl')), 'w-20 justify-end')}
+        </div>
         {#each symShown as s (s.sym)}
           <button
             type="button"
@@ -388,6 +515,16 @@
       {@render head('Performance by tag')}
       <Card.Content class="space-y-2">
         {#if byTag.length}
+          <!-- A197: sortable columns — default is the builder's impact (|P&L|) order -->
+          <div class="-mx-1 flex items-center gap-3 px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+            {@render sortBtn('Tag', 'name', tagSort, () => (tagSort = applySort(tagSort, 'name')), 'w-24')}
+            <span class="flex w-28 items-center gap-2">
+              {@render sortBtn('Trades', 'trades', tagSort, () => (tagSort = applySort(tagSort, 'trades')))}
+              {@render sortBtn('Win', 'win', tagSort, () => (tagSort = applySort(tagSort, 'win')))}
+            </span>
+            <span class="flex-1"></span>
+            {@render sortBtn('P&L', 'pnl', tagSort, () => (tagSort = applySort(tagSort, 'pnl')), 'w-20 justify-end')}
+          </div>
           {#each tagShown as r (r.tag)}
             <button
               type="button"

@@ -389,7 +389,7 @@
       "status": "open",
       "completedDate": null,
       "partial": true,
-      "prompt": "Full review + upgrade of the Analytics screen (src/app/screens/Analytics.svelte, view-model in src/app/lib/analytics.ts). Today the analytics modules are largely static read-outs; make them interactive. Audit every module and add: per-module and/or page-level filters (date range, symbol/root, session, side, win/loss) that reuse the existing filter model where possible; drill-down / hover detail on charts; sort/paginate on tabular modules; toggles for grouping (by day-of-week, session, symbol) grounded in what compute()/costModel()/curveseries already produce (don't add server compute — moat is client-only). Reuse installed shadcn-svelte primitives (tabs/select/popover/tooltip/table) and the chart-1..5 tokens; keep CSP style-src 'self' (no inline style). Coordinate with A142 (new module ideas) and F29/R20 (resizable grid). Start by delivering a written audit of each current module with a proposed interactivity upgrade + effort, then implement the shortlist. Done when: the analytics modules support filtering/drill-down/sorting as specced, demo stays non-mutating, and e2e + size-budget gates stay green. — UPDATE 2026-07-04 (first shortlist SHIPPED on feat/analytics-interactivity): audit found 9 static read-outs with FilterState editable only via the Dashboard popover. Shipped: click-to-filter on symbol rows (root), tag rows (tag), long/short cards (side) and weekday bar labels (dows) — all TOGGLE the app-wide filter set so every screen narrows together; removable active-filter chips + Clear all atop the screen; show-all expansion on the symbol/tag tables (builder returns full breakdowns, screen owns the cut); aria-pressed states throughout. REMAINING: sortable table columns (currently fixed |P&L| order), histogram bucket drill-down (click a P&L bucket → matching trades), per-module date scoping, hour-of-day filter (needs an hour field in FilterState), and any module-level coverage gating carried over from A176.",
+      "prompt": "Full review + upgrade of the Analytics screen (src/app/screens/Analytics.svelte, view-model in src/app/lib/analytics.ts). Today the analytics modules are largely static read-outs; make them interactive. Audit every module and add: per-module and/or page-level filters (date range, symbol/root, session, side, win/loss) that reuse the existing filter model where possible; drill-down / hover detail on charts; sort/paginate on tabular modules; toggles for grouping (by day-of-week, session, symbol) grounded in what compute()/costModel()/curveseries already produce (don't add server compute — moat is client-only). Reuse installed shadcn-svelte primitives (tabs/select/popover/tooltip/table) and the chart-1..5 tokens; keep CSP style-src 'self' (no inline style). Coordinate with A142 (new module ideas) and F29/R20 (resizable grid). Start by delivering a written audit of each current module with a proposed interactivity upgrade + effort, then implement the shortlist. Done when: the analytics modules support filtering/drill-down/sorting as specced, demo stays non-mutating, and e2e + size-budget gates stay green. — UPDATE 2026-07-04 (first shortlist SHIPPED on feat/analytics-interactivity): audit found 9 static read-outs with FilterState editable only via the Dashboard popover. Shipped: click-to-filter on symbol rows (root), tag rows (tag), long/short cards (side) and weekday bar labels (dows) — all TOGGLE the app-wide filter set so every screen narrows together; removable active-filter chips + Clear all atop the screen; show-all expansion on the symbol/tag tables (builder returns full breakdowns, screen owns the cut); aria-pressed states throughout. REMAINING: sortable table columns (currently fixed |P&L| order), histogram bucket drill-down (click a P&L bucket → matching trades), per-module date scoping, hour-of-day filter (needs an hour field in FilterState), and any module-level coverage gating carried over from A176. — UPDATE 2026-07-05 (second slice SHIPPED): sortable columns on the symbol/tag breakdowns (Sym/Tag, Trades, Win, signed P&L; default stays the builder's |P&L| impact order; sorts the FULL set before the top-N cut) and the histogram bucket drill-down (DistBar carries [lo,hi) bounds; clicking a bar/label lists the bucket's matching trades via a lazy bucketTrades prop, capped at 12 with a Blotter pointer, live with the filter set). e2e covers both. STILL REMAINING: per-module date scoping, hour-of-day filter (needs an hour field in FilterState), module-level coverage gating (A176).",
       "doneNote": null
     },
     {
@@ -405,18 +405,6 @@
       "doneNote": null
     },
     {
-      "id": "A200",
-      "title": "Mobile: swipeable card-stack for the 5 top dashboard modules (one at a time, arrows/swipe)",
-      "category": "LAYOUT (web vs mobile)",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "On mobile, replace the vertically-stacked top-five dashboard modules (the summary/stat modules at the top of src/app/screens/Dashboard.svelte) with a single card-stack component that shows ONE module at a time and lets the user swipe left/right (touch) or tap left/right arrow controls to move between them, with a dot/index indicator. It's a cleaner, less scroll-heavy view on small screens. Constraints: mobile only — keep the existing multi-module layout at desktop breakpoints (render the stack under a Tailwind breakpoint / container query, the grid above); reuse chart-1..5 tokens and shadcn-svelte primitives; support keyboard (arrow keys) + reduced-motion (A146 pattern); CSP style-src 'self' (no inline style — use the styleProps action for any dynamic transform). Consider a small reusable ModuleCarousel component so other screens can reuse it. Related: A199 (mobile audit). Done when: on a mobile viewport the top modules render as a swipeable/arrow-navigable one-at-a-time stack, desktop is unchanged, and e2e + size-budget gates stay green.",
-      "doneNote": null
-    },
-    {
       "id": "A202",
       "title": "Add an arbitration clause to the legal terms",
       "category": "FEATURES",
@@ -426,18 +414,6 @@
       "completedDate": null,
       "partial": false,
       "prompt": "Add a binding-arbitration / dispute-resolution clause to the terms in src/site/components/Legal.svelte (legal.html; prerendered by scripts/vite-ssg.mjs). Cover the usual: agreement to arbitrate disputes, the governing arbitration body/rules, venue/governing law, a class-action waiver, and any opt-out window — sized to a client-side, no-data-leaves-the-browser trading journal. This ties into F18 (pre-monetization legal pack: ToS/Privacy/Disclaimer) and CH22 (footer operator/entity line) — keep entity naming consistent with whatever's decided there. NOTE: exact legal wording is an owner/counsel decision — draft reasonable placeholder language and flag it as needing legal review before ship, don't present it as final legal advice. Done when: the terms include a clearly-sectioned arbitration clause (with class-action waiver + opt-out), consistent with the rest of the legal pack, flagged for owner/legal sign-off.",
-      "doneNote": null
-    },
-    {
-      "id": "A203",
-      "title": "\"Commission Compare\" module/table — compare commission rates across brokers",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Build a 'Commission Compare' module/table that lets a user compare commission rates across brokers side-by-side, sourced from data/brokers.json (commission tiers) + the exchange/clearing/NFA fees in data/exchange-fees.json (all fetched via loadRefData with the pure-logic cost model). Let the user pick a contract/root and (optionally) a monthly volume/tier, then show a sortable table of per-broker all-in per-side/round-turn cost (commission + exchange + clearing + NFA), highlighting the cheapest. Reuse the costModel() math so the numbers reconcile with the dashboard; use the shadcn-svelte table + select primitives and chart tokens. Decide placement: a new analytics/dashboard module (coordinate with A142) or a standalone screen. Watch F30 (effective-dated historical rates) and R21 (brokers↔exchange-fees relationship) for the data model. Done when: users can compare all-in commissions across brokers for a chosen contract/volume in a sortable table that matches costModel() output; demo works with sample data; gates stay green.",
       "doneNote": null
     },
     {

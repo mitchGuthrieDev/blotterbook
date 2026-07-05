@@ -6,7 +6,9 @@ import { usd, money, num, ratio, fmtDur, tone, dowBuckets, tagBuckets, DOW_LABEL
 import type { Trade } from '../../lib/core/types.ts';
 
 export type Kpi = { label: string; value: string; tone?: 'pos' | 'neg' };
-export type DistBar = { label: string; value: number; neg: boolean };
+/** `lo`/`hi` = the bucket's half-open dollar bounds [lo, hi) — null = unbounded tail. The screen
+ *  uses them for the A197 bucket drill-down (click a bar → the matching trades). */
+export type DistBar = { label: string; value: number; neg: boolean; lo: number | null; hi: number | null };
 /** `key` = the underlying bucket id where the bar is filterable (A197 — weekday bars carry the
  *  dow index for click-to-filter; hour bars have no matching filter, so it stays unset). */
 export type SignedBar = { label: string; value: number; key?: number };
@@ -53,7 +55,13 @@ function histogram(pnls: number[]): DistBar[] {
     if (b === -1) b = EDGES.length; // ≥ last edge → top bucket
     counts[b]++;
   }
-  return labels.map((label, i) => ({ label, value: counts[i], neg: i < 4 }));
+  return labels.map((label, i) => ({
+    label,
+    value: counts[i],
+    neg: i < 4,
+    lo: i === 0 ? null : EDGES[i - 1],
+    hi: i === EDGES.length ? null : EDGES[i],
+  }));
 }
 
 export function buildAnalytics(m: Metrics, trades: Trade[], tagsFor: (t: Trade) => string[]): AnalyticsVM {

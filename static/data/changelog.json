@@ -6,14 +6,15 @@
     {
       "version": "0.52.0",
       "date": "2026-07-05",
-      "title": "Little things that add up",
-      "summary": "A quick polish pass: tooltips on the icon buttons, loading skeletons instead of blank screens, instant dashboard tabs, and your state pre-selected for the tax estimate. Your trade data still never leaves the browser.",
+      "title": "Compare broker costs, drill into your P&L, and a nicer phone dashboard",
+      "summary": "A new Commission Compare module ranks every broker's all-in cost for your contract, Analytics gets sortable tables and a click-to-drill P&L histogram, and the dashboard's stat cards become a swipeable deck on phones. Plus a round of polish: tooltips, loading skeletons, instant tabs, and your state pre-selected for the tax estimate. Your trade data still never leaves the browser.",
       "highlights": [
+        "New 'Commission Compare' dashboard module (add it via '+ Add modules'): pick a contract and your monthly round turns, and every broker is ranked by all-in cost — commission, exchange/clearing/NFA fees, round turn, and estimated monthly total — cheapest highlighted, your broker tagged.",
+        "Analytics drills deeper: click a P&L histogram bucket to list the exact trades inside it, and sort the symbol/tag tables by name, trades, win rate, or P&L.",
+        "On phones, the dashboard's stat cards are now a swipeable one-at-a-time deck with arrows and dots — no more thumb-scrolling past six stacked cards. Desktop is unchanged.",
         "New dashboard tabs appear instantly as 'New tab 1' — no naming dialog; rename any time from the tab's menu.",
         "US visitors get their state pre-selected in the tax estimate (from Cloudflare's coarse edge region — no IP stored, and you can always change it).",
-        "Icon buttons across the app — the sidebar toggle, tab menus, module menus, calendar controls, file actions — now explain themselves with tooltips.",
-        "Loading screens show shape-matched placeholders instead of a bare 'Loading…' or a blank flash.",
-        "The site footer now carries a copyright line."
+        "Polish: icon buttons across the app explain themselves with tooltips, loading screens show shape-matched placeholders instead of a blank flash, and the site footer carries a copyright line."
       ]
     },
     {

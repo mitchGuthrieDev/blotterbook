@@ -61,11 +61,30 @@
   import { styleProps } from '../lib/actions.ts';
   import { flip } from 'svelte/animate';
   import { fade, slide } from 'svelte/transition';
+  import { MediaQuery } from 'svelte/reactivity';
   import { dur } from '../lib/motion.ts';
-  import { usd, usdWhole, axMoney, niceTicks, linePath, minMax, monthCells, DOW_LABEL } from '../../lib/core/core.ts';
+  import {
+    usd,
+    usdWhole,
+    axMoney,
+    niceTicks,
+    linePath,
+    minMax,
+    monthCells,
+    DOW_LABEL,
+    rateFor,
+    roundTurn,
+    tierOf,
+    exchOf,
+    EXCH,
+    BROKERS,
+    BROKER_ORDER,
+  } from '../../lib/core/core.ts';
+  import * as Table from '$lib/components/ui/table';
   import type { DailyPoint } from '../../lib/core/curveseries.ts';
   import type { AppSetup } from '../../lib/core/types.ts';
   import CostSetup from '../parts/CostSetup.svelte';
+  import ModuleCarousel from '../parts/ModuleCarousel.svelte';
   import ActivityTerminal from '../parts/ActivityTerminal.svelte';
   import Definitions from '../parts/Definitions.svelte';
   import SegmentedControl from '../parts/SegmentedControl.svelte';
@@ -152,12 +171,17 @@
     if (name && name.trim()) layouts?.save(name.trim());
   }
 
+  // A200: below Tailwind's sm breakpoint the stat cards render as a one-at-a-time carousel.
+  // Conditional RENDER (not CSS hiding) so the cards never exist twice in the DOM/a11y tree.
+  const isNarrow = new MediaQuery('(max-width: 639px)');
+
   // ── Module layout (hide / reorder / re-add — parity with app/demo, persisted to Store.local) ────
   const MODULES: { key: string; label: string }[] = [
     { key: 'perf', label: 'Performance' },
     { key: 'cal', label: 'Trading Calendar' },
     { key: 'cost', label: 'Break-even & Cost' },
     { key: 'adv', label: 'Advanced Statistics' },
+    { key: 'compare', label: 'Commission Compare' }, // A203 — picker-addable, not in the default layout
   ];
   const validKeys = (ks?: string[]) => (ks ?? DEFAULT_MODULE_KEYS).filter(k => MODULES.some(m => m.key === k));
   // svelte-ignore state_referenced_locally — initial layout only; the app re-seeds via the prop below.
@@ -191,6 +215,24 @@
     commitModules(next);
   }
   const hideModule = (key: string) => commitModules(modOrder.filter(k => k !== key));
+
+  // ── A203 Commission Compare: per-broker all-in cost for a chosen root, straight from the same
+  // rateFor/roundTurn math costModel uses, so the numbers reconcile with the cost module. The
+  // exchange/clearing/NFA fee is identical across brokers — only the commission differs. ──
+  const compareRoots = Object.keys(EXCH).sort(); // ref data is loaded before the app renders
+  let compareRoot = $state('ES');
+  let compareRT = $state(40); // round turns / month for the monthly-cost column
+  let compareSort = $state<'cost' | 'name'>('cost');
+  const compareRows = $derived.by(() => {
+    const tier = tierOf(compareRoot);
+    const exch = exchOf(compareRoot, tier);
+    const rows = BROKER_ORDER.map(k => {
+      const { rate, known } = rateFor(k, compareRoot);
+      return { key: k, name: BROKERS[k]?.name ?? k, comm: rate - exch, rate, rt: roundTurn(rate), known };
+    });
+    rows.sort((a, b) => (compareSort === 'name' ? a.name.localeCompare(b.name) : a.rt - b.rt || a.name.localeCompare(b.name)));
+    return { rows, exch, tier, cheapest: Math.min(...rows.map(r => r.rt)) };
+  });
 
   // A189: the illustrated multi-select add-modules picker (the always-visible '+' opens it).
   let pickerOpen = $state(false);
@@ -664,34 +706,48 @@
   </div>
 
   <!-- KPI stat cards — click a card to drill into its breakdown (parity with app/demo). -->
-  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-    {#each stats as s (s.label)}
-      <button
-        type="button"
-        onclick={() => openStat(s.key)}
-        disabled={!s.key}
-        class="rounded-md border border-border bg-card p-4 text-left transition-colors enabled:cursor-pointer enabled:hover:border-ring enabled:hover:bg-accent/30"
+  {#snippet statCard(s: DashStat)}
+    <button
+      type="button"
+      onclick={() => openStat(s.key)}
+      disabled={!s.key}
+      class="w-full rounded-md border border-border bg-card p-4 text-left transition-colors enabled:cursor-pointer enabled:hover:border-ring enabled:hover:bg-accent/30"
+    >
+      <div class="flex items-start justify-between gap-2">
+        <span class="text-xs text-muted-foreground">{s.label}</span>
+        {#if s.badge}
+          <Badge variant="outline" class={s.up ? 'border-chart-2/40 text-chart-2' : 'border-destructive/40 text-destructive'}
+            >{s.badge}</Badge
+          >
+        {/if}
+      </div>
+      <div
+        class={[
+          'mt-2 text-xl font-semibold tracking-tight tabular-nums',
+          s.up === undefined ? 'text-foreground' : s.up ? 'text-chart-2' : 'text-destructive',
+        ]}
       >
-        <div class="flex items-start justify-between gap-2">
-          <span class="text-xs text-muted-foreground">{s.label}</span>
-          {#if s.badge}
-            <Badge variant="outline" class={s.up ? 'border-chart-2/40 text-chart-2' : 'border-destructive/40 text-destructive'}
-              >{s.badge}</Badge
-            >
-          {/if}
-        </div>
-        <div
-          class={[
-            'mt-2 text-xl font-semibold tracking-tight tabular-nums',
-            s.up === undefined ? 'text-foreground' : s.up ? 'text-chart-2' : 'text-destructive',
-          ]}
-        >
-          {s.value}
-        </div>
-        <div class="mt-1 text-[11px] text-muted-foreground">{s.note}</div>
-      </button>
-    {/each}
-  </div>
+        {s.value}
+      </div>
+      <div class="mt-1 text-[11px] text-muted-foreground">{s.note}</div>
+    </button>
+  {/snippet}
+  <!-- A200: on phones the stat cards stack behind a one-at-a-time swipeable carousel; the grid
+       returns at sm+ (desktop unchanged). Conditionally RENDERED (MediaQuery) so the cards exist
+       once in the DOM — CSS-hiding the other variant would double every stat for locators/AT. -->
+  {#if isNarrow.current}
+    <ModuleCarousel count={stats.length} label="Key stats">
+      {#snippet slide(i)}
+        {@render statCard(stats[i])}
+      {/snippet}
+    </ModuleCarousel>
+  {:else}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      {#each stats as s (s.label)}
+        {@render statCard(s)}
+      {/each}
+    </div>
+  {/if}
 
   {#snippet perfBody()}
     <div class="mb-3 flex w-fit items-center gap-0.5 rounded-md border border-border p-0.5">
@@ -953,6 +1009,95 @@
     </div>
   {/snippet}
 
+  {#snippet compareBody()}
+    <div class="mb-3 flex flex-wrap items-end gap-3">
+      <label class="flex min-w-0 flex-col gap-1 text-[11px] text-muted-foreground">
+        <span>Contract</span>
+        <Select.Root
+          type="single"
+          value={compareRoot}
+          onValueChange={v => (compareRoot = v)}
+          items={compareRoots.map(r => ({ value: r, label: r }))}
+        >
+          <Select.Trigger class="w-28" aria-label="Contract root"><Select.Value /></Select.Trigger>
+          <Select.Content>
+            {#each compareRoots as r (r)}<Select.Item value={r} label={r} />{/each}
+          </Select.Content>
+        </Select.Root>
+      </label>
+      <label class="flex min-w-0 flex-col gap-1 text-[11px] text-muted-foreground">
+        <span>Round turns / month</span>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          value={compareRT}
+          oninput={e => (compareRT = Math.max(0, Number((e.currentTarget as HTMLInputElement).value) || 0))}
+          class="w-28 rounded-md border border-border bg-secondary p-2 text-[13px] text-foreground focus:border-primary focus:outline-none"
+        />
+      </label>
+      <span class="pb-2 text-[11px] text-muted-foreground">
+        {compareRoot} is priced at the {compareRows.tier === 'micro' ? 'micro' : 'standard'} tier · exchange/clearing/NFA ${compareRows.exch.toFixed(
+          2
+        )}/side (same for every broker)
+      </span>
+    </div>
+    <div class="overflow-x-auto">
+      <Table.Root>
+        <Table.Header>
+          <Table.Row>
+            <Table.Head>
+              <button
+                type="button"
+                class={['flex items-center gap-1 hover:text-foreground', compareSort === 'name' && 'font-semibold text-foreground']}
+                aria-pressed={compareSort === 'name'}
+                onclick={() => (compareSort = 'name')}>Broker</button
+              >
+            </Table.Head>
+            <Table.Head class="text-right">Commission /side</Table.Head>
+            <Table.Head class="text-right">All-in /side</Table.Head>
+            <Table.Head class="text-right">
+              <button
+                type="button"
+                class={['ml-auto flex items-center gap-1 hover:text-foreground', compareSort === 'cost' && 'font-semibold text-foreground']}
+                aria-pressed={compareSort === 'cost'}
+                onclick={() => (compareSort = 'cost')}>Round turn</button
+              >
+            </Table.Head>
+            <Table.Head class="text-right">Est. /month</Table.Head>
+          </Table.Row>
+        </Table.Header>
+        <Table.Body>
+          {#each compareRows.rows as r (r.key)}
+            <Table.Row class={r.rt === compareRows.cheapest ? 'bg-chart-2/5' : undefined}>
+              <Table.Cell class="font-medium">
+                {r.name}
+                {#if r.rt === compareRows.cheapest}<Badge variant="outline" class="ml-1.5 border-chart-2/40 text-chart-2">Cheapest</Badge
+                  >{/if}
+                {#if setup.broker === r.key}<span class="ml-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">Yours</span>{/if}
+              </Table.Cell>
+              <Table.Cell class="text-right tabular-nums">${r.comm.toFixed(2)}</Table.Cell>
+              <Table.Cell class="text-right tabular-nums"
+                >${r.rate.toFixed(2)}{#if !r.known}*{/if}</Table.Cell
+              >
+              <Table.Cell class={['text-right font-semibold tabular-nums', r.rt === compareRows.cheapest && 'text-chart-2']}>
+                ${r.rt.toFixed(2)}
+              </Table.Cell>
+              <Table.Cell class="text-right tabular-nums text-muted-foreground">
+                {compareRT > 0 ? usdWhole(r.rt * compareRT) : '—'}
+              </Table.Cell>
+            </Table.Row>
+          {/each}
+        </Table.Body>
+      </Table.Root>
+    </div>
+    <p class="mt-2 text-[11px] text-muted-foreground">
+      Published per-contract rates (editable snapshot — see the Break-even module's sources); volume discounts, memberships and promos
+      aren't modeled{compareRows.rows.some(r => !r.known) ? '; * = fallback fee estimate for this root' : ''}. Data-feed and platform costs
+      are separate.
+    </p>
+  {/snippet}
+
   <!-- A189: tiny stylized per-module thumbnails for the picker — inline SVG in the chart tokens
        (geometry attrs + fill/stroke utilities only; CSP-clean). -->
   {#snippet moduleThumb(key: string)}
@@ -976,6 +1121,11 @@
         {#each [6, 12, 18] as y, i (y)}
           <rect x="4" {y} width={i === 2 ? 32 : 22 - i * 4} height="3" rx="1" class={i === 2 ? 'fill-chart-3/70' : 'fill-secondary'} />
         {/each}
+      {:else if key === 'compare'}
+        <!-- A203: ranked broker bars — the shortest (cheapest) highlighted green -->
+        {#each [16, 24, 32] as w, i (w)}
+          <rect x="4" y={5 + i * 7} width={w} height="4" rx="1" class={i === 0 ? 'fill-chart-2/70' : 'fill-secondary'} />
+        {/each}
       {:else}
         {#each [0, 1] as r (r)}
           {#each [0, 1, 2] as c (c)}
@@ -993,7 +1143,7 @@
       <Card.Root id="dashmod-{key}">
         {@render moduleHeader(key)}
         <Card.Content>
-          {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{/if}
+          {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'compare'}{@render compareBody()}{/if}
         </Card.Content>
       </Card.Root>
     </div>

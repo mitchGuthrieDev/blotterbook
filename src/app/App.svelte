@@ -954,6 +954,17 @@
             statRows={analytics.statRows}
             {filterModel}
             holdCoverage={analytics.holdCoverage}
+            bucketTrades={(lo, hi) =>
+              dash.metricsActive.trades
+                .filter(t => t.pnl !== 0 && (lo == null || t.pnl >= lo) && (hi == null || t.pnl < hi))
+                .map(t => ({
+                  date: t.date,
+                  time: (t.time || '').slice(11, 16),
+                  sym: t.root || t.symbol || '—',
+                  side: t.side === 'short' ? 'Short' : t.side === 'long' ? 'Long' : '—',
+                  qty: t.qty ?? 1,
+                  pnl: t.pnl,
+                }))}
           />
         {/await}
       {:else if active === 'blotter'}

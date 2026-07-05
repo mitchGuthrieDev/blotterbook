@@ -3934,6 +3934,28 @@
       "completedDate": "2026-07-05",
       "partial": false,
       "doneNote": "Shipped 2026-07-05 (quick-win batch). App.svelte gains a shape-matched screenSkeleton snippet (tab strip + card modules built from the shadcn-svelte Skeleton primitive, role='status') rendered (a) during boot in place of the old bare 'Loading…' line and (b) as the pending branch of all six code-split screen {#await import()} blocks (Calendar/Analytics/Blotter/TradeEditor/Reports/CsvLibrary) — no artificial delay, it only shows while genuinely pending (chunks are idle-prefetched so later navigations rarely see it). The skeleton primitive itself now carries motion-reduce:animate-none so the pulse collapses under reduced motion (A146)."
+    },
+    {
+      "id": "A200",
+      "title": "Mobile: swipeable card-stack for the 5 top dashboard modules (one at a time, arrows/swipe)",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (Wave-2 batch). New reusable src/app/parts/ModuleCarousel.svelte — a generic one-at-a-time card stack (parent supplies the slide snippet): pointer swipe (±40 px, touch-pan-y so vertical scroll survives), prev/next arrow buttons, a dot indicator with aria-current, ←/→ keys on the focusable wrapper, and a fly-in that collapses under reduced motion (A146 dur()); the index clamps if the slide set shrinks. Dashboard.svelte extracts the KPI stat card into a statCard snippet and renders the carousel below sm (grid hidden) while sm+ keeps the exact grid — desktop unchanged. No inline style (transition via Svelte fly). e2e: mobile carousel arrows/dots + desktop-unchanged assertions in interactions.spec.mjs."
+    },
+    {
+      "id": "A203",
+      "title": "\"Commission Compare\" module/table — compare commission rates across brokers",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (Wave-2 batch). Placement decided: a DASHBOARD module (the A142/A189 delivery surface) — 'compare' joins MODULES in Dashboard.svelte as picker-addable (not in the default layout), with its own picker thumbnail. Pick a contract root (every root in exchange-fees.json) and optional round-turns/month; the table ranks every broker by all-in cost — commission/side, all-in/side (with the A171 * fallback marker), round turn, est./month — cheapest-first with a Cheapest badge (sortable by broker name too), the user's current broker tagged 'Yours'. Uses the SAME rateFor/tierOf/exchOf/roundTurn math as costModel so the numbers reconcile; the footnote states the shared exchange/clearing/NFA fee, the snapshot caveat and that feeds/platform are separate. Works on demo (pure ref-data view state, nothing persists). e2e: picker-add + ranking assertions in staging-redesign.spec.mjs."
     }
   ]
 }
