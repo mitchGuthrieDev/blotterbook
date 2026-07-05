@@ -117,8 +117,24 @@ test('app: onboarding CSV CTA opens the picker and imports', async ({ page }) =>
     ),
   });
 
-  // The import lands → onboarding gives way to the dashboard with real KPIs.
+  // F48: the import lands in the review list — the app does NOT auto-launch; the explicit
+  // Launch button (enabled by the import) enters the dashboard.
+  await expect(page.getByText('trades.csv')).toBeVisible({ timeout: 6000 });
+  await expect(page.getByText(/TradingView · 2 trades/)).toBeVisible();
+  const launch = page.getByRole('button', { name: /Launch Blotterbook/ });
+  await expect(launch).toBeEnabled();
+  await launch.click();
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+
+  // A235: excluding the ONLY file must NOT bounce back to onboarding — the shell stays, with the
+  // all-excluded banner and a path back; only Erase all data returns to the initial state.
+  await page.locator('nav[aria-label="Primary"]').getByRole('button', { name: 'CSV Library', exact: true }).click();
+  await page.getByRole('switch', { name: 'Include in dataset' }).click();
+  await expect(page.getByText(/All imported files are excluded/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome to Blotterbook' })).toHaveCount(0);
+  await page.getByRole('switch', { name: 'Include in dataset' }).click(); // re-include
+  await expect(page.getByText(/All imported files are excluded/)).toHaveCount(0);
+
   await page.evaluate(() => indexedDB.deleteDatabase('blotterbook')); // leave the surface clean
   expect(errors, errors.join('\n')).toHaveLength(0);
 });

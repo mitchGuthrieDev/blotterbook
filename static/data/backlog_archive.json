@@ -4165,6 +4165,105 @@
       "completedDate": "2026-07-05",
       "partial": false,
       "doneNote": "Shipped 2026-07-05 (budget sprint). EditorRow gained a read-only `platform` field; App.svelte resolves it per trade from F37 provenance (fileIds → CsvFileRec.platformLabel, family-adapter type suffixes stripped, distinct platforms joined with ' · '; legacy/manual rows show '—'). Rendered as a muted Platform column between Fees and Tags in TradeEditor.svelte; never editable, ignored by the save diff. Blotter column deferred (its Columns picker is a natural follow-on if wanted)."
+    },
+    {
+      "id": "A209",
+      "title": "New CSV adapters: Quantower + NinjaTrader",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "DONE 2026-07-05 (both halves). NinjaTrader shipped 2026-07-05 AM via the Tradovate/NinjaTrader family (orders relabeled + beta-cleared; new tradovate-perf + tradovate-fills adapters — see the item's SHIPPED note). Quantower shipped 2026-07-05 PM once exports arrived: new non-beta 'quantower' adapter over Trades.csv — per-fill executions with per-fill realized Gross P/L (→ Fill.realized, apportioned by pairFills) and the Fee column (→ Fill.commission/A208), AM/PM timestamps, signed qty, exact-match column resolution (the 'Strike price'/'Gross P/L,ticks' twins defeat substring lookup), minScore 5 so it OUT-SCORES TradeStation (both real files previously misdetected as TradeStation and refused). Verified on the real export to the cent (3 round trips, net +$26.25, sides/holdMs correct). Fixture in test-adapters.mjs (160 passing); Quantower Howto section added (Verified badge). 'Orders history.csv' classified not-trade-data (F47 will name it gracefully). ATAS X is separate (F52 — xlsx)."
+    },
+    {
+      "id": "A225",
+      "title": "Header flavor text gets truncated — show the full message",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (session sprint). The header flavor text now flexes into the header's REAL free space instead of the fixed max-w-52 cap: the AppShell actions wrapper and App's actions row gained min-w-0 flex-1, and the flavor span is flex-1 truncate text-right with a title tooltip carrying the full phrase — full phrases readable on desktop, truncation only when the row is genuinely full, the header never reflows, still hidden below lg."
+    },
+    {
+      "id": "A228",
+      "title": "Dashboard (web): Trading Calendar + Break-Even & Cost side by side, not stacked",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (session sprint, with A232). The dashboard module stack becomes a 2-track grid at lg+ (grid-cols-1 lg:grid-cols-2): Trading Calendar and Break-Even & Cost are half-width (side by side when adjacent, as in the default order) and every other module spans both tracks; cards are h-full so paired modules match heights. Narrow viewports keep the single stack; reorder/hide/re-add + animate:flip + the staged-save model all survive (e2e green). A separated cal/cost pair simply takes a half-track each — the menu reorder re-pairs them."
+    },
+    {
+      "id": "A232",
+      "title": "Dashboard calendar (web): fill the vertical space instead of squishing",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (session sprint, with A228). The dashboard calendar's day cells scale up on desktop (sm:min-h-16 → lg:min-h-[5.5rem] → xl:min-h-24) so the month grid fills the module's vertical room instead of squishing; A182's bounded square mobile cells are untouched below sm."
+    },
+    {
+      "id": "R24",
+      "title": "Architect the user-account system (passkeys-only, donations, login/Account sidebar item)",
+      "category": "REVIEW / AUDIT",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05 — docs/accounts-architecture.md (agent-drafted, library facts verified against 2026 sources). HEADLINES: passkeys-only via @simplewebauthn/server v13 (MIT, WebCrypto-only, explicitly Workers-compatible) + hand-rolled D1 sessions per Lucia's successor guidance (opaque token, SHA-256 hash, __Host- HttpOnly cookie, Origin check) — REJECTED: better-auth (framework weight, nodejs_compat, open Workers session bug), Clerk (requires style-src 'unsafe-inline' — breaks our CSP), Auth0 (CSP-safe redirect but identities live on Okta). SSO: none needed — iCloud/Google password managers ARE the platform-passkey UX; recovery = mandatory recovery email (magic-link re-enroll) + second-passkey nudge. Backup lock: NO account-hash lock (backups stay restorable logged-out); instead a plain checksum + fold store.local layouts into export v3 (A236). D1-only tables honoring A17; donation→account rides the S11-verified webhook. Build items filed: F53-F56, A236, S25."
+    },
+    {
+      "id": "A233",
+      "title": "Site header spacing/styling: consistent across homepage and parallel pages",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (session sprint). The shared info-site Nav now matches Home's bespoke header EXACTLY: same 1180px column (was 1080), same 18px gap + ml-2 navlinks, and the same scroll-border treatment (border-transparent bg-background/72 at top → border-border bg-background/86 after 8px scroll, via svelte:window; SSR initial state matches Home). The shared Footer column widened to 1180 to stay aligned with the header."
+    },
+    {
+      "id": "F48",
+      "title": "Onboarding: explicit 'Launch Blotterbook' review step after CSV upload",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (session sprint). First-run onboarding gained step '3 · Review & launch': imports land in a review list (filename + detected platform + trade count, one ✓ row per file — multiple imports welcome) and the app only launches via the explicit 'Launch Blotterbook →' button (enabled once ≥1 import succeeded). App.svelte holds an onboardingActive latch armed on a fresh boot (or after Erase) and cleared by Launch, so importing no longer auto-enters the app. Boot e2e updated to drive the review step. Pairs with F47's richer per-file detection status when that lands."
+    },
+    {
+      "id": "A234",
+      "title": "Restore the online/status pill in the app header",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (session sprint). The online/status pill is restored in the app header (all surfaces): /api/status is fetched non-blocking at boot (admin-set auto|live|offline|maintenance + label) and navigator.onLine (+ online/offline listeners) catches genuine offline. Pill tones: green Online (live/auto), amber Maintenance, red Offline (declared or actually offline); a failed fetch just hides the pill (no error UI). data-testid=status-pill."
+    },
+    {
+      "id": "A235",
+      "title": "CSV Library include-toggle: excluding the ONLY CSV must not bounce to first-run onboarding",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (session sprint). Onboarding now keys off a truly fresh app (no trades AND no files) instead of an empty ACTIVE dataset, so excluding the only CSV keeps the normal shell — with a new amber banner ('All imported files are excluded…' linking the CSV Library) — and only Erase all data returns to the initial state. e2e: the app-surface boot spec now imports, excludes the only file, asserts no onboarding + the banner, and re-includes."
     }
   ]
 }

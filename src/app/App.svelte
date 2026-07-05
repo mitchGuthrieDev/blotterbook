@@ -758,13 +758,29 @@
 
   // First-run onboarding (prod /app only): shown when the real Store is empty. Parses + imports a CSV
   // directly (setup is already persisted via CostSetup → dash.saveSetup on each change).
-  const needsOnboarding = $derived(!isDemo && !isStaging && dash.loaded && !dash.allTrades.length);
+  // A235: onboarding is for a TRULY fresh app — no trades AND no files in the library. An
+  // all-excluded library (the include toggles off) keeps the normal shell with empty-state
+  // dashboards + the banner below; only Erase all data returns to this initial state.
+  // F48: `onboardingActive` (armed by freshness, cleared by the Launch button) keeps the review
+  // step up after an import instead of auto-entering the app.
+  let onboardImports = $state<{ name: string; platform: string; trades: number }[]>([]);
+  let onboardingActive = $state(false);
+  const freshApp = $derived(!isDemo && !isStaging && dash.loaded && !dash.allTrades.length && !dash.csvFiles.length);
+  const needsOnboarding = $derived(!isDemo && !isStaging && dash.loaded && onboardingActive);
+  $effect(() => {
+    if (freshApp) {
+      onboardingActive = true;
+      onboardImports = [];
+    }
+  });
   async function onboardImport(file: File): Promise<string> {
     const text = await file.text();
     const r = Adapters.parse(text);
     if (!r.ok || !r.trades || !r.trades.length)
       return r.ok ? 'No completed trades found in that CSV.' : r.error || 'Could not read that CSV.';
     await dash.importCsv(text, file.name, r); // F37: onboarding import carries provenance too
+    // F48: record the success for the onboarding review list (name + platform + trade count).
+    onboardImports = [...onboardImports, { name: file.name, platform: r.label || 'CSV', trades: r.trades.length }];
     return '';
   }
 
@@ -815,11 +831,38 @@
       : ''
   );
 
+  // A234: the online/status pill (the CH16 cutover dropped the legacy indicator) — /api/status is
+  // the admin-set source of truth (auto|live|offline|maintenance + label); navigator.onLine catches
+  // genuine offline. Convenience-only: a failed fetch just hides the pill (no error UI).
+  let statusRec = $state<{ mode?: string; label?: string } | null>(null);
+  let online = $state(typeof navigator === 'undefined' || navigator.onLine);
+  $effect(() => {
+    const on = () => (online = true),
+      off = () => (online = false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  });
+  const statusPill = $derived.by(() => {
+    if (!online) return { text: 'Offline', tone: 'down' as const };
+    if (!statusRec) return null;
+    if (statusRec.mode === 'maintenance') return { text: statusRec.label || 'Maintenance', tone: 'warn' as const };
+    if (statusRec.mode === 'offline') return { text: statusRec.label || 'Offline', tone: 'down' as const };
+    return { text: statusRec.label || 'Online', tone: 'up' as const }; // live/auto
+  });
+
   onMount(() => {
     dash.boot().catch((e: unknown) => {
       console.error('app boot failed', e);
       dash.error = e instanceof Error ? e.message : String(e);
     });
+    fetch('/api/status', { headers: { Accept: 'application/json' } })
+      .then(r => (r.ok ? (r.json() as Promise<{ mode?: string; label?: string }>) : null))
+      .then(v => (statusRec = v))
+      .catch(() => {});
     fetch('/data/versions.json', { cache: 'no-store' })
       .then(r => (r.ok ? (r.json() as Promise<{ prod?: string; staging?: string }>) : null))
       .then(v => (versions = v))
@@ -859,10 +902,35 @@
 
 <AppShell sections={navSections} {active} onnavigate={navigate} title={navLabel(active)} hideNav={needsOnboarding}>
   {#snippet actions()}
-    <div class="flex min-w-0 items-center gap-2">
-      <!-- A179: rotating flavor text — one phrase per page load; hidden on narrow viewports and
-           truncating so it can never shift the header layout. -->
-      <span class="hidden max-w-52 truncate text-xs text-muted-foreground italic lg:inline" data-testid="flavor-text">{flavor}</span>
+    <div class="flex min-w-0 flex-1 items-center gap-2">
+      <!-- A179/A225: rotating flavor text — one phrase per page load; hidden on narrow viewports.
+           flex-1 + min-w-0 lets it use the header's whole free width (full phrases readable on
+           desktop), truncating only when the row is genuinely full — never reflowing the header. -->
+      <span
+        class="hidden min-w-0 flex-1 truncate text-right text-xs text-muted-foreground italic lg:inline"
+        data-testid="flavor-text"
+        title={flavor}>{flavor}</span
+      >
+      <!-- A234: online/status pill — admin-set /api/status + navigator.onLine -->
+      {#if statusPill}
+        <Badge
+          variant="outline"
+          data-testid="status-pill"
+          class={statusPill.tone === 'up'
+            ? 'border-chart-2/40 text-chart-2'
+            : statusPill.tone === 'warn'
+              ? 'border-chart-4/40 text-chart-4'
+              : 'border-destructive/40 text-destructive'}
+        >
+          <span
+            class={[
+              'size-1.5 rounded-full',
+              statusPill.tone === 'up' ? 'bg-chart-2' : statusPill.tone === 'warn' ? 'bg-chart-4' : 'bg-destructive',
+            ]}
+          ></span>
+          {statusPill.text}
+        </Badge>
+      {/if}
       {#if isBeta}<Badge variant="outline" class="border-chart-4/40 text-chart-4">Beta</Badge>{/if}
       {#if envLabel}<Badge variant="secondary">{envLabel}</Badge>{/if}
       {#if appVersion}<span class="font-mono text-[11px] text-muted-foreground">v{appVersion}</span>{/if}
@@ -873,6 +941,15 @@
 
   <StatusBanner maintenance={flags.maintenanceBanner} {importWarning} />
 
+  <!-- A235: every imported file is toggled off — say so instead of bouncing to onboarding. -->
+  {#if dash.loaded && !needsOnboarding && !dash.allTrades.length && dash.csvFiles.length}
+    <div class="mb-4 rounded-md border border-chart-4/40 bg-chart-4/10 px-3 py-2 text-xs text-chart-4" role="status">
+      All imported files are excluded, so the dashboards are empty — re-enable files in the
+      <a href="#csv" class="font-medium text-chart-4 underline hover:no-underline">CSV Library</a>, or use Erase all data (CSV Library) to
+      start over.
+    </div>
+  {/if}
+
   <!-- A146: screen changes fade in (keyed on the route; instant under reduced motion). -->
   {#key active}
     <div in:fade={{ duration: dur(120) }}>
@@ -881,7 +958,13 @@
       {:else if !dash.loaded}
         {@render screenSkeleton()}
       {:else if needsOnboarding}
-        <Onboarding setup={dash.setup} onsetupsave={s => dash.saveSetup(s)} onimport={onboardImport} />
+        <Onboarding
+          setup={dash.setup}
+          onsetupsave={s => dash.saveSetup(s)}
+          onimport={onboardImport}
+          imported={onboardImports}
+          onlaunch={() => (onboardingActive = false)}
+        />
       {:else if active === 'dashboard'}
         <!-- A135 (promoted CH16): named dashboard tabs, each with its own module layout. -->
         <div class="mb-4">

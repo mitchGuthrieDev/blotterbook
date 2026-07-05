@@ -52,6 +52,10 @@
       >
       <a
         class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
+        href="#imp-quantower">Quantower</a
+      >
+      <a
+        class="block text-muted-foreground py-[5px] px-2.5 rounded-[7px] border-l-2 border-transparent no-underline hover:text-foreground hover:bg-card hover:no-underline"
         href="#imp-rithmic">Rithmic R|Trader</a
       >
       <a
@@ -435,6 +439,25 @@
         <p>
           The other exports on that panel (Cash History, Account Balance History, Position History) aren't per-trade data — Blotterbook will
           decline them.
+        </p>
+      </section>
+
+      <section id="imp-quantower" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
+        <h2 class="mt-0">
+          Quantower
+          <span
+            class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.04em] px-[9px] py-[3px] rounded-[7px] border border-chart-2/35 bg-chart-2/10 text-chart-2"
+            ><span class="w-[7px] h-[7px] rounded-full bg-chart-2"></span>Verified · real exports</span
+          >
+        </h2>
+        <ol class="steps">
+          <li>In Quantower, open the <b>Trades</b> panel (not Orders history — that's order lifecycle, not trade data).</li>
+          <li>Set your account and date range, then export the table to CSV — you'll get <code>Trades.csv</code>.</li>
+        </ol>
+        <p>
+          Detected columns: <code>Side</code>, <code>Symbol</code>, <code>Price</code>, <code>Gross P/L</code>, <code>Fee</code>,
+          <code>Date/Time</code>. Each fill carries its own realized P&amp;L — Blotterbook uses those exact figures when pairing your round
+          trips — and the <code>Fee</code> column supplies your real per-fill costs, which override the modeled commission rates.
         </p>
       </section>
 

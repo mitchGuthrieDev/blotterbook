@@ -12,11 +12,17 @@
     setup,
     onsetupsave,
     onimport,
+    imported = [],
+    onlaunch,
   }: {
     setup: AppSetup;
     onsetupsave: (s: AppSetup) => void;
     /** Parse + import a CSV; resolves to an error string ('' on success). */
     onimport: (file: File) => Promise<string>;
+    /** F48: successful imports so far — the review list feeding the Launch step. */
+    imported?: { name: string; platform: string; trades: number }[];
+    /** F48: enter the app (enabled once at least one CSV imported). */
+    onlaunch?: () => void;
   } = $props();
 
   let busy = $state(false);
@@ -100,5 +106,25 @@
     <p class="mt-2 text-[11px] text-muted-foreground">
       Supports TradingView and other platform exports. Not sure how to export? See the How-To guide.
     </p>
+  </div>
+
+  <!-- F48: the review step — imports list here (add as many files as you like) and the app only
+       launches on the explicit button, so there's a chance to review before entering. -->
+  <div class="mt-6">
+    <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">3 · Review &amp; launch</h3>
+    {#if imported.length}
+      <ul class="mb-3 space-y-1">
+        {#each imported as f, i (i)}
+          <li class="flex items-center gap-2 rounded-md border border-chart-2/30 bg-chart-2/10 px-3 py-1.5 text-xs">
+            <span class="text-chart-2" aria-hidden="true">✓</span>
+            <span class="min-w-0 truncate font-medium text-foreground">{f.name}</span>
+            <span class="ml-auto whitespace-nowrap text-muted-foreground">{f.platform} · {f.trades} trade{f.trades === 1 ? '' : 's'}</span>
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      <p class="mb-3 text-xs text-muted-foreground">Import at least one CSV above and it'll show up here.</p>
+    {/if}
+    <Button disabled={!imported.length || busy} onclick={() => onlaunch?.()}>Launch Blotterbook &rarr;</Button>
   </div>
 </div>

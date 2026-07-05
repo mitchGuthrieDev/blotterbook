@@ -58,6 +58,14 @@ MESM6,-2,0,0.25,540725260033,540725260130,1,7490.50,7491.75,$(6.25),06/14/2026 1
 540725260010,540725260007,3570919,2026-06-14 23:03:54.732Z,2026-06-15,0,1,7494.25,true,54066902,540725260010,540725260007,06/14/2026 18:03:54,6/14/26,DEMO, Buy,1,7494.25,-2,0,0.25,ESM6,ES,E-Mini S&P 500,1.29
 540725260021,540725260018,3570919,2026-06-14 23:04:19.743Z,2026-06-15,1,1,7494.75,true,54066902,540725260021,540725260018,06/14/2026 18:04:19,6/14/26,DEMO, Sell,1,7494.75,-2,0,0.25,ESM6,ES,E-Mini S&P 500,1.29`,
 
+  // Quantower — Trades export (A209): per-fill realized Gross P/L + Fee, AM/PM times, signed qty,
+  // newest-first, with the 'Strike price' / '"Gross P/L,ticks"' trap columns exact-match must dodge.
+  quantower: `Account,Date/Time,Symbol,Description,Symbol type,Expiration date,Strike price,Side,Order type,Quantity,Price,Gross P/L,Fee,Net P/L,Trade value,Trade ID,Order ID,Position ID,Connection name,Comment,Exchange,"Gross P/L,ticks","Gross P/L(Qty),ticks",
+Account 1 (USD),7/5/2026 5:06:02 PM,MESU26,AMP/CQG,Futures,9/17/2026 7:00:00 PM,0,Sell,Market,-1,7556.5,7.5,1.10,6.40,-37782.5,t4,o4,,Sim,,CME,6,6,
+Account 1 (USD),7/5/2026 5:05:23 PM,MESU26,AMP/CQG,Futures,9/17/2026 7:00:00 PM,0,Buy,Market,1,7555,0,1.10,-1.10,37775,t3,o3,,Sim,,CME,0,0,
+Account 1 (USD),7/5/2026 5:05:12 PM,MESU26,AMP/CQG,Futures,9/17/2026 7:00:00 PM,0,Buy,Limit,1,7551.5,15,0,15,37757.5,t2,o2,,Sim,,CME,12,12,
+Account 1 (USD),7/5/2026 5:04:32 PM,MESU26,AMP/CQG,Futures,9/17/2026 7:00:00 PM,0,Sell,Market,-1,7554.5,0,0,0,-37772.5,t1,o1,,Sim,,CME,0,0,`,
+
   rithmic: `Account,Buy/Sell,Symbol,Qty Filled,Avg Fill Price,Update Time
 DEMO,Buy,MNQM2025,1,18000.00,2026-06-02 09:31:00
 DEMO,Sell,MNQM2025,1,18010.00,2026-06-02 09:50:00`,
@@ -134,6 +142,19 @@ ok(
     r.trades[0].time === '2026-06-14 18:04:19',
   JSON.stringify(r.trades)
 );
+
+// A209: Quantower — per-fill realized P/L wins, Fee → commission, AM/PM times, out-scores TradeStation.
+r = A.parse(C.quantower);
+ok(
+  'quantower: 2 round trips from newest-first AM/PM fills — realized P/L verbatim, Fee → round-turn commission',
+  r.ok &&
+    r.trades.length === 2 &&
+    r.trades.some(t => t.side === 'short' && t.pnl === 15 && (t.commission ?? 0) === 0) &&
+    r.trades.some(t => t.side === 'long' && t.pnl === 7.5 && Math.abs((t.commission ?? 0) - 2.2) < 1e-9) &&
+    r.trades.every(t => t.root === 'MES' && t.time.startsWith('2026-07-05 17:')),
+  JSON.stringify(r.trades)
+);
+ok('quantower: detected as Quantower (not TradeStation — the old misdetection)', A.detect(C.quantower)?.id === 'quantower');
 
 r = A.parse(C.rithmic);
 ok('rithmic 1 long, +$20 (MNQ pt=2)', r.ok && r.trades.length === 1 && Math.abs(r.trades[0].pnl - 20) < 1e-6, JSON.stringify(r.trades));

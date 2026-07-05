@@ -4,6 +4,20 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.55.0",
+      "date": "2026-07-05",
+      "title": "Quantower support, a roomier dashboard, and a gentler first run",
+      "summary": "Quantower joins the verified platforms with real per-fill P&L and fees. The dashboard uses its space better — calendar and costs sit side by side with a full-height month grid — onboarding lets you review before launching, and excluding your only CSV no longer boots you back to the start. Your trade data still never leaves the browser.",
+      "highlights": [
+        "Quantower is now supported (verified against real exports): its Trades export imports with each fill's actual realized P&L and Fee — real costs, not estimates. Previously these files were misread as TradeStation and refused.",
+        "On desktop, the Trading Calendar and Break-Even & Cost modules now sit side by side, and the calendar's day cells grow to fill the space instead of squishing.",
+        "First run now has a review step: imported CSVs list with their detected platform and trade count, and you enter the app with an explicit 'Launch Blotterbook' button — import as many files as you like first.",
+        "Excluding your only CSV in the Library no longer drops you back to the first-run screen — the app stays put with a banner pointing back to the Library. Only 'Erase all data' resets the app.",
+        "The online/status pill is back in the app header — it reflects the service status and goes red when you're offline.",
+        "The header's rotating desk wisdom now shows the whole phrase on desktop, and the site's page headers are consistent from the homepage through How To, Roadmap, and Changelog."
+      ]
+    },
+    {
       "version": "0.54.0",
       "date": "2026-07-05",
       "title": "NinjaTrader support, richer Tradovate imports, and honest paper-trading costs",

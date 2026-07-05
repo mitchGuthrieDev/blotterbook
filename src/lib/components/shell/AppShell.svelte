@@ -110,7 +110,9 @@
         <h1 class="truncate text-sm font-medium text-foreground">{title}</h1>
       {/if}
       {#if actions}
-        <div class="ml-auto flex items-center gap-2">{@render actions()}</div>
+        <!-- A225: min-w-0 + flex-1 so a growable action (the flavor text) can use the header's real
+             free space and truncation only kicks in when the row is genuinely full. -->
+        <div class="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2">{@render actions()}</div>
       {/if}
     </header>
 
