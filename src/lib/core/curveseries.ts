@@ -37,7 +37,8 @@ export function dailySeries(m: Metrics, opts: { broker: string; tEff?: number; f
     let e = map.get(t.date);
     if (!e) map.set(t.date, (e = { gross: 0, comm: 0 }));
     e.gross += t.pnl;
-    e.comm += roundTurn(rateFor(broker, t.root).rate, t.qty); // per-contract (B4)
+    // A208: same actual-vs-modeled rule as costModel, so the curve endpoint still reconciles.
+    e.comm += t.commission != null && Number.isFinite(t.commission) ? t.commission : roundTurn(rateFor(broker, t.root).rate, t.qty); // per-contract (B4)
   }
   let cg = 0,
     cn = 0;

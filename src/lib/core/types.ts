@@ -38,6 +38,13 @@ export interface Trade {
   /** PnL was derived from price × a FALLBACK point value ($1/point) because the root has no known
    *  contract size — the figure is a guess and is surfaced to the user (A113). */
   pvEstimated?: boolean;
+  /** ACTUAL round-turn commission+fees ($, positive = cost) from the source CSV (A208) — when set,
+   *  costModel uses it verbatim instead of the modeled tier rate. NOT part of tradeId. */
+  commission?: number;
+  /** Source-file provenance (F37): ids of every imported CSV that contributed this trade (a trade
+   *  in two overlapping exports carries both). Absent = imported pre-F37 (always included).
+   *  NOT part of tradeId. */
+  fileIds?: string[];
   /** Stable dedupe id once persisted (Store.tradeId). */
   id?: string;
 }
@@ -51,6 +58,9 @@ export interface Fill {
   price: number;
   /** Per-row realized PnL when the export provides it (IBKR). */
   realized?: number;
+  /** Per-fill commission+fees ($, positive = cost) when the export provides it (A208 — e.g. IBKR
+   *  ibCommission). pairFills apportions entry+exit shares onto the closed round trips. */
+  commission?: number;
   /** Execution-order tiebreak within a same-second batch. */
   _seq?: number;
 }
@@ -105,6 +115,8 @@ export interface SymCost {
   rate: number;
   known: boolean;
   total: number;
+  /** Trades priced with an ACTUAL CSV-provided commission instead of the modeled rate (A208). */
+  actual: number;
 }
 
 /** Inputs to costModel() — the cost setup (A32). */
@@ -136,6 +148,10 @@ export interface CostModel {
   contracts: number;
   bePer: number;
   bySym: SymCost[];
+  /** A208: how many trades carry an ACTUAL CSV commission (used verbatim), and their $ total —
+   *  the rest use the modeled tier rate. Surfaced in the cost UI so the mix is visible. */
+  actualCommTrades: number;
+  actualComm: number;
 }
 
 /** Persisted setup selections (Store meta key `setup`). */
@@ -304,12 +320,55 @@ export interface TaxModel {
 export type StateRow = [string, number, string];
 
 /** The Store / DemoStore persistence interface (A4 seam). */
+/** An imported CSV's file record (F37 per-file provenance). Metadata only — the raw CSV text is
+ *  stored separately (Store.getFileText) so listing the library never loads megabytes of text. */
+export interface CsvFileRec {
+  /** Content hash of the raw text (same FNV as tradeId) — a re-upload of the same file dedupes. */
+  id: string;
+  /** Original filename. */
+  name: string;
+  /** User rename (display label); absent = show `name`. */
+  label?: string;
+  /** Adapter id (e.g. 'tradingview'). */
+  platform: string;
+  /** Adapter display label at import time. */
+  platformLabel: string;
+  /** Raw text size in bytes (chars) — drives the 50 MB library budget. */
+  size: number;
+  /** Data rows in the file. */
+  rows: number;
+  /** Trades this file contributed at import (including ones other files already had). */
+  tradeCount: number;
+  /** Trades already present when this file was imported (overlap/dup count). */
+  overlap: number;
+  /** Coverage range (first/last trade date). */
+  from: string;
+  to: string;
+  /** ISO import timestamp. */
+  imported: string;
+  /** Include this file's trades in the active dataset (the Library toggle). */
+  included: boolean;
+}
+
 export interface StoreLike {
   available(): boolean;
   init(): Promise<boolean>;
   tradeId(t: Trade): string;
   validShot(s: unknown): boolean;
   addTrades(trades: Trade[]): Promise<{ added: number; duplicate: number; total: number }>;
+  /* ---- F37 per-file CSV provenance ---- */
+  getFiles(): Promise<CsvFileRec[]>;
+  /** Persist a file record + its raw text (text stored separately from the metadata row). */
+  addFile(rec: CsvFileRec, text: string): Promise<unknown>;
+  /** Patch mutable metadata (label, included, overlap). */
+  updateFile(id: string, patch: Partial<CsvFileRec>): Promise<unknown>;
+  /** Remove the file record + raw text, strip its id from every trade's fileIds, and DELETE trades
+   *  whose provenance becomes empty (trades another file also contributed survive). */
+  deleteFile(id: string): Promise<{ removedTrades: number }>;
+  /** The stored raw CSV text (download-original / re-import), or undefined. */
+  getFileText(id: string): Promise<string | undefined>;
+  /** Total stored raw-CSV bytes (the 50 MB budget check). */
+  filesBytes(): Promise<number>;
   getAllTrades(): Promise<Trade[]>;
   tradeCount(): Promise<number>;
   deleteTrade(id: string): Promise<unknown>;

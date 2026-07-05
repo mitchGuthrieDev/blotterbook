@@ -96,6 +96,8 @@
     costRows: { label: string; value: string; tone?: 'pos' | 'neg'; total?: boolean }[];
     /** Roots priced off the fallback per-side rate — rendered as the commissions asterisk footnote (A171). */
     estRoots?: string[];
+    /** A208 dagger footnote — how many trades are priced at ACTUAL CSV commissions ('' = none). */
+    actualCommNote?: string;
     advStats: { k: string; v: string; tone?: 'pos' | 'neg' }[];
     /** Cost setup (broker/feed/state/platform) that drives costModel; edited in the Break-even module. */
     setup: AppSetup;
@@ -134,6 +136,7 @@
     onpickdate,
     costRows,
     estRoots = [],
+    actualCommNote = '',
     advStats,
     setup,
     onsetupsave,
@@ -906,6 +909,9 @@
       <p class="mt-2 text-[11px] text-muted-foreground">
         * Commission rate estimated for {estRoots.join(', ')} — root not in the fee table.
       </p>
+    {/if}
+    {#if actualCommNote}
+      <p class="mt-2 text-[11px] text-muted-foreground">{actualCommNote}</p>
     {/if}
     <p class="mt-2 text-[11px] text-muted-foreground">Costs from your broker/feed/platform setup; tax is an estimate — not advice.</p>
   {/snippet}

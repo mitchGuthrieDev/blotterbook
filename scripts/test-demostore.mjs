@@ -100,6 +100,42 @@ ok('importAll is a no-op', imp.added === 0 && (await s.tradeCount()) === 2);
 // exportAll shape
 const dump = await s.exportAll();
 ok('exportAll has app + trades', dump.app === 'blotterbook' && Array.isArray(dump.trades));
+ok('exportAll carries the CSV library (F37)', Array.isArray(dump.files) && Array.isArray(dump.filetexts));
+
+// F37: per-file provenance methods (in-memory parity with the real Store)
+const rec = {
+  id: 'aaaa1111',
+  name: 'a.csv',
+  platform: 'tradingview',
+  platformLabel: 'TradingView',
+  size: 10,
+  rows: 2,
+  tradeCount: 2,
+  overlap: 0,
+  from: '2025-01-01',
+  to: '2025-01-02',
+  imported: '2026-07-04T00:00:00Z',
+  included: true,
+};
+await s.addFile(rec, 'raw,text');
+ok('addFile/getFiles roundtrip', (await s.getFiles())[0].name === 'a.csv');
+ok('getFileText returns the raw text', (await s.getFileText('aaaa1111')) === 'raw,text');
+await s.updateFile('aaaa1111', { label: 'Renamed', included: false });
+const fUpd = (await s.getFiles())[0];
+ok('updateFile patches label/included (id fixed)', fUpd.label === 'Renamed' && fUpd.included === false && fUpd.id === 'aaaa1111');
+ok('filesBytes sums stored sizes', (await s.filesBytes()) === 10);
+// provenance merge on duplicate + the deleteFile cascade
+await s.purge();
+await s.addTrades([{ ...t('2025-02-01 10:00:00', 5), fileIds: ['f1'] }]);
+await s.addTrades([
+  { ...t('2025-02-01 10:00:00', 5), fileIds: ['f2'] }, // duplicate → merges provenance
+  { ...t('2025-02-02 10:00:00', 7), fileIds: ['f2'] }, // exclusive to f2
+]);
+const merged = await s.getAllTrades();
+ok('duplicate import merges fileIds (overlap keeps both files)', merged[0].fileIds.length === 2);
+const del = await s.deleteFile('f2');
+ok('deleteFile removes exclusive trades, keeps shared ones', del.removedTrades === 1 && (await s.tradeCount()) === 1);
+ok('surviving trade lost the deleted file id', (await s.getAllTrades())[0].fileIds.join() === 'f1');
 
 // local shim is in-memory (no localStorage)
 s.local.set('k', { v: 1 });
@@ -108,6 +144,6 @@ ok('local.get fallback', s.local.get('missing', 'fb') === 'fb');
 
 // purge clears everything
 await s.purge();
-ok('purge empties the store', (await s.tradeCount()) === 0 && (await s.allTradeMeta()).length === 0);
+ok('purge empties the store', (await s.tradeCount()) === 0 && (await s.allTradeMeta()).length === 0 && (await s.getFiles()).length === 0);
 
 console.log(`\n${pass} passed, 0 failed`);

@@ -317,6 +317,35 @@ ok(
   JSON.stringify({ open: rdang.openLots, n: (rdang.trades || []).length })
 );
 
+/* ---------- A208: real per-fill commissions → per-trade commission ---------- */
+console.log('\nA208 commission capture (IBKR):');
+// IBKR reports IBCommission as a NEGATIVE cash amount. Round trip = entry share + exit share.
+const ibkrComm = `Symbol,DateTime,Buy/Sell,Quantity,TradePrice,Realized P/L,IBCommission
+TSLA,2026-06-02 09:31:00,BUY,10,250.00,0,-2.00
+TSLA,2026-06-02 14:00:00,SELL,-10,255.00,120.00,-2.50`;
+let rc = A.parse(ibkrComm);
+ok(
+  'ibkr full round trip carries entry+exit commission ($4.50)',
+  rc.ok && rc.trades.length === 1 && rc.trades[0].commission === 4.5,
+  JSON.stringify(rc.trades)
+);
+// Partial close: entry 2 @ $2.00, exits 1+1 @ $1.00 each → each trade = half the entry + its exit.
+const ibkrPartial = `Symbol,DateTime,Buy/Sell,Quantity,TradePrice,IBCommission
+TSLA,2026-06-02 09:31:00,BUY,2,250.00,-2.00
+TSLA,2026-06-02 10:00:00,SELL,-1,255.00,-1.00
+TSLA,2026-06-02 11:00:00,SELL,-1,256.00,-1.00`;
+rc = A.parse(ibkrPartial);
+ok(
+  'ibkr partial closes prorate the entry commission (2 × $2.00)',
+  rc.ok && rc.trades.length === 2 && rc.trades.every(t => t.commission === 2),
+  JSON.stringify((rc.trades || []).map(t => t.commission))
+);
+// No commission column → the field stays absent (costModel falls back to the modeled rate).
+rc = A.parse(C.ibkr);
+ok('ibkr without a commission column leaves trades unmarked', rc.ok && rc.trades.every(t => t.commission == null));
+rc = A.parse(C.tradovate);
+ok('fills adapter without commission support leaves trades unmarked', rc.ok && rc.trades.every(t => t.commission == null));
+
 /* ---------- A177/A178 intake hardening ---------- */
 console.log('\nA177/A178 intake hardening:');
 

@@ -63,8 +63,9 @@ test('staging redesign: every screen navigates + renders real content', async ({
   await expect(page.locator('table tbody tr').first()).toBeVisible();
 
   await gotoScreen(page, 'CSV Library');
-  await expect(page.getByText('Active dataset')).toBeVisible();
-  await expect(page.getByText('Imported trades')).toBeVisible();
+  // F37: the seed goes through the per-file path — a real file record, not a derived dataset row.
+  await expect(page.getByText('Uploaded files')).toBeVisible();
+  await expect(page.getByText('sample-trades.csv')).toBeVisible();
 
   await gotoScreen(page, 'Trade Editor');
   await expect(page.getByText(/Click a cell to edit/)).toBeVisible();
@@ -133,8 +134,10 @@ test('staging redesign: CSV Library really imports a CSV and the dataset grows +
   await bootDashboard(page);
   await gotoScreen(page, 'CSV Library');
 
-  const datasetTrades = page.locator('table tbody tr').first().locator('td.tabular-nums').first();
-  const before = parseInt(((await datasetTrades.textContent()) || '').replace(/[^\d]/g, ''), 10);
+  // F37: per-file rows. Boot = the seeded sample file; the header carries the included-trade total.
+  const header = page.locator('text=/\\d+ of \\d+ included · [\\d,]+ trades/');
+  await expect(header).toBeVisible();
+  const before = parseInt((((await header.textContent()) || '').match(/· ([\d,]+) trades/) || [])[1].replace(/,/g, ''), 10);
   expect(before).toBeGreaterThan(0);
 
   // Real Adapters parse → preview → import (two TradingView close-events in a fresh date range).
@@ -149,14 +152,15 @@ test('staging redesign: CSV Library really imports a CSV and the dataset grows +
   const importBtn = page.getByRole('button', { name: /Import 2 trades/ });
   await expect(importBtn).toBeVisible();
   await importBtn.click();
-  await expect(datasetTrades).toHaveText((before + 2).toLocaleString());
+  // The imported file lands as its OWN row (2 trades) and the included total grows by 2.
+  await expect(page.getByText('e2e-import.csv')).toBeVisible();
+  await expect(page.locator(`text=/2 of 2 included · ${(before + 2).toLocaleString()} trades/`)).toBeVisible();
 
-  // Persists across a reload (addTrades wrote to the isolated DB; no duplicate re-seed).
+  // Persists across a reload (addTrades + addFile wrote to the isolated DB; no duplicate re-seed).
   await page.reload({ waitUntil: 'networkidle' });
   await gotoScreen(page, 'CSV Library');
-  await expect(page.locator('table tbody tr').first().locator('td.tabular-nums').first()).toHaveText((before + 2).toLocaleString(), {
-    timeout: 10_000,
-  });
+  await expect(page.getByText('e2e-import.csv')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(`text=/2 of 2 included · ${(before + 2).toLocaleString()} trades/`)).toBeVisible();
 });
 
 test('staging redesign: Reports custom range re-slices with a prior-period comparison + Markdown export', async ({ page }) => {

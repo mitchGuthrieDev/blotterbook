@@ -56,7 +56,7 @@
   import { loadFlags, APP_FLAGS, type AppFlags } from './lib/flags.ts';
   import { pickFlavor } from './lib/flavor.ts';
   import { Adapters } from '../lib/core/adapters.ts';
-  import type { Trade } from '../lib/core/types.ts';
+  import type { Trade, ParseResult } from '../lib/core/types.ts';
 
   // Mode-aware persistence seam (parity with the legacy App.svelte):
   //   app      → real IndexedDB Store (blotterbook DB), NO seed (real user data; empty → onboarding)
@@ -480,11 +480,22 @@
   // A171: roots priced off the fallback per-side rate get an asterisk + footnote so estimated
   // commissions are distinguishable from fee-table rates.
   const dashEstRoots = $derived(estimatedCommRoots(dash.cost));
+  // A208: how many active trades are priced at their ACTUAL CSV commission (vs the modeled rate).
+  const dashActualCommNote = $derived.by(() => {
+    const c = dash.cost;
+    return c.actualCommTrades > 0
+      ? `† ${c.actualCommTrades} of ${c.n} trade${c.n === 1 ? '' : 's'} priced at actual commissions from your CSV (${usd(c.actualComm)}).`
+      : '';
+  });
   const dashCostRows = $derived.by(() => {
     const c = dash.cost;
     return [
       { label: 'Gross P&L', value: usd(c.gross), tone: tone(c.gross) },
-      { label: `Commissions (all-in)${dashEstRoots.length ? ' *' : ''}`, value: usd(-c.totalComm), tone: 'neg' as const },
+      {
+        label: `Commissions (all-in)${dashEstRoots.length ? ' *' : ''}${c.actualCommTrades > 0 ? ' †' : ''}`,
+        value: usd(-c.totalComm),
+        tone: 'neg' as const,
+      },
       { label: `Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, value: usd(-c.fixedPeriod), tone: 'neg' as const },
       { label: 'Est. 1256 tax', value: usd(-c.tax), tone: 'neg' as const },
       { label: 'Take-home', value: usd(c.afterTax), tone: tone(c.afterTax), total: true },
@@ -510,7 +521,14 @@
       time: (t.time || '').slice(11, 16),
       side: t.side === 'short' ? ('Short' as const) : ('Long' as const),
       pnl: t.pnl,
-      fees: r ? +roundTurn(r.rate, qty).toFixed(2) : undefined,
+      // A208: a trade carrying its ACTUAL CSV commission shows that figure; the modeled rate
+      // only covers the rest (same rule as costModel).
+      fees:
+        t.commission != null && Number.isFinite(t.commission)
+          ? +t.commission.toFixed(2)
+          : r
+            ? +roundTurn(r.rate, qty).toFixed(2)
+            : undefined,
     };
   };
   const blotterRows = $derived<BlotterRow[]>(
@@ -597,34 +615,53 @@
   }
 
   // ── CSV Library ──────────────────────────────────────────────────────────────────────────────
-  // No per-file provenance is stored (only the merged trade set), so file storage is deferred: the
-  // table shows one derived "active dataset" row, and the upload zone is a real Adapters→addTrades
-  // importer. The parsed trades are stashed between parse() and import() (one preview at a time).
-  const csvFiles = $derived<Csv[]>(
-    dash.allTrades.length
+  // F37: real per-file provenance. The table lists the Store's file records (rename/include/
+  // download/re-import/delete all work per file); trades imported BEFORE per-file storage landed
+  // carry no fileIds and surface as one derived legacy row (delete = clear the dataset, as before).
+  // The parsed text/result are stashed between parse() and import() (one preview at a time).
+  const legacyTradeCount = $derived(dash.allTrades.filter(t => !t.fileIds?.length).length);
+  const csvFiles = $derived<Csv[]>([
+    ...dash.csvFiles.map(f => ({
+      id: f.id,
+      name: f.name,
+      label: f.label,
+      platform: f.platformLabel || f.platform,
+      rows: f.rows,
+      trades: f.tradeCount,
+      imported: (f.imported || '').slice(0, 10),
+      from: f.from,
+      to: f.to,
+      status: 'ok' as const,
+      sizeKb: Math.max(1, Math.round(f.size / 1024)),
+      overlap: f.overlap,
+      included: f.included,
+    })),
+    ...(legacyTradeCount
       ? [
           {
             id: 'dataset',
-            name: 'Imported trades',
+            name: 'Imported trades (no file history)',
             platform: 'Imported',
-            rows: dash.allTrades.length,
-            trades: dash.allTrades.length,
+            rows: legacyTradeCount,
+            trades: legacyTradeCount,
             imported: '',
-            from: dash.allTrades[0].date,
-            to: dash.allTrades[dash.allTrades.length - 1].date,
-            status: 'ok',
+            from: dash.allTrades.find(t => !t.fileIds?.length)?.date ?? '',
+            to: [...dash.allTrades].reverse().find(t => !t.fileIds?.length)?.date ?? '',
+            status: 'ok' as const,
             sizeKb: 0,
             overlap: 0,
             included: true,
+            legacy: true,
           },
         ]
-      : []
-  );
-  let pendingTrades: Trade[] = [];
+      : []),
+  ]);
+  let pendingCsv: { text: string; name: string; result: ParseResult } | null = null;
   function parseCsv(text: string, name: string): ImportPreview {
     const r = Adapters.parse(text);
+    pendingCsv = { text, name, result: r };
     if (!r.ok || !r.trades) {
-      pendingTrades = [];
+      pendingCsv = null;
       // (an error-only preview — keep the shape aligned with CsvLibrary's errorPreview(); a value
       //  import of it here would pull the lazy-loaded screen into the boot chunk)
       return {
@@ -642,7 +679,6 @@
       };
     }
     const trades = r.trades;
-    pendingTrades = trades;
     const rows = Math.max(0, text.trim().split(/\r?\n/).length - 1);
     const sample = trades.slice(0, 3).map(t => ({
       time: (t.time || '').slice(11, 16),
@@ -667,8 +703,20 @@
     };
   }
   async function importPreview() {
-    if (pendingTrades.length) await dash.importTrades(pendingTrades);
-    pendingTrades = [];
+    // F37: persist the file record + raw text alongside the trades (provenance-stamped).
+    if (pendingCsv) await dash.importCsv(pendingCsv.text, pendingCsv.name, pendingCsv.result);
+    pendingCsv = null;
+  }
+
+  // F37 CSV Library per-file actions — all thin wrappers over the dash/store seam.
+  function csvDelete(id: string) {
+    // The legacy no-provenance row can only be cleared wholesale (pre-F37 behavior).
+    return id === 'dataset' ? dash.purgeAll() : dash.deleteFile(id);
+  }
+  async function csvDownload(id: string) {
+    const rec = dash.csvFiles.find(f => f.id === id);
+    const text = await dash.fileText(id);
+    if (rec && text != null) downloadBlob(rec.name || 'import.csv', new Blob([text], { type: 'text/csv' }));
   }
 
   // First-run onboarding (prod /app only): shown when the real Store is empty. Parses + imports a CSV
@@ -679,7 +727,7 @@
     const r = Adapters.parse(text);
     if (!r.ok || !r.trades || !r.trades.length)
       return r.ok ? 'No completed trades found in that CSV.' : r.error || 'Could not read that CSV.';
-    await dash.importTrades(r.trades);
+    await dash.importCsv(text, file.name, r); // F37: onboarding import carries provenance too
     return '';
   }
 
@@ -808,6 +856,7 @@
           onpickdate={(y, m) => dash.setCal(y, m)}
           costRows={dashCostRows}
           estRoots={dashEstRoots}
+          actualCommNote={dashActualCommNote}
           advStats={dashAdvStats}
           setup={dash.setup}
           onsetupsave={s => dash.saveSetup(s)}
@@ -892,11 +941,16 @@
         {#await SCREEN_LOADERS.csv() then CsvLibrary}
           <CsvLibrary.default
             files={csvFiles}
-            perFileActions={false}
             blotterHref="#blotter"
             parse={parseCsv}
             onimport={importPreview}
-            ondelete={() => dash.purgeAll()}
+            ondelete={csvDelete}
+            oninclude={(id, v) => dash.setFileIncluded(id, v)}
+            onrename={(id, label) => dash.renameFile(id, label)}
+            ondownload={csvDownload}
+            onreimport={async id => {
+              await dash.reimportFile(id);
+            }}
             onbackup={doBackup}
             onrestore={doRestore}
             onerase={doErase}

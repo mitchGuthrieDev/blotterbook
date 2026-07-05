@@ -215,6 +215,34 @@ const t = (time, pnl, side = 'long', root = 'MES', qty = 1) => ({ time, date: ti
   ok('series: endpoint net === costModel netPreTax basis', approx(p2.net, c.gross - c.totalComm - c.fixedPeriod, 1e-9));
 }
 
+// ── A208: actual CSV commissions override the modeled tier rate ──
+{
+  const { estimatedCommRoots } = core;
+  // AMP micro: 0.25 comm + 0.35 exch per side → $1.20 round-turn per contract (modeled).
+  const withActual = { ...t('2026-01-05 10:00:00', 100), commission: 4.44 };
+  const modeled = t('2026-01-06 10:00:00', 50);
+  const m = compute([withActual, modeled]);
+  const c = costModel(m, { broker: 'AMP', platform: 0, feedCost: 0, stateRate: 0 });
+  ok('A208: actual commission used verbatim + modeled for the rest', approx(c.totalComm, 4.44 + 1.2, 1e-9), c.totalComm);
+  ok('A208: actual counters surface the mix', c.actualCommTrades === 1 && approx(c.actualComm, 4.44, 1e-9));
+  ok(
+    'A208: bySym reconciles (total = actual + modeled, actual counted)',
+    approx(c.bySym[0].total, 5.64, 1e-9) && c.bySym[0].actual === 1 && c.bySym[0].count === 2
+  );
+  // A zero commission is REAL data (a free fill), not "missing" — must not fall back to the model.
+  const cz = costModel(compute([{ ...t('2026-01-05 10:00:00', 100), commission: 0 }]), { broker: 'AMP' });
+  ok('A208: commission 0 is honored (no model fallback)', cz.totalComm === 0 && cz.actualCommTrades === 1);
+  // An unknown root normally gets the estimated-rate asterisk — but not when ALL its trades are actual.
+  const unk = costModel(compute([{ ...t('2026-01-05 10:00:00', 100, 'long', 'ZZZZ'), commission: 2 }]), { broker: 'AMP' });
+  ok('A208: all-actual unknown root drops the estimate asterisk', estimatedCommRoots(unk).length === 0);
+  const unk2 = costModel(compute([t('2026-01-05 10:00:00', 100, 'long', 'ZZZZ')]), { broker: 'AMP' });
+  ok('A171 regression: modeled unknown root still asterisked', estimatedCommRoots(unk2).includes('ZZZZ'));
+  // The daily curve applies the same rule, so the endpoint still reconciles.
+  const { dailySeries } = await import('../src/lib/core/curveseries.ts');
+  const { pts } = dailySeries(m, { broker: 'AMP', tEff: 0, fixedMo: 0 });
+  ok('A208: curve endpoint reconciles with actual commissions', approx(pts[pts.length - 1].net, c.gross - c.totalComm, 1e-9));
+}
+
 // ── A188: the event bus replay buffer — late subscribers can backfill boot events ──
 {
   const { emit, busLog, onEvent } = core;
