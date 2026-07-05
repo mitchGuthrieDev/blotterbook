@@ -562,3 +562,88 @@ test('staging redesign: dashboard tabs drag-reorder — one commit on drop, Esc-
   await drag('Alpha', 'Beta', false);
   await expect.poll(order).toEqual(['Beta', 'Main', 'Alpha']);
 });
+
+// ── A212 (R1 pass-7): the F37 per-file actions + A211 broker override round-trip the Store ──────
+
+test('staging redesign: CSV Library include-toggle narrows the active dataset and persists (F37)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await bootDashboard(page);
+  await gotoScreen(page, 'CSV Library');
+
+  // Seeded state: one included file carrying the whole dataset.
+  await expect(page.getByText(/1 of 1 included · [\d,]+ trades/)).toBeVisible();
+  const sw = page.getByRole('switch', { name: 'Include in dataset' });
+  await sw.click();
+  await expect(page.getByText(/0 of 1 included · 0 trades/)).toBeVisible();
+
+  // The exclusion applies app-wide: the Dashboard's win-rate KPI now counts 0 trades.
+  await gotoScreen(page, 'Dashboard');
+  await expect(page.getByText('0 trades')).toBeVisible();
+
+  // …and survives a reload (persisted via Store.updateFile) before being toggled back on.
+  await page.reload({ waitUntil: 'networkidle' });
+  await gotoScreen(page, 'CSV Library');
+  await expect(page.getByText(/0 of 1 included/)).toBeVisible();
+  await page.getByRole('switch', { name: 'Include in dataset' }).click();
+  await expect(page.getByText(/1 of 1 included · [\d,]+ trades/)).toBeVisible();
+});
+
+test('staging redesign: CSV Library rename + broker override persist on the file record (F37/A211)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await bootDashboard(page);
+  await gotoScreen(page, 'CSV Library');
+
+  // Rename via the row menu → dialog; the label replaces the filename in the table.
+  await page.getByRole('button', { name: 'File actions' }).click();
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  const dlg = page.getByRole('dialog');
+  await dlg.getByRole('textbox').fill('My Schwab era');
+  await dlg.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('button', { name: 'My Schwab era' })).toBeVisible();
+
+  // Broker override via the detail sheet's select (A211) — pick a non-global broker.
+  await page.getByRole('button', { name: 'My Schwab era' }).click();
+  const sheet = page.locator('[data-slot="sheet-content"]');
+  await expect(sheet).toBeVisible();
+  // (bits-ui Select.Trigger renders as a plain <button aria-label=…>, not role=combobox.)
+  await sheet.locator('button[aria-label="Broker override for this file"]').click();
+  await page.getByRole('option', { name: 'EdgeClear' }).click();
+  await page.keyboard.press('Escape'); // close the sheet
+
+  // Both persist across a reload (Store.updateFile wrote label + broker on the record).
+  await page.reload({ waitUntil: 'networkidle' });
+  await gotoScreen(page, 'CSV Library');
+  await page.getByRole('button', { name: 'My Schwab era' }).click();
+  await expect(page.locator('[data-slot="sheet-content"]').locator('button[aria-label="Broker override for this file"]')).toContainText(
+    'EdgeClear'
+  );
+});
+
+test('staging redesign: Analytics click-to-filter narrows every screen and the chips clear it (A197)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await bootDashboard(page);
+
+  // Baseline: the Blotter's unfiltered trade count.
+  await gotoScreen(page, 'Blotter');
+  const footer = page.locator('text=/of [\\d,]+ trades/');
+  const countOf = async () => parseInt((((await footer.textContent()) || '').match(/of ([\d,]+) trades/) || [])[1].replace(/,/g, ''), 10);
+  const before = await countOf();
+  expect(before).toBeGreaterThan(0);
+
+  // Click the top symbol row on Analytics — pressed state + the filter chip bar appear.
+  await gotoScreen(page, 'Analytics');
+  await page.locator('button[title^="Filter every screen to"]').first().click();
+  await expect(page.getByText('Filtered:')).toBeVisible();
+  await expect(page.locator('button[aria-pressed="true"]').first()).toBeVisible();
+
+  // The narrowing is app-wide: the Blotter now shows fewer trades (seed spans several roots).
+  await gotoScreen(page, 'Blotter');
+  await expect.poll(countOf).toBeLessThan(before);
+
+  // Back on Analytics, Clear all removes the chips and restores the full set.
+  await gotoScreen(page, 'Analytics');
+  await page.getByRole('button', { name: 'Clear all' }).click();
+  await expect(page.getByText('Filtered:')).toHaveCount(0);
+  await gotoScreen(page, 'Blotter');
+  await expect.poll(countOf).toBe(before);
+});

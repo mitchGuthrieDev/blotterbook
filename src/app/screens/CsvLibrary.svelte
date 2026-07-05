@@ -103,8 +103,6 @@
 
   interface Props {
     files: Csv[];
-    /** Per-file rename/re-import/download/include only make sense with file provenance. */
-    perFileActions?: boolean;
     blotterHref?: string;
     /** Parse a picked file's text into a preview (wraps Adapters). */
     parse?: (text: string, name: string) => ImportPreview;
@@ -137,7 +135,6 @@
   }
   let {
     files,
-    perFileActions = true,
     blotterHref = '#blotter',
     parse,
     onimport,
@@ -286,7 +283,12 @@
     renameOpen = false;
   }
   // A211: the detail sheet's broker-override select ('GLOBAL' sentinel = clear the override —
-  // bits-ui items need a non-empty value).
+  // bits-ui items need a non-empty value). Root gets `items` so Select.Value renders the LABEL
+  // for a persisted value on re-open, not the raw key.
+  const brokerItems = $derived([
+    { value: 'GLOBAL', label: 'Use the global broker setting' },
+    ...brokers.map(([value, label]) => ({ value, label })),
+  ]);
   function setBroker(id: string, v: string) {
     const key = v === 'GLOBAL' ? '' : v;
     list = list.map(f => (f.id === id ? { ...f, broker: key || undefined } : f));
@@ -353,11 +355,9 @@
   <!-- File table -->
   <Card.Root>
     <Card.Header>
-      <Card.Title>{perFileActions ? 'Uploaded files' : 'Active dataset'}</Card.Title>
+      <Card.Title>Uploaded files</Card.Title>
       <span class="text-xs text-muted-foreground">
-        {#if perFileActions}{includedCount} of {list.length} included · {fmt(totalTrades)} trades · {size(usedKb)} of {size(FILE_BUDGET_KB)} stored{:else}{fmt(
-            totalTrades
-          )} trades imported{/if}
+        {includedCount} of {list.length} included · {fmt(totalTrades)} trades · {size(usedKb)} of {size(FILE_BUDGET_KB)} stored
       </span>
     </Card.Header>
     <Card.Content class="p-0">
@@ -389,7 +389,7 @@
               <Table.Head>Status</Table.Head>
               <Table.Head class="text-right">Size</Table.Head>
               <Table.Head>Health</Table.Head>
-              {#if perFileActions}<Table.Head class="text-center">Included</Table.Head>{/if}
+              <Table.Head class="text-center">Included</Table.Head>
               <Table.Head class="w-9"></Table.Head>
             </Table.Row>
           </Table.Header>
@@ -419,20 +419,18 @@
                     <span class="text-xs text-muted-foreground">—</span>
                   {/if}
                 </Table.Cell>
-                {#if perFileActions}
-                  <Table.Cell class="text-center" onclick={e => e.stopPropagation()}>
-                    {#if f.legacy}
-                      <span class="text-xs text-muted-foreground">—</span>
-                    {:else}
-                      <Switch
-                        checked={f.included}
-                        disabled={dataDisabled}
-                        onCheckedChange={v => toggleInclude(f.id, v)}
-                        aria-label="Include in dataset"
-                      />
-                    {/if}
-                  </Table.Cell>
-                {/if}
+                <Table.Cell class="text-center" onclick={e => e.stopPropagation()}>
+                  {#if f.legacy}
+                    <span class="text-xs text-muted-foreground">—</span>
+                  {:else}
+                    <Switch
+                      checked={f.included}
+                      disabled={dataDisabled}
+                      onCheckedChange={v => toggleInclude(f.id, v)}
+                      aria-label="Include in dataset"
+                    />
+                  {/if}
+                </Table.Cell>
                 <Table.Cell onclick={e => e.stopPropagation()}>
                   <DropdownMenu.Root>
                     <DropdownMenu.Trigger>
@@ -448,7 +446,7 @@
                       {/snippet}
                     </DropdownMenu.Trigger>
                     <DropdownMenu.Content align="end" class="min-w-[160px]">
-                      {#if perFileActions && !f.legacy}
+                      {#if !f.legacy}
                         <DropdownMenu.Item disabled={dataDisabled} onSelect={() => onreimport?.(f.id)}>
                           <RefreshCw class="size-4" /> Re-import
                         </DropdownMenu.Item>
@@ -533,7 +531,7 @@
           {@render kv('Overlap', openFile.overlap > 0 ? `${openFile.overlap} rows` : 'None')}
         </div>
 
-        {#if perFileActions && !openFile.legacy && brokers.length}
+        {#if !openFile.legacy && brokers.length}
           <!-- A211: per-file broker override — for users who switched brokers over time. -->
           <div>
             <div class="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Broker for this file's trades</div>
@@ -541,6 +539,7 @@
               type="single"
               value={openFile.broker || 'GLOBAL'}
               onValueChange={v => setBroker(openFile.id, v)}
+              items={brokerItems}
               disabled={dataDisabled}
             >
               <Select.Trigger class="w-full min-w-0" aria-label="Broker override for this file">
@@ -578,7 +577,7 @@
         </div>
       </div>
       <Sheet.Footer class="flex-row justify-between">
-        {#if perFileActions && !openFile.legacy}
+        {#if !openFile.legacy}
           <Button variant="outline" size="sm" disabled={dataDisabled} onclick={() => onreimport?.(openFile.id)}>
             <RefreshCw class="size-4" /> Re-import
           </Button>

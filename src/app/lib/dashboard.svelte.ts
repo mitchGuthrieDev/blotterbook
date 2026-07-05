@@ -31,9 +31,6 @@ import type {
   ParseResult,
 } from '../../lib/core/types.ts';
 
-/** Raw-CSV library budget (F37 owner decision): soft 50 MB cap, warn from 80%. */
-export const FILE_BUDGET_BYTES = 50 * 1024 * 1024;
-
 export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?: boolean }) {
   // Demo mounts the in-memory DemoStore (nothing persists by construction), but every write path is
   // ALSO isDemo-guarded here (A87 belt-and-suspenders) and the UI disables the controls — so demo can
@@ -219,7 +216,10 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   }
   async function deleteTrades(ids: string[]) {
     if (isDemo) return;
-    for (const id of ids) await store.deleteTrade(id);
+    for (const id of ids) {
+      await store.deleteTrade(id);
+      await store.deleteTradeMeta(id); // A216: tags/note/screenshots go with the trade
+    }
     await reloadAll();
     emit('trade:deleted', { count: ids.length });
   }
@@ -324,7 +324,6 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     emit('data:imported', { added: res.added });
     return res;
   }
-  const filesBytes = () => csvFiles.reduce((a, f) => a + (Number(f.size) || 0), 0);
   async function purgeAll() {
     if (isDemo) return;
     await store.purge();
@@ -507,7 +506,6 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     deleteFile,
     fileText,
     reimportFile,
-    filesBytes,
     purgeAll,
     exportBackup,
     importBackup,

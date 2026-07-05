@@ -157,6 +157,7 @@ export function createDemoStore(): StoreLike {
         if (rest.length) trades.set(tid, { ...rec, fileIds: rest });
         else {
           trades.delete(tid);
+          trademeta.delete(tid); // A216: no orphaned meta
           removedTrades++;
         }
       }
