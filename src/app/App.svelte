@@ -910,6 +910,8 @@
             byTag={analytics.byTag}
             untagged={analytics.untagged}
             statRows={analytics.statRows}
+            {filterModel}
+            holdCoverage={analytics.holdCoverage}
           />
         {/await}
       {:else if active === 'blotter'}

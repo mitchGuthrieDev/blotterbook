@@ -99,3 +99,32 @@ alias (they route CQG/Rithmic/Teton; CME L1 $3–19/mo non-pro).
 - **A208 interplay:** trades imported with real CSV commissions bypass the model entirely, so
   historical accuracy matters most for close-event exports (TradingView) that carry no costs.
 - **R21 disposition:** keep the two-file split; no restructure. This document closes R21.
+
+## Addendum (2026-07-04): broker changes over time — the A211 recommendation
+
+**Problem.** The cost setup (broker/feed/platform $) is one global setting, but traders switch
+brokers. A user who moved from Schwab ($2.25/side) to AMP ($0.25/side) gets one commission model
+across both eras — mispricing whichever era doesn't match. F30 dates the *exchange-fee* component;
+A208's real CSV commissions bypass the model only for commission-bearing exports.
+
+**Options weighed.**
+
+| | accuracy | setup cost | implementation |
+|---|---|---|---|
+| (a) per-file broker override | high — files ARE the eras | zero until needed; one dropdown per old file | small: `broker?` on `CsvFileRec`, resolver in costModel |
+| (b) effective-dated broker setting | high | a new "broker history" settings concept to learn | medium: period editor UI + dated resolver |
+| (c) keep global, document it | low for switchers | zero | zero |
+
+**Recommendation: (a) — per-file broker override, falling back to the global setting.** The F37
+file records already exist, carry the platform, and match how users think about their history
+("this file is from my Schwab era"). Single-broker users never see the feature; a switcher sets
+one dropdown on their old files in the CSV Library. Resolution: a trade's broker = the override of
+its newest-imported contributing file that has one, else the global setting. (Cross-broker
+overlapping trades are practically nonexistent — different accounts produce different fills — so
+the precedence rule is a formality.) Mechanically: `CsvFileRec.broker?`, a `brokerFor(t)` resolver
+threaded through `costModel`/`curveseries` beside the F30 date, and a dropdown in the Library's
+file detail sheet. Option (b) remains a natural later layer *on top of* (a) if a platform-continuous
+user (one TradingView file spanning both broker eras) ever needs a date split — and A208
+increasingly moots the whole problem as more exports carry real costs.
+
+**Status: recommendation delivered; awaiting owner sign-off before implementation (A211).**
