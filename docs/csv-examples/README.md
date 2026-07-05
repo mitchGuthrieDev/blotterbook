@@ -1,10 +1,10 @@
-# CSV examples — real platform exports (TEMPORARY reference)
+# CSV examples — real platform exports (PERMANENT reference)
 
 Owner-supplied real export sets (2026-07-05, demo/paper accounts — no live account data) for the
 adapter work: **A209** (NinjaTrader/Tradovate family), **A103** (beta-adapter verification), and
-**F47** (batch upload + detection status). Remove this folder (or move to `docs/archive/`) once the
-adapters + fixtures ship — fixtures in `scripts/test-adapters.mjs` are the durable home for
-representative rows, not raw files.
+**F47** (batch upload + detection status). **Kept indefinitely by owner decision (2026-07-05)** as
+the ground-truth reference for future adapter/format questions — fixtures in
+`scripts/test-adapters.mjs` guard the shipped behavior, but these are the real files behind them.
 
 ## What's here
 
