@@ -3967,6 +3967,171 @@
       "completedDate": "2026-07-05",
       "partial": false,
       "doneNote": "Shipped across three slices. SLICE 1 (2026-07-04, PR #102): audit of the 9 static read-outs; click-to-filter on symbol rows (root), tag rows (tag), long/short cards (side) and weekday labels (dows) — all toggling the app-wide FilterState so every screen narrows together; removable filter chips + Clear all; show-all expansion on the symbol/tag tables. SLICE 2 (2026-07-05, PR #106): sortable columns on the symbol/tag breakdowns (name/trades/win/signed-P&L; default stays the |P&L| impact order, sorted before the top-N cut) and the histogram bucket drill-down (DistBar carries [lo,hi) bounds; a clicked bucket lists its matching trades via a lazy bucketTrades prop, capped at 12 with a Blotter pointer). SLICE 3 (2026-07-05, this closure): hour-of-day click-to-filter — FilterState/SavedFilterDef gained `hours: number[]` (applyFilters matches the trade timestamp HH; no-timestamp trades are excluded while active; saved views round-trip it), the hour bars carry keys + toggle + a chip; page-level quick date scoping (30D/90D/YTD/All presets writing the shared from/to); and the hour module is A176-coverage-gated (a no-timestamp dataset gets a capability note naming fills exports instead of an empty chart). e2e covers all three slices. Follow-on interactivity ideas belong to new items (A142 has the module pipeline)."
+    },
+    {
+      "id": "R11",
+      "title": "Discussion & planning: Trade Replay (simulated market snapshots)",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05: docs/trade-replay-r11.md. VERDICT: feasible with caveats — phase it, market data LAST. Evidence: 8/10 adapter formats are fills exports carrying per-execution price+time, but pairFills() currently DISCARDS prices (the persisted Trade has no price fields) — so phase 1's prerequisite is a small backward-compatible core change persisting entryPrice/exitPrice. No export carries intra-trade market data. Licensed CME intraday data is a hard blocker for a free client-side app (delayed-data fee ~$304/mo; Databento/Polygon are per-user-key, no redistribution) → recommended path: BYOD bar-file import (zero cost, zero egress); vendor fetch only as consent-gated opt-in (a candle request keyed by symbol+time leaks trading activity — bundled/hosted data rejected outright). Storage: 1m bars ≈ 40-60 KB/symbol-day → IndexedDB-fine with an LRU cap; lightweight-charts (Apache-2.0) fits CSP if lazy-loaded. Phases: (1) own-executions fills replay ~3-5 d; (2) BYOD candles ~1-2 wk; (3) user-keyed vendor fetch ~1 wk, owner-gated. Follow-up filed: F42 (the phase-0 price capture, useful on its own); further phases stay in the doc pending owner direction."
+    },
+    {
+      "id": "R14",
+      "title": "Discussion & planning: economic calendar data on the calendar module",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05: docs/econ-calendar-r14.md. RECOMMENDATION: build — US-government primary sources make this license-clean and cheap: FOMC meeting dates (Fed), BLS release schedules (CPI/NFP), EIA crude inventories, BEA GDP — all published in advance (no scraping drama). Data: ~8-12 event types × 5 years ≈ a few thousand rows → tens of KB gzipped as static/data/econ-events.json with schemaVersion + manifest hashing (the standard ref-data pattern). Render: a small marker in the existing calendar day cells + detail in the day drill-in; a calendar-screen toggle persisted via Store.local (demo-safe). Maintenance: an annual/quarterly refresh from the published schedules (automate later under the A15 subrequest guardrail). Follow-up filed: F43."
+    },
+    {
+      "id": "R15",
+      "title": "Discussion & planning: Stripe integration (donations now, subscriptions later)",
+      "category": "REVIEW / AUDIT",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05: docs/stripe-assessment-r15.md. RECOMMENDATION: hosted full-redirect Stripe with NO Stripe.js on our pages — the donations MVP is two Stripe Payment Links ($25 one-time / $50) wired to the homepage 'Back the project' card, opened new-tab; CSP/_headers need ZERO changes (full navigation isn't CSP-gated) and the MVP needs NO server code or secrets (donations grant no entitlement; /api/webhook stays inert behind the S11 signature verify that's already wired). The Checkout-Session Function (~1 day) is the upgrade path and the mandatory subscription primitive; subscriptions stay gated on accounts + CloudStore + A16 Workers Paid (stub = test-mode Prices + Billing Portal config + a verify-then-log webhook that provisions nothing). LAUNCH BLOCKER flagged: the F18/A202 legal pack + entity decision gate live-mode, not the test-mode build. Open question for the owner: is '$50/yr' truly recurring (that makes it a Stripe subscription, not a Payment Link donation)? Follow-up filed: F38."
+    },
+    {
+      "id": "A65",
+      "title": "Discuss: which Svelte features to utilize",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05 (combined with A80): docs/svelte-adoption-survey.md — every claim cited to file:line. Verdicts on the A65 focus list: snippets vs slots DONE (0 <slot>, 136 snippet/render lines, typed Snippet props); $derived.by DONE where it helps (17 sites; remaining App.svelte chains are single-expression — convert opportunistically); attachments SKIP migrating the 3 existing actions (styleProps needs the action update() contract — the CSP seam) but use {@attach} for new needs; $props.id() ADOPT narrowly (1 use in TagInput; 8 hardcoded form ids to sweep when touched). Follow-ups filed under A224."
+    },
+    {
+      "id": "A80",
+      "title": "Discuss/explore: deeper Svelte 5 runes + reactivity adoption",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05 (combined with A65): docs/svelte-adoption-survey.md. Verdicts on the reactivity list: .svelte.ts vs context — KEEP the factory+props model (two rune modules exist; NOTE the setContext('bb:store') seam has ZERO getContext consumers today — a dead seam to fix or drop); extract App.svelte's ~145-line dashboard-tabs block into a .svelte.ts module; $effect correctness CLEAN (14 blocks, the 2 resource-acquiring ones both return cleanups; the 3 lastKey reseed-guards are deliberate); $bindable SKIP (callback pairs are intentional staged-commit/demo-guard seams); $state.snapshot SOUND (9 boundary sites + Store-side defensive copies); fine-vs-coarse reactivity is the ONE real perf lever — $state.raw for allTrades/csvFiles/tradeMeta/journal (reassignment-only today; overlaps the A136 shortlist), plus make REDUCED_MOTION a live MediaQuery. Follow-ups filed: A223 ($state.raw with the perf batch) + A224 (idiom cleanups)."
+    },
+    {
+      "id": "A112",
+      "title": "Discussion: free SAST options for the CI pipeline",
+      "category": "SECURITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05: docs/sast-eval-a112.md. VERDICT: adopt Semgrep CE (free LGPL engine; custom rules can mechanically enforce the no-egress invariant) + osv-scanner (the real gap — A28 pinned the lockfile but NOTHING in CI scans dependencies today). SKIP CodeQL: this repo is private, so it requires GitHub Advanced Security (~$30/active-committer/mo, org plans only — the free tier is public-repos-only); skip Socket.dev (paid for private repos, low value with 2 pinned runtime deps) and eslint-plugin-security (TS false-positive burden). Wiring: a separate security.yml workflow (PR + weekly cron) — custom Semgrep rules + osv-scanner FAIL the build, registry rulesets report-only initially; SARIF upload also needs GHAS on private repos so results stay in logs. Follow-up filed: A220."
+    },
+    {
+      "id": "R20",
+      "title": "Evaluate gridstack.js vs a custom build for the resizable tiling grid (CSP/A28)",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05: docs/grid-eval-r20.md. VERDICT: CUSTOM — build F29 phase 1 on the existing styleProps/modOrder/Store.local/A186 primitives. The explicit CSP verdict: gridstack v12+ PASSES style-src 'self' (geometry via CSSOM + CSS variables; the dynamic <style> injection was removed in v12 — verified in v12.6.0 source; v10-and-earlier FAIL), no telemetry, MIT — but it loses on size (~83 KiB minified vs ~22 KiB budget headroom), fights the keyed {#each}+animate:flip substrate, and has no built-in keyboard move/resize. Svelte wrapper libs are unmaintained. The doc includes the concrete F29 phase-1 scope ({key,span}[] layout payload v2 + migration, 12-col CSS grid spans via styleProps, rAF pointer resize staged behind the dirty asterisk, keyboard/aria fallback, span-12 mobile degrade) — F29's prompt updated to reference it. Phase 2 (height/2-D) may re-open gridstack or vendor its DOM-free engine under the standing CSP verdict."
+    },
+    {
+      "id": "A136",
+      "title": "Discussion: performance optimizations",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05: docs/perf-shortlist-a136.md (measured: 619.4/640 KiB, boot ~451.5 KiB static). TOP 3: (1) $state.raw for allTrades — every recompute runs ~20+ O(n) passes through the deep-reactivity proxy and all mutation paths already replace wholesale; (2) downsample the per-trade SVG paths (the Analytics underwater curve emits one path command per trade — min/max decimation to ~1-2k points is visually lossless); (3) consolidate boot IndexedDB reads (reloadAll awaits 6 reads sequentially; journalDates duplicates getAllJournal). Negative findings: no adoptable dep removal (the select chunk is intentional ADR-002 weight; lucide tree-shakes), Geist Mono is already a 22.6 KiB latin subset, no redundant $effect work. Budget verdict: HOLD 640 KiB; re-ratchet only if bytes are genuinely removed. Follow-up filed: A223."
+    },
+    {
+      "id": "A137",
+      "title": "Discussion: add contract expiry / delivery month info",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05: docs/contract-expiry-a137.md. VERDICT: capture expiry — but DERIVE IT ON READ with zero adapter/schema changes: Trade.symbol already persists the raw export symbol (root is the stripped copy), so expiry is recoverable retroactively via a pure core helper (the inverse of rootSym()'s /[FGHJKMNQUVXZ]\\d{1,4}$/ strip). Coverage from the real fixtures: 7/10 formats carry full contract codes (MotiveWave/Tradovate/Rithmic/Sierra/TradeStation/Schwab/IBKR) — but BOTH TradingView adapters (the only verified ones) export continuous 'CME_MINI:MES1!' with no expiry, so the UI must degrade to '—'. Parser handles F-Z months, 1/2/4-digit years (single digit resolved nearest-to-trade-date), refuses continuous/spread symbols; digit-ended roots (M2K, SR3, 6E) are safe. Surface in TradeEditor detail first, muted Blotter column second; rollover analytics deferred. Follow-up filed: F40."
+    },
+    {
+      "id": "A141",
+      "title": "(Discussion) Changelog email signup + notify on changelog update",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05: docs/changelog-email-a141.md. RECOMMENDATION: build first-party — a Pages Function signup endpoint + D1 subscriber list + Resend transactional sends, triggered by a new paths-filtered GitHub Actions workflow on changelog.json pushes (NOT inside version-bump.yml — the curated changelog lands in a separate commit from the bump). Cost: $0/mo to ~100 subscribers; ~$20/mo (Resend Pro) toward 1k. KV rejected per A17 (per-visitor writes on a public path); MailChannels' free Workers arrangement confirmed ended 2024-08-31; Buttondown ($0→$9/mo) is the buy runner-up. Design covers double opt-in, one-click unsubscribe + List-Unsubscribe headers, hard-delete erasure, no-tracking GDPR-lite posture, Turnstile + D1 cooldown for abuse (defense-in-depth only per S22), and batch sends under the A15 50-subrequest cap. Follow-up filed: F44 (implementation, owner-gated on the provider account)."
+    },
+    {
+      "id": "A142",
+      "title": "Discussion: ideas for more dashboards / dashboard modules",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05: docs/dashboard-module-ideas-a142.md, grounded in the actual Metrics/CostModel/dailySeries fields and de-duplicated against the Analytics screen + existing perf/cal/cost/adv/compare modules. TOP 5 (all grid modules): (1) Today / Last Session (daily check-in from the tail of m.days vs avgDaily/avgTrades), (2) Drawdown Status (live distance from the high-water mark off m.curve, framed by maxDD/maxDDpct), (3) Streak Monitor (current run vs mcw/mcl records), (4) Rolling Form (last-20-trades expectancy/win-rate vs all-time), (5) Session Split RTH/ETH (core sessionOf — absent from Analytics). Also detailed: Monthly P&L strip, Tax Reserve card, Edge Quality (SQN/Kelly), a Morning Review preset-tab concept. Follow-up filed: F39 (top-3 batch)."
+    },
+    {
+      "id": "A196",
+      "title": "Discussion: Claude Code skills to accelerate this project's development",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05: docs/skills-shortlist-a196.md. SHORTLIST: (1) add-adapter P1 — A209 runs the ritual twice imminently (Quantower + NinjaTrader); it spans 5 files and carries the subtle A174/A178 sniff/minScore/no-misfire rules plus the easy-to-forget Howto/Home docs tail; (2) backlog-upkeep P1 — the highest-frequency ritual (every session; 10 items archived by hand on 2026-07-05): donePolicy prompt-strip + move-to-archive + recurring exemptions + updated bump + format pass, fully mechanical; (3) cut-changelog P2; (4) add-dashboard-module P2; (5) add-ui-primitive P3. Rate-data update explicitly skipped (two documented steps, no error surface). Follow-up filed: CH36 (author the top two)."
+    },
+    {
+      "id": "A199",
+      "title": "(Discussion) Audit our mobile approach — is it best-practice or does it need re-architecting?",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05: docs/mobile-architecture-assessment.md. RECOMMENDATION: keep-and-refine — the responsive-adaptive single SPA is right for this desktop-first workload, and the incremental path (A182/A183/A184/A200) is compounding into a real pattern (MediaQuery conditional rendering). Nothing is broken; papering-over: the Blotter/TradeEditor 13-14-column scroll tables, DashTabs HTML5 drag being touch-dead (menu fallback exists), hover-only tooltips leaving icon buttons unexplained on touch, and a tail of sub-24px touch targets (calendar stepper, carousel dots). Notable gap: width is the only mobile signal — no pointer:coarse/hover:none queries anywhere. Follow-ups filed: A221 (Blotter card list), A222 (touch-target + touch-tooltip pass)."
+    },
+    {
+      "id": "A204",
+      "title": "Discussion: evaluate modern-feel UI libraries (anime.js, Kokonut UI, bklit UI)",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05: docs/ui-libs-eval-a204.md. VERDICTS: anime.js v4 SKIP for now (MIT, CSP-fine via CSSOM, tree-shakeable — but duplicates Svelte transitions and even a trimmed import eats most of the ~22 KiB headroom with no screen needing timelines/staggers today); Kokonut UI SELECTIVELY BORROW (React/Next + Framer Motion copy-paste collection with no Svelte story — treat as a visual-idea catalog and re-implement in shadcn-svelte; never port JSX style={{}} to a style attribute); bklit UI SKIP (verified: an obscure React-only shadcn CHART registry — nothing installable for Svelte, and our charts are custom SVG in the pure core). Peer note: motion/mini (~2.3 KiB gz, WAAPI, MIT) is the one to adopt IF a real need appears; GSAP too heavy + custom license. No follow-up items."
+    },
+    {
+      "id": "A207",
+      "title": "Discussion: static-loading / prerendering the app surface for faster first paint",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Delivered 2026-07-05: docs/app-first-paint-a207.md. TOP RECOMMENDATION: put static skeleton markup (shape-matched to the A206 screenSkeleton, existing Tailwind utility classes only) directly inside <div id='app'> in the three hand-authored shells, cleared via replaceChildren() in main.ts — it paints after the ~73 KiB CSS instead of the ~427 KiB boot JS, is CSP-clean, and costs nothing against the size budget. Adopt alongside: font + versions.json preloads, and drop the redundant ?t=Date.now() on the manifest fetch (already cache:'no-cache') so it becomes preloadable. Verified: no modulepreload gap exists (the boot graph ships as parallel module tags in <head>). Phase 2 (viable, later): SSG-prerender a data-free AppShell-chrome sibling via the existing vite-ssg.mjs (never App.svelte — it reads document.body/Store at init), replace-not-hydrate. REJECTED: inline critical CSS (breaks style-src 'self') and any SvelteKit/SSR route (A62). Follow-up filed: F41; service-worker caching left for a future item."
     }
   ]
 }
