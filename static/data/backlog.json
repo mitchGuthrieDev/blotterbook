@@ -583,17 +583,6 @@
       "partial": false,
       "prompt": "Follow-up from F30 (see docs/rates-data-assessment.md — Follow-ups). (1) CME published a 2026-02-01 fee schedule AND announced further transaction-fee changes effective 2026-04-01; our current composites in static/data/exchange-fees.json are a 'mid-2026 snapshot' (A171, 2026-07-02) that SHOULD include both — spot-check the equity/energy/metals/micro groups against cmegroup.com's current schedule (clearing-fees page); if anything moved, bump the current values and push the prior values into a new history entry ('until': '2026-03-31' or '2026-01-31' as documented), then run build-manifest.mjs. (2) Backfill deeper (pre-2024) exchange-fee history from cmegroup.com/company/clearing-fees/historical-fees.html only if users import multi-year-old data. (3) Add broker rateHistory entries ONLY with a citable source (broker announcement or a Wayback capture of their pricing page) — never fabricate. Schema needs no changes for any of this. Done when: the 2026 spot-check is recorded (values confirmed or corrected+dated) and any added history entries carry citations.",
       "doneNote": null
-    },
-    {
-      "id": "A213",
-      "title": "/app bundle headroom eroded to ~20 KiB — trim or re-budget before the next feature",
-      "category": "CHORE / REFACTOR",
-      "priority": "P2",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the 2026-07-04 R1 pass-7 audit (docs/repo-audit-2026-07-04.md). npm run size-budget: 579.9/600.0 KiB — the 2026-07-04 feature day cost ~21 KiB and the next feature of similar size trips the A96 gate. Before raising the ceiling, trim: (1) App.svelte keeps growing as the wiring hub (~1000 lines) — evaluate moving per-screen view-model builders (analytics/reports/blotter row mappers) into the screens' own lazy chunks so their code leaves the boot payload; (2) the utils chunk (bits-ui/tailwind-merge, ~124 KiB) remains the standing A136 candidate; (3) re-measure Geist Mono subsetting. If trimming can't buy meaningful headroom, make the deliberate call to raise the budget (docs/architecture note + gate constant) rather than letting it fail ad hoc. Done when: either ≥40 KiB headroom is restored or the budget is consciously re-set with the rationale recorded."
     }
   ],
   "howToDrive": [

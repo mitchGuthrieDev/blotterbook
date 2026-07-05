@@ -71,12 +71,15 @@ function priorBounds(from: string, to: string): { from: string; to: string } | n
   return { from: fmtDate(pa), to: fmtDate(pb) };
 }
 
+/** The caller-supplied slice of ReportLabels (generated/scope are filled in here). */
+export type ReportLabelsIn = Omit<ReportLabels, 'generated' | 'scope'>;
+
 export function buildReportVM(
   allTrades: Trade[],
   range: ReportRange,
   compare: boolean,
   costInputs: CostInputs,
-  labels: Omit<ReportLabels, 'generated' | 'scope'>,
+  labels: ReportLabelsIn,
   meta?: ReportMeta
 ): ReportVM {
   const { from, to, label } = bounds(range);

@@ -3824,6 +3824,28 @@
       "completedDate": "2026-07-04",
       "partial": false,
       "doneNote": "From the 2026-07-04 audit; fixed same day. intake.ts added to the core file list; store.ts described with all six object stores (files/filetext, F37); the data-flow diagram carries the intake gates (A177/A178), F37 provenance/enrichment, A208 real commissions, F30 dated rates and the A211 per-file broker, and links docs/data-flow.md; the adapter recipe's trade shape includes `commission` and notes minScore."
+    },
+    {
+      "id": "A213",
+      "title": "/app bundle headroom eroded to ~20 KiB — trim or re-budget before the next feature",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-04 (feat/a213-bundle-headroom). Boot payload trimmed first: the report builders (reports.ts + report.ts) moved out of App.svelte into the lazy Reports chunk (main 135→129 KiB; Reports lazy 15→21 KiB) — Reports owns buildReportVM and App passes raw reactive inputs. The remaining growth is intentional feature code (the 2026-07-04 CSV/data-management day), so per this item's own escape hatch the ceiling moved DELIBERATELY 600→640 KiB with the rationale recorded in scripts/check-bundle-size.mjs (matching the A128/CH16 precedent). Now 580.1/640 = 59.9 KiB headroom; the standing trim target remains the utils chunk (tailwind-merge/bits-ui — A136)."
+    },
+    {
+      "id": "A219",
+      "title": "TradingView calc audit: cross-export reconciliation (phantom trades from truncated fills exports)",
+      "category": "FIXES",
+      "priority": "P1",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Owner-directed calculation audit over the five real TradingView exports, every upload combination (docs/calc-audit-tradingview-2026-07-04.md). Found: importing balance history + order history together OVERSTATED net by +$363.75 (553.50 vs the authoritative 189.75) — the order-history export's limited reach-back mispairs its earliest round trips into phantom trades whose P&L differs, so tradeId dedupe can't catch them. Fixed with cross-export reconciliation (reconcileImport in src/lib/core/intake.ts, wired through importCsv/reimportFile, scoped to the same platform family): inside a closed export's window, a derived trade either matches an authoritative record at the SAME P&L (dedupe+enrich) or is a phantom (dropped/evicted) — both import orders converge to the identical dataset (fixture-pinned, 6 new assertions). Import preview states the resolved count before confirm; Howto updated ('import both — reconciliation is automatic'). Post-fix matrix: all 7 cases produce authoritative or self-consistent numbers with curve↔costModel reconciliation everywhere. Known documented trade-off: two same-platform ACCOUNTS mixed across export types would over-reconcile — the preview count is the guardrail; account-aware classifiers if multi-account ever lands."
     }
   ]
 }

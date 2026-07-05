@@ -43,6 +43,9 @@
     coverage?: { hold: number; qty: number; comm: number };
     /** The platform's "upload X to unlock Y" sibling-export guidance (from the adapter). */
     upgradeHint?: string;
+    /** Rows that disagree with already-imported data (truncated-export artifacts) — resolved
+     *  toward the authoritative version on confirm (cross-export reconciliation). */
+    conflicts?: number;
     error?: string;
   };
   /** An error-only preview (intake rejection / failed parse) in the shape the preview sheet renders. */
@@ -659,6 +662,16 @@
                 </Table.Body>
               </Table.Root>
             </div>
+          </div>
+        {/if}
+        {#if preview.conflicts}
+          <div class="flex items-start gap-2 rounded-md border border-chart-4/40 bg-chart-4/10 px-3 py-2 text-xs text-muted-foreground">
+            <TriangleAlert class="size-4 shrink-0 text-chart-4" />
+            <span>
+              {preview.conflicts} trade{preview.conflicts === 1 ? '' : 's'} in this file disagree{preview.conflicts === 1 ? 's' : ''} with data
+              you've already imported (usually a truncated export mispricing its earliest round trips). The exact figures win — the conflicting
+              cop{preview.conflicts === 1 ? 'y is' : 'ies are'} resolved automatically on import.
+            </span>
           </div>
         {/if}
         {#if preview.estimatedRoots.length}

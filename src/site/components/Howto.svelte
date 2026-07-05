@@ -400,8 +400,9 @@
           <b>Order history</b> — columns <code>Symbol</code>, <code>Side</code>, <code>Fill price</code>, <code>Status</code>,
           <code>Closing time</code>. A fills export: Blotterbook pairs entries→exits, which unlocks <b>hold time</b>, and reads the
           <code>Commission</code> column when your broker fills it in. One caveat: this export only reaches back a limited number of orders —
-          if it starts mid-position, the earliest round trips can misprice (you'll see an open-lots notice on import). Prefer balance history
-          unless you want hold times; the two de-duplicate if you import both. The other exports on that panel (positions, orders, trading journal)
+          if it starts mid-position, the earliest round trips can misprice (you'll see an open-lots notice on import). Import both and Blotterbook
+          reconciles them automatically: identical trades de-duplicate and enrich each other, and where the two disagree the balance history's
+          exact P&amp;L wins over the derived figure — in either import order. The other exports on that panel (positions, orders, trading journal)
           aren't trade data — Blotterbook will decline them.
         </p>
       </section>

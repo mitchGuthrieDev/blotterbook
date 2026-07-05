@@ -386,6 +386,54 @@ ok('ibkr without a commission column leaves trades unmarked', rc.ok && rc.trades
 rc = A.parse(C.tradovate);
 ok('fills adapter without commission support leaves trades unmarked', rc.ok && rc.trades.every(t => t.commission == null));
 
+/* ---------- Cross-export reconciliation (TV calc audit 2026-07-04) ---------- */
+console.log('\nCross-export reconciliation (reconcileImport):');
+{
+  // Mini replica of the real TradingView case: a closed (authoritative) export covering
+  // 10:00–10:13, and a fills export whose truncated head mispriced two round trips.
+  const T = (time, pnl, extra = {}) => ({
+    time,
+    date: time.slice(0, 10),
+    pnl,
+    symbol: 'CME_MINI:MES1!',
+    root: 'MES',
+    side: 'short',
+    ...extra,
+  });
+  const auth1 = T('2026-06-17 10:00:00', 61.25, { id: 'a1', fileIds: ['balf'] });
+  const auth2 = T('2026-06-17 10:13:00', 63.75, { id: 'a2', fileIds: ['balf'] });
+  const opts = {
+    isAuthority: t => !!t.fileIds?.includes('balf'),
+    isDerivedPeer: t => !!t.fileIds?.includes('ordf'),
+  };
+  const dPhantomMismatch = T('2026-06-17 10:00:00', 271.25, { holdMs: 60000, fileIds: ['ordf'] }); // wrong pnl at a real event
+  const dPhantomNoEvent = T('2026-06-17 10:10:00', 92.5, { holdMs: 60000, fileIds: ['ordf'] }); // no authoritative event at all
+  const dMatch = T('2026-06-17 10:13:00', 63.75, { holdMs: 90000, fileIds: ['ordf'] }); // corroborated → dedupe/enrich
+  const dOutside = T('2026-06-17 09:00:00', 10, { holdMs: 5000, fileIds: ['ordf'] }); // before the window → untouched
+
+  // Fills import into an authoritative store: both phantoms drop, corroborated + outside kept.
+  let r = I.reconcileImport([auth1, auth2], [dPhantomMismatch, dPhantomNoEvent, dMatch, dOutside], 'fills', opts);
+  ok('recon: phantoms inside the authority window drop (mismatch + no-event)', r.conflicted === 2 && r.evictIds.length === 0);
+  ok('recon: corroborated + outside-window trades survive', r.add.length === 2 && r.add.includes(dMatch) && r.add.includes(dOutside));
+
+  // Reverse order: the closed export arrives second — stored derived phantoms evict, matches stay.
+  const dp1 = { ...dPhantomMismatch, id: 'd1' },
+    dp2 = { ...dPhantomNoEvent, id: 'd2' },
+    dm = { ...dMatch, id: 'd3' };
+  r = I.reconcileImport([dp1, dp2, dm], [auth1, auth2], 'closed', opts);
+  ok('recon: reverse order evicts the same phantoms (converges)', r.conflicted === 2 && r.evictIds.sort().join() === 'd1,d2');
+  ok('recon: reverse order keeps the corroborated derived record', !r.evictIds.includes('d3') && r.add.length === 2);
+
+  // No classifiers (no provenance) → conservative fallback: only the exact collision resolves.
+  r = I.reconcileImport([{ ...auth1, holdMs: undefined }], [dPhantomMismatch, dPhantomNoEvent], 'fills');
+  ok('recon: fallback resolves exact collisions only', r.conflicted === 1 && r.add.length === 1);
+
+  // A different platform family is never touched (classifiers return false).
+  const other = { isAuthority: () => false, isDerivedPeer: () => false };
+  r = I.reconcileImport([auth1], [dPhantomMismatch], 'fills', other);
+  ok('recon: cross-family imports untouched by the window rule (fallback still guards exact keys)', r.add.length + r.conflicted === 1);
+}
+
 /* ---------- A177/A178 intake hardening ---------- */
 console.log('\nA177/A178 intake hardening:');
 
