@@ -8,6 +8,7 @@
   import { Plus, MoreHorizontal, Pencil, ChevronLeft, ChevronRight, Trash2, X, Save } from '@lucide/svelte';
   import { flip } from 'svelte/animate';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+  import IconTip from '$lib/components/IconTip.svelte';
   import { dur } from '../lib/motion.ts';
 
   export type DashTab = { id: string; name: string };
@@ -112,16 +113,22 @@
         {t.name}{#if isDirty(t.id)}<span class="ml-0.5 text-chart-4" title="Unsaved layout changes">*</span>{/if}
       </button>
       <DropdownMenu.Root>
-        <DropdownMenu.Trigger>
-          {#snippet child({ props })}
-            <button
-              {...props}
-              type="button"
-              class="grid size-6 place-items-center text-muted-foreground hover:bg-accent hover:text-foreground"
-              aria-label="Tab menu: {t.name}"><MoreHorizontal class="size-3.5" /></button
-            >
+        <!-- A205: tooltip composed onto the menu trigger — the tooltip's child props feed the
+             DropdownMenu.Trigger so bits-ui merges both onto the one real button. -->
+        <IconTip label="Tab options">
+          {#snippet button(tip)}
+            <DropdownMenu.Trigger {...tip}>
+              {#snippet child({ props })}
+                <button
+                  {...props}
+                  type="button"
+                  class="grid size-6 place-items-center text-muted-foreground hover:bg-accent hover:text-foreground"
+                  aria-label="Tab menu: {t.name}"><MoreHorizontal class="size-3.5" /></button
+                >
+              {/snippet}
+            </DropdownMenu.Trigger>
           {/snippet}
-        </DropdownMenu.Trigger>
+        </IconTip>
         <DropdownMenu.Content align="start" class="min-w-[160px]">
           <DropdownMenu.Item onSelect={() => onrename(t.id)}><Pencil class="size-4" /> Rename</DropdownMenu.Item>
           <DropdownMenu.Item disabled={i === 0} onSelect={() => onmove(t.id, -1)}
@@ -136,13 +143,18 @@
         </DropdownMenu.Content>
       </DropdownMenu.Root>
       <!-- A186: direct close ✕ (the last tab can't be closed — same rule as the menu Delete). -->
-      <button
-        type="button"
-        class="grid size-6 place-items-center rounded-r-md text-muted-foreground hover:bg-accent hover:text-destructive disabled:opacity-30"
-        aria-label="Close tab: {t.name}"
-        disabled={tabs.length === 1}
-        onclick={() => ondelete(t.id)}><X class="size-3" /></button
-      >
+      <IconTip label="Close tab">
+        {#snippet button(tip)}
+          <button
+            {...tip}
+            type="button"
+            class="grid size-6 place-items-center rounded-r-md text-muted-foreground hover:bg-accent hover:text-destructive disabled:opacity-30"
+            aria-label="Close tab: {t.name}"
+            disabled={tabs.length === 1}
+            onclick={() => ondelete(t.id)}><X class="size-3" /></button
+          >
+        {/snippet}
+      </IconTip>
     </div>
   {/each}
   <button

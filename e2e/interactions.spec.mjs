@@ -156,23 +156,48 @@ test('demo: feedback dialog builds a mailto draft from ONLY the typed text (A105
 
 test('demo: dashboard tabs render and work in-memory (A135, promoted) — but never persist', async ({ page }) => {
   test.setTimeout(60_000);
-  page.on('dialog', d => d.accept(d.type() === 'prompt' ? 'Swing' : undefined));
   await bootDashboard(page);
 
   // The tab bar ships on every surface now — demo boots with the implicit Main tab.
   await expect(page.getByRole('button', { name: 'Main', exact: true })).toBeVisible();
 
-  // Creating a tab works (in-memory DemoStore.local) and becomes active.
-  await page.getByRole('button', { name: 'New tab' }).click();
-  const swingTab = page.getByRole('button', { name: 'Swing', exact: true });
-  await expect(swingTab).toBeVisible();
-  await expect(swingTab).toHaveAttribute('aria-current', 'page');
+  // Creating a tab works (in-memory DemoStore.local): it auto-names itself 'New tab 1' (A198 —
+  // no prompt) and becomes active.
+  await page.getByRole('button', { name: 'New tab', exact: true }).click();
+  const newTab = page.getByRole('button', { name: 'New tab 1', exact: true });
+  await expect(newTab).toBeVisible();
+  await expect(newTab).toHaveAttribute('aria-current', 'page');
 
   // Demo invariant: nothing persists — a reload is back to the single Main tab.
   await page.reload({ waitUntil: 'networkidle' });
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
   await expect(page.getByRole('button', { name: 'Main', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Swing', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'New tab 1', exact: true })).toHaveCount(0);
+});
+
+test('demo (mobile): top stat cards render as a one-at-a-time carousel with arrows + dots (A200)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 360, height: 780 });
+  await bootDashboard(page);
+
+  // One card at a time: card 1 (Net P&L) shows; card 2 (Win rate) doesn't exist inside the
+  // carousel until we move to it (the desktop grid renders it, but hidden at this width).
+  const carousel = page.getByRole('group', { name: 'Key stats' });
+  await expect(carousel).toBeVisible();
+  await expect(carousel.getByText('Net P&L', { exact: true })).toBeVisible();
+  await expect(carousel.getByText('Win rate', { exact: true })).toHaveCount(0);
+
+  // Arrows + dots navigate; the dot for the active card is marked current.
+  await carousel.getByRole('button', { name: 'Next card' }).click();
+  await expect(carousel.getByText('Win rate', { exact: true })).toBeVisible();
+  await expect(carousel.getByRole('button', { name: /Go to card 2 of/ })).toHaveAttribute('aria-current', 'true');
+  await carousel.getByRole('button', { name: 'Previous card' }).click();
+  await expect(carousel.getByText('Net P&L', { exact: true })).toBeVisible();
+
+  // Desktop is unchanged: at sm+ the grid returns and the carousel unmounts.
+  await page.setViewportSize({ width: 1280, height: 780 });
+  await expect(page.getByRole('group', { name: 'Key stats' })).not.toBeVisible();
+  await expect(page.getByText('Win rate', { exact: true })).toBeVisible();
 });
 
 test('demo (mobile): no screen scrolls horizontally at 360px (A183) and both calendars fit (A182)', async ({ page }) => {

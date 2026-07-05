@@ -460,6 +460,7 @@ test('staging redesign: dashboard tabs — staged layouts, Save + dirty asterisk
   page,
 }) => {
   test.setTimeout(90_000);
+  // The rename prompt supplies 'Scalping'; the ✕-close confirm is accepted.
   page.on('dialog', d => d.accept(d.type() === 'prompt' ? 'Scalping' : undefined));
   await bootDashboard(page);
   await expect(page.getByRole('button', { name: 'Main', exact: true })).toBeVisible();
@@ -476,8 +477,12 @@ test('staging redesign: dashboard tabs — staged layouts, Save + dirty asterisk
   await expect(addBtn).toBeDisabled(); // nothing selectable on a full layout
   await page.keyboard.press('Escape');
 
-  // Create a second tab (prompt supplies the name) — it becomes active with the default layout.
-  await page.getByRole('button', { name: 'New tab' }).click();
+  // Create a second tab — it auto-names itself 'New tab 1' (A198, no prompt) and becomes active
+  // with the default layout; the menu → Rename (prompt) then names it 'Scalping'.
+  await page.getByRole('button', { name: 'New tab', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'New tab 1', exact: true })).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('button', { name: 'Tab menu: New tab 1' }).click();
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
   const scalpTab = page.getByRole('button', { name: /^Scalping/ });
   await expect(scalpTab).toBeVisible();
   await expect(scalpTab).toHaveAttribute('aria-current', 'page');
@@ -521,19 +526,18 @@ test('staging redesign: dashboard tabs — staged layouts, Save + dirty asterisk
 
 test('staging redesign: dashboard tabs drag-reorder — one commit on drop, Esc-style cancel reverts (A186/A192)', async ({ page }) => {
   test.setTimeout(60_000);
-  let tabNo = 0;
-  page.on('dialog', d => d.accept(d.type() === 'prompt' ? ['Alpha', 'Beta'][tabNo++] : undefined));
   await bootDashboard(page);
-  await page.getByRole('button', { name: 'New tab' }).click();
-  await page.getByRole('button', { name: 'New tab' }).click();
+  // A198: '+ New tab' auto-names — two clicks yield 'New tab 1' and 'New tab 2' (no prompts).
+  await page.getByRole('button', { name: 'New tab', exact: true }).click();
+  await page.getByRole('button', { name: 'New tab', exact: true }).click();
   const order = () =>
     page.evaluate(() =>
       [...document.querySelectorAll('[aria-label^="Tab menu: "]')].map(el => el.getAttribute('aria-label').replace('Tab menu: ', ''))
     );
-  expect(await order()).toEqual(['Main', 'Alpha', 'Beta']);
+  expect(await order()).toEqual(['Main', 'New tab 1', 'New tab 2']);
 
   // HTML5 DnD is synthesized via dispatched DragEvents (Playwright's mouse API doesn't drive the
-  // native drag pipeline headless). Drag 'Beta' to the left half of 'Main', then DROP → commits once.
+  // native drag pipeline headless). Drag 'New tab 2' to the left half of 'Main', then DROP → commits once.
   const drag = (fromName, overName, drop) =>
     page.evaluate(
       ([fromName, overName, drop]) => {
@@ -552,17 +556,17 @@ test('staging redesign: dashboard tabs drag-reorder — one commit on drop, Esc-
       [fromName, overName, drop]
     );
 
-  await drag('Beta', 'Main', true);
-  await expect.poll(order).toEqual(['Beta', 'Main', 'Alpha']);
+  await drag('New tab 2', 'Main', true);
+  await expect.poll(order).toEqual(['New tab 2', 'Main', 'New tab 1']);
 
   // The committed order survives a reload (persisted once, on the drop).
   await page.reload({ waitUntil: 'networkidle' });
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
-  await expect.poll(order).toEqual(['Beta', 'Main', 'Alpha']);
+  await expect.poll(order).toEqual(['New tab 2', 'Main', 'New tab 1']);
 
   // A cancelled drag (dragend without drop — what Esc produces) reverts to the entry order.
-  await drag('Alpha', 'Beta', false);
-  await expect.poll(order).toEqual(['Beta', 'Main', 'Alpha']);
+  await drag('New tab 1', 'New tab 2', false);
+  await expect.poll(order).toEqual(['New tab 2', 'Main', 'New tab 1']);
 });
 
 // ── A212 (R1 pass-7): the F37 per-file actions + A211 broker override round-trip the Store ──────
@@ -652,4 +656,57 @@ test('staging redesign: Analytics click-to-filter narrows every screen and the c
   await expect(page.getByText('Filtered:')).toHaveCount(0);
   await gotoScreen(page, 'Blotter');
   await expect.poll(countOf).toBe(before);
+});
+
+test('staging redesign: Analytics histogram drill-down + sortable breakdown columns (A197)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await bootDashboard(page);
+  await gotoScreen(page, 'Analytics');
+
+  // Clicking a P&L bucket label opens the drill-down panel naming the bucket + its trade count;
+  // clicking again (or ✕) closes it.
+  await page.locator('button[title^="Show the"]').first().click();
+  const panel = page.locator('text=/— \\d+ trades?/');
+  await expect(panel).toBeVisible();
+  await page.getByRole('button', { name: 'Close bucket detail' }).click();
+  await expect(panel).toHaveCount(0);
+
+  // Sortable columns: the symbol table re-sorts alphabetically on the Sym header (default is
+  // impact order), and flips direction on a second click.
+  const symCard = page.locator('[data-slot="card"]', { hasText: 'Performance by symbol' });
+  const syms = () => symCard.locator('button[aria-pressed] > span:first-child').allTextContents();
+  // The header buttons' accessible name is their column label (the title attr is supplementary).
+  await symCard.getByRole('button', { name: 'Sym', exact: true }).click();
+  await expect
+    .poll(async () => {
+      const s = await syms();
+      return s.every((v, i) => i === 0 || s[i - 1].localeCompare(v) <= 0);
+    })
+    .toBe(true);
+  await symCard.getByRole('button', { name: 'Sym', exact: true }).click();
+  await expect
+    .poll(async () => {
+      const s = await syms();
+      return s.every((v, i) => i === 0 || s[i - 1].localeCompare(v) >= 0);
+    })
+    .toBe(true);
+});
+
+test('staging redesign: Commission Compare module adds via the picker and ranks brokers (A203)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await bootDashboard(page);
+
+  // Add the module through the A189 picker (it's not in the default layout).
+  await page.getByRole('button', { name: 'Add modules' }).click();
+  const dlg = page.getByRole('dialog');
+  await dlg.locator('label', { hasText: 'Commission Compare' }).locator('input[type=checkbox]').check();
+  await dlg.getByRole('button', { name: /Add module/ }).click();
+
+  // The table renders every broker, cheapest-first with the Cheapest badge on row 1.
+  const mod = page.locator('#dashmod-compare');
+  await expect(mod).toBeVisible();
+  const rows = mod.locator('tbody tr');
+  expect(await rows.count()).toBeGreaterThan(3);
+  await expect(rows.first().getByText('Cheapest')).toBeVisible();
+  await expect(mod.getByText(/exchange\/clearing\/NFA \$\d/)).toBeVisible();
 });

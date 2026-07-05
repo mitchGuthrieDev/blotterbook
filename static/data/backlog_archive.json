@@ -3846,6 +3846,116 @@
       "completedDate": "2026-07-04",
       "partial": false,
       "doneNote": "Owner-directed calculation audit over the five real TradingView exports, every upload combination (docs/calc-audit-tradingview-2026-07-04.md). Found: importing balance history + order history together OVERSTATED net by +$363.75 (553.50 vs the authoritative 189.75) — the order-history export's limited reach-back mispairs its earliest round trips into phantom trades whose P&L differs, so tradeId dedupe can't catch them. Fixed with cross-export reconciliation (reconcileImport in src/lib/core/intake.ts, wired through importCsv/reimportFile, scoped to the same platform family): inside a closed export's window, a derived trade either matches an authoritative record at the SAME P&L (dedupe+enrich) or is a phantom (dropped/evicted) — both import orders converge to the identical dataset (fixture-pinned, 6 new assertions). Import preview states the resolved count before confirm; Howto updated ('import both — reconciliation is automatic'). Post-fix matrix: all 7 cases produce authoritative or self-consistent numbers with curve↔costModel reconciliation everywhere. Known documented trade-off: two same-platform ACCOUNTS mixed across export types would over-reconcile — the preview count is the guardrail; account-aware classifiers if multi-account ever lands."
+    },
+    {
+      "id": "A177",
+      "title": "CSV upload security hardening (type/size/content validation at every intake)",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-04 (PR #98, with A178). New shared intake-gate module src/lib/core/intake.ts (checkCsvFile/checkCsvText) sits in front of Adapters.parse at every intake point (CsvLibrary upload zone + file picker, Onboarding dropzone): extension/MIME allowlist, size + row caps with readable 'file too large'-style errors, and a binary/NUL sniff rejecting not-a-CSV files. Existing content guards (rootSym charset, A154 export formula-escaping, SHOT_RE) kept. Fuzz fixtures in scripts/test-adapters.mjs feed binary blobs / degenerate CSVs and assert graceful ok:false, never exceptions. Pure client-side — no file leaves the browser. (intake.ts later also grew the A219 cross-export reconciliation.)"
+    },
+    {
+      "id": "A178",
+      "title": "Reject CSVs that don't come from an approved platform (strict detection gate)",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-04 (PR #98, with A177). Every adapter in src/lib/core/adapters.ts now carries a per-adapter `minScore` confidence threshold; Adapters.detect refuses any below-threshold match with an explicit 'This CSV doesn’t match a supported platform export' error naming the supported platforms, instead of importing garbage through a weak keyword hit. The import preview names the detected platform + beta status before confirm. Fixtures: generic/shuffled-header CSVs refuse; every real platform fixture still detects."
+    },
+    {
+      "id": "F37",
+      "title": "Per-file CSV storage / provenance (redesign CSV Library)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-04 (PR #104, together with A208 as one coordinated Trade-shape + Store migration), per the owner's 2026-07-04 design decisions (store raw CSV text; fileIds array for overlap; 50 MB budget). Store DB v3 adds `files` + `filetext` object stores — a CsvFileRec per import (name/label, platform, counts, coverage, size, importedAt) with the raw CSV text persisted separately; trades carry a `fileIds` provenance array, and a re-imported duplicate MERGES provenance + ENRICHES missing fields instead of no-op'ing (fileIds/commission are deliberately excluded from the tradeId content hash). The CSV Library lists real per-file records with working include/exclude, rename, re-import, download-original, and per-file delete (all through the Store seam via callback props); a soft 50 MB raw-CSV budget warns from 80%. Later extended by A211 (per-file broker override on CsvFileRec)."
+    },
+    {
+      "id": "A208",
+      "title": "Use real per-trade commissions from the CSV to override modeled commissions",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-04 (PR #104, together with F37), per the owner's 2026-07-04 decision: ALWAYS-OVERRIDE, no global toggle. Optional `commission` (round-turn commission+fees, $ positive = cost) added to Trade and Fill in types.ts; adapters that expose real costs populate it (fills exports via pairFills — e.g. IBKR). costModel() prices a commission-bearing trade at its ACTUAL CSV amount verbatim and falls back to the modeled tier rate otherwise, with the mix reflected in the bySym breakdown so totals reconcile. UI surfaces the distinction: a dagger footnote on the dashboard cost module ('N of M trades priced at actual commissions from your CSV'), per-trade actual-vs-modeled display in the blotter, and CSV Library copy noting real-commission trades ignore the broker setting. Node fixtures assert commission-bearing vs bare CSVs cost out correctly."
+    },
+    {
+      "id": "A198",
+      "title": "Auto-name new dashboard tabs \"New tab N\" instead of prompting for a name",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (quick-win batch). createDashTab() in src/app/App.svelte no longer opens a blocking prompt — '+ New tab' instantly creates the tab named 'New tab N' (lowest N unused among existing tab names), keeping the id generation, selectDashTab persist, and the emit('tab:created') activity-log line. renameDashTab (DashTabs menu → Rename) is untouched for the real name afterward."
+    },
+    {
+      "id": "A201",
+      "title": "Wire up /api/geo — prefill the tax-estimate US state from the visitor's edge region",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (quick-win batch). createDashboard's boot() (src/app/lib/dashboard.svelte.ts) fires a non-blocking prefillStateFromGeo() when no state is saved yet: fetch('/api/geo') → if country==='US' and the regionCode matches a STATES entry, setup.stateAbbr is pre-selected IN MEMORY only (it persists with the user's next setup save, never by itself). Skipped on demo (seeded); any failure (offline, non-US, unknown region, dev server without functions) is silent; a state picked while the fetch is in flight wins. No trade data leaves the browser — the endpoint returns only Cloudflare's coarse edge region."
+    },
+    {
+      "id": "A205",
+      "title": "Add tooltips to icon/ambiguous buttons across the app",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (quick-win batch). New reusable wrapper src/lib/components/IconTip.svelte — composes the canonical shadcn-svelte tooltip (self-contained Provider, 300 ms delay, portal to body, keyboard/focus accessible) and hands the trigger props to the caller's real element via the bits-ui child pattern; for dropdown triggers the tooltip's child props feed DropdownMenu.Trigger so bits-ui merges both onto one button. Applied to: the AppShell sidebar collapse/expand toggle, DashTabs tab-options menu + close ✕, the Dashboard module-options menu + rename/delete-filter + delete-layout buttons, Calendar month prev/next + target stepper + remove-screenshot, and the CSV Library file-actions menu. Buttons with visible text labels were deliberately left alone; aria-labels remain for touch/AT users."
+    },
+    {
+      "id": "A206",
+      "title": "Add skeleton loaders for boot/async surfaces",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (quick-win batch). App.svelte gains a shape-matched screenSkeleton snippet (tab strip + card modules built from the shadcn-svelte Skeleton primitive, role='status') rendered (a) during boot in place of the old bare 'Loading…' line and (b) as the pending branch of all six code-split screen {#await import()} blocks (Calendar/Analytics/Blotter/TradeEditor/Reports/CsvLibrary) — no artificial delay, it only shows while genuinely pending (chunks are idle-prefetched so later navigations rarely see it). The skeleton primitive itself now carries motion-reduce:animate-none so the pulse collapses under reduced motion (A146)."
+    },
+    {
+      "id": "A200",
+      "title": "Mobile: swipeable card-stack for the 5 top dashboard modules (one at a time, arrows/swipe)",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (Wave-2 batch). New reusable src/app/parts/ModuleCarousel.svelte — a generic one-at-a-time card stack (parent supplies the slide snippet): pointer swipe (±40 px, touch-pan-y so vertical scroll survives), prev/next arrow buttons, a dot indicator with aria-current, ←/→ keys on the focusable wrapper, and a fly-in that collapses under reduced motion (A146 dur()); the index clamps if the slide set shrinks. Dashboard.svelte extracts the KPI stat card into a statCard snippet and renders the carousel below sm (grid hidden) while sm+ keeps the exact grid — desktop unchanged. No inline style (transition via Svelte fly). e2e: mobile carousel arrows/dots + desktop-unchanged assertions in interactions.spec.mjs."
+    },
+    {
+      "id": "A203",
+      "title": "\"Commission Compare\" module/table — compare commission rates across brokers",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-05",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-05 (Wave-2 batch). Placement decided: a DASHBOARD module (the A142/A189 delivery surface) — 'compare' joins MODULES in Dashboard.svelte as picker-addable (not in the default layout), with its own picker thumbnail. Pick a contract root (every root in exchange-fees.json) and optional round-turns/month; the table ranks every broker by all-in cost — commission/side, all-in/side (with the A171 * fallback marker), round turn, est./month — cheapest-first with a Cheapest badge (sortable by broker name too), the user's current broker tagged 'Yours'. Uses the SAME rateFor/tierOf/exchOf/roundTurn math as costModel so the numbers reconcile; the footnote states the shared exchange/clearing/NFA fee, the snapshot caveat and that feeds/platform are separate. Works on demo (pure ref-data view state, nothing persists). e2e: picker-add + ranking assertions in staging-redesign.spec.mjs."
     }
   ]
 }

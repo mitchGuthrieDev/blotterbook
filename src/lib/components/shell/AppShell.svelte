@@ -10,6 +10,7 @@
   import type { Snippet } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import { Menu, PanelLeft } from '@lucide/svelte';
+  import IconTip from '$lib/components/IconTip.svelte';
   import SidebarNav, { type NavSection } from './SidebarNav.svelte';
 
   interface Props {
@@ -89,15 +90,20 @@
           <Menu class="size-4" />
         </button>
         <!-- Desktop: collapse rail. -->
-        <button
-          type="button"
-          class="hidden size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground md:grid"
-          aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
-          aria-pressed={collapsed}
-          onclick={() => (collapsed = !collapsed)}
-        >
-          <PanelLeft class="size-4" />
-        </button>
+        <IconTip label={collapsed ? 'Expand navigation' : 'Collapse navigation'} side="bottom">
+          {#snippet button(tip)}
+            <button
+              {...tip}
+              type="button"
+              class="hidden size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground md:grid"
+              aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+              aria-pressed={collapsed}
+              onclick={() => (collapsed = !collapsed)}
+            >
+              <PanelLeft class="size-4" />
+            </button>
+          {/snippet}
+        </IconTip>
       {/if}
       {#if title}
         {#if !hideNav}<div class="h-4 w-px bg-border"></div>{/if}
