@@ -51,6 +51,35 @@ export function checkCsvFile(file: CsvFileMeta): string | null {
   return null;
 }
 
+/* ------------------------------------------------------------
+   F52: the ATAS X .xlsx path — an EXPLICIT allowlisted route.
+   An xlsx workbook is a ZIP container (PK magic), so the normal
+   text gates rightly reject it as binary — that rejection is NOT
+   weakened. Instead the app layer routes a file that isXlsxFile()
+   recognizes through atasXlsxToCsv() (src/lib/core/xlsx.ts) and
+   feeds the resulting CSV TEXT into the standard pipeline, where
+   checkCsvText + Adapters.parse apply as usual.
+   ------------------------------------------------------------ */
+
+/** Size cap for an imported .xlsx workbook (F52) — a real ATAS statistics export is ~12 KB;
+ *  10 MB is generous headroom while still refusing an arbitrary huge ZIP before it's read. */
+export const XLSX_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+/** Route test: does this file take the xlsx path (ATAS X statistics export) instead of the
+ *  text-CSV gates? Extension OR reported MIME — drag-drops often carry no type at all. */
+export function isXlsxFile(file: { name: string; type?: string }): boolean {
+  return /\.xlsx$/i.test(file.name || '') || (file.type || '') === XLSX_MIME;
+}
+
+/** Pre-read gate for the xlsx path: size cap only — structural validation (ZIP walk, sheet
+ *  presence) lives in the reader itself, which throws a readable error on a non-workbook. */
+export function checkXlsxFile(file: CsvFileMeta): string | null {
+  if (file.size > XLSX_MAX_BYTES) return 'That workbook is over the 10 MB import limit. Export a shorter date range and try again.';
+  return null;
+}
+
 /**
  * Post-read gate: binary sniff + row cap.
  * Sniffs the first 4 KB — a NUL byte, or a >2% density of non-text control

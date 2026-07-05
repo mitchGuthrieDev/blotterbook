@@ -105,22 +105,37 @@ test('app: onboarding CSV CTA opens the picker and imports', async ({ page }) =>
 
   const [chooser] = await Promise.all([
     page.waitForEvent('filechooser', { timeout: 3000 }),
-    page.getByRole('button', { name: 'Choose a CSV file' }).click(),
+    page.getByRole('button', { name: 'Choose CSV files' }).click(),
   ]);
-  await chooser.setFiles({
-    name: 'trades.csv',
-    mimeType: 'text/csv',
-    buffer: Buffer.from(
-      'Time,Action,Realized PnL (value)\n' +
-        '2026-06-02 10:00:00,"Close long position for symbol MESM2025 at price 5310.00",50.00\n' +
-        '2026-06-02 11:30:00,"Close short position for symbol MNQM2025 at price 18000.00",-20.00\n'
-    ),
-  });
+  // F47: a BATCH — the trade file imports, the Cash History file is recognized-non-trade (named,
+  // not the generic refusal).
+  await chooser.setFiles([
+    {
+      name: 'trades.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(
+        'Time,Action,Realized PnL (value)\n' +
+          '2026-06-02 10:00:00,"Close long position for symbol MESM2025 at price 5310.00",50.00\n' +
+          '2026-06-02 11:30:00,"Close short position for symbol MNQM2025 at price 18000.00",-20.00\n'
+      ),
+    },
+    {
+      name: 'cash.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(
+        'Account,Transaction ID,Timestamp,Date,Delta,Amount,Cash Change Type,Currency,Contract\n' +
+          'DEMO,1,06/16/2026 08:25:38,2026-06-16,"50,000.00","50,000.00", Fund Transaction,USD,\n'
+      ),
+    },
+  ]);
 
   // F48: the import lands in the review list — the app does NOT auto-launch; the explicit
   // Launch button (enabled by the import) enters the dashboard.
   await expect(page.getByText('trades.csv')).toBeVisible({ timeout: 6000 });
   await expect(page.getByText(/TradingView · 2 trades/)).toBeVisible();
+  // F47: the non-trade file is NAMED instead of refused generically.
+  await expect(page.getByText('cash.csv')).toBeVisible();
+  await expect(page.getByText(/Cash History · recognized, not a trade file/)).toBeVisible();
   const launch = page.getByRole('button', { name: /Launch Blotterbook/ });
   await expect(launch).toBeEnabled();
   await launch.click();

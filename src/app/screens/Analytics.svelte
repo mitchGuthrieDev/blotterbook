@@ -19,6 +19,7 @@
   // arrives (defensive — App always passes it).
   import { cn } from '$lib/utils';
   import { usd, usdWhole, DOW_LABEL } from '../../lib/core/core.ts';
+  import { decimateMinMax } from '../../lib/core/curveseries.ts';
   import { X, ChevronUp, ArrowUpDown } from '@lucide/svelte';
   import * as Card from '$lib/components/ui/card';
   import type { Kpi, DistBar, SignedBar, SymbolRow, TagRow, StatRow } from '../lib/analytics.ts';
@@ -171,6 +172,8 @@
 
   // Underwater (drawdown) series from the equity curve: depth = running peak − equity, normalized.
   // Uses a loop (not Math.max(...curve)) so a large fills export can't overflow the call stack.
+  // A223: the per-trade path is min/max-decimated to ~1.5k points — a 50k-fill import used to emit
+  // a 50k-segment SVG path; extremes and endpoints survive the decimation by construction.
   const ddPath = $derived.by(() => {
     if (curve.length < 2) return { area: '', line: '' };
     let peak = curve[0],
@@ -186,7 +189,8 @@
       H = 50;
     const X = (i: number) => (i / (curve.length - 1)) * W;
     const Y = (d: number) => 1 + (d / span) * (H - 3);
-    const line = depth.map((d, i) => `${i === 0 ? 'M' : 'L'}${X(i).toFixed(2)} ${Y(d).toFixed(2)}`).join(' ');
+    const pts = decimateMinMax(depth);
+    const line = pts.map(([i, d], k) => `${k === 0 ? 'M' : 'L'}${X(i).toFixed(2)} ${Y(d).toFixed(2)}`).join(' ');
     return { line, area: `M0 0 ${line.replace(/^M/, 'L')} L${W} 0 Z` };
   });
 </script>

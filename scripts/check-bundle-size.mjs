@@ -38,7 +38,13 @@ const ENTRY = resolve(DIST, 'app/app.html');
 // remaining growth is feature code, not accidental imports, so the ceiling moves deliberately.
 // ~46 KiB headroom again catches a heavy accidental import; the standing trim target stays the
 // utils chunk (tailwind-merge/bits-ui — A136).
-const BUDGET_BYTES = 640 * 1024;
+// A223 (2026-07-05, owner-authorized): raised 640 → 840 KiB. Headroom had eroded to ~14 KiB and the
+// approved feature slate (F53 accounts w/ the lazy @simplewebauthn/browser chunk, F52's lazy xlsx
+// reader, F47 batch-intake UI, F51 compact Blotter module) is intentional product code. The A223
+// boot-path wins ($state.raw collections, consolidated boot reads, curve decimation) landed first;
+// lazy chunks still count toward this total (A190), so the ceiling moves deliberately with the
+// owner's +200 KiB grant rather than ratcheting per-feature.
+const BUDGET_BYTES = 840 * 1024;
 
 let html;
 try {

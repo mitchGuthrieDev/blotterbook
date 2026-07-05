@@ -18,6 +18,8 @@
     /** The trade's journal note text (edited in the detail drawer — A149). */
     noteText: string;
     session: 'RTH' | 'ETH';
+    /** F50: provenance platform(s) from the trade's contributing file records ('' = legacy/manual). */
+    platform: string;
   };
 </script>
 
@@ -79,9 +81,14 @@
   let openId = $state<string | null>(null);
 
   const SIDE_LBL: Record<string, string> = { all: 'All sides', Long: 'Long', Short: 'Short' };
-  const GROUP_LBL: Record<string, string> = { none: 'No grouping', day: 'Group by day', symbol: 'Group by symbol' };
+  const GROUP_LBL: Record<string, string> = {
+    none: 'No grouping',
+    day: 'Group by day',
+    symbol: 'Group by symbol',
+    platform: 'Group by platform', // F50
+  };
 
-  const colCount = $derived(1 + 5 + (cols.prices ? 3 : 0) + (cols.costs ? 2 : 0) + (cols.context ? 2 : 0));
+  const colCount = $derived(1 + 5 + (cols.prices ? 3 : 0) + (cols.costs ? 2 : 0) + (cols.context ? 3 : 0)); // F50: context = Tags/Session/Platform
 
   const filtered = $derived(
     rows.filter(t => {
@@ -110,7 +117,7 @@
     if (groupBy === 'none') return [{ key: 'all', label: '', trades: pagedSorted, subtotal: 0 }];
     const map = new Map<string, BlotterRow[]>();
     for (const t of pagedSorted) {
-      const k = groupBy === 'day' ? t.date : t.sym;
+      const k = groupBy === 'day' ? t.date : groupBy === 'platform' ? t.platform || 'No platform' : t.sym;
       (map.get(k) ?? map.set(k, []).get(k)!).push(t);
     }
     return [...map.entries()].map(([key, trades]) => ({ key, label: key, trades, subtotal: trades.reduce((s, t) => s + t.pnl, 0) }));
@@ -224,6 +231,7 @@
           <Select.Item value="none">No grouping</Select.Item>
           <Select.Item value="day">Group by day</Select.Item>
           <Select.Item value="symbol">Group by symbol</Select.Item>
+          <Select.Item value="platform">Group by platform</Select.Item>
         </Select.Content>
       </Select.Root>
       <Popover.Root>
@@ -277,29 +285,31 @@
   </Card.Header>
 
   <Card.Content class="p-0">
-    <Table.Root>
+    <!-- F50: tighter cell padding — the default p-2 wasted width across 13+ columns -->
+    <Table.Root class="[&_td]:px-2 [&_td]:py-1.5 [&_th]:px-2">
       <Table.Header>
         <Table.Row class="hover:bg-transparent">
           <Table.Head class="w-9 pl-3">
             <Checkbox checked={allSelected} indeterminate={someSelected} onCheckedChange={toggleAll} aria-label="Select all" />
           </Table.Head>
-          {@render sortHead('time', 'Date / time', 'w-32')}
-          {@render sortHead('sym', 'Symbol', '')}
-          <Table.Head>Side</Table.Head>
-          {@render sortHead('qty', 'Qty', 'text-right')}
-          {@render sortHead('pnl', 'P&L', 'text-right')}
+          {@render sortHead('time', 'Date / time', 'w-28 whitespace-nowrap')}
+          {@render sortHead('sym', 'Symbol', 'w-16')}
+          <Table.Head class="w-14">Side</Table.Head>
+          {@render sortHead('qty', 'Qty', 'w-10 text-right')}
+          {@render sortHead('pnl', 'P&L', 'w-20 text-right')}
           {#if cols.prices}
-            <Table.Head class="text-right">Entry</Table.Head>
-            <Table.Head class="text-right">Exit</Table.Head>
-            <Table.Head class="text-right">Hold</Table.Head>
+            <Table.Head class="w-16 text-right">Entry</Table.Head>
+            <Table.Head class="w-16 text-right">Exit</Table.Head>
+            <Table.Head class="w-14 text-right">Hold</Table.Head>
           {/if}
           {#if cols.costs}
-            <Table.Head class="text-right">Fees</Table.Head>
-            <Table.Head class="text-right">Net</Table.Head>
+            <Table.Head class="w-16 text-right">Fees</Table.Head>
+            <Table.Head class="w-20 text-right">Net</Table.Head>
           {/if}
           {#if cols.context}
             <Table.Head>Tags</Table.Head>
-            <Table.Head>Session</Table.Head>
+            <Table.Head class="w-16">Session</Table.Head>
+            <Table.Head class="w-24">Platform</Table.Head>
           {/if}
         </Table.Row>
       </Table.Header>
@@ -357,6 +367,8 @@
                   </span>
                 </Table.Cell>
                 <Table.Cell><span class="text-xs text-muted-foreground">{t.session}</span></Table.Cell>
+                <!-- F50: provenance platform (family-adapter type suffixes already stripped upstream) -->
+                <Table.Cell><span class="whitespace-nowrap text-xs text-muted-foreground">{t.platform || '—'}</span></Table.Cell>
               {/if}
             </Table.Row>
           {/each}

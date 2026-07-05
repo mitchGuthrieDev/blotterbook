@@ -1,53 +1,50 @@
 <script lang="ts">
   // First-run onboarding for a fresh /app user (real Store, no seed, zero trades) — parity with the
-  // legacy A32 Landing: set the cost model up (broker/feed/state/platform) and import a CSV to begin.
-  // Renders inside the AppShell content column; once the import lands, the normal dashboard takes over.
+  // legacy A32 Landing: set the cost model up (broker/feed/state/platform), import CSVs, review, and
+  // launch. F47: intake is a BATCH — drop/pick multiple files at once; each lands a detection-status
+  // row (imported ✓ / recognized-non-trade · / refused ✗) and the capability relay states what the
+  // mix unlocks. F48: the app only launches via the explicit button once ≥1 file imported.
   import { Upload } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
-  import { checkCsvFile } from '../../lib/core/intake.ts';
   import type { AppSetup } from '../../lib/core/types.ts';
+  import type { BatchRow } from '../lib/batch.ts';
   import CostSetup from './CostSetup.svelte';
+  import DetectionStatus from './DetectionStatus.svelte';
 
   let {
     setup,
     onsetupsave,
-    onimport,
-    imported = [],
+    onbatch,
+    capability = [],
     onlaunch,
   }: {
     setup: AppSetup;
     onsetupsave: (s: AppSetup) => void;
-    /** Parse + import a CSV; resolves to an error string ('' on success). */
-    onimport: (file: File) => Promise<string>;
-    /** F48: successful imports so far — the review list feeding the Launch step. */
-    imported?: { name: string; platform: string; trades: number }[];
-    /** F48: enter the app (enabled once at least one CSV imported). */
+    /** F47: import a batch of files (gates + parse + import per file) → one status row each. */
+    onbatch: (files: File[]) => Promise<BatchRow[]>;
+    /** F47 capability relay — what the imported mix unlocks/limits (dataset-level, from the app). */
+    capability?: string[];
+    /** F48: enter the app (enabled once at least one file imported). */
     onlaunch?: () => void;
   } = $props();
 
   let busy = $state(false);
-  let err = $state('');
   let dragging = $state(false);
+  let rows = $state<BatchRow[]>([]);
   let fileInput = $state<HTMLInputElement | null>(null);
+  const anyImported = $derived(rows.some(r => r.state === 'ok'));
 
-  async function handle(file: File | undefined) {
-    if (!file || busy) return;
-    // A177: pre-read gate (extension/MIME allowlist + size cap) before the file is read at all;
-    // the post-read binary/row checks run inside Adapters.parse.
-    const veto = checkCsvFile(file);
-    if (veto) {
-      err = veto;
-      return;
-    }
+  async function handle(files: FileList | File[] | null | undefined) {
+    const list = files ? [...files] : [];
+    if (!list.length || busy) return;
     busy = true;
-    err = '';
-    err = await onimport(file);
+    rows = [...rows, ...(await onbatch(list))];
     busy = false;
   }
   function onDrop(e: DragEvent) {
     e.preventDefault();
     dragging = false;
-    void handle(e.dataTransfer?.files?.[0]);
+    void handle(e.dataTransfer?.files);
   }
   // A147: open the picker programmatically. The CTA used to be a <Button> nested inside the
   // <label> wrapping the input — per the HTML spec a label does NOT forward activation to its
@@ -58,8 +55,8 @@
 <div class="mx-auto max-w-2xl py-8">
   <h2 class="text-lg font-semibold text-foreground">Welcome to Blotterbook</h2>
   <p class="mt-1 text-sm text-muted-foreground">
-    Your trades are parsed and stored entirely in this browser — nothing is uploaded. Set up your cost model, then import a balance-history
-    CSV to get started.
+    Your trades are parsed and stored entirely in this browser — nothing is uploaded. Set up your cost model, then import your platform
+    exports to get started.
   </p>
 
   <div class="mt-6">
@@ -68,12 +65,12 @@
   </div>
 
   <div class="mt-6">
-    <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">2 · Import a CSV</h3>
+    <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">2 · Import your CSVs</h3>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       role="button"
       tabindex="0"
-      aria-label="Import a CSV file"
+      aria-label="Import CSV files"
       class={[
         'flex flex-col items-center justify-center gap-2 rounded-md border border-dashed p-8 text-center transition-colors',
         dragging ? 'border-primary bg-accent' : 'border-border',
@@ -92,39 +89,33 @@
       }}
     >
       <Upload class="size-6 text-muted-foreground" />
-      <p class="text-sm text-muted-foreground">Drag a CSV here, or</p>
+      <p class="text-sm text-muted-foreground">Drag exports here (several at once is fine — CSVs, or ATAS .xlsx), or</p>
       <input
         bind:this={fileInput}
         type="file"
-        accept=".csv,.txt,.tsv,text/csv,text/plain"
+        multiple
+        accept=".csv,.txt,.tsv,.xlsx,text/csv,text/plain"
         class="sr-only"
-        onchange={e => handle((e.currentTarget as HTMLInputElement).files?.[0])}
+        onchange={e => handle((e.currentTarget as HTMLInputElement).files)}
       />
-      <Button variant="secondary" size="sm" disabled={busy} onclick={pickFile}>{busy ? 'Importing…' : 'Choose a CSV file'}</Button>
-      {#if err}<p class="text-xs text-destructive" role="alert">{err}</p>{/if}
+      <Button variant="secondary" size="sm" disabled={busy} onclick={pickFile}>{busy ? 'Importing…' : 'Choose CSV files'}</Button>
     </div>
     <p class="mt-2 text-[11px] text-muted-foreground">
-      Supports TradingView and other platform exports. Not sure how to export? See the How-To guide.
+      Supports TradingView, Tradovate / NinjaTrader, Quantower and other platform exports — mix platforms and export types freely;
+      overlapping trades merge. Not sure how to export? See the How-To guide.
     </p>
   </div>
 
-  <!-- F48: the review step — imports list here (add as many files as you like) and the app only
-       launches on the explicit button, so there's a chance to review before entering. -->
+  <!-- F47/F48: the review step — per-file detection status + the capability relay, then launch. -->
   <div class="mt-6">
     <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">3 · Review &amp; launch</h3>
-    {#if imported.length}
-      <ul class="mb-3 space-y-1">
-        {#each imported as f, i (i)}
-          <li class="flex items-center gap-2 rounded-md border border-chart-2/30 bg-chart-2/10 px-3 py-1.5 text-xs">
-            <span class="text-chart-2" aria-hidden="true">✓</span>
-            <span class="min-w-0 truncate font-medium text-foreground">{f.name}</span>
-            <span class="ml-auto whitespace-nowrap text-muted-foreground">{f.platform} · {f.trades} trade{f.trades === 1 ? '' : 's'}</span>
-          </li>
-        {/each}
-      </ul>
+    {#if rows.length || busy}
+      <div class="mb-3">
+        <DetectionStatus {rows} {busy} capability={anyImported ? capability : []} />
+      </div>
     {:else}
-      <p class="mb-3 text-xs text-muted-foreground">Import at least one CSV above and it'll show up here.</p>
+      <p class="mb-3 text-xs text-muted-foreground">Import at least one CSV above and the detected data will show up here.</p>
     {/if}
-    <Button disabled={!imported.length || busy} onclick={() => onlaunch?.()}>Launch Blotterbook &rarr;</Button>
+    <Button disabled={!anyImported || busy} onclick={() => onlaunch?.()}>Launch Blotterbook &rarr;</Button>
   </div>
 </div>

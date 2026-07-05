@@ -302,5 +302,33 @@ ok('isoWeek: 2019-12-30 (Mon) is week 1 of 2020', isoWeek(new Date(2019, 11, 30)
   );
 }
 
+// ── A223: decimateMinMax — endpoints + extrema survive, budget respected, small series pass through ──
+{
+  const { decimateMinMax } = await import('../src/lib/core/curveseries.ts');
+  const small = [0, 5, 3, 9, 1];
+  ok(
+    'decimate: small series passes through verbatim',
+    JSON.stringify(decimateMinMax(small, 1500)) === JSON.stringify(small.map((v, i) => [i, v]))
+  );
+  // A 20k-point sawtooth with a planted global max and min.
+  const big = Array.from({ length: 20000 }, (_, i) => Math.sin(i / 7) * 100);
+  big[12345] = 9999; // planted global max
+  big[6789] = -9999; // planted global min
+  const dec = decimateMinMax(big, 1500);
+  ok('decimate: within budget', dec.length <= 1500, dec.length);
+  ok(
+    'decimate: endpoints survive',
+    dec[0][0] === 0 && dec[0][1] === big[0] && dec[dec.length - 1][0] === 19999 && dec[dec.length - 1][1] === big[19999]
+  );
+  ok(
+    'decimate: planted extrema survive',
+    dec.some(([i, v]) => i === 12345 && v === 9999) && dec.some(([i, v]) => i === 6789 && v === -9999)
+  );
+  ok(
+    'decimate: indices strictly ordered',
+    dec.every(([i], k) => k === 0 || i > dec[k - 1][0])
+  );
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

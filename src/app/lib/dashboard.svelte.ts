@@ -37,13 +37,16 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   // ALSO isDemo-guarded here (A87 belt-and-suspenders) and the UI disables the controls — so demo can
   // never mutate, even if a real Store were passed by mistake.
   const isDemo = !!opts.isDemo;
-  let allTrades = $state<Trade[]>([]);
-  let csvFiles = $state<CsvFileRec[]>([]); // F37: the imported-CSV library (metadata; texts stay in the Store)
+  // A223: the big collections are $state.raw — they are REASSIGNMENT-ONLY (reloadAll/saveNote etc.
+  // replace the whole reference; nothing pushes/sets in place — keep it that way), so compute()/
+  // costModel()'s ~20 O(n) passes read plain objects instead of deep-reactivity proxies.
+  let allTrades = $state.raw<Trade[]>([]);
+  let csvFiles = $state.raw<CsvFileRec[]>([]); // F37: the imported-CSV library (metadata; texts stay in the Store)
   let loaded = $state(false);
   let error = $state('');
-  let journalDates = $state<Set<string>>(new Set());
-  let journal = $state<Map<string, { text: string; tags: string[]; shots: string[] }>>(new Map());
-  let tradeMeta = $state<Map<string, StoredTradeMeta>>(new Map());
+  let journalDates = $state.raw<Set<string>>(new Set());
+  let journal = $state.raw<Map<string, { text: string; tags: string[]; shots: string[] }>>(new Map());
+  let tradeMeta = $state.raw<Map<string, StoredTradeMeta>>(new Map());
   let savedFilters = $state<SavedFilter[]>([]);
   let setup = $state<AppSetup>({ broker: '', feed: '', stateAbbr: '', platform: 0 });
   let filters = $state<FilterState>({ scope: 'all', from: '', to: '', root: '', side: '', session: '', tag: '', dows: [], hours: [] });
@@ -146,16 +149,22 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     // F37: the ACTIVE dataset excludes trades whose every contributing file is toggled off in the
     // CSV Library. No fileIds (pre-F37 import) = always included; an id with no surviving record
     // (defensive) counts as included rather than silently hiding data.
-    csvFiles = await store.getFiles();
+    // A223: the five independent store reads run concurrently, and journalDates derives from the
+    // journal read (store.journalDates() was a duplicate hit on the same object store).
+    const [files, raw, journalRows, metaRows, sf] = await Promise.all([
+      store.getFiles(),
+      store.getAllTrades(),
+      store.getAllJournal(),
+      store.allTradeMeta(),
+      store.getMeta('savedFilters'),
+    ]);
+    csvFiles = files;
     const excluded = new Set(csvFiles.filter(f => !f.included).map(f => f.id));
-    const raw = await store.getAllTrades();
     allTrades = excluded.size ? raw.filter(t => !t.fileIds?.length || t.fileIds.some(id => !excluded.has(id))) : raw;
-    journalDates = await store.journalDates();
-    journal = new Map(
-      (await store.getAllJournal()).map(j => [j.date, { text: j.text || '', tags: j.tags || [], shots: j.shots || [] }] as const)
-    );
-    tradeMeta = new Map((await store.allTradeMeta()).map(m => [m.id, m] as const));
-    savedFilters = ((await store.getMeta('savedFilters')) as SavedFilter[]) || [];
+    journal = new Map(journalRows.map(j => [j.date, { text: j.text || '', tags: j.tags || [], shots: j.shots || [] }] as const));
+    journalDates = new Set(journal.keys());
+    tradeMeta = new Map(metaRows.map(m => [m.id, m] as const));
+    savedFilters = (sf as SavedFilter[]) || [];
   }
   async function boot() {
     // A195: 'session initiated' (app:ready) leads the activity log — emitted BEFORE loadRefData,

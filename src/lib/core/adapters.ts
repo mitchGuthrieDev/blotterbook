@@ -765,6 +765,68 @@ const quantower: Adapter = {
   },
 };
 
+/* ATAS X — the 'Journal' sheet of the .xlsx statistics export (closed round trips). ATAS exports
+   ONE workbook (Statistics / Journal / Executions); the app layer converts the Journal sheet to
+   CSV text via atasXlsxToCsv() (src/lib/core/xlsx.ts) and feeds it through this normal text
+   pipeline — the adapter itself never sees binary. Verified against a real export 2026-07-05
+   (docs/csv-examples/atas-x/): 20 round trips, net −$26.25, and the derived side agrees with the
+   export's signed Open volume on every row. Rows carry NO explicit side column — long/short is
+   derived from the (close − open) price-move sign agreeing with the PnL sign (agree ⇒ long,
+   disagree ⇒ short; a zero-move or zero-PnL row is unknowable → side ''). 'PnL' is dollars,
+   'Price PnL' is side-adjusted points (the fallback only). Instruments carry an '@CME_Ind'-style
+   venue suffix — stripped HERE (not in rootSym) before the root resolves (MESU6@CME_Ind → MESU6). */
+const atas: Adapter = {
+  id: 'atas',
+  label: 'ATAS X',
+  kind: 'closed',
+  beta: false,
+  minScore: 5,
+  sniff(text, rows) {
+    const h = lc(rows[0] || []);
+    return hasAny(h, ['open time']) && hasAny(h, ['close time']) && hasAny(h, ['price pnl']) ? 5 : 0;
+  },
+  toTrades(text, rows) {
+    const head = lc(rows[0]);
+    const ix = finder(head);
+    // exact — the 'Price PnL' twin column contains 'pnl' and sits to its LEFT, so substring
+    // lookup would hijack the dollar figure with the points figure.
+    const exact = (name: string) => head.findIndex(h => h === name);
+    const cSym = ix('instrument'),
+      cOT = ix('open time'),
+      cOP = ix('open price'),
+      cOV = ix('open volume'),
+      cCT = ix('close time'),
+      cCP = ix('close price'),
+      cPnl = exact('pnl') >= 0 ? exact('pnl') : ix('price pnl');
+    if (cOT < 0 || cCT < 0 || cPnl < 0) throw new Error('missing Open time, Close time or PnL column');
+    const out: Trade[] = [];
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row || !row[cCT]) continue;
+      const pnl = num(row[cPnl]);
+      if (isNaN(pnl)) continue;
+      const symbol = ((cSym >= 0 ? row[cSym] : '') || '').split('@')[0].trim();
+      const entry = normTime(row[cOT]),
+        exit = normTime(row[cCT]);
+      const move = cOP >= 0 && cCP >= 0 ? num(row[cCP]) - num(row[cOP]) : NaN;
+      const side = isNaN(move) || !move || !pnl ? '' : move > 0 === pnl > 0 ? 'long' : 'short';
+      out.push({
+        time: exit,
+        date: exit.slice(0, 10),
+        pnl,
+        symbol,
+        root: rootSym(symbol),
+        side,
+        qty: cOV >= 0 ? Math.abs(num(row[cOV])) || 1 : 1, // Open volume is SIGNED (−1 = short entry)
+        entryTime: entry || undefined,
+        exitTime: exit,
+        holdMs: entry ? Math.max(0, tms(exit) - tms(entry)) : undefined,
+      });
+    }
+    return out;
+  },
+};
+
 /* Rithmic R|Trader — Completed Orders (fills). */
 const rithmic: Adapter = {
   id: 'rithmic',
@@ -1030,6 +1092,7 @@ const ADAPTERS: Adapter[] = [
   tradovatePerf,
   tradovateFills,
   quantower,
+  atas,
   rithmic,
   sierrachart,
   tradestation,

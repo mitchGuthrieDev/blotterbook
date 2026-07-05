@@ -4,6 +4,20 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.56.0",
+      "date": "2026-07-05",
+      "title": "Batch imports that explain themselves, ATAS X support, and a beefier Blotter",
+      "summary": "Drop your whole export folder at once — every file gets a per-file verdict (imported, recognized-but-not-trade-data, or refused with a reason) plus a summary of what your data mix unlocks. ATAS X's Excel exports now import natively. The Blotter gains a platform column, platform grouping and tighter columns, a compact Recent Trades module joins the dashboard picker, and big datasets got faster. Your trade data still never leaves the browser.",
+      "highlights": [
+        "Batch imports: select or drag MULTIPLE files at once — onboarding and the CSV Library import them all in one go, listing each file's detected platform and export type. Known non-trade exports (Cash History, Account Balance History, order logs) are named politely instead of refused cryptically.",
+        "After importing, Blotterbook tells you what your mix unlocks: if no fills-type export is present, it says hold times and real commissions are unavailable and names the export that fixes it. The CSV Library shows this as an always-on 'Dataset coverage' panel.",
+        "ATAS X is now supported (verified against a real export): its .xlsx statistics workbook imports directly — no spreadsheet conversion needed.",
+        "Blotter upgrades: a Platform column, 'Group by platform', and noticeably tighter columns so more fits on screen.",
+        "New 'Recent Trades' dashboard module (add via '+ Add modules'): your latest trades at a glance, following the active filters, with a jump to the full Blotter.",
+        "Faster with big datasets: imports with tens of thousands of fills render the drawdown chart via smart downsampling (peaks and troughs preserved), and boot reads the local database in parallel."
+      ]
+    },
+    {
       "version": "0.55.0",
       "date": "2026-07-05",
       "title": "Quantower support, a roomier dashboard, and a gentler first run",
