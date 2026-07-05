@@ -287,6 +287,7 @@
     from: dash.filters.from,
     to: dash.filters.to,
     dows: dash.filters.dows,
+    hours: dash.filters.hours,
     roots: dash.roots,
     tags: dash.tags,
     count: dash.filtered.length,
