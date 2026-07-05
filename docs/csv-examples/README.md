@@ -13,6 +13,8 @@ the ground-truth reference for future adapter/format questions — fixtures in
 | `ninjatrader/` | Performance, Fills, Orders, Cash History, Account Balance History, Position History | NinjaTrader (web) full export set |
 | `tradovate/` | same six types | Tradovate full export set |
 | `tradingview/` | order-history, balance-history, orders, positions, trading-journal (paper trading) | Both trade-bearing types already verified (A106/A219) |
+| `quantower/` | Trades, Orders history | Added 2026-07-05 (A209 second half) |
+| `atas-x/` | one `.xlsx` statistics workbook | Added 2026-07-05 (F52 — xlsx, not CSV) |
 
 ## Key findings (2026-07-05 analysis)
 
@@ -40,3 +42,16 @@ the ground-truth reference for future adapter/format questions — fixtures in
    text log (recognized-non-trade). Both trade-bearing TV types parse with the shipped adapters.
 6. **Cross-export overlap:** Orders + Fills + Performance describe the SAME trades — the A219
    reconciliation model must extend to this family so a mixed batch never double-counts.
+
+## Quantower + ATAS X findings (2026-07-05 analysis)
+
+7. **Quantower `Trades.csv`** is the import source: per-fill executions with per-fill realized
+   Gross/Net P/L **and a Fee column** (→ `Fill.realized` + `Fill.commission`), full contract codes
+   (`MESU26`), 12-hour AM/PM timestamps (`normTime` handles them), and a **UTF-8 BOM** on the
+   header. `Orders history.csv` is order-lifecycle noise (Opened/Filled/Cancelled). **Both files
+   currently misdetect as TradeStation** and refuse with a TradeStation-named error — the new sniff
+   must out-score it (A209).
+8. **ATAS X exports one `.xlsx`** (zip+XML, sharedStrings, Excel-serial timestamps) with three
+   sheets: Statistics (aggregates), **Journal** (closed round trips: open/close time+price+volume,
+   PnL — the import source), Executions (fills). We parse only CSV text today — F52 owns the
+   xlsx-path decision (minimal reader vs lazy-loaded parser vs documented save-as-CSV).

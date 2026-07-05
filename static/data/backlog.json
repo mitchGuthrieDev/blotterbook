@@ -257,7 +257,7 @@
       "status": "open",
       "completedDate": null,
       "partial": true,
-      "prompt": "Add platform adapters for Quantower and NinjaTrader — neither is among the nine supported platforms in src/lib/core/adapters.ts. Owner has accounts on both and will supply REAL exports (blocked until then — don't guess header shapes from docs alone). Per the 'Adding things' recipe: one adapter object each (sniff + toTrades) normalizing to the standard Trade shape { time, date, pnl, symbol, root, side[, qty, entryTime, exitTime, holdMs] } (use pairFills() if the export is fills-based), a representative fixture in scripts/test-adapters.mjs per format, beta-flagged until verified (A103 pattern). Mind the A178 strict-detection gate: each new sniff must clear its minimum-confidence bar on real files and not misfire on the other platforms' fixtures. Update the Howto import guide (A107) with each platform's export steps. Done when: both adapters detect + parse real exports with fixtures green, ship beta-flagged, and the supported-platform list/docs are updated. — UPDATE 2026-07-05 (real exports in hand — analysis done): the owner supplied full export sets, staged at docs/csv-examples/{ninjatrader,tradovate,tradingview}/ (see its README for the findings). KEY FINDING: NinjaTrader and Tradovate exports are IDENTICAL formats (NinjaTrader runs the Tradovate platform) — build ONE adapter family for both, and headers cannot distinguish the platforms, so label it 'Tradovate / NinjaTrader' (matches brokers.json). The existing beta tradovate adapter already parses BOTH platforms' Orders.csv to the cent vs their own Performance.csv (Tradovate 9 trades net -$13.75; NT 2 trades net +$325.00). REMAINING SCOPE: add family adapters for Performance.csv (authoritative round trips w/ duration; '$275.00'-format pnl; sides derivable from buy/sell fill order) and Fills.csv (per-fill REAL commission 1.29 → Fill.commission, the A208 pipeline); classify Cash History / Account Balance History / Position History as recognized-non-trade (F47); extend A219-style reconciliation across Orders+Fills+Performance so a mixed batch never double-counts; fixtures per type in scripts/test-adapters.mjs; clear the Tradovate beta flag (A103). Quantower remains blocked (no exports yet). — SHIPPED (first half) 2026-07-05 (budget sprint): the Tradovate/NinjaTrader FAMILY is live — the orders adapter is relabeled 'Tradovate / NinjaTrader (orders)' and beta-cleared (verified to the cent vs Performance ground truth on BOTH platforms' real exports), plus two new non-beta adapters: 'tradovate-perf' (Performance — the platform's own round trips; handles the '$(x.xx)' accounting negatives via a num() fix; side from bought/sold order) and 'tradovate-fills' (Fills — real per-fill commissions → Fill.commission/A208; exact-match column lookup so the '_meta' twin columns can't hijack Contract/Timestamp/Price). All three types produce IDENTICAL tradeIds on the real files (natural dedupe; Fills ENRICHES the same trades with real commissions via the F37 merge). Fixtures in test-adapters.mjs; Howto section rewritten (Verified badge, three-export guidance). REMAINING for this item: Quantower only (still no exports).",
+      "prompt": "Add platform adapters for Quantower and NinjaTrader — neither is among the nine supported platforms in src/lib/core/adapters.ts. Owner has accounts on both and will supply REAL exports (blocked until then — don't guess header shapes from docs alone). Per the 'Adding things' recipe: one adapter object each (sniff + toTrades) normalizing to the standard Trade shape { time, date, pnl, symbol, root, side[, qty, entryTime, exitTime, holdMs] } (use pairFills() if the export is fills-based), a representative fixture in scripts/test-adapters.mjs per format, beta-flagged until verified (A103 pattern). Mind the A178 strict-detection gate: each new sniff must clear its minimum-confidence bar on real files and not misfire on the other platforms' fixtures. Update the Howto import guide (A107) with each platform's export steps. Done when: both adapters detect + parse real exports with fixtures green, ship beta-flagged, and the supported-platform list/docs are updated. — UPDATE 2026-07-05 (real exports in hand — analysis done): the owner supplied full export sets, staged at docs/csv-examples/{ninjatrader,tradovate,tradingview}/ (see its README for the findings). KEY FINDING: NinjaTrader and Tradovate exports are IDENTICAL formats (NinjaTrader runs the Tradovate platform) — build ONE adapter family for both, and headers cannot distinguish the platforms, so label it 'Tradovate / NinjaTrader' (matches brokers.json). The existing beta tradovate adapter already parses BOTH platforms' Orders.csv to the cent vs their own Performance.csv (Tradovate 9 trades net -$13.75; NT 2 trades net +$325.00). REMAINING SCOPE: add family adapters for Performance.csv (authoritative round trips w/ duration; '$275.00'-format pnl; sides derivable from buy/sell fill order) and Fills.csv (per-fill REAL commission 1.29 → Fill.commission, the A208 pipeline); classify Cash History / Account Balance History / Position History as recognized-non-trade (F47); extend A219-style reconciliation across Orders+Fills+Performance so a mixed batch never double-counts; fixtures per type in scripts/test-adapters.mjs; clear the Tradovate beta flag (A103). Quantower remains blocked (no exports yet). — SHIPPED (first half) 2026-07-05 (budget sprint): the Tradovate/NinjaTrader FAMILY is live — the orders adapter is relabeled 'Tradovate / NinjaTrader (orders)' and beta-cleared (verified to the cent vs Performance ground truth on BOTH platforms' real exports), plus two new non-beta adapters: 'tradovate-perf' (Performance — the platform's own round trips; handles the '$(x.xx)' accounting negatives via a num() fix; side from bought/sold order) and 'tradovate-fills' (Fills — real per-fill commissions → Fill.commission/A208; exact-match column lookup so the '_meta' twin columns can't hijack Contract/Timestamp/Price). All three types produce IDENTICAL tradeIds on the real files (natural dedupe; Fills ENRICHES the same trades with real commissions via the F37 merge). Fixtures in test-adapters.mjs; Howto section rewritten (Verified badge, three-export guidance). REMAINING for this item: Quantower only (still no exports). — UPDATE 2026-07-05 (Quantower exports in hand — analysis done): docs/csv-examples/quantower/ holds Trades.csv + Orders history.csv. FINDINGS: Trades.csv is the import source — per-fill executions WITH per-fill realized Gross/Net P/L and a Fee column (→ Fill.realized + Fill.commission), full contract codes (MESU26), 12-hour AM/PM timestamps (normTime already handles them), and a UTF-8 BOM on the header row (don't key the sniff on the first column). Orders history.csv is order-lifecycle noise (Opened/Filled/Cancelled rows) — classify recognized-non-trade. CRITICAL: both files currently MISDETECT as TradeStation (then refuse with a TradeStation-named error) — the new sniff must OUT-SCORE tradestation on these headers and the A178 gate story improves. Remaining scope: the quantower adapter (Trades.csv → pairFills with realized+fee), fixtures, Howto section; Orders-history classification for F47.",
       "doneNote": null
     },
     {
@@ -499,6 +499,126 @@
       "partial": false,
       "prompt": "From the owner. On desktop/web widths, the main dashboard renders every module as a full-width stacked card — the Trading Calendar and Break-Even & Cost modules should sit NEXT TO each other (two columns) instead. Implement in src/app/screens/Dashboard.svelte's module render loop: at a wide breakpoint (e.g. lg+), lay the modOrder list into a 2-column grid where cal and cost (adjacent in the order) share a row while wide modules (perf curve, adv stats table, compare) keep full width — e.g. a CSS grid with per-module col-span classes, or a paired-row special case for the cal/cost keys. Constraints: mobile/narrow keeps today's single-column stack; reordering/hide/re-add + the animate:flip and staged-save (A186) behavior must keep working with the new layout (flip animations across grid tracks — verify); Tailwind utilities only (CSP-clean, no inline style); keep e2e green (the sweep clicks module controls). Coordinate with F29 (the future resizable tiling grid — this is the cheap fixed-layout step, not the resizer; don't block on R20/F29). Done when: on desktop the calendar and cost modules render side by side, narrow viewports stack as today, and module reorder/hide/save still work.",
       "doneNote": null
+    },
+    {
+      "id": "A232",
+      "title": "Dashboard calendar (web): fill the vertical space instead of squishing",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "From the owner. On desktop, the Trading Calendar module on the main dashboard renders vertically 'squished' — compact day cells with a lot of empty dashboard space below/around it. Let the month grid EXPAND to use the available vertical room: taller day cells (aspect/min-height scaling at lg+ widths) so P&L, trade count and note dots breathe, while the mobile/narrow layout keeps the current compact, bounded cells (A182 fixed those — don't regress the square bounded-cell behavior at small sizes). Implement in the calBody snippet of src/app/screens/Dashboard.svelte (and check the Calendar SCREEN's month grid for the same treatment); Tailwind utilities only, CSP-clean. Coordinate with A228 (cal+cost side-by-side): sized together, the two modules should fill their row. Done when: the dashboard calendar visibly fills its space on desktop with no mobile regression and e2e stays green."
+    },
+    {
+      "id": "R24",
+      "title": "Architect the user-account system (passkeys-only, donations, login/Account sidebar item)",
+      "category": "REVIEW / AUDIT",
+      "priority": "P2",
+      "effort": "large",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "From the owner (spec) — DESIGN/ARCHITECTURE first (a written doc + spun-off build items), then scaffolding. Requirements: (1) SIMPLE accounts supporting PASSKEYS ONLY (WebAuthn — no passwords ever); (2) track whether the user has DONATED (ties to R15/F38 Stripe — a donation should create an account or prompt account creation); (3) a 'Login' item on the app sidebar that opens a login prompt, becoming an 'Account' dashboard when logged in (account info + donation status now; SCAFFOLD a workspace-management section for the future synced-workspaces tier — A132/A16); (4) LATER (once accounts are real): an initial-state login module gating app launch, with a 'Create account' button beside 'Log in' → the account-creation flow — design it now, ship behind a flag/stage. OPEN QUESTIONS the doc must answer: (a) account-hash lock on exported backups? Context: backups currently capture trades/journal/meta (incl. saved filters) + the CSV library via Store.exportAll(), but NOT dashboard layouts/tabs/workspaces (store.local) — decide whether to add a keyed integrity/ownership check (and whether layouts should join the backup first); (b) third-party options to avoid reinventing auth: evaluate better-auth, Lucia(-style) hand-rolled WebAuthn via SimpleWebAuthn on Cloudflare Workers/D1, and managed (Clerk/Auth0 — cost + privacy posture vs the no-egress moat); (c) SSO (Google/Apple) as the primary path vs an ADDITIONAL option beside passkeys — recommend. Constraints: the moat holds (trade data NEVER server-side; accounts hold identity + entitlements only), Workers Paid guardrail A16 before any synced tier, S11 webhook discipline for the donation link, D1 for account rows (A17: not KV). Done when: a written architecture doc (docs/accounts-architecture.md) answers the open questions with a phased build plan, and the build items are filed."
+    },
+    {
+      "id": "A233",
+      "title": "Site header spacing/styling: consistent across homepage and parallel pages",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "From the owner. The header spacing/styling differs between the homepage and the parallel info pages (How To, Roadmap, Changelog — and check Legal): make them consistent. The shared chrome is src/site/lib/Nav.svelte inside SiteShell.svelte — find where per-page wrappers/props (wide variants, page-specific margins/padding on the hero/eyebrow area) diverge, pick the intended treatment, and normalize. Prerendered SSG (A69) — `npm run build` regenerates every page; keep CSP-clean utilities. Done when: the header band (nav + top spacing) is visually identical across index/howto/roadmap/changelog (+legal), verified in the built pages."
+    },
+    {
+      "id": "F48",
+      "title": "Onboarding: explicit 'Launch Blotterbook' review step after CSV upload",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "From the owner. Today the first-run onboarding jumps straight into the main app the moment a CSV imports. Instead: stay on the onboarding surface after upload, showing what was imported (per-file detection results — coordinate with F47's status list) and the cost-setup selections, with a 'Launch Blotterbook' button that becomes enabled once at least one CSV imported successfully — so the user reviews before entering the app. Implement in src/app/parts/Onboarding.svelte + the needsOnboarding gate in App.svelte (the gate currently flips on allTrades.length; add an explicit 'launched' latch the button sets). Demo/staging unaffected (they seed, never see onboarding). Done when: uploading on first run shows a review state with an enabled Launch button instead of auto-entering, and e2e's onboarding specs are updated."
+    },
+    {
+      "id": "A234",
+      "title": "Restore the online/status pill in the app header",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "From the owner. The pre-redesign app surfaced an online/status pill (the /api/status admin-set status + connectivity indicator) that the CH16 cutover dropped — the redesigned header shows env/Beta/version pills but no status. Restore it: fetch the status via the existing flags/status plumbing (src/app/lib/flags.ts already loads /api/config; check what the legacy pill read — likely /api/status via StatusBanner's maintenance source) and render a compact pill in the AppShell header actions (online/degraded/maintenance states; offline detection via navigator.onLine + fetch failure). Fail silent/offline-friendly like A201; demo can show it too (read-only). Done when: the header shows the status pill on all app surfaces with graceful offline behavior, and no CSP/e2e regressions."
+    },
+    {
+      "id": "F49",
+      "title": "Trade Editor: calendar date-picker and symbol-select cell editors",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "From the owner. In the Trade Editor, editable DATE cells should open a calendar picker on click (not a bare text field), and editable SYMBOL cells should open a selectable list of symbols (the roots/symbols already present in the dataset + the known fee roots) instead of free text. Implement in src/app/screens/TradeEditor.svelte's cell-editing layer: a popover calendar (vendor the shadcn-svelte calendar/date-picker primitives by hand — the CLI registry is egress-blocked — or a minimal month grid reusing the app's own calendar rendering) and a Select/combobox for symbols (allow typing-to-filter; still permit a new custom root for manual rows). Keep the staged-draft editing model + validation intact; keyboard accessibility (the current cells are keyboard-editable — pickers must be too); CSP-clean. NOTE core cells only edit on manual/new rows today (imported trades are immutable) — this targets those editable cases. Done when: date cells open a picker, symbol cells open a filterable list, manual-row entry still works end-to-end, and e2e stays green."
+    },
+    {
+      "id": "F50",
+      "title": "Blotter: Platform column, group-by-platform, tighter column widths",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "From the owner (extends F46, which added the platform column to the Trade Editor). Blotter (src/app/screens/Blotter.svelte): (1) add a Platform column resolved from F37 provenance (reuse App.svelte's platformOf() — consider lifting it to a shared app lib), wired into the existing Columns picker (hideable, default on or off — owner's call at build time); (2) add a 'Group by platform' option (alongside/like the existing sort model — collapsible groups or a grouped sort with sticky group headers); (3) TIGHTEN the column widths across the table — several columns are wider than their content needs (date/time/qty/side); audit each column's width and reduce padding so more fits without horizontal scroll at common widths, while keeping the A183 overflow-x wrapper for narrow screens. Done when: Blotter shows a platform column + working group-by-platform, columns are visibly tighter with no content clipping, and the blotter e2e specs stay green."
+    },
+    {
+      "id": "F51",
+      "title": "Compact Blotter dashboard module (addable via the picker)",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "From the owner (the A142 module pipeline). Build a COMPACT Blotter module for the main dashboard, addable via the A189 '+ Add modules' picker (not in the default layout): the most recent N trades (e.g. 10–15) in a dense table — time, symbol, side, qty, P&L (chart-2/destructive), maybe tags — with a 'View all' link to the Blotter screen, respecting the live filter set (dash.filtered) so it narrows with everything else. Implementation: a MODULES entry + snippet in src/app/screens/Dashboard.svelte + a picker thumbnail (the A203 'compare' module is the template for all three touch points); no pagination/editing in the module (that's the screen's job); demo-safe (read-only). Done when: the module is addable from the picker, renders the recent filtered trades compactly with a link to the full Blotter, and gates stay green."
+    },
+    {
+      "id": "A235",
+      "title": "CSV Library include-toggle: excluding the ONLY CSV must not bounce to first-run onboarding",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "Bug/UX from the owner. Toggling 'Included' OFF on the only CSV in the Library empties the active dataset, which flips App.svelte's needsOnboarding gate (!allTrades.length) and dumps the user back into the first-run onboarding — jarring, and wrong: ONLY 'Erase all data' should return the app to its initial state. Fix the gate so onboarding keys off 'no FILES in the library' (store.getFiles().length === 0, i.e. truly fresh) rather than 'no ACTIVE trades': an all-excluded library should keep the normal app shell and show the standard empty-state affordances (dashboards render their zero-data states; the CSV Library remains reachable to re-include). Decide + implement the empty-active-dataset presentation (e.g. a slim banner 'All files are excluded — re-enable them in the CSV Library'). Update the e2e include-toggle spec (it currently exercises exclude→re-include; assert the app does NOT show onboarding while excluded). Done when: excluding the last file keeps the app shell with a clear path back, only Erase returns to onboarding, and e2e covers it."
+    },
+    {
+      "id": "F52",
+      "title": "ATAS X importer — xlsx statistics export (Journal round trips + Executions fills)",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "large",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "From the owner — real export in hand at docs/csv-examples/atas-x/ (ATAS X exports a single .xlsx, not CSV). Analysis (2026-07-05): the workbook has three sheets — Statistics (aggregates), Journal (CLOSED ROUND TRIPS: Account, Instrument, Open time/price/volume, Close time/price/volume, Price PnL, Profit ticks, PnL — the import source), and Executions (fills: Time, Exchange ID, Direction, Price, Volume, Route); instruments like 'MESU6@CME_Ind'; times are EXCEL SERIAL dates; cells use sharedStrings. Blocker to solve FIRST: we parse only CSV text — decide the xlsx path: (a) a minimal client-side xlsx reader (it's zip+XML; browsers have DecompressionStream('deflate-raw') — a small hand-rolled unzip+sheet parser avoids a dependency but is real work; weigh A28 supply-chain vs ~size budget for SheetJS ~200KB+), (b) lazy-load a vendored parser only when an .xlsx hits the intake (code-split chunk, keeps boot lean), or (c) short-term: docs tell ATAS users to open+save-as CSV. Then: an adapter for the Journal sheet shape (closed trades w/ entry+exit → native holdMs; excel-serial → normTime conversion; instrument '@CME_Ind' suffix → rootSym extension), intake gates for .xlsx (A177 — the binary sniff currently REJECTS zip containers; carve an allowlisted xlsx path), fixtures, Howto section. Done when: the decision is made + implemented, the real ATAS file imports (or the documented CSV path ships with the adapter), fixtures green."
     }
   ],
   "howToDrive": [
