@@ -3681,6 +3681,149 @@
       "completedDate": "2026-07-02",
       "partial": false,
       "doneNote": "DONE (2026-07-02, closed by backlog review) — already satisfied in the data: IBKR ships in static/data/brokers.json (order slot + {micro: 0.25, std: 0.85} per side, matching IBKR's published Fixed futures pricing: US micro contracts $0.25/contract, standard $0.85/contract, exchange/regulatory fees separate — which costModel() adds from exchange-fees.json) AND has a brokerFeeds entry in feeds.json, so it is selectable end-to-end with no app-code change (verified BROKER_ORDER renders it and costModel prices with it). The entry predates this review (landed by #64); the item was never closed. Values are snapshot estimates like the rest of brokers.json (its _comment); IBKR's tiered plan is not modeled — file separately if wanted."
+    },
+    {
+      "id": "R21",
+      "title": "Discussion: brokers.json <-> exchange-fees.json relationship",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Delivered as docs/rates-data-assessment.md (2026-07-04, Phase 3 of the CSV/data-mgmt plan). Verdict: KEEP the two-file split — broker-controlled vs exchange-controlled cost components on different clocks; no overlap/duplication; units consistent. Research finding that shaped F30: CME exchange fees change annually (documented Feb-2024/Feb-2025 notices, cited), broker commissions are sticky and unarchived. Effective-dating shipped across BOTH files as optional closed periods ({until, values, source}, partial by design) with current values untouched. Also exposed + fixed stale composites (ZC/ZS/ZW 2.05→2.15, MGC 0.50→0.62). Clearing-by-route noted as a possible future third component, not a restructure."
+    },
+    {
+      "id": "F35",
+      "title": "Add Discount Trader as a selectable broker",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-04 (feat/rates-data). Discount Trading selectable in the cost model: micro $0.20/side, std $0.49/side (published base tier; exchange/clearing/NFA additional; volume tiers go lower) — source discounttrading.com/commission-rates.html, cited in brokers.json. feeds.json maps it to the shared CQG set (routes CQG/Rithmic/Teton). Manifest regenerated; costModel fixtures assert 0.55 micro / 1.94 std all-in vs MES/ES; no app-code change needed."
+    },
+    {
+      "id": "F30",
+      "title": "Effective-dated (historical) broker commission rates",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-04 (feat/rates-data; design in docs/rates-data-assessment.md). Both data files at schemaVersion 2: current values stay in comm/exchange (date-agnostic consumers unchanged); optional history = closed {until(inclusive), values, source} periods, oldest first, PARTIAL by design with fall-through to current. rateFor/exchOf take an optional date; costModel/curveseries/blotter fees price each trade at ITS date (undated = identical to before — backward-compat requirement met). Cited history: CME eff. 2024-02-01 (equity/energy/metals) + eff. 2025-02-01 (CBOT ag, micro gold) per AMP notices; stale current composites corrected (ZC/ZS/ZW 2.15, MGC 0.62). Broker rateHistory ships as a tested MECHANISM with no entries — no citable broker-commission change exists 2024–2026 (research finding: only pass-through CME increases are announced); entries get added opportunistically per A210, never fabricated. 17 fixtures in test-compute.mjs."
+    },
+    {
+      "id": "A110",
+      "title": "Discussion/doc: data flow & data-management overview",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Delivered as docs/data-flow.md (2026-07-04, feat/tradingview-exports). One prose narrative stitching the end-to-end flow — intake gates (A177/A178) → detection/normalization → the Store seam + IndexedDB v3 object-store table (incl. F37 files/filetext, tradeId/dedupe/provenance-merge semantics, backup trust boundary) → hash-busted ref data with F30 dated rates → the pure recompute chain → the three modes → the no-egress guarantee. Links the PR #91 architecture diagrams as the boxes-and-arrows companion."
+    },
+    {
+      "id": "A106",
+      "title": "Evaluate supporting TradingView’s other CSV export types",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Evaluated + SHIPPED (2026-07-04, feat/tradingview-exports) against real owner-supplied paper-trading exports of all five TradingView CSV types. Outcome: (1) balance history — existing adapter verified on real data (50/50 trades; CME_MINI:MES1! symbols resolve correctly); (2) order history — new `tradingview-orders` fills adapter (Status-gated executions, avg Fill price + Closing time → pairFills for hold time; Commission column feeds A208 when populated); cross-validated vs the same account's balance history — 21/23 round trips reconcile to the cent, the 2 misses are the export's own reach-back truncation (Howto caveat + openLots notice); (3) positions/orders/trading-journal — not trade data, the A178 gate refuses them (fixture-pinned). Detection strategy: auto-detect via distinctive 'Placing time'+'Fill price'+'Status' sniff (no picker needed); no collision with Webull's 'Placed Time' thanks to A174 word-boundary matching. Howto updated with both import types."
+    },
+    {
+      "id": "A176",
+      "title": "(Discussion) Platform-aware module availability — richer CSVs unlock more calculations",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Shipped across two slices (2026-07-04, feat/tradingview-exports + feat/analytics-interactivity). Import-time: the preview states data-driven field coverage (hold/qty/commissions) with a per-adapter 'upload X to unlock Y' upgradeHint, and duplicate trades ENRICH missing fields so import order doesn't matter. Dataset-level: Avg hold time states its coverage inline ('· N% of trades'), the Analytics stats grid footnotes what unlocks missing hold data, and the Howto carries a per-export capability matrix (P&L exact/derived, qty, hold, commissions × every format) + multi-platform guidance. Mixed-platform datasets work by design (normalized shape + F37 provenance, per-file platform badges in the Library). Deeper per-module gating (hide/annotate modules below a coverage threshold) folds into A197's remaining scope if ever wanted; the original 'TradingView multi-export' question was executed as A106."
+    },
+    {
+      "id": "A211",
+      "title": "(Discussion) Cost model for users who change brokers/platforms over time",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "Owner approved option (a) 2026-07-04; SHIPPED same day (feat/broker-override; design in docs/rates-data-assessment.md addendum). CsvFileRec.broker? + a CostInputs.brokerFor per-trade resolver — costModel/curveseries/blotter fees/Reports price each trade at its file's broker override (resolution: newest-imported contributing file with one), falling back to the global setting. CSV Library detail sheet gained the broker select ('Use the global broker setting' + BROKER_ORDER); backup restore sanitizes the key; unknown keys fall back safely. Fixtures: override-vs-global costModel totals, curve endpoint reconciliation, DemoStore set/clear; e2e persistence spec (A212) pinned it — and caught a Select label-display bug in the process."
+    },
+    {
+      "id": "A212",
+      "title": "R1p7: e2e coverage for per-file actions + analytics interactivity",
+      "category": "REVIEW / AUDIT",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "From the 2026-07-04 audit (docs/repo-audit-2026-07-04.md); fixed same day per owner's fix-all directive. Three staging specs added (56 e2e total): (1) F37 include-toggle narrows the active dataset app-wide (Dashboard KPI shows 0 trades) and persists across reload; (2) rename + A211 broker override round-trip the file record across reload — this spec exposed and pinned a real bug (the override Select rendered the raw broker key instead of its label on re-open; Select.Root now receives items); (3) Analytics click-to-filter narrows the Blotter count, chips + Clear all restore it."
+    },
+    {
+      "id": "A214",
+      "title": "R1p7: DOW_NAME duplicated core DOW_LABEL in Analytics",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "From the 2026-07-04 audit; fixed same day. The A197 chips introduced a local DOW_NAME array identical to core.ts DOW_LABEL (A29 single-source violation) — removed, Analytics imports DOW_LABEL."
+    },
+    {
+      "id": "A215",
+      "title": "R1p7: dead FILE_BUDGET_BYTES + unused dash.filesBytes()",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "From the 2026-07-04 audit; fixed same day. dashboard.svelte.ts exported FILE_BUDGET_BYTES and filesBytes() with no consumer (CsvLibrary computes usedKb against its own FILE_BUDGET_KB) — both removed; the 50 MB budget constant is single-sourced in CsvLibrary."
+    },
+    {
+      "id": "A216",
+      "title": "R1p7: trademeta orphaned by deleteFile + Blotter bulk delete",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "From the 2026-07-04 audit; fixed same day. Store.deleteFile now deletes the removed trades' trademeta in the SAME transaction (tags/note/base64 screenshots no longer accumulate orphaned in IndexedDB), dash.deleteTrades purges meta per deleted id, DemoStore parity. updateTrade's explicit meta migration is untouched."
+    },
+    {
+      "id": "A217",
+      "title": "R1p7: perFileActions prop was constant-true dead config",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "From the 2026-07-04 audit; fixed same day. Post-F37 no caller passed false — the prop and its unreachable 'Active dataset' branches removed from CsvLibrary; per-row `legacy` gating is the real mechanism."
+    },
+    {
+      "id": "A218",
+      "title": "R1p7: CLAUDE.md drift from the 2026-07-04 features",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-04",
+      "partial": false,
+      "doneNote": "From the 2026-07-04 audit; fixed same day. intake.ts added to the core file list; store.ts described with all six object stores (files/filetext, F37); the data-flow diagram carries the intake gates (A177/A178), F37 provenance/enrichment, A208 real commissions, F30 dated rates and the A211 per-file broker, and links docs/data-flow.md; the adapter recipe's trade shape includes `commission` and notes minScore."
     }
   ]
 }
