@@ -4,6 +4,18 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.53.0",
+      "date": "2026-07-05",
+      "title": "Filter by hour, scope by date",
+      "summary": "Analytics interactivity is complete: the hour-of-day chart is now click-to-filter like everything else, quick date presets scope every screen at once, and datasets without timestamps say so instead of showing an empty chart. Your trade data still never leaves the browser.",
+      "highlights": [
+        "Click an hour on the 'Avg P&L by hour' chart to filter every screen to trades placed in that hour — stacks with symbol, tag, side, and weekday filters, and shows as a removable chip.",
+        "Quick date ranges on Analytics: 30D / 90D / YTD / All presets set the shared date filter, so the dashboard, blotter, and reports all narrow together.",
+        "Saved filter views now remember hour filters too.",
+        "If your dataset has no trade timestamps (balance-history exports), the hour chart now explains what's missing and how to get it instead of rendering nothing."
+      ]
+    },
+    {
       "version": "0.52.0",
       "date": "2026-07-05",
       "title": "Compare broker costs, drill into your P&L, and a nicer phone dashboard",

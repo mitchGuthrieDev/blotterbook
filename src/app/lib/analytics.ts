@@ -10,7 +10,7 @@ export type Kpi = { label: string; value: string; tone?: 'pos' | 'neg' };
  *  uses them for the A197 bucket drill-down (click a bar → the matching trades). */
 export type DistBar = { label: string; value: number; neg: boolean; lo: number | null; hi: number | null };
 /** `key` = the underlying bucket id where the bar is filterable (A197 — weekday bars carry the
- *  dow index for click-to-filter; hour bars have no matching filter, so it stays unset). */
+ *  dow index and hour bars the 0–23 hour for click-to-filter). */
 export type SignedBar = { label: string; value: number; key?: number };
 export type SymbolRow = { sym: string; trades: number; win: number; pnl: number };
 export type TagRow = { tag: string; trades: number; win: number; pnl: number };
@@ -87,7 +87,7 @@ export function buildAnalytics(m: Metrics, trades: Trade[], tagsFor: (t: Trade) 
   }
   const hours: SignedBar[] = [...hourMap.entries()]
     .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-    .map(([hh, a]) => ({ label: hh, value: Math.round(a.pnl / a.n) }));
+    .map(([hh, a]) => ({ label: hh, value: Math.round(a.pnl / a.n), key: +hh }));
 
   // ── Avg P&L by weekday (core dowBuckets — ONE definition with compute()'s weekday stats) ──
   const wdays: SignedBar[] = dowBuckets(trades)

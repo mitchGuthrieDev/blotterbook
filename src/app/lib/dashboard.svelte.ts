@@ -46,7 +46,7 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   let tradeMeta = $state<Map<string, StoredTradeMeta>>(new Map());
   let savedFilters = $state<SavedFilter[]>([]);
   let setup = $state<AppSetup>({ broker: '', feed: '', stateAbbr: '', platform: 0 });
-  let filters = $state<FilterState>({ scope: 'all', from: '', to: '', root: '', side: '', session: '', tag: '', dows: [] });
+  let filters = $state<FilterState>({ scope: 'all', from: '', to: '', root: '', side: '', session: '', tag: '', dows: [], hours: [] });
   let calYear = $state(new Date().getFullYear());
   let calMonth = $state(new Date().getMonth());
 
@@ -66,6 +66,12 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
         if (!m || !(m.tags || []).includes(f.tag)) return false;
       }
       if (f.dows.length && !f.dows.includes(new Date(t.date + 'T00:00:00').getDay())) return false;
+      if (f.hours.length) {
+        // A197: hour-of-day from the trade timestamp HH; no timestamp = excluded while active
+        // (balance-history exports carry no time — the Analytics hour module states the coverage).
+        const hh = (t.time || '').slice(11, 13);
+        if (!/^\d\d$/.test(hh) || !f.hours.includes(+hh)) return false;
+      }
       return true;
     });
   }
@@ -221,6 +227,7 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   function clearFilters() {
     filters.from = filters.to = filters.root = filters.side = filters.session = filters.tag = '';
     filters.dows = [];
+    filters.hours = [];
   }
   const tradeId = (t: Trade) => store.tradeId(t);
   const brokerName = (id: string) => (BROKERS[id] && BROKERS[id].name) || id || '—';
@@ -454,6 +461,7 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
       session: filters.session,
       tag: filters.tag,
       dows: [...filters.dows],
+      hours: [...filters.hours],
     };
     const id = Date.now().toString(36) + savedFilters.length;
     const label = (name || '').trim() || `Filter ${savedFilters.length + 1}`;
@@ -470,6 +478,7 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     filters.session = f.session || '';
     filters.tag = f.tag || '';
     filters.dows = Array.isArray(f.dows) ? [...f.dows] : [];
+    filters.hours = Array.isArray(f.hours) ? [...f.hours] : [];
     emit('filter:applied', { name: sf.name }); // A188
   }
   async function deleteView(id: string) {

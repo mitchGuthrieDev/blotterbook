@@ -690,6 +690,21 @@ test('staging redesign: Analytics histogram drill-down + sortable breakdown colu
       return s.every((v, i) => i === 0 || s[i - 1].localeCompare(v) >= 0);
     })
     .toBe(true);
+
+  // Hour click-to-filter (A197 final slice): an hour label toggles the shared hour filter — the
+  // chip bar shows it (…h) and Clear all removes it.
+  const hourCard = page.locator('[data-slot="card"]', { hasText: 'Avg P&L by hour' });
+  await hourCard.locator('button[aria-pressed]').first().click();
+  await expect(page.getByText('Filtered:')).toBeVisible();
+  await expect(page.locator('button[aria-label^="Remove filter:"]', { hasText: 'h' })).toBeVisible();
+  await page.getByRole('button', { name: 'Clear all' }).click();
+  await expect(page.getByText('Filtered:')).toHaveCount(0);
+
+  // Quick date scoping: a preset writes the shared from/to (range chip appears); All clears it.
+  await page.getByRole('button', { name: '90D', exact: true }).click();
+  await expect(page.getByText('Filtered:')).toBeVisible();
+  await page.getByRole('button', { name: 'All', exact: true }).click();
+  await expect(page.getByText('Filtered:')).toHaveCount(0);
 });
 
 test('staging redesign: Commission Compare module adds via the picker and ranks brokers (A203)', async ({ page }) => {

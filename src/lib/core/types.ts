@@ -241,6 +241,9 @@ export interface FilterState {
   session: string;
   tag: string;
   dows: number[];
+  /** Hour-of-day buckets (0–23, from the trade timestamp HH) — A197; trades without a timestamp
+   *  are excluded while an hour filter is active. */
+  hours: number[];
 }
 
 /** The persisted payload of a saved filter (vanilla-compatible `f` shape; `symbol` holds root). */
@@ -252,6 +255,7 @@ export interface SavedFilterDef {
   session?: string;
   tag?: string;
   dows?: number[];
+  hours?: number[];
 }
 
 /** A saved filter view ([{id,name,f}]) persisted to Store meta `savedFilters`. */

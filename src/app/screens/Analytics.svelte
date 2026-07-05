@@ -118,6 +118,23 @@
   const toggleSide = (s: string) => filterModel?.set({ side: filterModel.side === s ? '' : s });
   const toggleDow = (i: number) =>
     filterModel?.set({ dows: filterModel.dows.includes(i) ? filterModel.dows.filter(d => d !== i) : [...filterModel.dows, i] });
+  const toggleHour = (h: number) =>
+    filterModel?.set({ hours: filterModel.hours.includes(h) ? filterModel.hours.filter(x => x !== h) : [...filterModel.hours, h] });
+
+  // ── A197 quick date scoping: preset ranges write the shared from/to, so every screen narrows
+  // together and the range shows up as a removable chip like any other filter. ──
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const RANGES = $derived.by(() => {
+    const now = new Date();
+    const daysAgo = (n: number) => iso(new Date(now.getTime() - n * 86_400_000));
+    return [
+      { label: '30D', from: daysAgo(30), to: '' },
+      { label: '90D', from: daysAgo(90), to: '' },
+      { label: 'YTD', from: `${now.getFullYear()}-01-01`, to: '' },
+      { label: 'All', from: '', to: '' },
+    ];
+  });
+  const rangeActive = (r: { from: string; to: string }) => filterModel?.from === r.from && (filterModel?.to || '') === r.to;
 
   // Active filters → removable chips (mirrors the Dashboard popover state, so the narrowing that
   // click-to-filter applies is always visible and reversible right here).
@@ -139,6 +156,15 @@
           .map(d => DOW_LABEL[d])
           .join(' · '),
         clear: () => f.set({ dows: [] }),
+      });
+    if (f.hours.length)
+      out.push({
+        key: 'hours',
+        label: [...f.hours]
+          .sort((a, b) => a - b)
+          .map(h => `${String(h).padStart(2, '0')}h`)
+          .join(' · '),
+        clear: () => f.set({ hours: [] }),
       });
     return out;
   });
@@ -273,6 +299,25 @@
 {/snippet}
 
 <div class="flex flex-col gap-4">
+  <!-- A197: quick date scoping — presets write the shared from/to so every screen narrows together. -->
+  {#if filterModel}
+    <div class="flex flex-wrap items-center gap-2 text-xs">
+      <span class="text-muted-foreground">Range:</span>
+      {#each RANGES as r (r.label)}
+        <button
+          type="button"
+          class={cn(
+            'rounded-md border border-border px-2 py-0.5 font-medium hover:bg-accent',
+            rangeActive(r) && 'border-ring bg-secondary'
+          )}
+          aria-pressed={rangeActive(r)}
+          title={r.from ? `Trades since ${r.from}` : 'All dates'}
+          onclick={() => filterModel?.set({ from: r.from, to: r.to })}>{r.label}</button
+        >
+      {/each}
+    </div>
+  {/if}
+
   <!-- A197: active-filter chips — the narrowing applied by click-to-filter (or the Dashboard
        popover) is visible and reversible right here. -->
   {#if chips.length}
@@ -444,10 +489,20 @@
       </Card.Content>
     </Card.Root>
 
-    <!-- Time of day -->
+    <!-- Time of day (A197: labels toggle the hour filter; coverage-gated per A176) -->
     <Card.Root>
       {@render head('Avg P&L by hour')}
-      <Card.Content>{@render signedBars(hours)}</Card.Content>
+      <Card.Content>
+        {#if hours.length}
+          {@render signedBars(hours, filterModel ? toggleHour : undefined, filterModel?.hours)}
+        {:else}
+          <!-- A176-class capability note: name what unlocks the missing data instead of an empty chart -->
+          <p class="text-xs text-muted-foreground">
+            No time-of-day data in this dataset — fills-based exports carry trade timestamps (e.g. TradingView’s order-history export;
+            balance history has P&L only). Import one alongside your existing files and overlapping trades merge.
+          </p>
+        {/if}
+      </Card.Content>
     </Card.Root>
 
     <!-- Day of week (A197: labels toggle the weekday filter) -->

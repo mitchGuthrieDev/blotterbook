@@ -381,18 +381,6 @@
       "doneNote": null
     },
     {
-      "id": "A197",
-      "title": "Big analytics dashboard review — add interactivity, filters & functionality to modules",
-      "category": "FEATURES",
-      "priority": "P2",
-      "effort": "large",
-      "status": "open",
-      "completedDate": null,
-      "partial": true,
-      "prompt": "Full review + upgrade of the Analytics screen (src/app/screens/Analytics.svelte, view-model in src/app/lib/analytics.ts). Today the analytics modules are largely static read-outs; make them interactive. Audit every module and add: per-module and/or page-level filters (date range, symbol/root, session, side, win/loss) that reuse the existing filter model where possible; drill-down / hover detail on charts; sort/paginate on tabular modules; toggles for grouping (by day-of-week, session, symbol) grounded in what compute()/costModel()/curveseries already produce (don't add server compute — moat is client-only). Reuse installed shadcn-svelte primitives (tabs/select/popover/tooltip/table) and the chart-1..5 tokens; keep CSP style-src 'self' (no inline style). Coordinate with A142 (new module ideas) and F29/R20 (resizable grid). Start by delivering a written audit of each current module with a proposed interactivity upgrade + effort, then implement the shortlist. Done when: the analytics modules support filtering/drill-down/sorting as specced, demo stays non-mutating, and e2e + size-budget gates stay green. — UPDATE 2026-07-04 (first shortlist SHIPPED on feat/analytics-interactivity): audit found 9 static read-outs with FilterState editable only via the Dashboard popover. Shipped: click-to-filter on symbol rows (root), tag rows (tag), long/short cards (side) and weekday bar labels (dows) — all TOGGLE the app-wide filter set so every screen narrows together; removable active-filter chips + Clear all atop the screen; show-all expansion on the symbol/tag tables (builder returns full breakdowns, screen owns the cut); aria-pressed states throughout. REMAINING: sortable table columns (currently fixed |P&L| order), histogram bucket drill-down (click a P&L bucket → matching trades), per-module date scoping, hour-of-day filter (needs an hour field in FilterState), and any module-level coverage gating carried over from A176. — UPDATE 2026-07-05 (second slice SHIPPED): sortable columns on the symbol/tag breakdowns (Sym/Tag, Trades, Win, signed P&L; default stays the builder's |P&L| impact order; sorts the FULL set before the top-N cut) and the histogram bucket drill-down (DistBar carries [lo,hi) bounds; clicking a bar/label lists the bucket's matching trades via a lazy bucketTrades prop, capped at 12 with a Blotter pointer, live with the filter set). e2e covers both. STILL REMAINING: per-module date scoping, hour-of-day filter (needs an hour field in FilterState), module-level coverage gating (A176).",
-      "doneNote": null
-    },
-    {
       "id": "A199",
       "title": "(Discussion) Audit our mobile approach — is it best-practice or does it need re-architecting?",
       "category": "LAYOUT (web vs mobile)",

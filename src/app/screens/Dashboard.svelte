@@ -7,7 +7,16 @@
   export const DEFAULT_MODULE_KEYS = ['perf', 'cal', 'cost', 'adv'];
   // Live filter model for the dashboard Filters popover — current values + option lists + mutators
   // (bound to the app's filter state).
-  export type FilterPatch = Partial<{ root: string; side: string; session: string; tag: string; from: string; to: string; dows: number[] }>;
+  export type FilterPatch = Partial<{
+    root: string;
+    side: string;
+    session: string;
+    tag: string;
+    from: string;
+    to: string;
+    dows: number[];
+    hours: number[];
+  }>;
   export type FilterModel = {
     root: string;
     side: string;
@@ -16,6 +25,8 @@
     from: string;
     to: string;
     dows: number[];
+    /** Hour-of-day buckets (0–23) — A197 hour click-to-filter on the Analytics chart. */
+    hours: number[];
     roots: string[];
     tags: string[];
     count: number;
