@@ -377,7 +377,9 @@ test('staging redesign: Blotter drawer saves a journal note (A149) and the note 
   //  save→reload→re-render roundtrip was observed to exceed the old 4s.)
   await expect(firstRow.locator('[title="Has a note"]')).toBeVisible({ timeout: 10_000 });
   await firstRow.locator('td').nth(2).getByRole('button').click();
-  await expect(page.locator('[data-slot="sheet-content"]').getByPlaceholder('Notes for this trade…')).toHaveValue('drawer note e2e');
+  await expect(page.locator('[data-slot="sheet-content"]').getByPlaceholder('Notes for this trade…')).toHaveValue('drawer note e2e', {
+    timeout: 10_000,
+  });
 });
 
 test('staging redesign: Blotter bulk delete removes the selected trade (A149)', async ({ page }) => {
@@ -608,6 +610,10 @@ test('staging redesign: CSV Library rename + broker override persist on the file
   // (bits-ui Select.Trigger renders as a plain <button aria-label=…>, not role=combobox.)
   await sheet.locator('button[aria-label="Broker override for this file"]').click();
   await page.getByRole('option', { name: 'EdgeClear' }).click();
+  // The trigger reflects the pick immediately; the Store write is fire-and-forget — give it a
+  // beat before reloading (parity with the file's other post-write waits).
+  await expect(sheet.locator('button[aria-label="Broker override for this file"]')).toContainText('EdgeClear');
+  await page.waitForTimeout(500);
   await page.keyboard.press('Escape'); // close the sheet
 
   // Both persist across a reload (Store.updateFile wrote label + broker on the record).

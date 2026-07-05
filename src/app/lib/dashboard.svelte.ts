@@ -17,6 +17,7 @@ import {
 } from '../../lib/core/core.ts';
 import { Adapters } from '../../lib/core/adapters.ts';
 import { cleanTags, fileId } from '../../lib/core/store.ts';
+import { reconcileImport } from '../../lib/core/intake.ts';
 import { demoCSV } from '../../lib/core/sampledata.ts';
 import type {
   Trade,
@@ -270,16 +271,48 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     emit('data:imported', { added: res.added });
     return res;
   }
+  // Cross-export reconciliation classifiers (TV calc audit): scope authority to the SAME platform
+  // family — 'tradingview' (balance history, closed/authoritative) vs 'tradingview-orders'
+  // (fills/derived) share the family 'tradingview'. kindOf comes from the adapter registry.
+  const ADAPTER_KIND = new Map(Adapters.list().map(a => [a.id, a.kind]));
+  const family = (platformId: string) => platformId.split('-')[0];
+  function reconcileOpts(platformId: string, files: CsvFileRec[]) {
+    const F = family(platformId);
+    const authority = new Set(files.filter(f => family(f.platform) === F && ADAPTER_KIND.get(f.platform) === 'closed').map(f => f.id));
+    const derived = new Set(files.filter(f => family(f.platform) === F && ADAPTER_KIND.get(f.platform) === 'fills').map(f => f.id));
+    return {
+      isAuthority: (t: Trade) => !!t.fileIds?.some(id => authority.has(id)),
+      isDerivedPeer: (t: Trade) => !!t.fileIds?.some(id => derived.has(id)),
+    };
+  }
+  /** Preview-time reconciliation count (sync — in-memory state) for the import sheet. */
+  function previewReconcile(trades: Trade[], kind: string, platformId: string): number {
+    return reconcileImport(allTrades, trades, kind, reconcileOpts(platformId, csvFiles)).conflicted;
+  }
+
   // F37: import a parsed CSV WITH provenance — stores the file record + raw text alongside the
   // trades (every contributed trade carries the file's id), and records the overlap count.
+  // Cross-export reconciliation (TV calc audit): a derived copy of a round trip the store already
+  // holds authoritatively (or vice versa) is resolved instead of double-counting — see
+  // reconcileImport in the intake module.
   async function importCsv(text: string, name: string, r: ParseResult) {
     if (isDemo || !r.ok || !r.trades?.length) return { added: 0, duplicate: 0, total: allTrades.length };
     const { rec, trades } = fileRecFor(text, name, r);
-    const res = await store.addTrades(trades);
+    const recon = reconcileImport(
+      await store.getAllTrades(),
+      trades,
+      r.kind || '',
+      reconcileOpts(r.platform || '', await store.getFiles())
+    );
+    for (const id of recon.evictIds) {
+      await store.deleteTrade(id);
+      await store.deleteTradeMeta(id); // A216 rule — meta goes with the evicted copy
+    }
+    const res = await store.addTrades(recon.add);
     await store.addFile({ ...rec, overlap: res.duplicate }, text);
     await reloadAll();
-    emit('data:imported', { added: res.added });
-    return res;
+    emit('data:imported', { added: res.added, ...(recon.conflicted ? { reconciled: recon.conflicted } : {}) });
+    return { ...res, reconciled: recon.conflicted };
   }
   /* ---- F37 CSV Library file actions (all demo-guarded, all behind the Store seam) ---- */
   async function setFileIncluded(id: string, included: boolean) {
@@ -319,7 +352,22 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     const r = Adapters.parse(text, rec.platform || undefined);
     if (!r.ok || !r.trades?.length) return { added: 0, duplicate: 0 };
     const fid = rec.id;
-    const res = await store.addTrades(r.trades.map(t => ({ ...t, fileIds: [fid] })));
+    // Same cross-export reconciliation as importCsv — a re-import must not resurrect a derived
+    // copy the authoritative record has since superseded.
+    const recon = reconcileImport(
+      await store.getAllTrades(),
+      r.trades.map(t => ({ ...t, fileIds: [fid] })),
+      r.kind || '',
+      reconcileOpts(
+        rec.platform || '',
+        (await store.getFiles()).filter(f => f.id !== fid)
+      )
+    );
+    for (const id of recon.evictIds) {
+      await store.deleteTrade(id);
+      await store.deleteTradeMeta(id);
+    }
+    const res = await store.addTrades(recon.add);
     await reloadAll();
     emit('data:imported', { added: res.added });
     return res;
@@ -500,6 +548,7 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     editTradeCore,
     importTrades,
     importCsv,
+    previewReconcile,
     setFileIncluded,
     renameFile,
     setFileBroker,

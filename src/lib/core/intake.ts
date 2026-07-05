@@ -19,6 +19,8 @@
    passes. Framework-agnostic and node-tested (test-adapters.mjs).
    ============================================================ */
 
+import type { Trade } from './types.ts';
+
 /** Size cap for an imported CSV — beyond this we refuse rather than freeze the tab. */
 export const CSV_MAX_BYTES = 20 * 1024 * 1024; // 20 MB
 /** Row cap (a season of fills is thousands of rows; hundreds of thousands is not a trade export). */
@@ -71,4 +73,133 @@ export function checkCsvText(text: string): string | null {
     if (++rows > CSV_MAX_ROWS) return `That file has more than ${CSV_MAX_ROWS.toLocaleString()} rows — export a shorter date range.`;
   }
   return null;
+}
+
+/* ============================================================
+   Cross-export reconciliation (TV calc audit, 2026-07-04)
+   ------------------------------------------------------------
+   A platform can export the SAME account at two fidelities: closed
+   exports (TradingView balance history) list every realized-P&L
+   event exactly; fills exports derive round trips from prices — and
+   a fills export with limited reach-back (TV order history caps at
+   ~100 orders) MISPAIRS its earliest round trips when a position was
+   open at the boundary: wrong entries produce wrong P&L and even
+   closes that never happened. Those copies hash to different
+   tradeIds (pnl is in the id), so dedupe alone double-counts them.
+
+   The rule, per import, scoped to the SAME platform family:
+   • The closed export is AUTHORITATIVE inside its own time window —
+     it lists every realized event, so a derived trade in that window
+     either matches an authoritative record on time|symbol|side with
+     the SAME pnl (→ normal dedupe + enrichment), or it is a phantom
+     (mismatched pnl, or no event at all) → dropped.
+   • Reverse order converges identically: when the authoritative
+     export arrives second, stored derived trades inside its window
+     that it doesn't corroborate are evicted, then the exact records
+     import.
+   • Without an authority/peer classifier (callers outside the app,
+     no file provenance) it falls back to exact-collision resolution
+     only. Trades outside the authoritative window, other platforms,
+     and ambiguous shapes are untouched.
+   Known trade-off (documented in the calc audit): two same-platform
+   accounts imported as balance(acct A) + orders(acct B) would treat
+   acct B's window-overlapping trades as unsupported — the preview
+   states the resolved count BEFORE confirm, so the user sees it.
+   ============================================================ */
+export interface ImportReconciliation {
+  /** The incoming trades to actually add (phantom derived copies removed). */
+  add: Trade[];
+  /** Stored trade ids to evict first (derived copies superseded by incoming authoritative data). */
+  evictIds: string[];
+  /** How many phantom copies were resolved (surfaced as an import notice). */
+  conflicted: number;
+}
+
+const tkey = (t: Trade) => `${t.time}|${t.symbol}|${t.side}`;
+
+export function reconcileImport(
+  existing: Trade[],
+  incoming: Trade[],
+  incomingKind: string,
+  opts?: {
+    /** Existing trade is an authoritative (closed-export) record of the incoming file's platform family. */
+    isAuthority?: (t: Trade) => boolean;
+    /** Existing trade is a derived (fills-export) record of the incoming file's platform family. */
+    isDerivedPeer?: (t: Trade) => boolean;
+  }
+): ImportReconciliation {
+  const add: Trade[] = [];
+  const evictIds: string[] = [];
+  let conflicted = 0;
+
+  if (incomingKind === 'fills' && opts?.isAuthority) {
+    // Authority window + event map from the same-family closed records already in the store.
+    const auth = existing.filter(opts.isAuthority);
+    const authPnl = new Map(auth.map(t => [tkey(t), t.pnl]));
+    let lo = '',
+      hi = '';
+    for (const t of auth) {
+      if (!lo || t.time < lo) lo = t.time;
+      if (!hi || t.time > hi) hi = t.time;
+    }
+    for (const t of incoming) {
+      if (lo && t.time >= lo && t.time <= hi) {
+        const p = authPnl.get(tkey(t));
+        if (p === undefined || p !== t.pnl) {
+          conflicted++; // phantom: the authoritative record has no such event (or a different P&L)
+          continue;
+        }
+      }
+      add.push(t);
+    }
+    return { add, evictIds, conflicted };
+  }
+
+  if (incomingKind === 'closed' && opts?.isDerivedPeer) {
+    // Incoming IS the authority — evict stored same-family derived trades inside its window that
+    // it doesn't corroborate, then import everything (dedupe + enrichment handle the matches).
+    const inPnl = new Map(incoming.map(t => [tkey(t), t.pnl]));
+    let lo = '',
+      hi = '';
+    for (const t of incoming) {
+      if (!lo || t.time < lo) lo = t.time;
+      if (!hi || t.time > hi) hi = t.time;
+    }
+    for (const ex of existing) {
+      if (!ex.id || !opts.isDerivedPeer(ex) || ex.time < lo || ex.time > hi) continue;
+      const p = inPnl.get(tkey(ex));
+      if (p === undefined || p !== ex.pnl) {
+        conflicted++;
+        evictIds.push(ex.id);
+      }
+    }
+    return { add: incoming.slice(), evictIds, conflicted };
+  }
+
+  // Fallback (no provenance classifiers): resolve only unambiguous exact collisions —
+  // one existing record at the same time|symbol|side with a different pnl, where exactly one
+  // side is authoritative (closed exports carry no holdMs).
+  const byKey = new Map<string, Trade[]>();
+  for (const t of existing) {
+    const k = tkey(t);
+    const arr = byKey.get(k);
+    if (arr) arr.push(t);
+    else byKey.set(k, [t]);
+  }
+  for (const t of incoming) {
+    const matches = byKey.get(tkey(t)) || [];
+    if (matches.length === 1 && matches[0].pnl !== t.pnl) {
+      const ex = matches[0];
+      if (incomingKind === 'fills' && ex.holdMs == null) {
+        conflicted++;
+        continue;
+      }
+      if (incomingKind === 'closed' && ex.holdMs != null && ex.id) {
+        conflicted++;
+        evictIds.push(ex.id);
+      }
+    }
+    add.push(t);
+  }
+  return { add, evictIds, conflicted };
 }

@@ -30,7 +30,15 @@ const ENTRY = resolve(DIST, 'app/app.html');
 // /app bundle on every surface — before the cutover it was a staging-only dynamic chunk EXCLUDED from
 // this measurement, so the ~529 KiB it lands is the intentional cost of shipping the redesign to prod,
 // not a regression. Headroom (~71 KiB) still catches an accidental heavy import on top of it.
-const BUDGET_BYTES = 600 * 1024;
+// A213 (2026-07-04): raised 600 → 640 KiB. The CSV/data-management feature day (intake gates,
+// per-file provenance + the CSV Library manager, real commissions, effective-dated rates, the
+// TradingView order-history adapter, analytics interactivity, per-file broker overrides) landed
+// ~35 KiB of intentional product code, eating the CH16 headroom to ~20 KiB. Boot payload was
+// trimmed first (the report builders moved into the lazy Reports chunk — boot ~427 KiB); the
+// remaining growth is feature code, not accidental imports, so the ceiling moves deliberately.
+// ~46 KiB headroom again catches a heavy accidental import; the standing trim target stays the
+// utils chunk (tailwind-merge/bits-ui — A136).
+const BUDGET_BYTES = 640 * 1024;
 
 let html;
 try {

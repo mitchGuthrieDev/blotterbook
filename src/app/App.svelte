@@ -48,7 +48,6 @@
   import type { BlotterRow } from './screens/Blotter.svelte';
   import type { EditorRow } from './screens/TradeEditor.svelte';
   import type { ReportVM, ReportRange, ReportMeta, ExportKind } from './screens/Reports.svelte';
-  import { buildReportVM } from './lib/reports.ts';
   import { downloadBlob } from './lib/files.ts';
   import type { Csv, ImportPreview } from './screens/CsvLibrary.svelte';
   import Onboarding from './parts/Onboarding.svelte';
@@ -599,9 +598,6 @@
     stateRate: Number(dash.costInputs.stateRate) || 0,
     platform: dash.setup.platform,
   });
-  function buildReport(range: ReportRange, compare: boolean, meta: ReportMeta): ReportVM {
-    return buildReportVM(dash.allTrades, range, compare, dash.costInputs, reportLabels, meta);
-  }
   function onReportExport(kind: ExportKind, vm: ReportVM) {
     if (kind === 'md') downloadBlob('blotterbook-report.md', new Blob([vm.md], { type: 'text/markdown' }));
     else if (kind === 'copy') void navigator.clipboard?.writeText(vm.text);
@@ -718,6 +714,9 @@
         comm: trades.filter(t => t.commission != null).length / trades.length,
       },
       upgradeHint: r.upgradeHint,
+      // Cross-export reconciliation preview: how many rows the authoritative record contradicts —
+      // resolved automatically on confirm (same classifiers the real import uses).
+      conflicts: dash.previewReconcile(trades, r.kind || '', r.platform || ''),
     };
   }
   async function importPreview() {
@@ -953,7 +952,9 @@
             defaultAccount={dash.brokerName(dash.setup.broker)}
             calYear={dash.calYear}
             calMonth={dash.calMonth}
-            build={buildReport}
+            trades={dash.allTrades}
+            costInputs={dash.costInputs}
+            labels={reportLabels}
             onexport={onReportExport}
           />
         {/await}

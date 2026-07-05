@@ -17,7 +17,9 @@
   import { Switch } from '$lib/components/ui/switch';
   import { Separator } from '$lib/components/ui/separator';
   import * as Card from '$lib/components/ui/card';
-  import type { ReportVM, ReportRange, ReportMeta, ReportSections } from '../lib/reports.ts';
+  import { buildReportVM } from '../lib/reports.ts';
+  import type { ReportVM, ReportRange, ReportMeta, ReportSections, ReportLabelsIn } from '../lib/reports.ts';
+  import type { Trade, CostInputs } from '../../lib/core/types.ts';
 
   type Tmpl = 'performance' | 'cost' | 'tax' | 'full';
 
@@ -28,10 +30,14 @@
     calMonth: number;
     // A156: the builder receives the configured title/account/sections, so the vm's export
     // payloads (md/text/mailto) always match what the preview renders.
-    build: (range: ReportRange, compare: boolean, meta: ReportMeta) => ReportVM;
+    /** A213: the screen owns buildReportVM (its chunk carries reports.ts/report.ts, not the boot
+     *  payload) — App passes the raw reactive inputs instead of a prebuilt callback. */
+    trades: Trade[];
+    costInputs: CostInputs;
+    labels: ReportLabelsIn;
     onexport?: (kind: ExportKind, vm: ReportVM) => void;
   }
-  let { defaultTitle = '', defaultAccount = '', calYear, calMonth, build, onexport }: Props = $props();
+  let { defaultTitle = '', defaultAccount = '', calYear, calMonth, trades, costInputs, labels, onexport }: Props = $props();
 
   let template = $state<Tmpl>('full');
   // svelte-ignore state_referenced_locally — seed the editable fields from the prop defaults once.
@@ -68,7 +74,7 @@
   }
 
   const range = $derived<ReportRange>({ scope, from, to, calYear, calMonth });
-  const vm = $derived(build(range, compare, { title, account, sections }));
+  const vm = $derived(buildReportVM(trades, range, compare, costInputs, labels, { title, account, sections }));
 
   const TEMPLATES: { key: Tmpl; label: string; icon: typeof FileText }[] = [
     { key: 'performance', label: 'Performance', icon: ChartLine },
