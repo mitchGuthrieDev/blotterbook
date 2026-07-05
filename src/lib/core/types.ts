@@ -330,6 +330,9 @@ export interface Broker {
   name: string;
   /** The CURRENT per-side commission tiers — everything date-agnostic reads this unchanged. */
   comm: { micro: number; std: number };
+  /** A227: a paper/sim broker — NOTHING real is charged, so rateFor() models $0 all-in (no
+   *  commission AND no exchange/clearing/NFA fees) and Commission Compare excludes it (A226). */
+  paper?: boolean;
   /** F30: prior commission periods, oldest first — each applies to trades ON OR BEFORE `until`.
    *  Absent (the norm — brokers rarely change and never archive rates) = `comm` for all dates. */
   rateHistory?: Array<{ until: string; comm: { micro: number; std: number }; source?: string }>;

@@ -10,6 +10,9 @@
     exit: number;
     pnl: number;
     fees: number;
+    /** F46: provenance platform(s) from the trade's contributing file records — read-only ('—' for
+     *  legacy pre-F37 trades and manual rows). */
+    platform: string;
     tags: string[];
     note: string;
     shots: string[];
@@ -189,6 +192,7 @@
         exit: 0,
         pnl: 0,
         fees: 0,
+        platform: '', // manual row — no file provenance (F46)
         tags: [],
         note: '',
         shots: [],
@@ -348,6 +352,7 @@
             <Table.Head class="text-right">Exit</Table.Head>
             <Table.Head class="text-right">P&L</Table.Head>
             <Table.Head class="text-right">Fees</Table.Head>
+            <Table.Head>Platform</Table.Head>
             <Table.Head>Tags</Table.Head>
             <Table.Head>Note</Table.Head>
             <Table.Head>Shots</Table.Head>
@@ -396,6 +401,8 @@
                 )}</Table.Cell
               >
               <Table.Cell class="p-1 text-muted-foreground">{@render numCell(row, 'fees', row.fees, 'text-muted-foreground')}</Table.Cell>
+              <!-- F46: provenance platform — read-only metadata, never editable -->
+              <Table.Cell class="whitespace-nowrap p-1 text-xs text-muted-foreground">{row.platform || '—'}</Table.Cell>
               <Table.Cell class="p-1">
                 <Popover.Root
                   onOpenChange={o => {

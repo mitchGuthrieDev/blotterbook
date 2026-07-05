@@ -237,7 +237,9 @@
   const compareRows = $derived.by(() => {
     const tier = tierOf(compareRoot);
     const exch = exchOf(compareRoot, tier);
-    const rows = BROKER_ORDER.map(k => {
+    // A226: paper/sim brokers charge nothing real — ranking them against live brokers is
+    // meaningless, so the data-driven `paper` flag excludes them here (cost setup keeps them).
+    const rows = BROKER_ORDER.filter(k => !BROKERS[k]?.paper).map(k => {
       const { rate, known } = rateFor(k, compareRoot);
       return { key: k, name: BROKERS[k]?.name ?? k, comm: rate - exch, rate, rt: roundTurn(rate), known };
     });

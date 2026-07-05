@@ -11,6 +11,6 @@
     "SCHWAB":          { "name": "Charles Schwab (thinkorswim)", "comm": { "micro": 2.25, "std": 2.25 } },
     "IBKR":            { "name": "Interactive Brokers",        "comm": { "micro": 0.25, "std": 0.85 } },
     "TRADESTATION":    { "name": "TradeStation",               "comm": { "micro": 0.50, "std": 1.50 } },
-    "TVPAPER":         { "name": "TradingView PaperTrade",     "comm": { "micro": 0.00, "std": 0.00 } }
+    "TVPAPER":         { "name": "TradingView PaperTrade",     "comm": { "micro": 0.00, "std": 0.00 }, "paper": true }
   }
 }

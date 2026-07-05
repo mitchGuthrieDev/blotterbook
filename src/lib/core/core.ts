@@ -599,6 +599,9 @@ function commOf(b: Broker, tier: 'micro' | 'std', date?: string): number {
 /** All-in per-side rate for a broker+root — dated (F30) when a trade date is passed, current otherwise. */
 export function rateFor(brokerKey: string, root: string, date?: string) {
   const b = BROKERS[brokerKey] || BROKERS.AMP;
+  // A227: a paper/sim broker charges NOTHING real — no commission and no exchange/clearing/NFA
+  // fees — so the whole all-in rate is $0 (known: the zero is exact, not a fallback estimate).
+  if (b.paper) return { rate: 0, known: true };
   const tier = tierOf(root);
   return { rate: +(commOf(b, tier, date) + exchOf(root, tier, date)).toFixed(4), known: EXCH[root] != null };
 }

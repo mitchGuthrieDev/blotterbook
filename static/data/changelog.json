@@ -4,6 +4,19 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.54.0",
+      "date": "2026-07-05",
+      "title": "NinjaTrader support, richer Tradovate imports, and honest paper-trading costs",
+      "summary": "NinjaTrader joins the supported platforms — and because it shares Tradovate's export format, both get three importable file types, including Fills with your broker's real commissions. Paper-trading accounts now correctly model $0 costs, and the Trade Editor shows which platform each trade came from. Your trade data still never leaves the browser.",
+      "highlights": [
+        "NinjaTrader (web) is now supported: it produces the same files as Tradovate, so both platforms import interchangeably — verified against real exports, no more beta flag.",
+        "Three Tradovate/NinjaTrader export types now import: Performance (the platform's own paired round trips — the best single file), Fills (with your REAL per-fill commissions, which override the modeled rates), and Orders. Import any or all — overlapping trades merge and never double-count.",
+        "Paper-trading brokers (TradingView PaperTrade) now model $0 all-in costs — no phantom exchange fees — and are excluded from the Commission Compare ranking, where beating real brokers at $0 meant nothing.",
+        "The Trade Editor gained a Platform column showing which platform each trade was imported from.",
+        "The How-To guide's Tradovate section is rewritten for both platforms with the three-export guidance."
+      ]
+    },
+    {
       "version": "0.53.0",
       "date": "2026-07-05",
       "title": "Filter by hour, scope by date",

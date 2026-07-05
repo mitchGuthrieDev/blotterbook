@@ -44,6 +44,20 @@ MNQM2025,Sell,1,2026-06-02 10:00:00,18010.00,2026-06-02 10:20:00,18000.00,20.00`
 1,DEMO,Buy,MESM2025,MES,1,2026-06-02 09:31:00,5300.00
 2,DEMO,Sell,MESM2025,MES,1,2026-06-02 09:45:00,5310.00`,
 
+  // Tradovate / NinjaTrader — Performance export (the platform's own round-trip pairing; A209).
+  // Real-format rows from docs/csv-examples: row 2 is a SHORT (sold before bought) with the
+  // '$(x.xx)' accounting-negative pnl the exports use for losses.
+  'tradovate-perf': `symbol,_priceFormat,_priceFormatType,_tickSize,buyFillId,sellFillId,qty,buyPrice,sellPrice,pnl,boughtTimestamp,soldTimestamp,duration
+ESM6,-2,0,0.25,540725260010,540725260021,1,7494.25,7494.75,$25.00,06/14/2026 18:03:54,06/14/2026 18:04:19,25sec
+MESM6,-2,0,0.25,540725260033,540725260130,1,7490.50,7491.75,$(6.25),06/14/2026 18:50:51,06/14/2026 18:13:48,37min 2sec`,
+
+  // Tradovate / NinjaTrader — Fills export (per-fill executions WITH real commission — A208/A209).
+  // Carries '_'-prefixed meta twins (incl. a UTC _timestamp) — the adapter must read the exact
+  // human columns (local Timestamp, Contract) rather than substring-matching into the meta ones.
+  'tradovate-fills': `_id,_orderId,_contractId,_timestamp,_tradeDate,_action,_qty,_price,_active,_accountId,Fill ID,Order ID,Timestamp,Date,Account,B/S,Quantity,Price,_priceFormat,_priceFormatType,_tickSize,Contract,Product,Product Description,commission
+540725260010,540725260007,3570919,2026-06-14 23:03:54.732Z,2026-06-15,0,1,7494.25,true,54066902,540725260010,540725260007,06/14/2026 18:03:54,6/14/26,DEMO, Buy,1,7494.25,-2,0,0.25,ESM6,ES,E-Mini S&P 500,1.29
+540725260021,540725260018,3570919,2026-06-14 23:04:19.743Z,2026-06-15,1,1,7494.75,true,54066902,540725260021,540725260018,06/14/2026 18:04:19,6/14/26,DEMO, Sell,1,7494.75,-2,0,0.25,ESM6,ES,E-Mini S&P 500,1.29`,
+
   rithmic: `Account,Buy/Sell,Symbol,Qty Filled,Avg Fill Price,Update Time
 DEMO,Buy,MNQM2025,1,18000.00,2026-06-02 09:31:00
 DEMO,Sell,MNQM2025,1,18010.00,2026-06-02 09:50:00`,
@@ -94,6 +108,32 @@ ok(
   JSON.stringify(r.trades)
 );
 ok('tradovate hold time present', r.ok && r.trades[0].holdMs > 0);
+
+// A209: the Tradovate/NinjaTrader family — Performance (closed) + Fills (real commissions).
+r = A.parse(C['tradovate-perf']);
+ok(
+  'tradovate/NT performance: 2 closed trades — $(x.xx) negative parses, short from sold-first order',
+  r.ok &&
+    r.trades.length === 2 &&
+    r.trades[0].pnl === 25 &&
+    r.trades[0].side === 'long' &&
+    r.trades[1].pnl === -6.25 &&
+    r.trades[1].side === 'short' &&
+    r.trades[1].root === 'MES',
+  JSON.stringify(r.trades)
+);
+ok('tradovate/NT performance: family label, non-beta', r.ok && r.label === 'Tradovate / NinjaTrader (performance)' && !r.beta);
+r = A.parse(C['tradovate-fills']);
+ok(
+  'tradovate/NT fills: paired w/ REAL round-turn commission 2.58 (A208); exact Contract + local Timestamp win over the _meta twins',
+  r.ok &&
+    r.trades.length === 1 &&
+    Math.abs(r.trades[0].pnl - 25) < 1e-6 &&
+    Math.abs(r.trades[0].commission - 2.58) < 1e-6 &&
+    r.trades[0].symbol === 'ESM6' &&
+    r.trades[0].time === '2026-06-14 18:04:19',
+  JSON.stringify(r.trades)
+);
 
 r = A.parse(C.rithmic);
 ok('rithmic 1 long, +$20 (MNQ pt=2)', r.ok && r.trades.length === 1 && Math.abs(r.trades[0].pnl - 20) < 1e-6, JSON.stringify(r.trades));

@@ -560,6 +560,19 @@
     })
   );
 
+  // F46: provenance platform per trade — fileIds → the contributing file records' labels, compacted
+  // (the family adapters' '(orders)'-style type suffix is per-FILE detail; the trade-level column
+  // shows the platform). Overlap trades list each distinct platform once; legacy/no-provenance → ''.
+  const fileById = $derived(new Map(dash.csvFiles.map(f => [f.id, f])));
+  function platformOf(t: Trade): string {
+    const labels = (t.fileIds ?? [])
+      .map(id => fileById.get(id))
+      .filter((f): f is NonNullable<typeof f> => !!f)
+      .map(f => (f.platformLabel || f.platform || '').replace(/\s*\(.*\)$/, ''))
+      .filter(Boolean);
+    return [...new Set(labels)].join(' · ');
+  }
+
   // Imported trades are immutable → the editor edits the metadata layer (tags + note); core cells
   // render read-only (entry/exit NaN → "—").
   const editorRows = $derived<EditorRow[]>(
@@ -571,6 +584,7 @@
         entry: NaN,
         exit: NaN,
         fees: b.fees ?? NaN,
+        platform: platformOf(t),
         tags: b.meta?.tags ?? [],
         note: b.meta?.note ?? '',
         shots: b.meta?.shots ?? [],

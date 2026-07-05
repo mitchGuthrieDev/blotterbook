@@ -96,7 +96,7 @@ function num(x: unknown): number {
   if (x == null) return NaN;
   let s = String(x).trim();
   if (!s) return NaN;
-  const neg = /^\(.*\)$/.test(s); // accounting-style negatives
+  const neg = /^\$?\(.*\)$/.test(s); // accounting-style negatives, incl. currency-prefixed "$(6.25)" (Tradovate/NT Performance)
   s = s.replace(/[()$\s]/g, '').replace(/−/g, '-'); // strip parens/$/whitespace; Unicode minus → ASCII (A174)
   // A174: trailing-minus exports ("123.45-") — carry the sign to the front instead of silently
   // dropping it (parseFloat stops at a trailing '-', flipping a loss into a gain).
@@ -571,12 +571,17 @@ const motivewave: Adapter = {
   },
 };
 
-/* Tradovate — Orders export (fills). */
+/* Tradovate / NinjaTrader — Orders export (fills). NinjaTrader (web) runs on the Tradovate
+   platform, so all six export types are IDENTICAL formats and headers cannot distinguish the
+   platforms (verified against real exports 2026-07-05 — docs/csv-examples/README.md); the three
+   adapters in this family therefore carry the combined label. The id 'tradovate' is kept for
+   stored file-record provenance. Orders is avg-fill-price based and carries NO commission column —
+   the Fills export (below) is the richer source when both are imported. */
 const tradovate: Adapter = {
   id: 'tradovate',
-  label: 'Tradovate',
+  label: 'Tradovate / NinjaTrader (orders)',
   kind: 'fills',
-  beta: true,
+  beta: false, // verified vs real exports + the platform's own Performance ground truth (2026-07-05)
   minScore: 4,
   sniff(text, rows) {
     const h = lc(rows[0] || []);
@@ -604,6 +609,105 @@ const tradovate: Adapter = {
       const qty = cQty >= 0 ? Math.abs(num(row[cQty])) : 1;
       if (!side || isNaN(price) || !(qty > 0)) continue;
       fills.push({ time: normTime(row[cT]), symbol: row[cSym], side, qty, price });
+    }
+    return pairFills(fills);
+  },
+};
+
+/* Tradovate / NinjaTrader — Performance export (closed round trips). The platform's own pairing:
+   one row per round trip with both fill ids, prices, '$x.xx' / '$(x.xx)' pnl and bought/sold
+   timestamps (side = whichever leg executed first). The authoritative import source for this
+   family (A209). */
+const tradovatePerf: Adapter = {
+  id: 'tradovate-perf',
+  label: 'Tradovate / NinjaTrader (performance)',
+  kind: 'closed',
+  beta: false,
+  minScore: 5,
+  sniff(text, rows) {
+    const h = lc(rows[0] || []);
+    return hasAny(h, ['buyfillid']) && hasAny(h, ['sellfillid']) && hasAny(h, ['pnl']) ? 5 : 0;
+  },
+  toTrades(text, rows) {
+    const head = lc(rows[0]);
+    const ix = finder(head);
+    const cSym = ix('symbol'),
+      cQty = ix('qty'),
+      cPnl = ix('pnl'),
+      cBT = ix('boughttimestamp'),
+      cST = ix('soldtimestamp');
+    if (cSym < 0 || cPnl < 0 || cBT < 0 || cST < 0) throw new Error('missing symbol, pnl or bought/sold timestamp column');
+    const out: Trade[] = [];
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row || !row[cSym]) continue;
+      const pnl = num(row[cPnl]);
+      const bt = normTime(row[cBT]),
+        st = normTime(row[cST]);
+      if (isNaN(pnl) || !bt || !st) continue;
+      // Long bought first, short sold first; a same-second scalp falls back to fill-id order
+      // (ids are sequential) and finally to long.
+      const long = bt !== st ? bt < st : num(row[ix('buyfillid')]) <= num(row[ix('sellfillid')]);
+      const entry = long ? bt : st,
+        exit = long ? st : bt;
+      const symbol = row[cSym];
+      out.push({
+        time: exit,
+        date: exit.slice(0, 10),
+        pnl,
+        symbol,
+        root: rootSym(symbol),
+        side: long ? 'long' : 'short',
+        qty: cQty >= 0 ? Math.abs(num(row[cQty])) || 1 : 1,
+        entryTime: entry,
+        exitTime: exit,
+        holdMs: Math.max(0, tms(exit) - tms(entry)),
+      });
+    }
+    return out;
+  },
+};
+
+/* Tradovate / NinjaTrader — Fills export (per-fill executions WITH real commission — A208). */
+const tradovateFills: Adapter = {
+  id: 'tradovate-fills',
+  label: 'Tradovate / NinjaTrader (fills)',
+  kind: 'fills',
+  beta: false,
+  minScore: 5,
+  sniff(text, rows) {
+    const h = lc(rows[0] || []);
+    return hasAny(h, ['fill id']) && hasAny(h, ['b/s']) && hasAny(h, ['commission']) ? 5 : 0;
+  },
+  toTrades(text, rows) {
+    const head = lc(rows[0]);
+    const ix = finder(head);
+    // The export carries '_'-prefixed meta twins of most columns (_contractId/_timestamp/_price…),
+    // and finder() is substring-based — use EXACT lookups so the human-readable columns win. The
+    // LOCAL 'Timestamp' (not the UTC '_timestamp') keeps times aligned with the Orders/Performance
+    // exports, which cross-type dedupe depends on.
+    const exact = (name: string) => head.findIndex(h => h === name);
+    const cBS = ix('b/s'),
+      cSym = exact('contract') >= 0 ? exact('contract') : exact('product'),
+      cQty = exact('quantity'),
+      cPx = exact('price'),
+      cComm = exact('commission'),
+      cT = exact('timestamp');
+    if (cBS < 0 || cSym < 0 || cPx < 0 || cT < 0) throw new Error('missing B/S, Contract, Price or Timestamp column');
+    const fills: Fill[] = [];
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row || !row[cBS]) continue;
+      const side = sideWord(row[cBS]);
+      const price = num(row[cPx]);
+      const qty = cQty >= 0 ? Math.abs(num(row[cQty])) : 1;
+      if (!side || isNaN(price) || !(qty > 0)) continue;
+      const f: Fill = { time: normTime(row[cT]), symbol: row[cSym], side, qty, price };
+      if (cComm >= 0) {
+        const cm = num(row[cComm]);
+        if (!isNaN(cm)) f.commission = Math.abs(cm); // real per-fill commission (A208)
+      }
+      fills.push(f);
     }
     return pairFills(fills);
   },
@@ -871,6 +975,8 @@ const ADAPTERS: Adapter[] = [
   tradingviewOrders,
   motivewave,
   tradovate,
+  tradovatePerf,
+  tradovateFills,
   rithmic,
   sierrachart,
   tradestation,
