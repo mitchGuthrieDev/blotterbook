@@ -111,11 +111,16 @@ account IDENTITY KEY (IK)   (random 256-bit — the account's root secret; never
 Since the server can't read plaintext, it **cannot merge** — it is an ordered encrypted-blob store:
 
 ```
-sync_records(workspace_id, blinded_id, type, ciphertext, updated, deleted, seq)
-sync_wrapped_ik(user_id, method, key_id, wrapped_ik)            -- account IK wrapped per unlock method (passkey|passphrase|recovery)
-sync_workspace_keys(workspace_id, owner_user_id, wrapped_dek)   -- per-workspace DEK wrapped under the account IK
+sync_records(workspace_id, blinded_id, seq, type, ciphertext_ref, updated, deleted)  -- ciphertext_ref → the R2 object; D1 is the index
+sync_wrapped_ik(user_id, method, key_id, wrapped_ik, updated)  -- account IK wrapped per unlock method (method value: prf|passphrase|recovery)
+sync_workspace_keys(workspace_id, owner_user_id, wrapped_dek, updated)  -- per-workspace DEK wrapped under the account IK
 sync_workspaces(workspace_id, owner_user_id, created_at)        -- names live ENCRYPTED in a record, not here
 ```
+
+*(As built: the record ciphertext lives in R2 (`SYNC_BUCKET`), keyed `records/<workspace_id>/<blinded_id>`;
+the D1 `sync_records` row carries `ciphertext_ref` pointing at it plus the `seq`/`updated`/`deleted` index.
+The wrapped-IK `method` value for a passkey is **`prf`** — the WebAuthn PRF path — not the literal string
+`passkey`; `passphrase` and `recovery` are the other two.)*
 
 - **Merge is 100% client-side.** A device pulls "everything since `seq N`", decrypts, and runs the
   **existing** merge semantics locally (trade union / journal LWW / meta LWW).

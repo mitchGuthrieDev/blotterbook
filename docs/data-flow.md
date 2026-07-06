@@ -10,12 +10,15 @@ commissions A208, effective-dated rates F30).*
 
 ## The one-paragraph version
 
-A CSV never leaves the browser. It's validated, sniffed to a platform adapter, normalized into the
-internal trade shape, delta-merged into IndexedDB **with its source file stored alongside**, and
-from there every view is a pure recomputation: reference data (broker/fee/tax JSON) + the active
-trade set → `applyFilters` → `compute()` → `costModel()` → Svelte renders. There is no server-side
-state anywhere in this path — the Cloudflare Functions handle keys/flags/geo/payments scaffolding,
-never trade data.
+A CSV is parsed and computed entirely in the browser. It's validated, sniffed to a platform adapter,
+normalized into the internal trade shape, delta-merged into IndexedDB **with its source file stored
+alongside**, and from there every view is a pure recomputation: reference data (broker/fee/tax JSON) +
+the active trade set → `applyFilters` → `compute()` → `costModel()` → Svelte renders. **Compute never
+touches the network on any tier.** The one path by which trade data leaves the browser is the
+**staging-gated** cloud-sync branch (§7a, F58–F63): a `cloud`-tier user can opt a *workspace* into
+end-to-end-encrypted sync, in which case only ciphertext the server can't decrypt is pushed/pulled.
+On prod/demo and for `local`-tier or un-synced workspaces, nothing leaves — the Cloudflare Functions
+otherwise handle keys/flags/geo/payments/identity, never plaintext trade data.
 
 ## 1 · Intake (A177/A178)
 
@@ -66,8 +69,8 @@ persisted verbatim (next section) — the parse is repeatable.
 ## 3 · Persistence — the Store seam (`src/lib/core/store.ts`)
 
 All persistence goes through the `Store` interface (guardrail A4): components never touch
-`indexedDB` directly, so a future `CloudStore` can drop in behind the same async methods. The
-IndexedDB database (v3) holds six object stores:
+`indexedDB` directly, so the `CloudStore` write-behind wrapper (F63) drops in behind the same async
+methods. The IndexedDB database (v4) holds **seven** object stores:
 
 | store | keyed by | holds |
 |---|---|---|
@@ -77,6 +80,20 @@ IndexedDB database (v3) holds six object stores:
 | `meta` | key | setup, saved filters, migration flags |
 | `files` | file id (content hash) | imported-CSV metadata records (F37) |
 | `filetext` | file id | the raw CSV text, stored verbatim (F37) |
+| `tombstones` | record id | delete-log `{id, type, updated}` (F58) |
+
+**Named workspaces (F59).** The store is now workspace-scoped: each named workspace is its **own**
+IndexedDB database (`blotterbook:<uuid>`; the pre-F59 **Default** workspace keeps the legacy
+`blotterbook` / `blotterbookStaging` name, so existing data is used in place — zero migration). The
+workspace **registry** + the **active workspace id** live in `Store.local` (the pre-paint localStorage
+seam) so boot opens the correct DB before first render; `createWorkspace`/`renameWorkspace`/
+`deleteWorkspace`/`setActiveWorkspace`/`listWorkspaces`/`activeWorkspace` manage them. Multiple *local*
+workspaces are available on every tier; *syncing* a workspace is the `cloud` feature (§7a).
+
+**Tombstones (F58).** Every delete path (`deleteTrade`/`deleteJournal`/`deleteTradeMeta`/`deleteFile`
+cascade) writes a tombstone in the same transaction, and `addTrades` consults `suppressedByTombstone()`
+so re-importing a CSV can't resurrect a trade you deleted (default policy: the tombstone always wins;
+LWW-resurrection is the documented one-predicate alternative). Tombstones sync as the delete half of LWW.
 
 **Identity & dedupe.** `tradeId` is an FNV-1a hash of `time|symbol|side|pnl` (+ a within-file
 ordinal for genuinely-identical same-second trades — A114). Provenance (`fileIds`) and real
@@ -132,10 +149,39 @@ screens/parts (no `context()` seam):
   is `isDemo`-guarded and write controls are disabled (belt and suspenders — e2e asserts no
   Blotterbook IndexedDB exists on demo).
 
+## 7a · Cloud sync — the write-behind branch (staging-gated, F58–F63)
+
+The one path by which trade data leaves the browser. **Staging-gated today** (prod/demo never construct
+a `CloudStore`; the CH16 promote is deferred). On staging, `App.svelte` wraps the local `Store` in a
+`CloudStore` (`src/app/lib/cloudstore.ts`) selected conceptually by the `cloud` tier
+(`Entitlements`/`/api/me`, F60):
+
+- **Reads** delegate straight to IndexedDB — compute stays 100% local, offline-first.
+- **Writes** delegate to IndexedDB, then fire a debounced (~1.5 s) incremental **push**: changed
+  records are encrypted client-side (`src/lib/core/crypto.ts` — per-workspace AES-GCM DEK) and sent to
+  `POST /api/sync/push`; the server assigns a monotonic per-workspace `seq` and stores only ciphertext
+  (R2) + a blinded-id change-index (D1).
+- **On connect / unlock / focus**, a **pull** (`GET /api/sync/pull?since=<seq>`; a full `since=0`
+  reconcile on connect closes F62's concurrent-push seq race) decrypts remote records and re-merges them
+  through the **existing** `importAll` trust boundary — same gate as a backup restore: trades union by
+  content hash (F58 tombstones suppress resurrection), journal/trade-meta/meta LWW by `updated`, deletes
+  applied via the store's delete methods.
+
+**Keys never leave the client in the clear.** An account **identity key (IK)** wraps every
+per-workspace **DEK**; the IK is itself wrapped once per unlock method (passkey PRF / optional passphrase
+via Argon2id / a downloaded escrow recovery key) into opaque blobs the server stores but can't unwrap.
+`src/app/lib/vault.svelte.ts` unwraps the IK **once per session** and holds it + the active DEK in memory
+only. The `blinded_id = HMAC(workspaceKey, tradeId)` (never the raw content hash) keeps upserts idempotent
+while leaking nothing. See [`synced-workspaces.md`](synced-workspaces.md) for the full key hierarchy and
+the server's deliberately-dumb encrypted-blob role.
+
 ## 7 · The guarantee
 
-Trade data lives in exactly two places: the user's IndexedDB and the user's own backup downloads.
-The only network calls in the data path are same-origin fetches of static reference JSON; the edge
-functions (`/api/*`) see keys, flags, and coarse geo — never a trade. That's the moat, and every
-layer above is designed so it stays true mechanically (Store seam, DemoStore-by-construction,
-client-side-only validation), not by policy.
+**Compute is 100% local on every tier**, and trade data lives in the user's IndexedDB + their own backup
+downloads — plus, *only* for a `cloud`-tier user who opted a workspace into sync, an **end-to-end-encrypted
+copy the server cannot decrypt** (§7a; staging-gated today). The network calls in the data path are
+same-origin fetches of static reference JSON, and — on the opt-in sync path only — ciphertext + blinded
+ids over `/api/sync/*`; the edge functions otherwise see keys, flags, coarse geo, and identity — never a
+plaintext trade. That's the refined moat, and every layer is designed so it stays true mechanically (Store
+seam, `CloudStore` encrypting before egress, DemoStore-by-construction, client-side-only validation,
+the zero-knowledge key hierarchy), not by policy.

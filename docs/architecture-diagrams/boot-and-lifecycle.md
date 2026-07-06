@@ -21,7 +21,8 @@ sequenceDiagram
     M->>App: mount(App, {target: #app})
     Note over App: side-effect import format.ts + tailwind.css
     App->>App: PAGE_MODE = body.dataset.mode
-    App->>App: store = isDemo ? DemoStore : Store
+    App->>App: store = isDemo ? DemoStore : Entitlements.storeFor('local')
+    App->>App: if isStaging: store = wrapStore(store) — CloudStore write-behind (F63)
     App->>App: resolve store (prop-drilled — no context call)
     App->>Dash: createDashboard(store, {seed, isDemo})
     App->>Dash: onMount → dash.boot()
@@ -40,6 +41,7 @@ sequenceDiagram
     Dash->>Bus: emit data:loaded with the trade count
     deactivate Dash
     App->>App: fetch /data/versions.json (badge) · loadFlags()
+    App->>App: if isStaging: configureCloudSync({localStore, dash}) — opt-in E2E sync (F63)
     App->>App: needsOnboarding = !isDemo && !isStaging && loaded && allTrades.length == 0
 ```
 
@@ -51,3 +53,9 @@ sequenceDiagram
 - **Demo never persists:** the in-memory `DemoStore` plus per-write `if (isDemo) return` guards
   (belt-and-suspenders) mean the boot path can seed demo in memory without ever touching disk.
 - The event bus is a no-op when nothing is subscribed; `ActivityTerminal` is the usual listener.
+- **Workspace-aware open (F59):** `Store.init()`/`open()` targets the *active* workspace's DB — the
+  registry + active id live in `Store.local` (localStorage), read pre-paint so the correct
+  `blotterbook:<uuid>` (or the legacy `blotterbook` Default) opens before first render.
+- **Cloud sync is staging-gated (F58–F63):** only `data-mode="staging"` wraps the store in a
+  `CloudStore` and calls `configureCloudSync`; prod/demo never sync. Sync stays paused until the user
+  unlocks the in-memory key (F61b), and every push/pull is E2E-encrypted ciphertext.

@@ -22,11 +22,11 @@ flowchart TD
     STORE[("IndexedDB — via Store interface only")] --> RENDER["Svelte render<br/>utilities / styleProps · never a style= attr"]
 
     subgraph INVARIANTS["enforced invariants"]
-        CSP["CSP style-src 'self' (_headers)<br/>no inline style= — CSSOM for dynamic styles"]
-        DEMO["demo: DemoStore + isDemo write guards<br/>→ nothing persists (e2e-asserted)"]
+        CSP["CSP style-src 'self' · script-src 'self' 'wasm-unsafe-eval' (_headers)<br/>no inline style=/JS eval — wasm only, for Argon2id (F61a)"]
+        DEMO["demo: DemoStore + isDemo write guards<br/>→ nothing persists, never syncs (e2e-asserted)"]
         STG["staging: edge middleware<br/>fail-closed 403 if creds unset/invalid"]
         ADMIN["admin.html: Cloudflare Access + noindex"]
-        LOCAL["no telemetry / no egress<br/>trade data never leaves the browser"]
+        LOCAL["compute 100% local · no telemetry<br/>egress ONLY the opt-in cloud-sync ciphertext<br/>(E2E, zero-knowledge; staging-gated F58–F63)"]
     end
 
     RENDER --- CSP
@@ -47,5 +47,11 @@ flowchart TD
   on every write) *and* by UI (controls disabled) — three independent layers; e2e asserts no
   Blotterbook IndexedDB is created on demo.
 - **Staging fails closed** at the edge, and **admin** is Cloudflare Access-gated + `noindex`.
-- The whole model rests on **local compute** — no telemetry, no egress; the only network calls are
-  static `/data/*.json` reference data and the optional public `/api/*` niceties (geo, status, flags).
+- **The model rests on local compute** — no telemetry; compute never touches the network. The only
+  network calls are static `/data/*.json` reference data, the optional public `/api/*` niceties (geo,
+  status, flags), and — on the **staging-gated** opt-in cloud-sync path (F58–F63) — **ciphertext + blinded
+  ids** over `/api/sync/*`. That sync path is refined-moat-safe: records are AES-GCM-encrypted with an
+  in-memory per-workspace key the server never sees (zero-knowledge — [`synced-workspaces.md`](../synced-workspaces.md)),
+  pulled records re-enter through the **same** `importAll` sanitizers as a backup restore, and prod/demo
+  never construct a `CloudStore`. The one CSP relaxation is `script-src 'wasm-unsafe-eval'` for the
+  Argon2id **wasm** only (`'unsafe-inline'`/`'unsafe-eval'` stay absent).

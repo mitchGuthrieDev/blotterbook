@@ -182,11 +182,11 @@ CREATE TABLE IF NOT EXISTS sync_workspace_keys (
 );
 
 -- The account IDENTITY KEY (IK) wrapped once per UNLOCK METHOD (F61a WrappedIK JSON). method is
--- 'passkey' | 'passphrase' | 'recovery' (opaque to the server); key_id selects the credential/derivation.
--- Opaque ciphertext of a key the server cannot unwrap.
+-- 'prf' (the WebAuthn PRF passkey path) | 'passphrase' | 'recovery' (opaque to the server); key_id
+-- selects the credential/derivation. Opaque ciphertext of a key the server cannot unwrap.
 CREATE TABLE IF NOT EXISTS sync_wrapped_ik (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  method TEXT NOT NULL,                       -- passkey | passphrase | recovery
+  method TEXT NOT NULL,                       -- prf | passphrase | recovery
   key_id TEXT NOT NULL,                       -- which credential / derivation this blob is for
   wrapped_ik TEXT NOT NULL,                   -- F61a WrappedIK JSON (AES-KW under the per-method KEK)
   updated INTEGER NOT NULL,
