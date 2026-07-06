@@ -18,7 +18,7 @@ const PAGES = [
   { path: '/roadmap.html', must: ['Available now', 'In progress', 'Numbers you can trust to the cent'] },
   // Changelog server-renders the inline fallback (the live notes load via fetch on hydration).
   { path: '/changelog.html', must: ['Changelog', 'Beta released', 'class="entry'] },
-  { path: '/legal.html', must: ['Legal &amp; Disclaimers', 'Not a broker. Not advice.', 'Terms of Use'] },
+  { path: '/legal.html', must: ['Legal &amp; Disclaimers', 'Not a broker. Not advice.', 'Terms of Service'] },
   { path: '/admin.html', must: ['Configuration', 'Feature flags', 'Backlog'] },
 ];
 

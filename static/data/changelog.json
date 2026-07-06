@@ -4,6 +4,18 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.59.0",
+      "date": "2026-07-06",
+      "title": "Accounts required to launch, and a real legal pack",
+      "summary": "Blotterbook now asks you to sign in with a passkey before launching the app (the live demo stays open to everyone, no account needed), and the site gains full Terms, Privacy, and Donation policies.",
+      "highlights": [
+        "The app now opens to a quick sign-in / create-account step before launch — your trades still never leave your browser; accounts hold only your identity.",
+        "The demo remains completely open — try everything with no account and no sign-up.",
+        "New legal pages: a full Terms of Service, a standalone Privacy Policy explaining exactly what accounts and donations do (and don't) store, and a plain-English non-refundable donations policy.",
+        "Site copy updated so the privacy story is accurate now that optional accounts exist — nothing about your trading is ever uploaded."
+      ]
+    },
+    {
       "version": "0.58.0",
       "date": "2026-07-06",
       "title": "Donations are open",

@@ -99,8 +99,8 @@
       <div class="flex-1">
         <b class="text-foreground">Private by default</b>
         <p class="mt-[3px] mb-0 text-[13.5px] leading-[1.5] text-muted-foreground">
-          Everything runs and stays in your browser — no account, nothing uploaded. Back up or restore your entire journal as a single file
-          anytime, and try it first on the live sample-data demo.
+          Everything runs and stays in your browser — nothing about your trades is uploaded. Back up or restore your entire journal as a
+          single file anytime, and try it first on the live sample-data demo (no sign-up).
         </p>
       </div>
     </li>

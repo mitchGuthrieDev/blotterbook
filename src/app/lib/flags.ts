@@ -14,8 +14,9 @@
    always participated in auto-detection regardless of the flag; betaRibbon was superseded by the
    version-based Beta pill in the header). Removed from here, the Admin panel, and the Worker
    DEFAULTS.flags mirror in functions/api/config.ts. */
-/* F56 — login-gate switch (staging-only; the owner flips this one constant per R24, and CH16 promotes
-   the account gate later). It is deliberately NOT a Worker-mirrored flag: it never appears in
+/* F56 — login-gate switch. CH16 (2026-07-06) promoted the gate to PROD: when this is on, the app +
+   staging surfaces boot to LaunchGate until signed in (DEMO is never gated — the App-side gateArmed
+   excludes isDemo). It is deliberately NOT a Worker-mirrored flag: it never appears in
    functions/api/config.ts DEFAULTS.flags and the A14 mirror (scripts/test-flags.mjs) ignores the
    shorthand key below (no `key: value` colon → skipped), so adding it here can't fail the drift gate.
    Exposed on APP_FLAGS for ergonomics (`APP_FLAGS.ACCOUNT_GATE`) AND as this standalone constant — flip

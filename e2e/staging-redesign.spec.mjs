@@ -779,6 +779,10 @@ test('staging redesign: F56 gate is ARMED by default — staging boots to the la
   await gate.getByRole('button', { name: 'Create account', exact: true }).click();
   await expect(gate.getByPlaceholder('you@example.com')).toBeVisible();
   await expect(gate.getByRole('button', { name: /Create account with a passkey/ })).toBeVisible();
+
+  // CH16: the gate is promoted to PROD too — app.html is gated as well (no override present).
+  await page.goto('/app/app.html', { waitUntil: 'networkidle' });
+  await expect(page.getByTestId('launch-gate')).toBeVisible({ timeout: 8000 });
 });
 
 test('staging redesign: F56 bb:flags override can force the gate OFF (QA bypass); demo is never gated', async ({ page }) => {
@@ -788,7 +792,7 @@ test('staging redesign: F56 bb:flags override can force the gate OFF (QA bypass)
   await expect(page.getByTestId('launch-gate')).toHaveCount(0);
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 8000 });
 
-  // Demo is NEVER gated regardless of the flag (isStaging guard); it boots straight to the dashboard.
+  // Demo is NEVER gated regardless of the flag (isDemo excluded from gateArmed); boots to the dashboard.
   await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
   await expect(page.getByTestId('launch-gate')).toHaveCount(0);
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });

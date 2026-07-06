@@ -58,7 +58,7 @@
       icon: '<path d="M12 3l7 4v5c0 4-3 7-7 9-4-2-7-5-7-9V7z"/>',
       graphic:
         '<rect class="gx-panel" x="34" y="22" width="192" height="96" rx="9"/><line class="gx-grid" x1="34" y1="44" x2="226" y2="44"/><circle class="gx-faint" cx="48" cy="33" r="3.2"/><circle class="gx-faint" cx="60" cy="33" r="3.2"/><circle class="gx-faint" cx="72" cy="33" r="3.2"/><path class="gx-stroke-primary" d="M118 82 v-10 a12 12 0 0 1 24 0 v10"/><rect class="gx-primary" x="112" y="80" width="36" height="28" rx="4"/><circle class="gx-panel" cx="130" cy="92" r="3"/>',
-      body: "Your CSVs (or an ATAS X .xlsx export) are parsed and stored entirely in your browser via IndexedDB — one file or a whole batch, even mixed platforms. Trade data never leaves the page — the only network calls are the app's own reference data.",
+      body: 'Your CSVs (or an ATAS X .xlsx export) are parsed and stored entirely in your browser via IndexedDB — one file or a whole batch, even mixed platforms. Trade data never leaves the page — nothing about your trading is uploaded.',
     },
     {
       title: 'True after-cost performance',
@@ -262,7 +262,7 @@
     </h2>
     <p class="mb-2 max-w-[680px] text-[clamp(15px,1.6vw,17px)] leading-[1.6] text-muted-foreground">
       Blotterbook turns a raw broker export into an honest picture of your trading — gross, net of every fee, and after an estimated tax
-      bill. No accounts, no uploads, no dependencies.
+      bill. Nothing about your trades is uploaded — it all runs in your browser.
     </p>
 
     <!-- condensed use-cases, horizontal -->
@@ -359,7 +359,7 @@
     >
       <span
         ><b>The pitch:</b> profit calculator <span class="font-mono text-muted-foreground">&amp;</span> budgeting tool
-        <span class="font-mono text-muted-foreground">+</span> a private trade journal — without a single byte leaving your browser.</span
+        <span class="font-mono text-muted-foreground">+</span> a private trade journal — without a single trade leaving your browser.</span
       >
     </div>
   </div>
@@ -516,8 +516,10 @@
       Free for everyone. Support if it helps.
     </h2>
     <p class="mb-2 max-w-[680px] text-[clamp(15px,1.6vw,17px)] leading-[1.6] text-muted-foreground">
-      Blotterbook is free for everyone — the whole CSV-driven app, no account, nothing uploaded. If it saves you money, back the project
-      with an optional donation. Cross-device <b>synced workspaces</b> are coming as a low-cost add-on.
+      Blotterbook is free for everyone — the whole CSV-driven app, with nothing about your trades uploaded. Launching takes a free account;
+      or try the <a href="/app/demo.html">demo</a> with no sign-up. If it saves you money, back the project with an optional donation.
+      Cross-device
+      <b>synced workspaces</b> are coming as a low-cost add-on.
     </p>
     <div class="price-grid mt-[34px] grid grid-cols-[1.1fr_1fr_1fr] items-stretch gap-4 max-[900px]:grid-cols-1">
       <div
@@ -529,7 +531,7 @@
         >
         <h3 class="mb-1 text-[18px] font-semibold">Blotterbook</h3>
         <p class="mb-[18px] text-[13px] leading-[1.5] text-muted-foreground">
-          The full app, free for everyone — no account, nothing uploaded, runs in your browser.
+          The full app, free for everyone — nothing about your trades uploaded, everything runs in your browser.
         </p>
         <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em]">Free</div>
         <ul class="my-4 mb-[22px] flex list-none flex-col gap-[10px] p-0">
@@ -555,7 +557,9 @@
             >Everything runs locally in your browser
           </li>
         </ul>
-        <p class="mt-auto text-[12px] leading-[1.5] text-muted-foreground">No sign-up required to use the app.</p>
+        <p class="mt-auto text-[12px] leading-[1.5] text-muted-foreground">
+          A free account launches the app — or try the demo, no sign-up.
+        </p>
       </div>
 
       <div class="plan flex flex-col rounded-[14px] border border-border bg-card p-[26px]">
@@ -614,6 +618,7 @@
           {/if}
           <p class="text-[11px] leading-[1.4] text-muted-foreground">
             A voluntary, non-refundable donation — not a purchase, and it grants no product access or entitlement.
+            <a href="legal.html#donations">See donation terms</a>.
           </p>
         </div>
       </div>
@@ -698,8 +703,11 @@
         <p
           class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground"
         >
-          No account, no sign-up, nothing uploaded. The only outbound network call is loading the app's own reference-data JSON (brokers,
-          fees, feeds, state tax). Use <code>Manage data</code> any time to back up, edit, or wipe everything stored in your browser.
+          Your trade data never leaves your browser and nothing about your trading is uploaded. Launching the app on the live site uses a
+          free account (a passkey — no password) so the app can carry your identity; the <a href="/app/demo.html">demo</a> needs no account
+          at all. Beyond the app's own reference-data JSON, the only network calls are the ones that sign you in and carry your account
+          identity — they never include your trades. Use <code>Manage data</code> any time to back up, edit, or wipe everything stored in your
+          browser.
         </p>
       </details>
       <details class="border-b border-border">
