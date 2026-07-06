@@ -63,6 +63,7 @@
   import FeedbackDialog from './parts/FeedbackDialog.svelte';
   import BootSplash from './parts/BootSplash.svelte';
   import LaunchGate from './parts/LaunchGate.svelte';
+  import WorkspaceSwitcher from './parts/WorkspaceSwitcher.svelte';
   import { account, refreshSession } from './lib/account.svelte.ts';
   import { loadFlags, APP_FLAGS, accountGateEnabled, type AppFlags } from './lib/flags.ts';
   import { pickFlavor } from './lib/flavor.ts';
@@ -935,6 +936,13 @@
   </div>
 {/snippet}
 
+<!-- A132: the workspace switcher — STAGING ONLY (F59's named-local-workspaces UI). Passed into
+     AppShell's sidebarHeader slot only when isStaging, so prod/demo never even receive the snippet
+     (AppShell renders nothing when it's undefined) — the single Default/Demo workspace is unaffected. -->
+{#snippet sidebarHeader(railCollapsed: boolean)}
+  <WorkspaceSwitcher {dash} collapsed={railCollapsed} />
+{/snippet}
+
 <!-- F45: branded boot splash (staging only) — fixed overlay above the A206 skeletons; unmounts on ready. -->
 {#if bootSplash}
   <BootSplash ready={dash.loaded} ondismiss={() => (bootSplash = false)} />
@@ -946,6 +954,7 @@
   onnavigate={navigate}
   title={active === 'account' ? 'Account' : navLabel(active)}
   hideNav={needsOnboarding || gateBlocking}
+  sidebarHeader={isStaging ? sidebarHeader : undefined}
 >
   {#snippet actions()}
     <div class="flex min-w-0 flex-1 items-center gap-2">
