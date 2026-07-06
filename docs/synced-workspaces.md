@@ -207,6 +207,46 @@ exists.** Steps 4–6 concentrate the E2E work.
 6. **F63 — `CloudStore` write-behind** wrapping `Store`, selected by `storeFor('cloud')`; push/pull +
    client-side merge. Promote staging→prod via the normal CH16 path.
 
+### F63 as built (2026-07-06 — STAGING-GATED; CH16 promote deferred)
+
+Landed staging-only; the CH16 prod promote is intentionally **not** done yet. Key decisions:
+
+- **Layering.** `src/app/lib/cloudsync-core.ts` is the pure (rune-free, node-testable) engine
+  (`collectChanges`/`pushChanges`/`pullAndMerge`/`mergeRecords`); `cloudstore.ts` is the `StoreLike`
+  wrapper (reads delegate, writes delegate + fire `onWrite`); `cloudsync.svelte.ts` is the reactive
+  controller (status, debounce, enable, the fetch transport). `crypto.ts` (and its Argon2 wasm) is
+  **dynamically imported** on every path, so it stays out of the /app boot bundle (A96). App.svelte
+  wraps the Store in a `CloudStore` **only on staging**; prod/demo never construct one → never sync.
+- **Blinding key derivation.** `blindId`'s per-workspace HMAC key is derived from the **DEK bytes**
+  via HKDF-SHA256 with the fixed label `blotterbook/e2e/blind-key/v1` (`crypto.blindKeyFromDekBytes`),
+  and the record key is the DEK re-imported non-extractable (`crypto.importDek`). Both come from the
+  same DEK seed, so every device that unwraps the same DEK produces **identical** blinded ids
+  (idempotent server-side upsert/dedup) — no extra server blob. Blinding input is namespaced
+  `` `${type}:${id}` `` so a trade and its trade-meta (which share a key) don't collide.
+- **Merge.** Pull does a **full `since=0` reconcile** on connect/unlock/focus (closes F62's
+  concurrent-push seq race — a full read can't skip a colliding seq an incremental `since=cursor`
+  pull would), then steady-state incremental from the persisted cursor. Records decrypt client-side
+  and flow through the **existing** trust boundary: trades via `importAll`→`addTrades` (content-hash
+  union; F58 tombstones suppress resurrection), journal/trade-meta/meta **LWW by `updated`**, deletes
+  applied via the store's delete methods (which write local tombstones). The remote-delete apply is
+  **idempotent** (skip when already absent AND already tombstoned) so a delete can't ping-pong.
+- **Write-behind.** Each local write bumps a debounced (1.5 s) incremental push that scans records
+  with `updated >= watermark` (inclusive, so a same-ms write is never permanently skipped; the
+  boundary re-push is a server LWW no-op). Cursor + pushed-watermark + the per-workspace enabled flag
+  persist via the `Store.local` seam — **never a key** (keys live in memory only, dropped on lock).
+- **Not synced: the CSV library (files).** `addFile` re-stamps `updated` on every import, so a synced
+  file record can't converge to a fixed point the way content-hash trades do. Trades still carry
+  their `fileIds`; a device lacking the file records just treats those trades as always-included.
+  Deleting a file still propagates (its cascade emits **trade** tombstones, which sync).
+- **Pauses gracefully.** Locked (`getIK()` null) or offline ⇒ sync pauses; a local write never blocks
+  and never throws. The `WorkspaceSwitcher` affordance surfaces not-synced / synced (last pull) /
+  syncing / offline / locked / error, an **Enable sync** action (cloud tier + unlocked only; local
+  tier shows an inert "cloud tier required" hint), and re-prompts unlock via F61b's `UnlockModal`.
+- **Tests.** `scripts/test-cloudsync.mjs` (node, in `test:unit`) proves convergence with the real
+  crypto + the real F62 functions over a mock D1/R2 + two in-memory stores: A→B propagation, offline
+  reconcile, delete-via-tombstone (no resurrection), the seq race survived by the full reconcile, and
+  that **only ciphertext + blinded ids** cross the boundary.
+
 ## Fit with the guardrails
 
 - **S25 / moat:** refined, not broken — see *The moat, stated precisely*. Compute stays local; egress is

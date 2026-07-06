@@ -62,6 +62,9 @@ export const IV_LEN = 12;
  *  with another even given identical input key material. */
 const HKDF_INFO_PRF = 'blotterbook/e2e/ik-kek/prf/v1';
 const HKDF_INFO_RECOVERY = 'blotterbook/e2e/ik-kek/recovery/v1';
+/** Domain-separation label for the per-workspace BLINDING KEY derived from the DEK (F63). Fixed +
+ *  distinct from every other HKDF label, so the HMAC blinding key can never collide with a KEK. */
+const HKDF_INFO_BLIND = 'blotterbook/e2e/blind-key/v1';
 
 const enc = new TextEncoder();
 
@@ -220,6 +223,50 @@ export function unwrapDek(blob: WrappedDek, ik: CryptoKey): Promise<CryptoKey> {
     'encrypt',
     'decrypt',
   ]);
+}
+
+/* ── Per-workspace key material for the write-behind sync layer (F63) ──────────────────────────────
+ * The DEK's raw bytes are the deterministic seed for BOTH the record-encryption key (the DEK itself)
+ * and the per-workspace BLINDING KEY (`blindId`'s HMAC key). Deriving the blinding key from the DEK
+ * — instead of minting a separate key — means it needs no extra server blob and is IDENTICAL on every
+ * device that unwraps the same DEK, so `blindId(blindKey, id)` matches across devices (idempotent
+ * upsert/dedup on the server). The bytes are handled briefly in memory and the caller zeroes them. */
+
+/** Export a freshly-minted (extractable) DEK's raw bytes — device-A path, where `genWorkspaceDek`
+ *  produced the key locally. Zero the result once the workspace keys are derived. */
+export async function dekBytesOf(dek: CryptoKey): Promise<Bytes> {
+  return new Uint8Array(await subtle.exportKey('raw', dek)) as Bytes;
+}
+
+/** Unwrap a workspace DEK to its RAW bytes (device-B path — the DEK came from the server wrapped
+ *  under the IK). Unwraps EXTRACTABLE only to export the seed; the caller re-imports a non-extractable
+ *  record key via `importDek` and zeroes the bytes. Throws on the wrong IK / corrupt blob. */
+export async function unwrapDekBytes(blob: WrappedDek, ik: CryptoKey): Promise<Bytes> {
+  const key = await subtle.unwrapKey('raw', base64ToBytes(blob.wrapped), ik, 'AES-KW', { name: 'AES-GCM', length: 256 }, true, [
+    'encrypt',
+    'decrypt',
+  ]);
+  return new Uint8Array(await subtle.exportKey('raw', key)) as Bytes;
+}
+
+/** Re-import raw DEK bytes as the NON-extractable AES-GCM record key used for `encryptRecord`/
+ *  `decryptRecord` (minimizes runtime key exposure — the bytes are zeroed after this + `blindKeyFromDekBytes`). */
+export function importDek(bytes: Bytes): Promise<CryptoKey> {
+  return subtle.importKey('raw', bytes, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+/** Derive the per-workspace HMAC-SHA256 BLINDING KEY from the DEK bytes via HKDF with a fixed label
+ *  (no salt — the DEK is full-entropy). Deterministic: the same DEK ⇒ the same blinding key on every
+ *  device, so `blindId` is stable cross-device. Non-extractable, sign-only. */
+export async function blindKeyFromDekBytes(bytes: Bytes): Promise<CryptoKey> {
+  const base = await subtle.importKey('raw', bytes, 'HKDF', false, ['deriveKey']);
+  return subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: enc.encode(HKDF_INFO_BLIND) },
+    base,
+    { name: 'HMAC', hash: 'SHA-256', length: 256 },
+    false,
+    ['sign']
+  );
 }
 
 /* ── Record encryption (AES-GCM, authenticated, fresh IV per record) ─────────────────────────── */

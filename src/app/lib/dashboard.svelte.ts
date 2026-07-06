@@ -727,6 +727,9 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     renameWorkspace: (id: string, name: string) => store.renameWorkspace(id, name),
     switchWorkspace,
     removeWorkspace,
+    // F63: re-read the active workspace's collections after a cloud-sync pull merges remote changes,
+    // so the UI reflects pulled data (reloadAll only reassigns the $state.raw collections).
+    reload: () => reloadAll(),
   };
 }
 

@@ -30,11 +30,13 @@ test('workspace switcher: renders on staging with the Default workspace active',
   await expect(trigger(page)).toBeVisible();
   await expect.poll(() => activeName(page)).toBe('Default');
 
-  // Opening it lists the registry (one entry) with the sync-status stub, and Delete is disabled —
-  // the store refuses to delete the last remaining workspace.
+  // Opening it lists the registry (one entry) with the F63 per-workspace sync-status affordance, and
+  // Delete is disabled — the store refuses to delete the last remaining workspace. The e2e static
+  // server can't run functions, so /api/me fails → the local tier → the inert "cloud tier required".
   await trigger(page).click();
   await expect(page.getByRole('menuitem', { name: 'Default', exact: true })).toBeVisible();
-  await expect(page.getByText('Local only · Sync coming soon')).toBeVisible();
+  await expect(page.getByTestId('sync-status')).toBeVisible();
+  await expect(page.getByText('cloud tier required')).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Delete…' })).toHaveAttribute('aria-disabled', 'true');
   await page.keyboard.press('Escape');
 
@@ -125,4 +127,51 @@ test('workspace switcher: prod and demo never render it (staging-only, F59 dimen
   await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
   await expect(page.getByRole('button', { name: /^Switch workspace: /, exact: false })).toHaveCount(0);
+});
+
+// F63: cloud sync is STAGING-GATED + opt-in. Prod and demo never construct a CloudStore or configure
+// the controller, so they must issue ZERO /api/sync/* traffic no matter what the account looks like.
+test('cloud sync: demo and prod never call /api/sync (no CloudStore off staging)', async ({ page }) => {
+  const syncCalls = [];
+  page.on('request', r => {
+    if (r.url().includes('/api/sync')) syncCalls.push(r.url());
+  });
+  // Even with a cloud-tier account stubbed, prod/demo must not sync.
+  await page.route('**/api/me', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ tier: 'cloud', cloudSync: true, user: null, passkeys: [] }),
+    })
+  );
+
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+  await page.waitForTimeout(500);
+
+  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
+  await page.goto('/app/app.html', { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1500);
+
+  expect(syncCalls, syncCalls.join('\n')).toHaveLength(0);
+});
+
+// F63: the per-workspace sync-status affordance renders on STAGING for a cloud-tier account. Without
+// an unlocked key it offers "Unlock to enable sync" (the e2e server can't run /api/sync, so this
+// asserts the affordance is present + wired, not a full push/pull — convergence is proven in
+// scripts/test-cloudsync.mjs).
+test('cloud sync (staging): the switcher shows the sync affordance for a cloud-tier account', async ({ page }) => {
+  await page.route('**/api/me', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ tier: 'cloud', cloudSync: true, user: null, passkeys: [] }),
+    })
+  );
+  await bootDashboard(page);
+  await trigger(page).click();
+  await expect(page.getByTestId('sync-status')).toBeVisible();
+  // Cloud tier + locked (no IK unlocked) ⇒ the affordance offers to unlock before enabling.
+  await expect(page.getByTestId('sync-unlock')).toBeVisible();
+  await expect(page.getByText('cloud tier required')).toHaveCount(0);
 });

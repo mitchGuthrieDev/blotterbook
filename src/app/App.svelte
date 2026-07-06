@@ -65,6 +65,7 @@
   import LaunchGate from './parts/LaunchGate.svelte';
   import WorkspaceSwitcher from './parts/WorkspaceSwitcher.svelte';
   import { account, refreshSession } from './lib/account.svelte.ts';
+  import { wrapStore, configureCloudSync } from './lib/cloudsync.svelte.ts';
   import { loadFlags, APP_FLAGS, accountGateEnabled, type AppFlags } from './lib/flags.ts';
   import { pickFlavor } from './lib/flavor.ts';
   import { createEconOverlay } from './lib/econ.svelte.ts';
@@ -86,7 +87,13 @@
   // local Store (F59); Entitlements only picks the implementation. The real tier probe
   // (Entitlements.current() → /api/me) is deferred to F63, where CloudStore actually consumes it —
   // so prod issues no new account traffic here (F56). Demo mounts the in-memory DemoStore.
-  const store = isDemo ? createDemoStore() : Entitlements.storeFor('local');
+  // F63: on STAGING, the local Store is wrapped in a CloudStore (write-behind sync) — reads still hit
+  // IndexedDB (offline-first; network never on the read path), writes also enqueue a DEBOUNCED
+  // encrypted push once a workspace is opted into cloud sync + unlocked. It is a pure passthrough
+  // until then, so boot is unchanged. Prod/demo use the plain Store/DemoStore — CloudStore is never
+  // constructed there, so those surfaces NEVER sync (demo non-persistence holds by construction).
+  const localStore = isDemo ? createDemoStore() : Entitlements.storeFor('local');
+  const store = isStaging ? wrapStore(localStore) : localStore;
   const SEEDED = isStaging || isDemo;
   const dash = createDashboard(store, { seed: SEEDED, isDemo });
   const dashTabsState = createDashTabs(store, { isStaging });
@@ -895,6 +902,9 @@
     // F56: only when the gate is armed (staging + flag) do we probe /api/me — prod/demo issue no
     // account traffic at all. refreshSession never throws; account.loaded flips when it settles.
     if (gateArmed) void refreshSession();
+    // F63: initialize cloud sync on STAGING ONLY (probes the tier, wires focus/connectivity, settles
+    // per-workspace status). Prod/demo never call this — no /api/sync or /api/me traffic there.
+    if (isStaging) configureCloudSync({ localStore, dash });
     fetch('/api/status', { headers: { Accept: 'application/json' } })
       .then(r => (r.ok ? (r.json() as Promise<{ mode?: string; label?: string }>) : null))
       .then(v => (statusRec = v))
