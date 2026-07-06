@@ -108,6 +108,14 @@ export interface RecoveryTokenRow {
   expires_at: number;
   used_at: number | null;
 }
+export interface SubscriptionRow {
+  user_id: string; // PK — the account's single current subscription
+  stripe_subscription_id: string | null;
+  stripe_customer_id: string | null;
+  status: string | null; // Stripe status: active|trialing|past_due|canceled|unpaid|…
+  current_period_end: number | null; // ms epoch (Stripe seconds converted at the webhook boundary)
+  updated: number; // ms epoch of the last webhook update (past_due grace counts from here)
+}
 
 /* ---- encoding / crypto -------------------------------------------------------------------- */
 const enc = new TextEncoder();
@@ -419,6 +427,68 @@ export async function claimDonationsForUser(db: AccountsDb, user: UserRow, now =
     if (isCreditableDonation(d.amount_cents ?? 0, d.currency)) credited++;
   }
   return credited;
+}
+
+/* ---- subscriptions + webhook-event dedupe (Synced Workspaces Step 3 — F60) -------------------
+   ONE current subscription per user (keyed by user_id). The webhook's subscription-lifecycle
+   handlers upsert status + current_period_end here; /api/me reads it to grant the `cloud` tier per
+   the locked period-end + grace lapse policy. S25: billing metadata only — never any trade data. */
+
+export async function subscriptionForUser(db: AccountsDb, userId: string) {
+  return db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').bind(userId).first<SubscriptionRow>();
+}
+export async function subscriptionByStripeId(db: AccountsDb, stripeSubscriptionId: string) {
+  return db.prepare('SELECT * FROM subscriptions WHERE stripe_subscription_id = ?').bind(stripeSubscriptionId).first<SubscriptionRow>();
+}
+export async function userByStripeCustomerId(db: AccountsDb, stripeCustomerId: string) {
+  return db.prepare('SELECT * FROM users WHERE stripe_customer_id = ?').bind(stripeCustomerId).first<UserRow>();
+}
+
+/** Record this Stripe customer id on the user when not yet linked, so later lifecycle events that
+ *  carry only the customer id (e.g. invoice.payment_failed) resolve back to the account. No-op when
+ *  already set — never overwrites an existing linkage. */
+export async function linkStripeCustomer(db: AccountsDb, user: UserRow, stripeCustomerId: string): Promise<void> {
+  if (!stripeCustomerId || user.stripe_customer_id) return;
+  await db.prepare('UPDATE users SET stripe_customer_id = ? WHERE id = ?').bind(stripeCustomerId, user.id).run();
+}
+
+/** Upsert the user's current subscription row (read-then-insert-or-update — one row per user). */
+export async function upsertSubscription(
+  db: AccountsDb,
+  s: {
+    userId: string;
+    stripeSubscriptionId: string | null;
+    stripeCustomerId: string | null;
+    status: string | null;
+    currentPeriodEnd: number | null;
+  },
+  now = Date.now()
+): Promise<void> {
+  const existing = await subscriptionForUser(db, s.userId);
+  if (existing) {
+    await db
+      .prepare(
+        'UPDATE subscriptions SET stripe_subscription_id = ?, stripe_customer_id = ?, status = ?, current_period_end = ?, updated = ? WHERE user_id = ?'
+      )
+      .bind(s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, s.userId)
+      .run();
+  } else {
+    await db
+      .prepare(
+        'INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, status, current_period_end, updated) VALUES (?, ?, ?, ?, ?, ?)'
+      )
+      .bind(s.userId, s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now)
+      .run();
+  }
+}
+
+/** Replay-safe dedupe for subscription-lifecycle webhook events (donations dedupe via their own PK;
+ *  these events have no such row, so they are logged here by Stripe event id). */
+export async function webhookEventSeen(db: AccountsDb, id: string): Promise<boolean> {
+  return !!(await db.prepare('SELECT * FROM webhook_events WHERE id = ?').bind(id).first());
+}
+export async function markWebhookEvent(db: AccountsDb, id: string, type: string, now = Date.now()): Promise<void> {
+  await db.prepare('INSERT INTO webhook_events (id, type, created_at) VALUES (?, ?, ?)').bind(id, type, now).run();
 }
 
 /* ---- recovery / verification tokens (Phase 3 — F55; single-use + TTL, S25) ------------------

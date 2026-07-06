@@ -129,3 +129,29 @@ CREATE TABLE IF NOT EXISTS changelog_sends (
   sent_at INTEGER NOT NULL,
   recipient_count INTEGER                     -- confirmed recipients at send time (0 is still recorded)
 );
+
+-- Subscriptions (Synced Workspaces Step 3 — F60). ONE current subscription per user (PK = user_id),
+-- kept in sync by the F54 webhook's subscription-lifecycle handlers (customer.subscription.created/
+-- updated/deleted + invoice.payment_failed). /api/me reads this to grant the `cloud` storage tier per
+-- the LOCKED lapse policy (docs/synced-workspaces.md — period-end + grace): active/trialing, OR
+-- past_due within a dunning grace window (measured from `updated`), OR still inside the paid period
+-- after a cancel (now < current_period_end). S25: billing metadata only — never any trade data.
+CREATE TABLE IF NOT EXISTS subscriptions (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, -- the account's current subscription
+  stripe_subscription_id TEXT,               -- Stripe subscription id (resolves lifecycle events)
+  stripe_customer_id TEXT,                    -- Stripe customer id (resolves events lacking a ref)
+  status TEXT,                               -- Stripe status: active|trialing|past_due|canceled|unpaid|…
+  current_period_end INTEGER,                -- ms epoch — the paid period end (Stripe sends SECONDS; the webhook converts)
+  updated INTEGER NOT NULL                    -- ms epoch of the last webhook update (past_due grace counts from here)
+);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe ON subscriptions (stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions (stripe_customer_id);
+
+-- Processed-webhook-event ledger (F60) — replay-safe dedupe for the subscription-lifecycle events,
+-- keyed by the Stripe EVENT id (the donation path dedupes via the donations PK the same way). A
+-- retried/duplicated delivery collides here and is a no-op.
+CREATE TABLE IF NOT EXISTS webhook_events (
+  id TEXT PRIMARY KEY,                        -- Stripe event id
+  type TEXT,                                  -- the event type processed
+  created_at INTEGER NOT NULL                 -- ms epoch (when the webhook processed it)
+);

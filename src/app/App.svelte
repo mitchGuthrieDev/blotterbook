@@ -6,7 +6,7 @@
   //   staging → real IndexedDB Store isolated to blotterbookStaging, seeded
   // Screens read real data via props.
   import { onMount } from 'svelte';
-  import { Store } from '../lib/core/store.ts';
+  import { Entitlements } from '../lib/core/entitlements.ts';
   import { createDemoStore } from '../lib/core/demostore.ts';
   import {
     usd,
@@ -78,7 +78,14 @@
   //   staging  → real IndexedDB Store (isolated blotterbookStaging DB), seeded
   const isDemo = PAGE_MODE === 'demo';
   const isStaging = PAGE_MODE === 'staging';
-  const store = isDemo ? createDemoStore() : Store;
+  // F60: the non-demo Store is resolved THROUGH Entitlements (the tier → Store seam), never by
+  // importing Store directly. storeFor() is tier-agnostic today — both tiers return the local
+  // IndexedDB Store; F63's CloudStore swaps in for 'cloud' without touching any consumer — so this
+  // resolves synchronously and boot is unchanged. The active WORKSPACE is still resolved inside the
+  // local Store (F59); Entitlements only picks the implementation. The real tier probe
+  // (Entitlements.current() → /api/me) is deferred to F63, where CloudStore actually consumes it —
+  // so prod issues no new account traffic here (F56). Demo mounts the in-memory DemoStore.
+  const store = isDemo ? createDemoStore() : Entitlements.storeFor('local');
   const SEEDED = isStaging || isDemo;
   const dash = createDashboard(store, { seed: SEEDED, isDemo });
   const dashTabsState = createDashTabs(store, { isStaging });

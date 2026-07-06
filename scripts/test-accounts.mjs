@@ -25,7 +25,7 @@ import {
   userByEmail,
   setEmailVerified,
 } from '../functions/_lib/accounts.ts';
-import { onRequestGet as meGet } from '../functions/api/me.ts';
+import { onRequestGet as meGet, SUBSCRIPTION_GRACE_MS } from '../functions/api/me.ts';
 import { onRequestPost as registerOptions } from '../functions/api/account/register-options.ts';
 import { onRequestPost as registerVerify } from '../functions/api/account/register-verify.ts';
 import { onRequestPost as loginOptions } from '../functions/api/account/login-options.ts';
@@ -56,7 +56,16 @@ const ok = (name, cond) => {
    Interprets the fixed statement set accounts.ts issues (INSERT/SELECT/UPDATE/DELETE with
    `col = ?` conditions). Throws on anything unrecognized so a new query can't silently no-op. */
 function mockDb() {
-  const tables = { users: [], credentials: [], sessions: [], challenges: [], donations: [], recovery_tokens: [] };
+  const tables = {
+    users: [],
+    credentials: [],
+    sessions: [],
+    challenges: [],
+    donations: [],
+    recovery_tokens: [],
+    subscriptions: [], // F60 — keyed by user_id (no `id` column)
+    webhook_events: [], // F60 — subscription-event dedupe ledger
+  };
   const where = (rows, clause, args, offset = 0) => {
     const conds = clause.split(/ AND /i).map(c => c.trim().match(/^(\w+) = \?$/)[1]);
     return rows.filter(r => conds.every((col, i) => r[col] === args[offset + i]));
@@ -68,15 +77,18 @@ function mockDb() {
       const cols = m[2].split(',').map(c => c.trim());
       const row = Object.fromEntries(cols.map((c, i) => [c, args[i] ?? null]));
       const t = tables[m[1]];
-      if (t.some(r => r.id === row.id)) throw new Error(`UNIQUE constraint failed: ${m[1]}.id`);
+      // Only enforce the `id` PK when the table actually has one (subscriptions is keyed by user_id).
+      if (row.id !== undefined && t.some(r => r.id === row.id)) throw new Error(`UNIQUE constraint failed: ${m[1]}.id`);
       if (m[1] === 'users' && t.some(r => r.email === row.email)) throw new Error('UNIQUE constraint failed: users.email');
       t.push(row);
       return [];
     }
     if ((m = s.match(/^SELECT \* FROM (\w+) WHERE (.+?)(?: ORDER BY .+)?$/i))) return where(tables[m[1]], m[2], args);
-    if ((m = s.match(/^UPDATE (\w+) SET (.+) WHERE id = \?$/i))) {
+    // Generalized to any single-column key (`WHERE <col> = ?`) — `id` still matches (F60 upserts by user_id).
+    if ((m = s.match(/^UPDATE (\w+) SET (.+) WHERE (\w+) = \?$/i))) {
       const cols = m[2].split(',').map(p => p.trim().match(/^(\w+) = \?$/)[1]);
-      const row = tables[m[1]].find(r => r.id === args[cols.length]);
+      const keyCol = m[3];
+      const row = tables[m[1]].find(r => r[keyCol] === args[cols.length]);
       if (row) cols.forEach((c, i) => (row[c] = args[i]));
       return [];
     }
@@ -143,6 +155,9 @@ const checkoutEvent = (id, { email, ref, amount = 2500, currency = 'usd', custom
       },
     },
   });
+// F60 subscription-lifecycle event (customer.subscription.* / invoice.payment_failed).
+const subEvent = (id, type, obj) => signedWebhook(JSON.stringify({ id, type, data: { object: obj } }));
+const secs = ms => Math.floor(ms / 1000); // Stripe current_period_end is UNIX SECONDS
 
 console.log('Session token hash/verify round-trip:');
 {
@@ -481,6 +496,75 @@ console.log('\nWebhook — verified-email credit vs. unclaimed → claim-on-veri
   ok('unclaimed donation is claimed on verify', pu.donated_at != null && pu.donation_total_cents === 1500);
   const claimed = await donationById(db, 'evt_un');
   ok('donation row now bound to the user', claimed.user_id === pending.id && claimed.claimed_at != null);
+}
+
+console.log('\nSubscription lifecycle (F60) — cloud entitlement grants + period-end/grace lapse:');
+{
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db, STRIPE_WEBHOOK_SECRET: WH_SECRET };
+  const user = await createUser(db, 'sub@example.com');
+  const { token } = await createSession(db, user.id);
+  const me = async () => (await meGet({ request: req('/api/me', { method: 'GET', cookie: cookieFor(token) }), env })).json();
+
+  // ── created (active), linked via subscription metadata.client_reference_id ──
+  const created = await webhook({
+    request: subEvent('evt_sub_created', 'customer.subscription.created', {
+      id: 'sub_1',
+      customer: 'cus_sub',
+      status: 'active',
+      current_period_end: secs(Date.now() + 30 * DAY),
+      metadata: { client_reference_id: user.id },
+    }),
+    env,
+  });
+  ok('subscription.created acked 200', created.status === 200);
+  ok(
+    'subscription row upserted + linked to the user (status active)',
+    db.tables.subscriptions.length === 1 && db.tables.subscriptions[0].user_id === user.id && db.tables.subscriptions[0].status === 'active'
+  );
+  ok('current_period_end stored in MS (not seconds)', db.tables.subscriptions[0].current_period_end > Date.now());
+  ok('user linked to the Stripe customer id', (await userByEmail(db, 'sub@example.com')).stripe_customer_id === 'cus_sub');
+
+  const active = await me();
+  ok('active subscription → /api/me grants cloud', active.tier === 'cloud' && active.cloudSync === true);
+  ok('...and stays identity+entitlement only (S25 — no trade data)', active.user?.email === 'sub@example.com' && !('trades' in active));
+
+  // ── event-id dedupe on the NEW subscription events ──
+  const dup = await webhook({
+    request: subEvent('evt_sub_created', 'customer.subscription.created', {
+      id: 'sub_1',
+      customer: 'cus_sub',
+      status: 'active',
+      current_period_end: secs(Date.now() + 30 * DAY),
+      metadata: { client_reference_id: user.id },
+    }),
+    env,
+  });
+  ok('replayed subscription event id is deduped', (await dup.json()).deduped === true && db.tables.subscriptions.length === 1);
+
+  // ── cancel keeps cloud until current_period_end, then drops to local (resolves by sub id) ──
+  await webhook({
+    request: subEvent('evt_sub_deleted', 'customer.subscription.deleted', {
+      id: 'sub_1',
+      customer: 'cus_sub',
+      status: 'canceled',
+      current_period_end: secs(Date.now() + 10 * DAY),
+    }),
+    env,
+  });
+  ok('subscription.deleted recorded as canceled', db.tables.subscriptions[0].status === 'canceled');
+  ok('cancel keeps cloud while now < current_period_end', (await me()).tier === 'cloud');
+  db.tables.subscriptions[0].current_period_end = Date.now() - 1000; // simulate the paid period ending
+  const lapsed = await me();
+  ok('after the paid period ends, a cancel drops to local', lapsed.tier === 'local' && lapsed.cloudSync === false);
+
+  // ── invoice.payment_failed → past_due; grace keeps cloud, past grace cuts off (resolves by customer) ──
+  await webhook({ request: subEvent('evt_sub_pf', 'invoice.payment_failed', { subscription: 'sub_1', customer: 'cus_sub' }), env });
+  ok('payment_failed sets past_due', db.tables.subscriptions[0].status === 'past_due');
+  ok('past_due within the dunning grace window stays cloud', (await me()).tier === 'cloud');
+  db.tables.subscriptions[0].updated = Date.now() - (SUBSCRIPTION_GRACE_MS + 1000); // grace elapsed
+  const cutoff = await me();
+  ok('past_due beyond grace drops to local', cutoff.tier === 'local' && cutoff.cloudSync === false);
 }
 
 console.log('\nRecovery/verify token lifecycle (single-use, TTL, hash-only — S25):');
