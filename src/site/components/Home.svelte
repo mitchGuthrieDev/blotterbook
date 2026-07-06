@@ -12,18 +12,16 @@
   // state (first feature active, "Checking status…") so it matches hydration exactly.
   import { onMount } from 'svelte';
 
-  // F38 — Stripe donations MVP (test-mode wiring). Donations are Stripe-dashboard-created PAYMENT
-  // LINKS: hosted, full-redirect checkout pages opened in a new tab — no Stripe.js on this page, so
-  // this needs ZERO CSP change (see docs/stripe-assessment-r15.md). OWNER ACTION: create the two
-  // Payment Links in the Stripe dashboard (TEST MODE first — exercise with card 4242 4242 4242 4242
-  // — then swap in the live-mode URLs at launch) and paste them below. Keep BOTH tiers ONE-TIME
-  // Prices: a recurring "$50/year" would be a Stripe *Subscription*, which needs a Customer, a
-  // billing portal, and webhook provisioning Blotterbook doesn't build until accounts/CloudStore
-  // exist (R15 open question #2) — a Payment Link can't do recurring + "customer chooses amount"
-  // at once anyway. Leave a value '' until it's ready: that tier's button stays in its "Donations
-  // open soon" state below; once set, it renders as a real link styled as a button.
+  // F38 — Stripe donations (LIVE). Donations are Stripe-dashboard-created PAYMENT LINKS: hosted,
+  // full-redirect checkout pages opened in a new tab — no Stripe.js on this page, so ZERO CSP change
+  // (see docs/stripe-assessment-r15.md). Live as of 2026-07-06 (legal pack counsel-reviewed). Both
+  // tiers are ONE-TIME: a recurring "$50/year" would be a Stripe *Subscription* (needs a Customer,
+  // billing portal, and webhook provisioning Blotterbook doesn't build until accounts/CloudStore —
+  // R15 open question #2), and a Payment Link can't do recurring + "customer chooses amount" at once
+  // anyway. A '' value keeps that tier's button in its "Donations open soon" state; a URL renders it
+  // as a real link styled as a button.
   const DONATION_LINKS: { once25: string; tier50: string } = {
-    once25: 'https://buy.stripe.com/fZubJ1cKE2tabyN2sb5wI00', // Stripe Payment Link — "Back the project — $25 (one-time)"
+    once25: 'https://buy.stripe.com/fZubJ1cKE2tabyN2sb5wI00', // LIVE Payment Link — "Back the project — $25 (one-time)"
     tier50: '', // No second tier for now (owner decision 2026-07-06) — set a Payment Link URL to re-enable the $50 button.
   };
 

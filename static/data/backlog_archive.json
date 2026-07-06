@@ -4340,7 +4340,7 @@
       "status": "done",
       "completedDate": "2026-07-06",
       "partial": false,
-      "doneNote": "Pricing card wired to Stripe Payment Links via the DONATION_LINKS constant in Home.svelte (per-tier: empty URL keeps 'donations open soon'); both tiers ONE-TIME (recurring would need a Subscription), $50 '/ year' label fixed, non-refundable/not-a-purchase disclaimer added. LIVE (2026-07-06): the single $25 one-time Payment Link is wired in DONATION_LINKS.once25 and the card renders the working Stripe button; the $50 tier was dropped per owner decision (re-enable by setting tier50). Live-mode still pending the F18 legal pack."
+      "doneNote": "Pricing card wired to Stripe Payment Links via the DONATION_LINKS constant in Home.svelte (per-tier: empty URL keeps 'donations open soon'); both tiers ONE-TIME (recurring would need a Subscription), $50 '/ year' label fixed, non-refundable/not-a-purchase disclaimer added. LIVE (2026-07-06): the single $25 one-time Payment Link is wired in DONATION_LINKS.once25 and the card renders the working Stripe button; the $50 tier was dropped per owner decision (re-enable by setting tier50). Live-mode enabled 2026-07-06 after counsel review of the F18 legal pack."
     },
     {
       "id": "CH37",
@@ -4526,8 +4526,8 @@
       "effort": "medium",
       "status": "done",
       "completedDate": "2026-07-06",
-      "partial": true,
-      "doneNote": "Legal pack published in src/site/components/Legal.svelte with a prominent 'draft pending counsel review' callout: Terms of Service (Delaware governing law/venue), standalone Privacy Policy (local-only IndexedDB trades; coarse /api/geo tax prefill; the live accounts data — passkey public keys, recovery email, hashed-secret session cookie, Cloudflare D1 identity+entitlements only per S25, Resend transactional email; Stripe donation processing; GDPR/CCPA deletion posture), and a NON-REFUNDABLE Donations/Refund policy. Seller identity = Blotterbook, individual sole proprietor; contact privacy@blotterbook.com. Footer operator line + a donation-card 'see donation terms' link added. LANGUAGE IS PLACEHOLDER — needs attorney review before relied upon; live-mode Stripe still gated on that review."
+      "partial": false,
+      "doneNote": "Legal pack published in src/site/components/Legal.svelte with a prominent 'draft pending counsel review' callout: Terms of Service (Delaware governing law/venue), standalone Privacy Policy (local-only IndexedDB trades; coarse /api/geo tax prefill; the live accounts data — passkey public keys, recovery email, hashed-secret session cookie, Cloudflare D1 identity+entitlements only per S25, Resend transactional email; Stripe donation processing; GDPR/CCPA deletion posture), and a NON-REFUNDABLE Donations/Refund policy. Seller identity = Blotterbook, individual sole proprietor; contact privacy@blotterbook.com. Footer operator line + a donation-card 'see donation terms' link added. Counsel-reviewed and in effect as of 2026-07-06 (draft banner removed, arbitration rules finalized to AAA); live-mode Stripe donations enabled."
     },
     {
       "id": "A202",

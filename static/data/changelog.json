@@ -4,6 +4,16 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.59.1",
+      "date": "2026-07-06",
+      "title": "Donations are officially live",
+      "summary": "With the legal pack reviewed, the $25 donation now runs in live mode and the Terms, Privacy, and Donation policies are in effect (no longer marked draft).",
+      "highlights": [
+        "The $25 one-time donation now processes real payments through Stripe.",
+        "The Terms of Service, Privacy Policy, arbitration clause, and Donations policy are finalized and in effect as of July 6, 2026."
+      ]
+    },
+    {
       "version": "0.59.0",
       "date": "2026-07-06",
       "title": "Accounts required to launch, and a real legal pack",

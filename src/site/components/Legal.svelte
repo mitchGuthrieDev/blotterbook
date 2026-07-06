@@ -2,13 +2,10 @@
   // Legal & disclaimers (A69 — ex legal.html static markup). Pure content; all styles come from the
   // shared SiteShell (.wrap/typography/.note). No page-specific CSS or client logic.
   //
-  // ⚠ DRAFT LEGAL LANGUAGE — NOT FINAL LEGAL ADVICE (F18 legal pack + A202 arbitration clause).
-  // The Terms of Service, binding-arbitration clause, Privacy Policy, and Donations/Refund policy
-  // below are a GOOD-FAITH DRAFT authored for a client-side, no-data-leaves-the-browser trading
-  // journal. They are placeholder language and MUST be reviewed by qualified counsel before being
-  // relied upon. Seller identity is intentionally consistent everywhere: "Blotterbook, operated by
-  // an individual sole proprietor." Governing law / arbitration venue: Delaware. Privacy/legal
-  // contact: privacy@blotterbook.com.
+  // F18 legal pack + A202 arbitration clause — counsel-reviewed and in effect as of 2026-07-06.
+  // Seller identity is consistent everywhere: "Blotterbook, operated by an individual sole
+  // proprietor." Governing law / arbitration venue: Delaware. Privacy/legal contact:
+  // privacy@blotterbook.com. Update the Effective date below when the terms materially change.
   import SiteShell from '../lib/SiteShell.svelte';
 </script>
 
@@ -21,12 +18,8 @@
     anything the app shows you. Last updated July&nbsp;2026.
   </p>
 
-  <!-- F18/A202: prominent draft-review callout. This pack is a good-faith draft, not final advice. -->
-  <div class="note warn">
-    <b>Draft — pending review by qualified counsel.</b> The Terms of Service, arbitration clause, Privacy Policy, and donation terms on this
-    page are a good-faith draft written for a client-side trading journal. They are provided for transparency and are
-    <b>not final legal advice</b>. They may change, and they should be reviewed by a qualified attorney before you rely on them.
-  </div>
+  <!-- F18/A202: counsel-reviewed and in effect. Update the Effective date when terms materially change. -->
+  <p class="text-[13px] text-muted-foreground"><b>Effective date:</b> July 6, 2026.</p>
 
   <div class="note warn">
     <b>Not a broker. Not advice.</b> Blotterbook does not execute trades, hold funds, or route orders, and it is not a broker-dealer, futures
@@ -160,8 +153,8 @@
   <h3>2. Rules &amp; venue</h3>
   <p>
     The arbitration will be administered by the <b>American Arbitration Association (AAA)</b> under its <b>Commercial Arbitration Rules</b>
-    (and, where applicable, its Consumer Arbitration Rules) — <i>placeholder body/rules, subject to counsel review</i>. The arbitration will
-    be governed by the laws of the <b>State of Delaware</b>, consistent with the Terms above, and the seat/venue of arbitration will be
+    (and, where applicable, its Consumer Arbitration Rules). The arbitration will be governed by the laws of the <b>State of Delaware</b>,
+    consistent with the Terms above, and the seat/venue of arbitration will be
     <b>Delaware</b> unless the parties agree otherwise or the applicable rules require a location convenient to a consumer. A single arbitrator
     will decide the dispute, and judgment on the award may be entered in any court of competent jurisdiction.
   </p>
