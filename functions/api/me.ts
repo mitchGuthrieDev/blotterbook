@@ -20,6 +20,7 @@ import type { Ctx } from '../_lib/types.ts';
 import {
   credentialsForUser,
   getDb,
+  grantsCloud,
   publicPasskey,
   publicUser,
   readSessionToken,
@@ -27,29 +28,14 @@ import {
   sessionSetCookie,
   subscriptionForUser,
   userById,
-  type SubscriptionRow,
 } from '../_lib/accounts.ts';
 
+// The cloud-entitlement predicate + its grace window live in _lib/accounts.ts (A253 — shared by
+// /api/me AND the /api/sync/* mutating routes so the server is the single source of truth). Re-exported
+// here so existing importers (scripts/test-accounts.mjs) keep resolving it from this module unchanged.
+export { SUBSCRIPTION_GRACE_MS } from '../_lib/accounts.ts';
+
 const ANON = { tier: 'local', cloudSync: false } as const;
-
-// Dunning grace (F60): a past_due subscription keeps the cloud tier for this long after the
-// failed-payment event (measured from the subscription row's `updated`) before cutoff. A few days
-// covers Stripe's retry cadence so a transient card decline doesn't strand a paying user.
-export const SUBSCRIPTION_GRACE_MS = 3 * 24 * 3600 * 1000;
-
-/**
- * The LOCKED lapse policy (docs/synced-workspaces.md — period-end + grace): grant `cloud` while the
- * subscription is active/trialing, OR past_due inside the dunning grace window, OR still inside the
- * paid period after a cancel (now < current_period_end). Otherwise the tier is `local` — the local
- * IndexedDB data always remains, only cloud sync stops.
- */
-function grantsCloud(sub: SubscriptionRow | null, now: number): boolean {
-  if (!sub) return false;
-  if (sub.status === 'active' || sub.status === 'trialing') return true;
-  if (sub.status === 'past_due' && now < sub.updated + SUBSCRIPTION_GRACE_MS) return true;
-  if (sub.current_period_end != null && now < sub.current_period_end) return true;
-  return false;
-}
 
 export async function onRequestGet(ctx: Ctx) {
   const db = getDb(ctx.env);

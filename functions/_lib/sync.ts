@@ -16,7 +16,7 @@
 
 import type { Env } from './types.ts';
 import { json } from './http.ts';
-import type { AccountsDb } from './accounts.ts';
+import { grantsCloud, subscriptionForUser, type AccountsDb } from './accounts.ts';
 
 /* ---- narrow R2 seam ------------------------------------------------------------------------------
    The subset of R2Bucket the sync endpoints use. R2Bucket satisfies it structurally; the sync test
@@ -43,6 +43,52 @@ export function authRequired() {
   return json({ error: 'Authentication required.' }, 401);
 }
 
+/* ---- cloud-tier entitlement gate (A253) ----------------------------------------------------------
+   Sync is a paid (cloud-tier) feature. The client checks its tier, but that is ADVISORY — the server
+   MUST enforce entitlement itself or any authenticated free-tier session could push unbounded blobs
+   (paywall bypass + storage DoS). So every MUTATING sync route (push, workspaces POST, wrapped-ik PUT)
+   resolves the caller's subscription server-side and requires grantsCloud() before writing.
+
+   READ/WRITE ASYMMETRY (intentional): the GET routes (pull, workspaces GET, wrapped-ik GET) do NOT
+   gate on the tier. A lapsed/downgraded but still-provisioned account must be able to READ what it
+   already stored so it can reconcile the cloud copy back down to its local IndexedDB and unlock. Reads
+   neither bypass the paywall nor grow storage; only writes do, so only writes are gated. */
+export async function callerHasCloud(db: AccountsDb, userId: string, now = Date.now()): Promise<boolean> {
+  return grantsCloud(await subscriptionForUser(db, userId), now);
+}
+
+/** 402 body for a mutating sync call from a session without the cloud tier (A253). Local data is
+ *  untouched — only cloud writes are refused. One subrequest (the subscription lookup) precedes this. */
+export function cloudRequired() {
+  return json({ error: 'A cloud subscription is required to sync. Your local data is unaffected.' }, 402);
+}
+
+/* ---- storage quota (A253) ------------------------------------------------------------------------
+   Bound what one account can store so a (compromised or abusive) authenticated session cannot run the
+   R2/D1 bill up. Enforced at the write routes: workspace count on register, per-workspace record count
+   + per-record ciphertext byte size on push. Each COUNT is one subrequest — accounted for in the A15
+   budget below. Generous ceilings (a real journal stays far under them); crossing one → 413. */
+export const MAX_WORKSPACES_PER_USER = 25;
+export const MAX_RECORDS_PER_WORKSPACE = 50000;
+export const MAX_RECORD_BYTES = 2 * 1024 * 1024; // ciphertext is base64 ASCII → 1 char = 1 byte
+
+/** 413 body for a crossed storage quota (A253). `what` names the limit for the client's UX. */
+export function quotaExceeded(what: string) {
+  return json({ error: `Storage limit reached: ${what}.`, quota: what }, 413);
+}
+
+/** Count the caller's registered workspaces (workspace-count quota — one subrequest). */
+export async function countWorkspaces(db: AccountsDb, userId: string): Promise<number> {
+  const row = await db.prepare('SELECT COUNT(*) AS n FROM sync_workspaces WHERE owner_user_id = ?').bind(userId).first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+/** Count a workspace's change-index rows (per-workspace record-count quota — one subrequest). */
+export async function countRecords(db: AccountsDb, workspaceId: string): Promise<number> {
+  const row = await db.prepare('SELECT COUNT(*) AS n FROM sync_records WHERE workspace_id = ?').bind(workspaceId).first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
 /* ---- row shapes (mirror functions/schema.sql) ---------------------------------------------------- */
 export interface SyncWorkspaceRow {
   workspace_id: string; // the client's F59 UUID
@@ -57,7 +103,7 @@ export interface SyncWorkspaceKeyRow {
 }
 export interface SyncWrappedIkRow {
   user_id: string;
-  method: string; // 'passkey' | 'passphrase' | 'recovery' — opaque to the server
+  method: string; // 'prf' (WebAuthn PRF passkey) | 'passphrase' | 'recovery' — opaque to the server
   key_id: string;
   wrapped_ik: string; // F61a WrappedIK JSON — IK wrapped (AES-KW) under a per-method KEK. Opaque.
   updated: number;
@@ -73,11 +119,14 @@ export interface SyncRecordRow {
 }
 
 /* ---- A15 subrequest budget (Cloudflare 50-subrequest cap) ----------------------------------------
-   PUSH costs 2 fixed subrequests (ownership lookup + max-seq lookup) + 3 per record (existing-row
-   SELECT + R2 put + upsert) ⇒ 2 + 3·15 = 47 < 50. Batches over MAX_PUSH_RECORDS are rejected (413) so
-   the client chunks. PULL costs 2 fixed + 1 R2 get per returned record ⇒ 2 + 25 = 27 < 50; the page is
-   capped and a nextSince cursor lets the client page. */
-export const MAX_PUSH_RECORDS = 15;
+   PUSH fixed cost is now 6 subrequests: session resolve (SELECT + slide UPDATE = 2), entitlement
+   lookup (A253, 1), ownership lookup (1), record-count quota (A253, 1), and the max-seq cursor base
+   (1). Each written record adds 3 (existing-row SELECT + R2 put + the atomic upsert). So 6 + 3·12 = 42
+   < 50 — MAX_PUSH_RECORDS was lowered from 15 to 12 to keep clear headroom once the entitlement + quota
+   subrequests were added. Batches over the cap are rejected (413) so the client chunks. PULL costs 2
+   fixed + 1 R2 get per returned record ⇒ 2 + 25 = 27 < 50; the page is capped and a nextSince cursor
+   lets the client page. */
+export const MAX_PUSH_RECORDS = 12;
 export const PULL_PAGE = 25;
 
 /** Resolve a workspace ONLY when it exists AND is owned by this user. Returns null for a
@@ -134,10 +183,19 @@ export function validRecord(r: unknown): r is IncomingRecord {
 
 /** Upsert one record under LAST-WRITER-WINS: a push whose `updated` is not strictly newer than the
  *  stored row is DROPPED (a stale device can never clobber a fresher row — same-clock re-push is a
- *  no-op). A written record gets `seq = prevSeq + 1` so pull's `seq > cursor` always surfaces it. The
- *  ciphertext blob is stored in R2 (large records like encrypted screenshots never sit in a D1 row).
- *  Returns the seq to carry forward (bumped iff the record was written). Subrequests per call: 1
- *  SELECT + 1 R2 put + 1 upsert = 3 (only when written; a stale drop costs just the SELECT). */
+ *  no-op). The ciphertext blob is stored in R2 (large records like encrypted screenshots never sit in a
+ *  D1 row).
+ *
+ *  SEQ ATOMICITY (A261): the written row's `seq` is assigned INSIDE the INSERT/UPDATE statement as
+ *  `(SELECT COALESCE(MAX(seq),0)+1 FROM sync_records WHERE workspace_id = ?)` — a single statement runs
+ *  under D1's write lock, so the max-read and the write are one atomic step. This closes the
+ *  read-max-then-write race where two concurrent pushes could otherwise pick the same seq. The value
+ *  returned here is a RUNNING cursor for the push RESPONSE (`prevSeq + 1`), which equals the
+ *  atomically-persisted seq absent concurrency; under concurrency the persisted seq stays monotonic and
+ *  the client reconciles via pull's `seq > cursor` watermark regardless.
+ *
+ *  Subrequests per call: 1 SELECT + 1 R2 put + 1 atomic upsert = 3 (only when written; a stale drop
+ *  costs just the SELECT). */
 export async function upsertRecord(
   db: AccountsDb,
   bucket: SyncBucket,
@@ -150,24 +208,23 @@ export async function upsertRecord(
     .bind(workspaceId, rec.blinded_id)
     .first<SyncRecordRow>();
   if (existing && existing.updated >= rec.updated) return prevSeq; // LWW: stale/equal push does not clobber
-  const seq = prevSeq + 1;
   const ref = recordKey(workspaceId, rec.blinded_id);
   await bucket.put(ref, rec.ciphertext); // opaque ciphertext only — S25
   const deleted = rec.deleted ? 1 : 0;
   if (existing) {
     await db
       .prepare(
-        'UPDATE sync_records SET seq = ?, type = ?, ciphertext_ref = ?, updated = ?, deleted = ? WHERE workspace_id = ? AND blinded_id = ?'
+        'UPDATE sync_records SET seq = (SELECT COALESCE(MAX(seq), 0) + 1 FROM sync_records WHERE workspace_id = ?), type = ?, ciphertext_ref = ?, updated = ?, deleted = ? WHERE workspace_id = ? AND blinded_id = ?'
       )
-      .bind(seq, rec.type, ref, rec.updated, deleted, workspaceId, rec.blinded_id)
+      .bind(workspaceId, rec.type, ref, rec.updated, deleted, workspaceId, rec.blinded_id)
       .run();
   } else {
     await db
       .prepare(
-        'INSERT INTO sync_records (workspace_id, blinded_id, seq, type, ciphertext_ref, updated, deleted) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO sync_records (workspace_id, blinded_id, seq, type, ciphertext_ref, updated, deleted) VALUES (?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM sync_records WHERE workspace_id = ?), ?, ?, ?, ?)'
       )
-      .bind(workspaceId, rec.blinded_id, seq, rec.type, ref, rec.updated, deleted)
+      .bind(workspaceId, rec.blinded_id, workspaceId, rec.type, ref, rec.updated, deleted)
       .run();
   }
-  return seq;
+  return prevSeq + 1;
 }

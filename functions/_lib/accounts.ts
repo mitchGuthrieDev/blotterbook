@@ -114,7 +114,8 @@ export interface SubscriptionRow {
   stripe_customer_id: string | null;
   status: string | null; // Stripe status: active|trialing|past_due|canceled|unpaid|…
   current_period_end: number | null; // ms epoch (Stripe seconds converted at the webhook boundary)
-  updated: number; // ms epoch of the last webhook update (past_due grace counts from here)
+  updated: number; // ms epoch of the last webhook update
+  past_due_since: number | null; // ms epoch of the FIRST failure of the current past_due run (grace base; NULL when not past_due — A266)
 }
 
 /* ---- encoding / crypto -------------------------------------------------------------------- */
@@ -431,8 +432,32 @@ export async function claimDonationsForUser(db: AccountsDb, user: UserRow, now =
 
 /* ---- subscriptions + webhook-event dedupe (Synced Workspaces Step 3 — F60) -------------------
    ONE current subscription per user (keyed by user_id). The webhook's subscription-lifecycle
-   handlers upsert status + current_period_end here; /api/me reads it to grant the `cloud` tier per
-   the locked period-end + grace lapse policy. S25: billing metadata only — never any trade data. */
+   handlers upsert status + current_period_end here; /api/me + the /api/sync/* mutating routes read
+   it (via grantsCloud) to grant the `cloud` tier per the locked period-end + grace lapse policy.
+   S25: billing metadata only — never any trade data. */
+
+// Dunning grace (F60): a past_due subscription keeps the cloud tier for this long after the FIRST
+// failed-payment event of the current lapse (measured from `past_due_since`, NOT from `updated` —
+// A266: `updated` is re-stamped on every Stripe retry, which would stretch the window to the whole
+// retry span). A few days covers Stripe's retry cadence so a transient decline doesn't strand a payer.
+export const SUBSCRIPTION_GRACE_MS = 3 * 24 * 3600 * 1000;
+
+/**
+ * The LOCKED lapse policy (docs/synced-workspaces.md — period-end + grace): grant `cloud` while the
+ * subscription is active/trialing, OR past_due inside the dunning grace window, OR still inside the
+ * paid period after a cancel (now < current_period_end). Otherwise the tier is `local` — the local
+ * IndexedDB data always remains, only cloud sync stops. Shared by /api/me and the sync routes so the
+ * server-side entitlement is the single source of truth (A253 — the client check is advisory only).
+ */
+export function grantsCloud(sub: SubscriptionRow | null, now: number): boolean {
+  if (!sub) return false;
+  if (sub.status === 'active' || sub.status === 'trialing') return true;
+  // Grace runs from the first failure of this past_due run (A266 clamp); fall back to `updated` for
+  // legacy rows written before past_due_since existed.
+  if (sub.status === 'past_due' && now < (sub.past_due_since ?? sub.updated) + SUBSCRIPTION_GRACE_MS) return true;
+  if (sub.current_period_end != null && now < sub.current_period_end) return true;
+  return false;
+}
 
 export async function subscriptionForUser(db: AccountsDb, userId: string) {
   return db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').bind(userId).first<SubscriptionRow>();
@@ -465,19 +490,25 @@ export async function upsertSubscription(
   now = Date.now()
 ): Promise<void> {
   const existing = await subscriptionForUser(db, s.userId);
+  // A266: stamp past_due_since on the transition INTO past_due; PRESERVE it across subsequent
+  // payment_failed retries (so grace measures from the first failure, not the latest); clear it when
+  // the subscription leaves past_due. This is what clamps the dunning grace to a fixed window.
+  const isPastDue = s.status === 'past_due';
+  const wasPastDue = existing?.status === 'past_due';
+  const pastDueSince = isPastDue ? (wasPastDue ? (existing?.past_due_since ?? now) : now) : null;
   if (existing) {
     await db
       .prepare(
-        'UPDATE subscriptions SET stripe_subscription_id = ?, stripe_customer_id = ?, status = ?, current_period_end = ?, updated = ? WHERE user_id = ?'
+        'UPDATE subscriptions SET stripe_subscription_id = ?, stripe_customer_id = ?, status = ?, current_period_end = ?, updated = ?, past_due_since = ? WHERE user_id = ?'
       )
-      .bind(s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, s.userId)
+      .bind(s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince, s.userId)
       .run();
   } else {
     await db
       .prepare(
-        'INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, status, current_period_end, updated) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, status, current_period_end, updated, past_due_since) VALUES (?, ?, ?, ?, ?, ?, ?)'
       )
-      .bind(s.userId, s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now)
+      .bind(s.userId, s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince)
       .run();
   }
 }

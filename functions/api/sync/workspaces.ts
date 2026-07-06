@@ -10,17 +10,25 @@
  *    it can decrypt.
  *
  * SECURITY: session-gated (server-side session resolution), Origin-checked on POST, fail-closed 503
- * without ACCOUNTS_DB or SYNC_BUCKET. S25: the response carries only { workspace_id, created_at,
- * wrapped_dek } — an opaque key blob + ids + a timestamp; never a workspace name or any trade field.
+ * without ACCOUNTS_DB or SYNC_BUCKET. POST is cloud-tier gated + workspace-count quota'd (A253 — else
+ * 402/413); GET (list) stays ungated so a lapsed account can still enumerate + reconcile. S25: the
+ * response carries only { workspace_id, created_at, wrapped_dek } — an opaque key blob + ids + a
+ * timestamp; never a workspace name or any trade field.
  */
 import { json } from '../../_lib/http.ts';
 import type { Ctx } from '../../_lib/types.ts';
 import { badOrigin, checkOrigin, dbUnavailable, getDb, readJson, sessionFromRequest } from '../../_lib/accounts.ts';
 import {
+  MAX_RECORD_BYTES,
+  MAX_WORKSPACES_PER_USER,
   authRequired,
   bucketUnavailable,
+  callerHasCloud,
+  cloudRequired,
+  countWorkspaces,
   getBucket,
   maxSeq,
+  quotaExceeded,
   upsertRecord,
   validRecord,
   type IncomingRecord,
@@ -45,6 +53,10 @@ export async function onRequestPost(ctx: Ctx) {
   const session = await sessionFromRequest(request, db);
   if (!session) return authRequired();
 
+  // ENTITLEMENT (A253): registering a workspace is a cloud-tier write — gate it server-side (else 402).
+  // GET (list) stays ungated so a lapsed account can still enumerate + reconcile what it already has.
+  if (!(await callerHasCloud(db, session.user_id))) return cloudRequired();
+
   const body = (await readJson<RegisterBody>(request)) ?? {};
   const workspaceId = body.workspace_id;
   const wrappedDek = body.wrapped_dek;
@@ -58,6 +70,10 @@ export async function onRequestPost(ctx: Ctx) {
   }
   const createdAt = existing ? existing.created_at : now;
   if (!existing) {
+    // Workspace-count quota (A253) — only bites on a NEW registration; a re-register is a no-op upsert.
+    if ((await countWorkspaces(db, session.user_id)) >= MAX_WORKSPACES_PER_USER) {
+      return quotaExceeded(`account exceeds ${MAX_WORKSPACES_PER_USER} workspaces`);
+    }
     await db
       .prepare('INSERT INTO sync_workspaces (workspace_id, owner_user_id, created_at) VALUES (?, ?, ?)')
       .bind(workspaceId, session.user_id, createdAt)
@@ -79,8 +95,13 @@ export async function onRequestPost(ctx: Ctx) {
   }
 
   // Optional encrypted workspace-name record — stored like any other record (ciphertext only, S25).
+  // RESERVED (A268): the current client does not send `name` yet, so this branch is presently unreached.
+  // It is kept as a working server capability for the F63 client follow-up (encrypted workspace names);
+  // do not remove it. The same per-record byte cap as push applies (A253 quota).
   if (body.name !== undefined) {
     if (!validRecord(body.name)) return json({ error: 'name must be an encrypted record.' }, 400);
+    if ((body.name as IncomingRecord).ciphertext.length > MAX_RECORD_BYTES)
+      return quotaExceeded(`record exceeds ${MAX_RECORD_BYTES} bytes`);
     await upsertRecord(db, bucket, workspaceId, body.name as IncomingRecord, await maxSeq(db, workspaceId));
   }
 

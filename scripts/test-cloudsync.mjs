@@ -34,7 +34,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* ── in-memory D1 stub (copied from test-sync.mjs — same statement set the sync helpers issue) ──── */
 function mockDb() {
-  const tables = { users: [], sessions: [], sync_workspaces: [], sync_workspace_keys: [], sync_wrapped_ik: [], sync_records: [] };
+  const tables = {
+    users: [],
+    sessions: [],
+    subscriptions: [], // A253 — callerHasCloud() reads this to gate the mutating sync routes
+    sync_workspaces: [],
+    sync_workspace_keys: [],
+    sync_wrapped_ik: [],
+    sync_records: [],
+  };
   const parseConds = clause =>
     clause.split(/ AND /i).map(c => {
       const m = c.trim().match(/^(\w+)\s*(=|>)\s*\?$/);
@@ -43,9 +51,34 @@ function mockDb() {
     });
   const matches = (row, conds, args, off) =>
     conds.every((c, i) => (c.op === '=' ? row[c.col] === args[off + i] : row[c.col] > args[off + i]));
+  const nextSeq = ws => tables.sync_records.filter(r => r.workspace_id === ws).reduce((mx, r) => Math.max(mx, r.seq), 0) + 1;
   const exec = (sql, args) => {
     const s = sql.trim().replace(/\s+/g, ' ');
     let m;
+    // A261 atomic-seq INSERT/UPDATE — seq is a MAX(seq)+1 subquery; matched before the generic forms.
+    if (
+      (m = s.match(
+        /^INSERT INTO sync_records \(workspace_id, blinded_id, seq, type, ciphertext_ref, updated, deleted\) VALUES \(\?, \?, \(SELECT COALESCE\(MAX\(seq\), 0\) \+ 1 FROM sync_records WHERE workspace_id = \?\), \?, \?, \?, \?\)$/i
+      ))
+    ) {
+      const [ws, blinded, wsSub, type, ref, updated, deleted] = args;
+      tables.sync_records.push({ workspace_id: ws, blinded_id: blinded, seq: nextSeq(wsSub), type, ciphertext_ref: ref, updated, deleted });
+      return [];
+    }
+    if (
+      (m = s.match(
+        /^UPDATE sync_records SET seq = \(SELECT COALESCE\(MAX\(seq\), 0\) \+ 1 FROM sync_records WHERE workspace_id = \?\), type = \?, ciphertext_ref = \?, updated = \?, deleted = \? WHERE workspace_id = \? AND blinded_id = \?$/i
+      ))
+    ) {
+      const [wsSub, type, ref, updated, deleted, ws, blinded] = args;
+      const row = tables.sync_records.find(r => r.workspace_id === ws && r.blinded_id === blinded);
+      if (row) Object.assign(row, { seq: nextSeq(wsSub), type, ciphertext_ref: ref, updated, deleted });
+      return [];
+    }
+    // A253 quota COUNT.
+    if ((m = s.match(/^SELECT COUNT\(\*\) AS n FROM (\w+) WHERE (\w+) = \?$/i))) {
+      return [{ n: tables[m[1]].filter(r => r[m[2]] === args[0]).length }];
+    }
     if ((m = s.match(/^INSERT INTO (\w+) \(([^)]+)\) VALUES/i))) {
       const cols = m[2].split(',').map(c => c.trim());
       tables[m[1]].push(Object.fromEntries(cols.map((c, i) => [c, args[i] ?? null])));
@@ -291,6 +324,17 @@ const bucket = mockBucket();
 const env = { ACCOUNTS_DB: db, SYNC_BUCKET: bucket };
 const user = await createUser(db, 'sync@example.com');
 const { token } = await createSession(db, user.id);
+// A253: the mutating sync routes now require the cloud tier — provision an active subscription so this
+// convergence test (which exercises the real F62 server) is allowed to register/push.
+db.tables.subscriptions.push({
+  user_id: user.id,
+  stripe_subscription_id: null,
+  stripe_customer_id: null,
+  status: 'active',
+  current_period_end: null,
+  updated: Date.now(),
+  past_due_since: null,
+});
 const transport = makeTransport(env, token);
 
 const ik = await genIdentityKey();

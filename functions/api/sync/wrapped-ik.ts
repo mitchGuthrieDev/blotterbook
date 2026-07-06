@@ -8,13 +8,14 @@
  *  - GET: return every wrapped-IK blob for the caller (a fresh device reads them all to unlock).
  *
  * SECURITY: session-gated, Origin-checked on PUT, fail-closed 503 without ACCOUNTS_DB or SYNC_BUCKET.
+ * PUT is cloud-tier gated (A253 — else 402); GET stays ungated so a lapsed account can still unlock.
  * S25: stores/returns ONLY { method, key_id, wrapped_ik, updated } — an opaque wrapped-key blob and
  * its selector; NEVER a plaintext key and never any trade field.
  */
 import { json } from '../../_lib/http.ts';
 import type { Ctx } from '../../_lib/types.ts';
 import { badOrigin, checkOrigin, dbUnavailable, getDb, readJson, sessionFromRequest } from '../../_lib/accounts.ts';
-import { authRequired, bucketUnavailable, getBucket, type SyncWrappedIkRow } from '../../_lib/sync.ts';
+import { authRequired, bucketUnavailable, callerHasCloud, cloudRequired, getBucket, type SyncWrappedIkRow } from '../../_lib/sync.ts';
 
 interface WrappedIkBody {
   method?: unknown;
@@ -32,6 +33,10 @@ export async function onRequestPut(ctx: Ctx) {
 
   const session = await sessionFromRequest(request, db);
   if (!session) return authRequired();
+
+  // ENTITLEMENT (A253): storing a wrapped-IK blob is a cloud-tier write — gate it server-side (else
+  // 402). GET stays ungated so a lapsed account can still fetch its blobs to unlock + reconcile.
+  if (!(await callerHasCloud(db, session.user_id))) return cloudRequired();
 
   const body = (await readJson<WrappedIkBody>(request)) ?? {};
   const { method, key_id: keyId, wrapped_ik: wrappedIk } = body;

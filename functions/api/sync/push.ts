@@ -8,9 +8,13 @@
  *
  * SECURITY:
  *  - session-gated + Origin-checked; fail-closed 503 without ACCOUNTS_DB or SYNC_BUCKET.
+ *  - ENTITLEMENT (A253): a mutating cloud-tier write → requires grantsCloud() server-side (else 402).
+ *    The client tier check is advisory; without this a free-tier session could push unbounded blobs.
+ *  - QUOTA (A253): per-record ciphertext byte cap + per-workspace record-count cap (else 413).
  *  - AUTHORIZATION: the workspace must exist AND be owned by the caller (ownedWorkspace → else 404),
  *    so user B can never push into user A's workspace.
- *  - seq MONOTONICITY: seq starts at the workspace's current max and only advances (never reused).
+ *  - seq ATOMICITY (A261): each written row's seq is assigned as MAX(seq)+1 inside the write statement,
+ *    so concurrent pushes cannot collide on a seq; it stays monotonic and is never reused.
  *  - LWW: a record whose `updated` is not strictly newer than the stored row is DROPPED — a stale
  *    device cannot clobber a fresher row.
  *  - A15 subrequest cap: batches over MAX_PUSH_RECORDS (15) are rejected 413 so the client chunks
@@ -23,11 +27,17 @@ import type { Ctx } from '../../_lib/types.ts';
 import { badOrigin, checkOrigin, dbUnavailable, getDb, readJson, sessionFromRequest } from '../../_lib/accounts.ts';
 import {
   MAX_PUSH_RECORDS,
+  MAX_RECORDS_PER_WORKSPACE,
+  MAX_RECORD_BYTES,
   authRequired,
   bucketUnavailable,
+  callerHasCloud,
+  cloudRequired,
+  countRecords,
   getBucket,
   maxSeq,
   ownedWorkspace,
+  quotaExceeded,
   upsertRecord,
   validRecord,
   type IncomingRecord,
@@ -49,6 +59,11 @@ export async function onRequestPost(ctx: Ctx) {
   const session = await sessionFromRequest(request, db);
   if (!session) return authRequired();
 
+  // ENTITLEMENT (A253): pushing is a cloud-tier write — gate it server-side. The client tier check is
+  // advisory; without this, any authed free-tier session could push unbounded blobs (paywall bypass +
+  // storage DoS). GET/pull stays ungated so a lapsed account can still reconcile/read (see sync.ts).
+  if (!(await callerHasCloud(db, session.user_id))) return cloudRequired();
+
   const body = (await readJson<PushBody>(request)) ?? {};
   const workspaceId = body.workspace_id;
   if (typeof workspaceId !== 'string' || !workspaceId) return json({ error: 'workspace_id is required.' }, 400);
@@ -59,13 +74,21 @@ export async function onRequestPost(ctx: Ctx) {
   }
   for (const r of body.records) {
     if (!validRecord(r)) return json({ error: 'Each record needs blinded_id, type, ciphertext, updated.' }, 400);
+    // Per-record ciphertext byte cap (A253 quota). Ciphertext is base64 ASCII → 1 char = 1 byte.
+    if ((r as IncomingRecord).ciphertext.length > MAX_RECORD_BYTES) return quotaExceeded(`record exceeds ${MAX_RECORD_BYTES} bytes`);
   }
 
   // AUTHORIZATION: reject a workspace the caller does not own (404 — does not leak existence). S25.
   const ws = await ownedWorkspace(db, workspaceId, session.user_id);
   if (!ws) return json({ error: 'workspace not found.' }, 404);
 
-  let seq = await maxSeq(db, workspaceId); // monotonic base — only ever advances below
+  // Per-workspace record-count quota (A253). One COUNT subrequest; upper-bound the post-push count by
+  // the batch size (some may be LWW updates, so this only ever over-estimates → never lets it exceed).
+  if ((await countRecords(db, workspaceId)) + body.records.length > MAX_RECORDS_PER_WORKSPACE) {
+    return quotaExceeded(`workspace exceeds ${MAX_RECORDS_PER_WORKSPACE} records`);
+  }
+
+  let seq = await maxSeq(db, workspaceId); // response-cursor base — the persisted seq is assigned atomically per record
   const records = body.records as IncomingRecord[];
   for (const rec of records) {
     seq = await upsertRecord(db, bucket, workspaceId, rec, seq); // LWW inside; bumps seq iff written

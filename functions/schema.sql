@@ -132,17 +132,24 @@ CREATE TABLE IF NOT EXISTS changelog_sends (
 
 -- Subscriptions (Synced Workspaces Step 3 — F60). ONE current subscription per user (PK = user_id),
 -- kept in sync by the F54 webhook's subscription-lifecycle handlers (customer.subscription.created/
--- updated/deleted + invoice.payment_failed). /api/me reads this to grant the `cloud` storage tier per
--- the LOCKED lapse policy (docs/synced-workspaces.md — period-end + grace): active/trialing, OR
--- past_due within a dunning grace window (measured from `updated`), OR still inside the paid period
+-- updated/deleted + invoice.payment_failed). /api/me + the /api/sync/* mutating routes read this (via
+-- grantsCloud) to grant the `cloud` storage tier per the LOCKED lapse policy (docs/synced-workspaces.md
+-- — period-end + grace): active/trialing, OR past_due within a dunning grace window (measured from
+-- `past_due_since` — the FIRST failure of the current lapse, A266), OR still inside the paid period
 -- after a cancel (now < current_period_end). S25: billing metadata only — never any trade data.
+-- ⚠ EXISTING DEPLOYMENTS: `past_due_since` (A266) was added after first release. Because SQLite cannot
+--   add a column via CREATE TABLE IF NOT EXISTS, a live DB needs a one-time, run-once migration:
+--     npx wrangler d1 execute blotterbook-accounts --remote --command "ALTER TABLE subscriptions ADD COLUMN past_due_since INTEGER"
+--   (grantsCloud falls back to `updated` for rows written before the column existed, so the app is
+--   safe to deploy before the migration runs; run it once, then re-apply this file for fresh installs.)
 CREATE TABLE IF NOT EXISTS subscriptions (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, -- the account's current subscription
   stripe_subscription_id TEXT,               -- Stripe subscription id (resolves lifecycle events)
   stripe_customer_id TEXT,                    -- Stripe customer id (resolves events lacking a ref)
   status TEXT,                               -- Stripe status: active|trialing|past_due|canceled|unpaid|…
   current_period_end INTEGER,                -- ms epoch — the paid period end (Stripe sends SECONDS; the webhook converts)
-  updated INTEGER NOT NULL                    -- ms epoch of the last webhook update (past_due grace counts from here)
+  updated INTEGER NOT NULL,                   -- ms epoch of the last webhook update
+  past_due_since INTEGER                      -- ms epoch of the FIRST failure of the current past_due run (grace base; NULL when not past_due — A266)
 );
 CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe ON subscriptions (stripe_subscription_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions (stripe_customer_id);
@@ -150,6 +157,10 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions (stripe_c
 -- Processed-webhook-event ledger (F60) — replay-safe dedupe for the subscription-lifecycle events,
 -- keyed by the Stripe EVENT id (the donation path dedupes via the donations PK the same way). A
 -- retried/duplicated delivery collides here and is a no-op.
+-- TODO (A265 — future TTL/compaction job, NOT built here): this ledger grows unbounded. A periodic
+-- cleanup can drop rows older than Stripe's replay/retry window (a few days) since dedupe only needs to
+-- cover that span; the same job should compact `sync_records` tombstones (deleted = 1 rows) once every
+-- device has reconciled past their seq. Neither is required for correctness — only to bound growth.
 CREATE TABLE IF NOT EXISTS webhook_events (
   id TEXT PRIMARY KEY,                        -- Stripe event id
   type TEXT,                                  -- the event type processed

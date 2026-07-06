@@ -561,10 +561,22 @@ console.log('\nSubscription lifecycle (F60) — cloud entitlement grants + perio
   // ── invoice.payment_failed → past_due; grace keeps cloud, past grace cuts off (resolves by customer) ──
   await webhook({ request: subEvent('evt_sub_pf', 'invoice.payment_failed', { subscription: 'sub_1', customer: 'cus_sub' }), env });
   ok('payment_failed sets past_due', db.tables.subscriptions[0].status === 'past_due');
+  const firstFailAt = db.tables.subscriptions[0].past_due_since;
+  ok('past_due stamps past_due_since as the grace base (A266)', typeof firstFailAt === 'number');
   ok('past_due within the dunning grace window stays cloud', (await me()).tier === 'cloud');
-  db.tables.subscriptions[0].updated = Date.now() - (SUBSCRIPTION_GRACE_MS + 1000); // grace elapsed
+
+  // A266 clamp: a Stripe RETRY (another invoice.payment_failed) must NOT reset the grace clock — it
+  // preserves past_due_since (only `updated` advances), so the window stays anchored to the FIRST
+  // failure instead of stretching across the whole ~3-week retry span.
+  await webhook({ request: subEvent('evt_sub_pf2', 'invoice.payment_failed', { subscription: 'sub_1', customer: 'cus_sub' }), env });
+  ok(
+    'a payment_failed retry preserves past_due_since (only updated advances)',
+    db.tables.subscriptions[0].past_due_since === firstFailAt && db.tables.subscriptions[0].updated >= firstFailAt
+  );
+
+  db.tables.subscriptions[0].past_due_since = Date.now() - (SUBSCRIPTION_GRACE_MS + 1000); // grace elapsed from the first failure
   const cutoff = await me();
-  ok('past_due beyond grace drops to local', cutoff.tier === 'local' && cutoff.cloudSync === false);
+  ok('past_due beyond grace (measured from the first failure) drops to local', cutoff.tier === 'local' && cutoff.cloudSync === false);
 }
 
 console.log('\nRecovery/verify token lifecycle (single-use, TTL, hash-only — S25):');

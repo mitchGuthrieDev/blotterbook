@@ -6,6 +6,7 @@
    propagation, cross-user rejection, fail-closed (no ACCOUNTS_DB / no SYNC_BUCKET), unauthed 401,
    Origin rejection on mutations, and the S25 response shape (ciphertext + blinded ids only). */
 import { createSession, createUser, SESSION_COOKIE } from '../functions/_lib/accounts.ts';
+import { MAX_RECORD_BYTES } from '../functions/_lib/sync.ts';
 import { onRequestGet as wsList, onRequestPost as wsRegister } from '../functions/api/sync/workspaces.ts';
 import { onRequestGet as ikGet, onRequestPut as ikPut } from '../functions/api/sync/wrapped-ik.ts';
 import { onRequestPost as push } from '../functions/api/sync/push.ts';
@@ -28,7 +29,15 @@ const ok = (name, cond) => {
    [ORDER BY col [DESC]] [LIMIT n], UPDATE ... SET ... WHERE ..., DELETE ... WHERE .... Throws on
    anything unrecognized so a new query can't silently no-op. */
 function mockDb() {
-  const tables = { users: [], sessions: [], sync_workspaces: [], sync_workspace_keys: [], sync_wrapped_ik: [], sync_records: [] };
+  const tables = {
+    users: [],
+    sessions: [],
+    subscriptions: [], // A253 — callerHasCloud() reads this to gate the mutating routes
+    sync_workspaces: [],
+    sync_workspace_keys: [],
+    sync_wrapped_ik: [],
+    sync_records: [],
+  };
   const parseConds = clause =>
     clause.split(/ AND /i).map(c => {
       const m = c.trim().match(/^(\w+)\s*(=|>)\s*\?$/);
@@ -37,9 +46,38 @@ function mockDb() {
     });
   const matches = (row, conds, args, off) =>
     conds.every((c, i) => (c.op === '=' ? row[c.col] === args[off + i] : row[c.col] > args[off + i]));
+  // The atomic MAX(seq)+1 the write statement computes in-SQL (A261) — evaluated here so the mock
+  // mirrors the real single-statement seq assignment.
+  const nextSeq = ws => tables.sync_records.filter(r => r.workspace_id === ws).reduce((mx, r) => Math.max(mx, r.seq), 0) + 1;
   const exec = (sql, args) => {
     const s = sql.trim().replace(/\s+/g, ' ');
     let m;
+    // A261 atomic-seq INSERT — seq is a MAX(seq)+1 subquery in position 3 (skips a positional bind arg),
+    // so it must be matched BEFORE the generic INSERT (which would mis-map the seq column).
+    if (
+      (m = s.match(
+        /^INSERT INTO sync_records \(workspace_id, blinded_id, seq, type, ciphertext_ref, updated, deleted\) VALUES \(\?, \?, \(SELECT COALESCE\(MAX\(seq\), 0\) \+ 1 FROM sync_records WHERE workspace_id = \?\), \?, \?, \?, \?\)$/i
+      ))
+    ) {
+      const [ws, blinded, wsSub, type, ref, updated, deleted] = args;
+      tables.sync_records.push({ workspace_id: ws, blinded_id: blinded, seq: nextSeq(wsSub), type, ciphertext_ref: ref, updated, deleted });
+      return [];
+    }
+    // A261 atomic-seq UPDATE — same MAX(seq)+1 subquery for seq; matched before the generic UPDATE.
+    if (
+      (m = s.match(
+        /^UPDATE sync_records SET seq = \(SELECT COALESCE\(MAX\(seq\), 0\) \+ 1 FROM sync_records WHERE workspace_id = \?\), type = \?, ciphertext_ref = \?, updated = \?, deleted = \? WHERE workspace_id = \? AND blinded_id = \?$/i
+      ))
+    ) {
+      const [wsSub, type, ref, updated, deleted, ws, blinded] = args;
+      const row = tables.sync_records.find(r => r.workspace_id === ws && r.blinded_id === blinded);
+      if (row) Object.assign(row, { seq: nextSeq(wsSub), type, ciphertext_ref: ref, updated, deleted });
+      return [];
+    }
+    // A253 quota COUNT.
+    if ((m = s.match(/^SELECT COUNT\(\*\) AS n FROM (\w+) WHERE (\w+) = \?$/i))) {
+      return [{ n: tables[m[1]].filter(r => r[m[2]] === args[0]).length }];
+    }
     if ((m = s.match(/^INSERT INTO (\w+) \(([^)]+)\) VALUES/i))) {
       const cols = m[2].split(',').map(c => c.trim());
       tables[m[1]].push(Object.fromEntries(cols.map((c, i) => [c, args[i] ?? null])));
@@ -113,6 +151,18 @@ const req = (path, { method = 'POST', origin = ORIGIN, cookie = null, body = nul
   });
 const cookieFor = token => `${SESSION_COOKIE}=${token}`;
 const rec = (blinded_id, ciphertext, updated, extra = {}) => ({ blinded_id, type: 'trade', ciphertext, updated, ...extra });
+// A253: the mutating sync routes now require the cloud tier (grantsCloud). Provision an active
+// subscription so a test user can push/register/put; callerHasCloud() reads it via subscriptionForUser.
+const grantCloud = (db, userId) =>
+  db.tables.subscriptions.push({
+    user_id: userId,
+    stripe_subscription_id: null,
+    stripe_customer_id: null,
+    status: 'active',
+    current_period_end: null,
+    updated: Date.now(),
+    past_due_since: null,
+  });
 
 console.log('Fail-closed (no ACCOUNTS_DB / no SYNC_BUCKET):');
 {
@@ -204,6 +254,8 @@ console.log('\nWorkspace register + list (idempotent, owned-by-caller):');
   const u2 = await createUser(db, 'u2@example.com');
   const { token: t1 } = await createSession(db, u1.id);
   const { token: t2 } = await createSession(db, u2.id);
+  grantCloud(db, u1.id);
+  grantCloud(db, u2.id);
 
   const reg = await wsRegister({
     request: req('/api/sync/workspaces', { cookie: cookieFor(t1), body: { workspace_id: 'w1', wrapped_dek: 'DEK-1' } }),
@@ -261,6 +313,7 @@ console.log('\nPush → pull round-trip + seq monotonicity + tombstones:');
   const env = { ACCOUNTS_DB: db, SYNC_BUCKET: bucket };
   const u1 = await createUser(db, 'p1@example.com');
   const { token } = await createSession(db, u1.id);
+  grantCloud(db, u1.id);
   await wsRegister({
     request: req('/api/sync/workspaces', { cookie: cookieFor(token), body: { workspace_id: 'w1', wrapped_dek: 'D' } }),
     env,
@@ -329,6 +382,7 @@ console.log('\nLWW — a stale push cannot clobber a newer row:');
   const env = { ACCOUNTS_DB: db, SYNC_BUCKET: bucket };
   const u1 = await createUser(db, 'lww@example.com');
   const { token } = await createSession(db, u1.id);
+  grantCloud(db, u1.id);
   await wsRegister({
     request: req('/api/sync/workspaces', { cookie: cookieFor(token), body: { workspace_id: 'w1', wrapped_dek: 'D' } }),
     env,
@@ -376,6 +430,8 @@ console.log('\nCross-user authorization (user B cannot touch user A workspace):'
   const b = await createUser(db, 'b@example.com');
   const { token: ta } = await createSession(db, a.id);
   const { token: tb } = await createSession(db, b.id);
+  grantCloud(db, a.id);
+  grantCloud(db, b.id); // b is cloud-provisioned too, so its cross-user push is stopped by OWNERSHIP (404), not the tier gate
   await wsRegister({
     request: req('/api/sync/workspaces', { cookie: cookieFor(ta), body: { workspace_id: 'wa', wrapped_dek: 'D' } }),
     env,
@@ -407,6 +463,8 @@ console.log('\nwrapped-IK store/fetch (per-method, per-user isolation):');
   const u2 = await createUser(db, 'ik2@example.com');
   const { token: t1 } = await createSession(db, u1.id);
   const { token: t2 } = await createSession(db, u2.id);
+  grantCloud(db, u1.id);
+  grantCloud(db, u2.id);
 
   await ikPut({
     request: req('/api/sync/wrapped-ik', {
@@ -457,11 +515,14 @@ console.log('\nBatch cap (A15 subrequest budget):');
   const env = { ACCOUNTS_DB: db, SYNC_BUCKET: mockBucket() };
   const u1 = await createUser(db, 'cap@example.com');
   const { token } = await createSession(db, u1.id);
+  grantCloud(db, u1.id);
   await wsRegister({
     request: req('/api/sync/workspaces', { cookie: cookieFor(token), body: { workspace_id: 'w1', wrapped_dek: 'D' } }),
     env,
   });
-  const many = Array.from({ length: 16 }, (_, i) => rec('b' + i, 'c' + i, 100));
+  // MAX_PUSH_RECORDS is 12 (lowered from 15 to keep the A15 subrequest budget after the A253
+  // entitlement + quota subrequests were added to push).
+  const many = Array.from({ length: 13 }, (_, i) => rec('b' + i, 'c' + i, 100));
   const big = await push({
     request: req('/api/sync/push', { cookie: cookieFor(token), body: { workspace_id: 'w1', records: many } }),
     env,
@@ -469,10 +530,112 @@ console.log('\nBatch cap (A15 subrequest budget):');
   ok('over-cap batch rejected 413 (client must chunk)', big.status === 413);
   ok('...and nothing was written', db.tables.sync_records.length === 0);
   const okBatch = await push({
-    request: req('/api/sync/push', { cookie: cookieFor(token), body: { workspace_id: 'w1', records: many.slice(0, 15) } }),
+    request: req('/api/sync/push', { cookie: cookieFor(token), body: { workspace_id: 'w1', records: many.slice(0, 12) } }),
     env,
   });
-  ok('at-cap batch (15) accepted', okBatch.status === 200 && (await okBatch.json()).count === 15);
+  ok('at-cap batch (12) accepted', okBatch.status === 200 && (await okBatch.json()).count === 12);
+}
+
+console.log('\nCloud-tier entitlement gate (A253) — writes gated, reads open for a lapsed account:');
+{
+  const db = mockDb();
+  const bucket = mockBucket();
+  const env = { ACCOUNTS_DB: db, SYNC_BUCKET: bucket };
+  const u = await createUser(db, 'ent@example.com');
+  const { token } = await createSession(db, u.id);
+
+  // Free tier (no subscription row) → every mutating route is refused with 402 before any write.
+  const freePush = await push({
+    request: req('/api/sync/push', { cookie: cookieFor(token), body: { workspace_id: 'w', records: [rec('b', 'c', 1)] } }),
+    env,
+  });
+  ok('free-tier push → 402 (paywall enforced server-side)', freePush.status === 402);
+  const freeReg = await wsRegister({
+    request: req('/api/sync/workspaces', { cookie: cookieFor(token), body: { workspace_id: 'w', wrapped_dek: 'D' } }),
+    env,
+  });
+  ok('free-tier workspaces POST → 402', freeReg.status === 402);
+  const freeIk = await ikPut({
+    request: req('/api/sync/wrapped-ik', {
+      method: 'PUT',
+      cookie: cookieFor(token),
+      body: { method: 'prf', key_id: 'k', wrapped_ik: 'B' },
+    }),
+    env,
+  });
+  ok('free-tier wrapped-ik PUT → 402', freeIk.status === 402);
+  ok('...and the free-tier session wrote nothing', db.tables.sync_workspaces.length === 0 && db.tables.sync_records.length === 0);
+
+  // Provision cloud, register + push, then LAPSE (drop the subscription): writes are refused but the
+  // account can still READ (pull) to reconcile its cloud copy back down locally — the R/W asymmetry.
+  grantCloud(db, u.id);
+  await wsRegister({
+    request: req('/api/sync/workspaces', { cookie: cookieFor(token), body: { workspace_id: 'w', wrapped_dek: 'D' } }),
+    env,
+  });
+  await push({
+    request: req('/api/sync/push', { cookie: cookieFor(token), body: { workspace_id: 'w', records: [rec('b', 'c', 1)] } }),
+    env,
+  });
+  db.tables.subscriptions = []; // lapse: entitlement now fails
+  const lapsedPush = await push({
+    request: req('/api/sync/push', { cookie: cookieFor(token), body: { workspace_id: 'w', records: [rec('b2', 'c2', 2)] } }),
+    env,
+  });
+  ok('lapsed account push → 402 (no new writes)', lapsedPush.status === 402);
+  const lapsedPull = await pull({
+    request: req('/api/sync/pull?workspace_id=w&since=0', { method: 'GET', cookie: cookieFor(token) }),
+    env,
+  });
+  const lapsedPullJson = await lapsedPull.json();
+  ok('lapsed account can still pull to reconcile (read stays open)', lapsedPull.status === 200 && lapsedPullJson.records.length === 1);
+}
+
+console.log('\nStorage quota (A253) — per-record ciphertext byte cap:');
+{
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db, SYNC_BUCKET: mockBucket() };
+  const u = await createUser(db, 'quota@example.com');
+  const { token } = await createSession(db, u.id);
+  grantCloud(db, u.id);
+  await wsRegister({
+    request: req('/api/sync/workspaces', { cookie: cookieFor(token), body: { workspace_id: 'w', wrapped_dek: 'D' } }),
+    env,
+  });
+  const oversize = await push({
+    request: req('/api/sync/push', {
+      cookie: cookieFor(token),
+      body: { workspace_id: 'w', records: [rec('big', 'x'.repeat(MAX_RECORD_BYTES + 1), 1)] },
+    }),
+    env,
+  });
+  ok('over-byte-cap record rejected 413', oversize.status === 413);
+  ok('...and nothing was written', db.tables.sync_records.length === 0);
+}
+
+console.log('\nAtomic seq assignment (A261) — two records in one push get distinct monotonic seqs:');
+{
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db, SYNC_BUCKET: mockBucket() };
+  const u = await createUser(db, 'seq@example.com');
+  const { token } = await createSession(db, u.id);
+  grantCloud(db, u.id);
+  await wsRegister({
+    request: req('/api/sync/workspaces', { cookie: cookieFor(token), body: { workspace_id: 'w', wrapped_dek: 'D' } }),
+    env,
+  });
+  await push({
+    request: req('/api/sync/push', {
+      cookie: cookieFor(token),
+      body: { workspace_id: 'w', records: [rec('b1', 'c1', 1), rec('b2', 'c2', 1)] },
+    }),
+    env,
+  });
+  const seqs = db.tables.sync_records
+    .filter(r => r.workspace_id === 'w')
+    .map(r => r.seq)
+    .sort((a, b) => a - b);
+  ok('the two written records hold distinct, contiguous seqs (1,2) assigned in-SQL', seqs.length === 2 && seqs[0] === 1 && seqs[1] === 2);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
