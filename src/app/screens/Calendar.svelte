@@ -17,6 +17,9 @@
   import * as Card from '$lib/components/ui/card';
   import { cn } from '$lib/utils';
   import { usdWhole, tone, fmtDate, isoWeek, monthCells, dowPnlRows, MONTH_ABBR, DOW_LABEL } from '../../lib/core/core.ts';
+  import type { EconEvent } from '../../lib/core/types.ts';
+  import type { EconMode } from '../lib/econ.svelte.ts';
+  import { CalendarClock } from '@lucide/svelte';
   import { cleanTag } from '../../lib/core/store.ts';
   import { readImage } from '../lib/files.ts';
   import ScreenshotLightbox from '../parts/ScreenshotLightbox.svelte';
@@ -39,6 +42,17 @@
     /** The existing day-tag vocabulary, for the tag-input autocomplete (A167). */
     tagVocab?: string[];
     onsavenote?: (day: number, text: string, tags: string[], shots: string[]) => void;
+    /** Econ-event overlay (R14b): filtered resolved events for the cursor month, keyed by
+     *  `YYYY-MM-DD`. Empty when the overlay is off or the dataset hasn't loaded. */
+    econMonth?: Map<string, EconEvent[]>;
+    /** Maps a day-of-month number to its `YYYY-MM-DD` (so cells/detail can key into econMonth). */
+    econDay?: (day: number) => string;
+    /** Filtered resolved econ events for a specific date (`YYYY-MM-DD`) — the day drill-in list. */
+    econEventsForDay?: (date: string) => EconEvent[];
+    /** Current overlay mode ('off' | 'high' | 'all'). */
+    econMode?: EconMode;
+    /** Persist a new overlay mode. */
+    oneconmode?: (mode: EconMode) => void;
   }
   let {
     monthDays,
@@ -53,6 +67,11 @@
     getJournal,
     tagVocab = [],
     onsavenote,
+    econMonth,
+    econDay,
+    econEventsForDay,
+    econMode = 'high',
+    oneconmode,
   }: Props = $props();
 
   let view = $state<'month' | 'year'>('month');
@@ -167,6 +186,12 @@
   // the node-tested core dowPnlRows (A194).
   const dowPnl = $derived(dowPnlRows(traded.map(t => ({ dow: new Date(year, month, t.day).getDay(), pnl: t.pnl }))));
 
+  // ── Econ overlay (R14b) ──────────────────────────────────────────────────────────────────────
+  // Per-cell resolved events (already impact-filtered by the overlay), looked up by the cell's date.
+  const econFor = (day: number): EconEvent[] => (econDay && econMonth ? (econMonth.get(econDay(day)) ?? []) : []);
+  // The selected day's econ events for the drill-in list (resolved `label` already folds in the note).
+  const selEcon = $derived(selectedDay && econDay ? (econEventsForDay?.(econDay(selectedDay)) ?? []) : []);
+
   // ── Selected day detail (real trades for the day). ───────────────────────────────────────────
   const sel = $derived(selectedDay ? monthDays[selectedDay] : undefined);
   const dayTrades = $derived(selectedDay ? tradesForDay(selectedDay) : []);
@@ -275,6 +300,28 @@
     {:else}
       <span class="text-sm font-semibold">{year}</span>
     {/if}
+
+    <!-- Econ-event overlay control (R14b). Off / High-impact only / All (adds the medium-impact
+         weekly EIA rows). Default is High per the owner's v1 decision; persisted via App.svelte. -->
+    <div class="flex items-center gap-1.5">
+      <IconTip label="Show US economic releases (FOMC, CPI, NFP, GDP; All adds weekly EIA)">
+        {#snippet button(tip)}
+          <span {...tip} class="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <CalendarClock class="size-3.5" /> Econ
+          </span>
+        {/snippet}
+      </IconTip>
+      <SegmentedControl
+        segments={[
+          { key: 'off', label: 'Off' },
+          { key: 'high', label: 'High' },
+          { key: 'all', label: 'All' },
+        ]}
+        value={econMode}
+        onselect={k => oneconmode?.(k as EconMode)}
+      />
+    </div>
+
     <span
       class={cn(
         'ml-auto text-sm font-semibold tabular-nums',
@@ -315,6 +362,7 @@
               {#each w.cells as c, ci (ci)}
                 {#if c}
                   {@const hit = !!c.rec && c.rec.pnl >= target}
+                  {@const evs = econFor(c.day)}
                   <button
                     type="button"
                     data-testid="cal-day"
@@ -331,6 +379,21 @@
                         class="absolute right-1 top-1 grid size-3 place-items-center rounded-full bg-chart-2 text-background"
                         title="Hit daily target"><Check class="size-2" /></span
                       >{/if}
+                    <!-- Econ-event marks (R14b): bottom-left corner — the only free corner (day#/note
+                         top-left, target-hit top-right, P&L bottom-right). chart-4 (amber = warning)
+                         for high-impact, muted for medium; max 2 dots + a +n. Utilities only (CSP). -->
+                    {#if evs.length}
+                      <span
+                        data-testid="econ-mark"
+                        class="absolute bottom-1 left-1 flex items-center gap-0.5"
+                        title={`Economic events: ${evs.map(e => `${e.et} ${e.label}`).join(' · ')}`}
+                      >
+                        {#each evs.slice(0, 2) as e (e.type + e.et)}
+                          <span class={cn('size-1.5 rounded-full', e.impact === 'high' ? 'bg-chart-4' : 'bg-muted-foreground')}></span>
+                        {/each}
+                        {#if evs.length > 2}<span class="text-[9px] leading-none text-muted-foreground">+{evs.length - 2}</span>{/if}
+                      </span>
+                    {/if}
                     <span
                       class={cn('flex items-center gap-1 text-[11px]', c.rec ? 'font-medium text-foreground' : 'text-muted-foreground')}
                     >
@@ -355,8 +418,8 @@
             {/each}
           </div>
           <p class="mt-3 text-[11px] text-muted-foreground">
-            Cell shade scales with P&L size · <Check class="inline size-3 text-chart-2" /> = hit the ${target}/day target · dot = has a
-            note.
+            Cell shade scales with P&L size · <Check class="inline size-3 text-chart-2" /> = hit the ${target}/day target · dot = has a note{#if econMode !== 'off'}
+              · <span class="inline-block size-1.5 translate-y-px rounded-full bg-chart-4"></span> = economic release{/if}.
           </p>
         </Card.Root>
       {:else}
@@ -422,6 +485,29 @@
                 {@render stat('Worst trade', worstTrade ? usdWhole(worstTrade.pnl) : '—', 'neg')}
               </div>
 
+              <!-- Economic events (R14b): time ET · label · impact — above the Trades list. The
+                   resolved label already folds in any row note (e.g. "GDP (Advance)"). -->
+              {#if selEcon.length}
+                <div>
+                  <div class="mb-1 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    <CalendarClock class="size-3" /> Economic events
+                  </div>
+                  <div class="overflow-hidden rounded-md border border-border">
+                    {#each selEcon as e, i (e.type + e.et)}
+                      <div class={cn('flex items-center gap-2 px-2.5 py-1.5 text-xs', i > 0 && 'border-t border-border')}>
+                        <span class="tabular-nums text-muted-foreground">{e.et}</span>
+                        <span class="min-w-0 flex-1 truncate font-medium">{e.label}</span>
+                        <Badge
+                          variant="outline"
+                          class={e.impact === 'high' ? 'border-chart-4/40 text-chart-4' : 'border-border text-muted-foreground'}
+                          >{e.impact === 'high' ? 'High' : 'Med'}</Badge
+                        >
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+
               <!-- Trades list -->
               <div>
                 <div class="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Trades · {sel.trades}</div>
@@ -448,6 +534,7 @@
               <div>
                 <div class="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Journal note</div>
                 <textarea
+                  aria-label="Journal note"
                   class="h-24 w-full resize-none rounded-md border border-border bg-background p-2 text-xs leading-relaxed text-foreground outline-none focus-visible:border-ring"
                   bind:value={note}
                 ></textarea>

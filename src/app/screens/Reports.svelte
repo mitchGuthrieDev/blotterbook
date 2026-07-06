@@ -180,8 +180,8 @@
           </div>
           {#if scope === 'custom'}
             <div class="grid grid-cols-2 gap-2">
-              <Input type="date" bind:value={from} class="h-8" />
-              <Input type="date" bind:value={to} class="h-8" />
+              <Input type="date" aria-label="Start date" bind:value={from} class="h-8" />
+              <Input type="date" aria-label="End date" bind:value={to} class="h-8" />
             </div>
           {/if}
         </div>

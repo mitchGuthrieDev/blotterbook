@@ -491,6 +491,7 @@
                       value={row.note}
                       oninput={e => setNote(row.id, e.currentTarget.value)}
                       placeholder="Journal note…"
+                      aria-label="Journal note"
                       class="h-24"
                     />
                   </Popover.Content>

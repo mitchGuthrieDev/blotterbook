@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "files": {
     "brokers.json": "4bf1e4d22636",
+    "econ-events.json": "0bb2a15c4b9f",
     "exchange-fees.json": "b6089f520922",
     "feeds.json": "4eb01af1233b",
     "state-tax.json": "4c751f7c290a"

@@ -18,6 +18,9 @@ import type {
   FeedsFile,
   StateTaxFile,
   ContractExpiry,
+  EconEventsFile,
+  EconEventType,
+  EconEvent,
 } from './types.ts';
 
 export const pad2 = (n: number | string) => String(n).padStart(2, '0');
@@ -82,9 +85,10 @@ export const PAGE_MODE = (typeof document !== 'undefined' && document.body && do
      src/site/ marketing/info — Svelte SSG (components prerendered by vite-ssg.mjs)
 
    Cross-component state is Svelte runes ($state/$derived) inside the components, NOT a shared
-   globals object; the active Store is provided via context('bb:store') (real IndexedDB for
-   app/staging, in-memory DemoStore for demo). Persistence is ALWAYS via the Store seam — never
-   call indexedDB directly from a component.
+   globals object; App.svelte resolves the active Store (real IndexedDB for app/staging, in-memory
+   DemoStore for demo) once and prop-drills it into the rune-module factories and down through
+   screens/parts — there is no context() seam for it. Persistence is ALWAYS via the Store seam —
+   never call indexedDB directly from a component.
 
    Mode flag (derived from document.body[data-mode] above):
      PAGE_MODE === 'staging'  the staging sandbox — isolated DB + one-time sample seeding (App.svelte
@@ -734,6 +738,102 @@ export async function loadRefData() {
     TAXMODEL.ordinaryWeight /= wsum;
   }
   emit('refdata:loaded');
+}
+
+/* ------------------------------------------------------------------
+   Economic-event calendar (R14 / R14a) — a SEPARATE, LAZY loader. Per the R14 scoping doc the
+   dataset is fetched on first toggle-on (not in loadRefData's boot path) so users who never enable
+   the Calendar's "Econ events" toggle pay nothing. It reuses the SAME manifest cache-bust seam as
+   the boot ref data (manifest.json → `?v=<hash>`), and the parse result is memoized for the session.
+   ------------------------------------------------------------------ */
+let ECON_TYPES: Record<string, EconEventType> = {};
+// date (YYYY-MM-DD) -> resolved events on that day, prebuilt once so the calendar's per-day/per-month
+// lookups are O(1) joins (the row's `et`/`note` merged with its type's defaults).
+let ECON_BY_DAY: Map<string, EconEvent[]> = new Map();
+let econLoaded = false;
+let econLoading: Promise<void> | null = null;
+
+/** Resolve one row against its type defaults into the flat `EconEvent` the render layer consumes. */
+function resolveEconEvent(
+  row: { d: string; t: string; et?: string; note?: string },
+  types: Record<string, EconEventType>
+): EconEvent | null {
+  const ty = types[row.t];
+  if (!ty) return null; // a row whose type key isn't declared is dropped rather than rendered blank
+  return {
+    date: row.d,
+    type: row.t,
+    label: row.note ? `${ty.label} (${row.note})` : ty.label,
+    impact: ty.impact,
+    et: row.et || ty.et,
+    src: ty.src,
+  };
+}
+
+/**
+ * Fetch + index econ-events.json (idempotent, memoized). Call on first "Econ events" toggle-on;
+ * safe to await repeatedly (concurrent callers share one in-flight fetch). Emits `econ:loaded` for
+ * the activity bus. A fetch/parse failure logs + leaves the dataset empty (the calendar just shows
+ * no marks) rather than throwing into the toggle handler.
+ */
+export async function loadEconEvents(): Promise<void> {
+  if (econLoaded) return;
+  if (econLoading) return econLoading;
+  econLoading = (async () => {
+    try {
+      const man: RefDataManifest = await fetch('../data/manifest.json?t=' + Date.now(), { cache: 'no-cache' }).then(r => {
+        if (!r.ok) throw new Error('manifest ' + r.status);
+        return r.json() as Promise<RefDataManifest>;
+      });
+      const ver = man.files && man.files['econ-events.json'] ? '?v=' + man.files['econ-events.json'] : '';
+      const file: EconEventsFile = await fetch(`../data/econ-events.json${ver}`).then(r => {
+        if (!r.ok) throw new Error('econ-events.json ' + r.status);
+        return r.json() as Promise<EconEventsFile>;
+      });
+      if (file.schemaVersion !== ECON_SCHEMA_VERSION) {
+        console.warn(`econ-events.json schemaVersion ${file.schemaVersion} != expected ${ECON_SCHEMA_VERSION} — loading anyway.`);
+      }
+      ECON_TYPES = file.types || {};
+      ECON_BY_DAY = new Map();
+      for (const row of file.events || []) {
+        const ev = resolveEconEvent(row, ECON_TYPES);
+        if (!ev) continue;
+        const arr = ECON_BY_DAY.get(ev.date);
+        if (arr) arr.push(ev);
+        else ECON_BY_DAY.set(ev.date, [ev]);
+      }
+      econLoaded = true;
+      emit('econ:loaded', { count: (file.events || []).length });
+    } catch (e) {
+      console.warn('econ-events load failed:', e);
+    } finally {
+      econLoading = null;
+    }
+  })();
+  return econLoading;
+}
+
+/** The schemaVersion this build expects in econ-events.json (see build-econ-events.mjs). */
+export const ECON_SCHEMA_VERSION = 1;
+
+/** True once loadEconEvents() has populated the dataset (the calendar gates marks on this). */
+export const econEventsLoaded = () => econLoaded;
+
+/** Resolved economic events on a single ET calendar date (`YYYY-MM-DD`), or [] — empty before load. */
+export function eventsForDay(date: string): EconEvent[] {
+  return ECON_BY_DAY.get(date) || [];
+}
+
+/**
+ * Resolved economic events across a calendar month, keyed by date. `month` is 1–12 (NOT the JS
+ * 0-based month), matching how the calendar screen labels months. Returns a Map so the caller can
+ * do O(1) per-cell lookups; empty before the dataset loads.
+ */
+export function eventsForMonth(year: number, month: number): Map<string, EconEvent[]> {
+  const prefix = `${year}-${pad2(month)}-`;
+  const out = new Map<string, EconEvent[]>();
+  for (const [date, evs] of ECON_BY_DAY) if (date.startsWith(prefix)) out.set(date, evs);
+  return out;
 }
 
 // F30: the broker commission effective on `date` — scans rateHistory (oldest first) for the first

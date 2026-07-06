@@ -551,6 +551,7 @@
         <div>
           <div class="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Journal note</div>
           <textarea
+            aria-label="Journal note"
             class="h-24 w-full resize-none rounded-md border border-border bg-background p-2 text-xs leading-relaxed outline-none focus-visible:border-ring"
             placeholder="Notes for this trade…"
             bind:value={draftNote}
