@@ -67,11 +67,7 @@
   }
 
   // ---- feature flags + versions ----
-  const FLAGS = [
-    { key: 'showBetaAdapters', label: 'Show beta platform adapters in the upload picker' },
-    { key: 'maintenanceBanner', label: 'Show a maintenance banner in the app' },
-    { key: 'betaRibbon', label: 'Show a “Beta” badge in the app header' },
-  ];
+  const FLAGS = [{ key: 'maintenanceBanner', label: 'Show a maintenance banner in the app' }];
   let flags = $state<Record<string, boolean>>({});
   let flagmsg = $state({ text: '', kind: '' });
   let versions = $state<Versions | null>(null);

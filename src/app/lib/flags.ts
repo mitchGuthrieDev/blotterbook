@@ -8,8 +8,12 @@
    /api/config can't be fetched.
 
    A89: loadFlags() re-wires the client consumer the A33 cutover dropped — App.svelte fetches the
-   admin-managed flags at boot and applies them (showBetaAdapters gates the import picker's beta
-   adapters, maintenanceBanner shows a banner, betaRibbon shows a header badge). */
+   admin-managed flags at boot and applies them (maintenanceBanner shows a banner).
+
+   A245: showBetaAdapters and betaRibbon were retired — no app code ever read either (beta adapters
+   always participated in auto-detection regardless of the flag; betaRibbon was superseded by the
+   version-based Beta pill in the header). Removed from here, the Admin panel, and the Worker
+   DEFAULTS.flags mirror in functions/api/config.ts. */
 /* F56 — login-gate switch (staging-only; the owner flips this one constant per R24, and CH16 promotes
    the account gate later). It is deliberately NOT a Worker-mirrored flag: it never appears in
    functions/api/config.ts DEFAULTS.flags and the A14 mirror (scripts/test-flags.mjs) ignores the
@@ -20,7 +24,7 @@
    isStaging, so prod/demo are never affected. */
 export const ACCOUNT_GATE = false;
 
-export const APP_FLAGS = { showBetaAdapters: true, maintenanceBanner: false, betaRibbon: false, ACCOUNT_GATE };
+export const APP_FLAGS = { maintenanceBanner: false, ACCOUNT_GATE };
 export type AppFlags = typeof APP_FLAGS;
 
 /** F56: is the login gate armed? True when the ACCOUNT_GATE constant is on, OR a `bb:flags`
