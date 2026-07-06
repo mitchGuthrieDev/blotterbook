@@ -1,4 +1,5 @@
 'use strict';
+import { csvCell } from './core.ts';
 /* ============================================================
    Minimal xlsx reader — ATAS-SCOPED (F52), not a general library
    ------------------------------------------------------------
@@ -226,7 +227,6 @@ export async function atasXlsxToCsv(buf: ArrayBuffer): Promise<string> {
   head.forEach((h, i) => {
     if (JOURNAL_TIME_COLS.includes(h)) timeCols.add(i);
   });
-  const esc = (c: string) => (/[",\n\r]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c);
   const width = journal[0].length;
   return journal
     .map((row, ri) => {
@@ -235,7 +235,10 @@ export async function atasXlsxToCsv(buf: ArrayBuffer): Promise<string> {
         const c = row[i] ?? '';
         // Data-row time cells are Excel serials — convert; a non-numeric cell passes through.
         if (ri > 0 && timeCols.has(i) && c !== '' && isFinite(Number(c))) cells.push(excelSerialToTime(Number(c)));
-        else cells.push(esc(c));
+        // A247: csvCell (core.ts) — quoting only, no A154 formula-prefix neutralization. This CSV is
+        // an INTERMEDIATE hand-off straight into Adapters.parse, never opened in a spreadsheet app,
+        // so there's no formula-injection surface to neutralize here.
+        else cells.push(csvCell(c));
       }
       return cells.join(',');
     })

@@ -23,6 +23,10 @@ import { json } from './http.ts';
 export const SESSION_COOKIE = '__Host-bb_session';
 export const SESSION_TTL_MS = 30 * 24 * 3600 * 1000; // 30-day sliding window
 export const CHALLENGE_TTL_MS = 5 * 60 * 1000; // pending WebAuthn ceremonies live ~5 min
+export const RECOVERY_TTL_MS = 15 * 60 * 1000; // verify / recovery magic-link tokens live ~15 min (F55)
+
+/** Shared email shape check — the ONE regex the account layer validates emails with. */
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /* ---- narrow D1 seam ----------------------------------------------------------------------
    The subset of D1Database the account helpers use. D1Database satisfies it structurally;
@@ -83,6 +87,26 @@ export interface ChallengeRow {
   email: string | null;
   challenge: string;
   expires_at: number;
+}
+export interface DonationRow {
+  id: string; // Stripe event id
+  user_id: string | null;
+  email: string | null;
+  amount_cents: number | null;
+  currency: string | null;
+  stripe_customer_id: string | null;
+  created_at: number;
+  claimed_at: number | null;
+}
+export interface RecoveryTokenRow {
+  id: string;
+  user_id: string | null;
+  email: string;
+  purpose: string; // 'verify' | 'recover'
+  token_hash: string;
+  created_at: number;
+  expires_at: number;
+  used_at: number | null;
 }
 
 /* ---- encoding / crypto -------------------------------------------------------------------- */
@@ -306,11 +330,146 @@ export function parseTransports(text: string | null): string[] {
   }
 }
 
+export async function setEmailVerified(db: AccountsDb, userId: string): Promise<void> {
+  await db.prepare('UPDATE users SET email_verified = ? WHERE id = ?').bind(1, userId).run();
+}
+
+/* ---- donations (Phase 2 — F54) --------------------------------------------------------------
+   The donations table PK is the Stripe EVENT id, so a replayed webhook can never double-credit
+   (donationById → skip). A donation is credited to a user immediately when linkage is trusted
+   (client_reference_id, or an already-verified matching email); otherwise it sits UNCLAIMED and
+   is swept onto the user by claimDonationsForUser() the moment that email is verified (F55). */
+
+/** S26(3): the guard for whether a donation event actually credits a user's donor tally. The
+ *  event is still RECORDED + linkage/dedupe still apply either way (insertDonation runs
+ *  unconditionally, keyed by the Stripe event id) — this only gates the donated_at stamp /
+ *  donation_total_cents accumulation in applyDonationToUser, so a $0 line item or a non-USD
+ *  checkout (we only ever configure USD prices — S26) can't inflate a user's donor status. */
+export function isCreditableDonation(amountCents: number, currency: string | null): boolean {
+  return amountCents > 0 && typeof currency === 'string' && currency.toLowerCase() === 'usd';
+}
+
+export async function donationById(db: AccountsDb, id: string) {
+  return db.prepare('SELECT * FROM donations WHERE id = ?').bind(id).first<DonationRow>();
+}
+
+export async function insertDonation(
+  db: AccountsDb,
+  d: {
+    id: string;
+    userId: string | null;
+    email: string | null;
+    amountCents: number;
+    currency: string | null;
+    stripeCustomerId: string | null;
+    claimedAt: number | null;
+  },
+  now = Date.now()
+): Promise<void> {
+  await db
+    .prepare(
+      'INSERT INTO donations (id, user_id, email, amount_cents, currency, stripe_customer_id, created_at, claimed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    )
+    .bind(d.id, d.userId, d.email, d.amountCents, d.currency, d.stripeCustomerId, now, d.claimedAt)
+    .run();
+}
+
+/** Add a credited amount to a user's donation tally. The FIRST credit stamps donated_at (kept
+ *  stable on later credits); the Stripe customer id is recorded when known. Returns the updated row.
+ *
+ *  S26(3): only stamps donated_at / accumulates donation_total_cents when the amount+currency pass
+ *  isCreditableDonation (amountCents > 0 AND currency is 'usd', case-insensitive) — a zero-amount
+ *  or non-USD event still gets recorded (by the caller's insertDonation) and dedupes normally, it
+ *  just doesn't move the donor tally. Not creditable → no-op, returns `user` unchanged. */
+export async function applyDonationToUser(
+  db: AccountsDb,
+  user: UserRow,
+  amountCents: number,
+  currency: string | null,
+  stripeCustomerId: string | null,
+  now = Date.now()
+): Promise<UserRow> {
+  if (!isCreditableDonation(amountCents, currency)) return user;
+  const donatedAt = user.donated_at ?? now;
+  const total = (user.donation_total_cents ?? 0) + amountCents;
+  const customer = stripeCustomerId ?? user.stripe_customer_id ?? null;
+  await db
+    .prepare('UPDATE users SET donated_at = ?, donation_total_cents = ?, stripe_customer_id = ? WHERE id = ?')
+    .bind(donatedAt, total, customer, user.id)
+    .run();
+  return { ...user, donated_at: donatedAt, donation_total_cents: total, stripe_customer_id: customer };
+}
+
+/** Claim every UNCLAIMED donation keyed by this user's email onto the user (called once the email
+ *  is verified — F55). Returns how many rows were credited. Never trusts an unverified email:
+ *  callers must only invoke this for a user whose email ownership is proven.
+ *
+ *  S26(3): every unclaimed row is still linked to the user (user_id + claimed_at stamped) so it
+ *  never lingers as "unclaimed" — applyDonationToUser separately decides whether it moves the
+ *  tally, so a stale non-USD/zero-amount row gets swept up (stops re-scanning it) without ever
+ *  crediting the user. */
+export async function claimDonationsForUser(db: AccountsDb, user: UserRow, now = Date.now()): Promise<number> {
+  const { results } = await db.prepare('SELECT * FROM donations WHERE email = ?').bind(user.email).all<DonationRow>();
+  const unclaimed = results.filter(d => d.user_id == null);
+  let u = user;
+  let credited = 0;
+  for (const d of unclaimed) {
+    await db.prepare('UPDATE donations SET user_id = ?, claimed_at = ? WHERE id = ?').bind(user.id, now, d.id).run();
+    u = await applyDonationToUser(db, u, d.amount_cents ?? 0, d.currency, d.stripe_customer_id, now);
+    if (isCreditableDonation(d.amount_cents ?? 0, d.currency)) credited++;
+  }
+  return credited;
+}
+
+/* ---- recovery / verification tokens (Phase 3 — F55; single-use + TTL, S25) ------------------
+   The emailed link carries `id.secret`; only SHA-256(secret) is persisted (session posture).
+   consume marks used_at on the first VALID presentation (a wrong secret never burns the row). */
+
+export async function createRecoveryToken(
+  db: AccountsDb,
+  t: { userId: string | null; email: string; purpose: 'verify' | 'recover' },
+  now = Date.now()
+): Promise<string> {
+  const id = randomB64u(16);
+  const secret = randomB64u(32);
+  await db
+    .prepare(
+      'INSERT INTO recovery_tokens (id, user_id, email, purpose, token_hash, created_at, expires_at, used_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    )
+    .bind(id, t.userId, t.email, t.purpose, await sha256b64u(secret), now, now + RECOVERY_TTL_MS, null)
+    .run();
+  return `${id}.${secret}`;
+}
+
+/** Consume a recovery token: verify purpose + hash, then mark it single-use. Returns the row only
+ *  when it is unused, the purpose matches, the secret hash matches, AND it is unexpired. A wrong
+ *  secret returns null WITHOUT burning the token; an expired-but-valid token is burned and null. */
+export async function consumeRecoveryToken(
+  db: AccountsDb,
+  token: string,
+  purpose: 'verify' | 'recover',
+  now = Date.now()
+): Promise<RecoveryTokenRow | null> {
+  if (!token) return null;
+  const dot = token.indexOf('.');
+  if (dot <= 0 || dot === token.length - 1) return null;
+  const id = token.slice(0, dot);
+  const secret = token.slice(dot + 1);
+  const row = await db.prepare('SELECT * FROM recovery_tokens WHERE id = ?').bind(id).first<RecoveryTokenRow>();
+  if (!row) return null;
+  if (row.used_at != null) return null; // already consumed
+  if (row.purpose !== purpose) return null;
+  if (!hashesEqual(await sha256b64u(secret), row.token_hash)) return null; // wrong secret — do NOT burn
+  await db.prepare('UPDATE recovery_tokens SET used_at = ? WHERE id = ?').bind(now, id).run(); // single-use
+  return row.expires_at > now ? row : null; // expired → burned + rejected
+}
+
 /* ---- public (client-facing) shapes — never leak internal columns ----------------------------- */
 
 export function publicUser(u: UserRow) {
   return {
     email: u.email,
+    emailVerified: !!u.email_verified,
     donated: u.donated_at != null,
     donatedAt: u.donated_at ?? null,
     donationTotalCents: u.donation_total_cents ?? 0,

@@ -4330,6 +4330,193 @@
       "completedDate": "2026-07-05",
       "partial": false,
       "doneNote": "Shipped 2026-07-05 (mega-batch; agent-built per the approved docs/accounts-architecture.md). SERVER: functions/schema.sql (users/credentials/sessions/challenges; apply via wrangler — steps in the header), functions/_lib/accounts.ts (opaque id.secret session tokens with SHA-256(secret) in D1, __Host-bb_session HttpOnly/Secure/Lax 30-day sliding cookie, single-use TTL'd challenges, Origin checks, fail-closed 503s when ACCOUNTS_DB is unbound), five endpoints under functions/api/account/* on @simplewebauthn/server 13.3.2 (usernameless login; add-another-passkey), /api/me extended (legacy shape untouched; authed adds user + passkeys). CLIENT: src/app/lib/account.svelte.ts (runes auth state; @simplewebauthn/browser via lazy import — out of boot) + src/app/screens/Account.svelte (login/create-account cards; account info + donation-badge placeholder + passkey management + sign-out + Workspaces stub when authed; isDemo disables all). STAGING-gated: the Account sidebar item + route render only on staging until CH16 promotes (needs the owner's D1 setup: wrangler d1 create blotterbook-accounts → execute schema.sql → bind ACCOUNTS_DB in Pages). Tests: scripts/test-accounts.mjs (58 assertions — session round-trip, challenge single-use/TTL, Origin 403s, 503 fail-closed, /api/me shapes) joined the test:unit chain. Guardrail S25 honored: identity + entitlements only. F54 (donations), F55 (recovery), F56 (login gate) build on this."
+    },
+    {
+      "id": "F38",
+      "title": "Stripe donations MVP — Payment Links on the homepage pricing card",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": true,
+      "doneNote": "Pricing card wired to Stripe Payment Links via the DONATION_LINKS constant in Home.svelte (per-tier: empty URL keeps 'donations open soon'); both tiers ONE-TIME (recurring would need a Subscription), $50 '/ year' label fixed, non-refundable/not-a-purchase disclaimer added. REMAINING (owner-gated): create the Payment Links in Stripe (test mode first) + paste URLs; F18/A202 legal pack before live mode."
+    },
+    {
+      "id": "CH37",
+      "title": "Review font weighting across the app + site",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Weight scale normalized + documented in the styleguide (400 body / 500 labels+nav / 600 emphasis+headers / 700 KPI numerals+titles). Variable woff2 covers wght 100-900 — no faux-bold. Fixed muddy small-bold outliers (Calendar P&L, terminal/definitions headers), table-head primitive 500→600, sidebar nav→500, hero KPI values→700."
+    },
+    {
+      "id": "R23",
+      "title": "Documentation + comment accuracy audit, with a /docs archive sweep",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Full docs/comments accuracy pass post the 2026-07-04/06 run: fixed drift in README/CLAUDE.md/architecture/data-flow/adr-002/diagrams/csv-examples README, refreshed stale functions/README scaffold banner + CI step name + 2 stale src headers; archived 9 fully-actioned audit/eval docs to docs/archive/ (all inbound links checked). docs/csv-examples kept permanent per owner."
+    },
+    {
+      "id": "F49",
+      "title": "Trade Editor: calendar date-picker and symbol-select cell editors",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Trade Editor editable cells upgraded: DatePickerPopover (month grid reusing core calendar helpers, arrow-key nav + Enter/Escape) and SymbolSelect (filterable roots from dataset ∪ fee roots, custom-root path). Imported trades stay immutable; e2e covers mouse+keyboard paths."
+    },
+    {
+      "id": "F54",
+      "title": "Accounts Phase 2: donation→account provisioning via the verified Stripe webhook",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Donation→account provisioning live behind S11 signature verify: dedupe keyed by Stripe event id (donations table), client_reference_id crediting via /api/checkout, unclaimed-by-email rows claimed when a user verifies that email. 47 new fixtures (accounts suite 58→105). Owner must re-apply functions/schema.sql to D1."
+    },
+    {
+      "id": "F55",
+      "title": "Accounts: recovery email + magic-link re-enrollment + second-passkey nudge",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Recovery email + magic-link re-enrollment shipped: recovery_tokens table (hash-only, single-use, TTL), email-verify-send/confirm + recover-send/verify endpoints (enumeration-safe), Resend via fetch w/ RESEND_API_KEY (503 fail-closed when unbound), second-passkey nudge + 'Lost your passkey?' flow on the Account screen."
+    },
+    {
+      "id": "F56",
+      "title": "Accounts Phase 3: login-gated launch module + Create account flow (flagged, staging)",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Login-gated launch module + Create-account flow shipped flag-OFF: LaunchGate.svelte behind isStaging && ACCOUNT_GATE (constant in flags.ts, or the bb:flags localStorage override). Owner turns the key after resolving R24's no-signup-copy question; CH16 promotes later. E2e covers default-off + override-on + demo-never-gated."
+    },
+    {
+      "id": "A237",
+      "title": "Bug: data-feed selection overflows its dropdown boundaries — truncate",
+      "category": "APP",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Root cause was primitive-level: select-trigger targeted data-[slot=select-value] but bits-ui emits a bare data-select-value attr — the truncation selector never matched. Retargeted + min-w-0 on trigger and value span; fixes every Select app-wide (feed/broker/state/root/admin)."
+    },
+    {
+      "id": "A243",
+      "title": "Web view: Advanced Stats + Activity Terminal side-by-side (like cal/cost pairing)",
+      "category": "APP",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Activity Terminal promoted into the reorderable module grid (MODULES + default keys) and paired half-width with Advanced Stats on lg+ via a named PAIRED_MODULE_KEYS set (cal, cost, adv, term — A228 generalized). Pre-existing saved layouts keep their chosen modules (picker-addable precedent)."
+    },
+    {
+      "id": "R25",
+      "title": "Account auth review: passkeys-only risks — do we need phone/email MFA?",
+      "category": "RESEARCH",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Recommendation (docs/accounts-architecture.md §R25): stay passkeys + verified-email recovery; no SMS OTP (cost, phishability, phone PII we never otherwise collect — and F55's magic link already is an email possession factor). Keep investing in second-passkey nudge + recovery email instead."
+    },
+    {
+      "id": "A244",
+      "title": "Audit homepage info for accuracy/currency",
+      "category": "SITE",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Homepage brought current: Tradovate/NinjaTrader promoted to verified, Quantower + ATAS X tiles added, TradingView-only FAQ rewritten platform-agnostic (batch + .xlsx import), Discount Trading added to broker lists, blotter platform-grouping + analytics drill-down + module customization claims added. No premature accounts claims."
+    },
+    {
+      "id": "A245",
+      "title": "Dead admin control: showBetaAdapters flag gates nothing",
+      "category": "BUG",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Retired both dead flags: showBetaAdapters + betaRibbon removed from APP_FLAGS, the Admin panel rows, and functions/api/config.ts DEFAULTS.flags; stale comments fixed (flags.ts header, App.svelte A89 note). test-flags.mjs A14 mirror parses the literals so the drift gate auto-adjusted (3/3)."
+    },
+    {
+      "id": "A246",
+      "title": "Extract a shared EditableCellPopover primitive (de-dup F49)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Extracted src/app/parts/EditableCellPopover.svelte (shared CELL_TRIGGER_CLASS trigger, open state, onopen reset hook, close() passed to the content snippet); DatePickerPopover + SymbolSelect now own only their content, TradeEditor's plain cell reuses the exported trigger class. Locators/aria untouched — F49 e2e passes unchanged."
+    },
+    {
+      "id": "A247",
+      "title": "Consolidate duplicated formatters/constants into the core (A29)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Core now owns usdCents() (Account donation total), MONTH_ABBR imported by Changelog.svelte, and csvCell() quote/escape shared by xlsx.ts + App.svelte's esc (which layers the A154 formula-prefix neutralization on top; the xlsx intermediate CSV correctly skips it, commented)."
+    },
+    {
+      "id": "A248",
+      "title": "Refresh CLAUDE.md repo-layout for the current tree",
+      "category": "DOCS",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "CLAUDE.md parts/ list brought current (18 parts incl. BootSplash/DatePickerPopover/EditableCellPopover/LaunchGate/SymbolSelect) in both the prose bullet and the repo-layout tree; screens/app-lib/core lists verified current."
+    },
+    {
+      "id": "S26",
+      "title": "Accounts posture hardening: enumeration note, verify-GET, donation guards",
+      "category": "SECURITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "(1) register-options 409 enumeration tradeoff documented as accepted (recover-send stays the enumeration-safe path). (2) verify-GET token-prefetch behavior documented as accepted (the GET still performs the verification). (3) Donation crediting now guarded: donated_at/total only for amount>0 AND USD (isCreditableDonation); non-creditable events still recorded for dedupe. +10 fixtures (accounts suite 115)."
+    },
+    {
+      "id": "A249",
+      "title": "Audit cleanup batch: dead flag comment, contract-only fields, small refactors",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "MeResponse.tier/cloudSync marked contract-only; resolveFromFiles(t, files, pick) helper extracted in dashboard.svelte.ts (3 call sites: platform labels, broker override, reconcile family); motion.ts reduced-motion check now live per dur() call; api<T> shape-check + family() move consciously skipped (commented)."
     }
   ]
 }

@@ -58,6 +58,16 @@ test('demo: boots into the redesigned sidebar dashboard with real seeded metrics
   expect(errors, errors.join('\n')).toHaveLength(0);
 });
 
+test('demo: Account screen is promoted (CH16) and fully read-only — controls disabled, no /api/me probe acted on', async ({ page }) => {
+  await page.goto(DEMO, { waitUntil: 'networkidle' });
+  // The Account nav item exists on demo now (F53 promoted).
+  await page.getByRole('button', { name: 'Account' }).click();
+  // Demo renders the screen in read-only mode with its explanatory note and disabled controls.
+  await expect(page.getByText(/demo/i).first()).toBeVisible();
+  const disabled = page.locator('button[disabled]');
+  await expect(disabled.first()).toBeVisible();
+});
+
 test('demo: HARD invariant — nothing is persisted (no "blotterbook" IndexedDB database)', async ({ page }) => {
   await bootDashboard(page);
   // Exercise a couple of screens so any accidental write path would have fired.
@@ -78,19 +88,15 @@ test('demo: write controls are disabled — cost model + data management + CSV i
   await expect(brokerTrigger).toBeVisible();
   await expect(brokerTrigger).toBeDisabled();
 
-  // Trade Editor: a staged cell edit cannot be saved — "Save all" is disabled on demo.
+  // Trade Editor: demo cannot edit trades at all — core cells render read-only (no trigger button)
+  // and "Save all" is disabled (owner decision 2026-07-06; F49's pickers are exercised on staging).
   await gotoScreen(page, 'Trade Editor');
   await expect(page.locator('table tbody tr').first()).toBeVisible();
-  const cell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
-  await cell.click();
-  const input = page.locator('table tbody tr').first().locator('td').nth(3).locator('input');
-  await input.fill('ZZDEMO');
-  await input.press('Enter');
-  // A161: assert the control EXISTS before asserting disabled — the old `if (count())` guard
-  // vacuously passed if "Save all" was ever renamed/removed, silencing the demo write-guard.
-  const saveAll = page.getByRole('button', { name: 'Save all' });
-  await expect(saveAll).toHaveCount(1);
-  await expect(saveAll).toBeDisabled();
+  await expect(page.locator('table tbody tr').first().locator('td').nth(3).locator('button')).toHaveCount(0);
+  // A161 (non-vacuous): the explicit read-only note EXISTS; the Save-all dirty bar can never appear
+  // because nothing can be staged on demo.
+  await expect(page.getByTestId('editor-readonly-note')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save all' })).toHaveCount(0);
 
   // CSV Library: the data-management controls (backup / restore / erase) are disabled on demo, and so
   // is the upload dropzone itself — importing is not allowed at all on demo (A134), not merely
@@ -104,23 +110,19 @@ test('demo: write controls are disabled — cost model + data management + CSV i
   await expect(page.getByRole('button', { name: /Import \d+ trade/ })).toHaveCount(0);
 });
 
-test('demo: Trade Editor stages edits in-memory but persists nothing across reload', async ({ page }) => {
+test('demo: Trade Editor is read-only — no cell editing, Add trade + Save all disabled', async ({ page }) => {
   test.setTimeout(60_000);
   await bootDashboard(page);
   await gotoScreen(page, 'Trade Editor');
   await expect(page.locator('table tbody tr').first()).toBeVisible();
 
-  // Edit the first row's Symbol cell → ZZDEMO (an in-memory draft edit). On demo the Save-all control
-  // is DISABLED (isDemo), so the staged edit can never be persisted.
-  const symCell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
-  await symCell.click();
-  const input = page.locator('table tbody tr').first().locator('td').nth(3).locator('input');
-  await input.fill('ZZDEMO');
-  await input.press('Enter');
-  const saveAll = page.getByRole('button', { name: 'Save all' });
-  await expect(saveAll).toHaveCount(1); // A161: no vacuous pass if the control is renamed
-  await expect(saveAll).toBeDisabled();
-  await page.waitForTimeout(300);
+  // Demo cannot edit trades AT ALL (owner decision 2026-07-06): core cells render read-only (no
+  // trigger button), Add trade + Save all are disabled. F49's picker cells are covered on staging.
+  const symTd = page.locator('table tbody tr').first().locator('td').nth(3);
+  await expect(symTd).toBeVisible();
+  await expect(symTd.locator('button')).toHaveCount(0); // no editable-cell trigger on demo
+  await expect(page.getByTestId('editor-readonly-note')).toBeVisible(); // exists (A161, non-vacuous)
+  await expect(page.getByRole('button', { name: 'Save all' })).toHaveCount(0); // no staged edits possible
 
   // Nothing was persisted (demo never touches IndexedDB), so a reload re-seeds the pristine dataset.
   const dbs = await page.evaluate(async () => (indexedDB.databases ? (await indexedDB.databases()).map(d => d.name || '') : []));
@@ -129,7 +131,6 @@ test('demo: Trade Editor stages edits in-memory but persists nothing across relo
   await page.reload({ waitUntil: 'networkidle' });
   await gotoScreen(page, 'Trade Editor');
   await expect(page.locator('table tbody tr').first()).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText('ZZDEMO')).toHaveCount(0); // the edit did not survive
 });
 
 test('demo: feedback dialog builds a mailto draft from ONLY the typed text (A105)', async ({ page }) => {

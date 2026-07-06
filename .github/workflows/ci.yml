@@ -46,7 +46,7 @@ jobs:
       - name: Format check (Prettier)
         run: npm run format:check
 
-      - name: Unit + logic tests (adapters / auth / version / flags / tax / demostore / curveandreport / compute)
+      - name: Unit + logic tests (adapters / auth / version / flags / tax / demostore / curveandreport / compute / accounts)
         run: npm run test:unit
 
       - name: Build (Vite → dist/)

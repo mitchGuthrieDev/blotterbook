@@ -26,6 +26,7 @@ flowchart TD
     ROUTER -->|csv| CSV["CsvLibrary"]
     ROUTER -->|trades| TE["TradeEditor"]
     ROUTER -->|reports| R["Reports"]
+    ROUTER -.->|"account (isStaging only, F53)"| ACC["Account"]
     ROUTER -.->|invalid → default| D
 
     STORECTX["context('bb:store')<br/>Store / DemoStore"] --> DASHSTATE
@@ -50,6 +51,14 @@ flowchart TD
         SB["StatusBanner"]
         AT["ActivityTerminal"]
         DEF["Definitions"]
+        DT["DashTabs"]
+        DS["DetectionStatus"]
+        FB["FeedbackDialog"]
+        MC["ModuleCarousel"]
+        PC["PaginationControls"]
+        SL["ScreenshotLightbox"]
+        SC["SegmentedControl"]
+        TI["TagInput"]
     end
     DASHSTATE --- PARTS
 ```
@@ -65,6 +74,7 @@ flowchart TD
 | `csv` | `CsvLibrary.svelte` | data management |
 | `trades` | `TradeEditor.svelte` | data management |
 | `reports` | `Reports.svelte` | data management |
+| `account` | `Account.svelte` | Account (nav item only rendered when `isStaging`, F53) |
 
 Missing/invalid hash defaults to `dashboard`. Hand-rolled hash router — **no SvelteKit** (ADR-001).
 
@@ -73,3 +83,7 @@ Missing/invalid hash defaults to `dashboard`. Hand-rolled hash router — **no S
 - **Unidirectional data flow:** screens are prop-driven and never fetch/persist directly — they read
   derived state and call mutation callbacks on the dashboard factory, which owns the `Store` seam.
 - Every dashboard mutation is `isDemo`-guarded so demo can't persist.
+- **`account` is staging-gated (F53), not a permanent surfaces split.** `App.svelte` only adds the
+  Account nav section and renders the lazy-loaded `Account.svelte` screen when `isStaging` — it ships
+  to app/demo once the accounts backend (`ACCOUNTS_DB`, Stripe env vars) is set up and a
+  `promote-staging` pass removes the gate (CH16 model).

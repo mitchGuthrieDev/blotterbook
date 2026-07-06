@@ -4,7 +4,7 @@
   //   app     → real IndexedDB Store, NO seed (empty → first-run onboarding)
   //   demo    → in-memory DemoStore (never persists), seeded, every write isDemo-guarded
   //   staging → real IndexedDB Store isolated to blotterbookStaging, seeded
-  // Screens read real data via props (the same components the /dev harness previews with mock data).
+  // Screens read real data via props.
   import { onMount, setContext } from 'svelte';
   import { Store } from '../lib/core/store.ts';
   import { createDemoStore } from '../lib/core/demostore.ts';
@@ -23,12 +23,13 @@
     pad2,
     tone,
     MONTH_NAMES,
+    csvCell,
   } from '../lib/core/core.ts';
   import { isBetaPhase } from '../lib/core/format.ts';
   import { Badge } from '$lib/components/ui/badge';
   import { Skeleton } from '$lib/components/ui/skeleton';
   import AppShell from '$lib/components/shell/AppShell.svelte';
-  import { createDashboard } from './lib/dashboard.svelte.ts';
+  import { createDashboard, resolveFromFiles } from './lib/dashboard.svelte.ts';
   import { dailySeries } from '../lib/core/curveseries.ts';
   import { navSections, navLabel } from './lib/nav';
   import { UserRound } from '@lucide/svelte';
@@ -56,7 +57,10 @@
   import StatusBanner from './parts/StatusBanner.svelte';
   import DashTabs from './parts/DashTabs.svelte';
   import FeedbackDialog from './parts/FeedbackDialog.svelte';
-  import { loadFlags, APP_FLAGS, type AppFlags } from './lib/flags.ts';
+  import BootSplash from './parts/BootSplash.svelte';
+  import LaunchGate from './parts/LaunchGate.svelte';
+  import { account, refreshSession } from './lib/account.svelte.ts';
+  import { loadFlags, APP_FLAGS, accountGateEnabled, type AppFlags } from './lib/flags.ts';
   import { pickFlavor } from './lib/flavor.ts';
   import { Adapters } from '../lib/core/adapters.ts';
   import { checkCsvFile, checkXlsxFile, isXlsxFile } from '../lib/core/intake.ts';
@@ -87,11 +91,8 @@
     account: () => import('./screens/Account.svelte'), // F53 — staging-gated route below
   };
 
-  // F53: the Account item is STAGING-gated until CH16 promotes it (the accounts backend needs the
-  // ACCOUNTS_DB binding; the gate is a UX switch, not a security boundary — A111 model).
-  const sections = isStaging
-    ? [...navSections, { label: 'Account', items: [{ key: 'account', label: 'Account', icon: UserRound }] }]
-    : navSections;
+  // F53/CH16: passkey accounts, promoted to every surface (demo renders it read-only via isDemo).
+  const sections = [...navSections, { label: 'Account', items: [{ key: 'account', label: 'Account', icon: UserRound }] }];
   const allNavKeys = $derived(new Set(sections.flatMap(s => s.items.map(i => i.key))));
 
   const fromHash = (): string => {
@@ -575,13 +576,10 @@
   // F46: provenance platform per trade — fileIds → the contributing file records' labels, compacted
   // (the family adapters' '(orders)'-style type suffix is per-FILE detail; the trade-level column
   // shows the platform). Overlap trades list each distinct platform once; legacy/no-provenance → ''.
-  const fileById = $derived(new Map(dash.csvFiles.map(f => [f.id, f])));
+  // A249: resolveFromFiles (dashboard.svelte.ts) owns the shared "index csvFiles by id, scan
+  // t.fileIds" idiom; this caller's pick collects every distinct label.
   function platformOf(t: Trade): string {
-    const labels = (t.fileIds ?? [])
-      .map(id => fileById.get(id))
-      .filter((f): f is NonNullable<typeof f> => !!f)
-      .map(f => (f.platformLabel || f.platform || '').replace(/\s*\(.*\)$/, ''))
-      .filter(Boolean);
+    const labels = resolveFromFiles(t, dash.csvFiles, f => (f.platformLabel || f.platform || '').replace(/\s*\(.*\)$/, '') || undefined);
     return [...new Set(labels)].join(' · ');
   }
 
@@ -638,11 +636,8 @@
     else if (kind === 'csv') {
       // A154: neutralize spreadsheet formula prefixes (= + - @ tab) with a leading apostrophe so a
       // cell that reached the store un-sanitized can't execute when the export opens in Excel/Sheets,
-      // then quote-wrap as before.
-      const esc = (c: string) => {
-        const g = /^[=+\-@\t\r]/.test(c) ? `'${c}` : c;
-        return /[",\n]/.test(g) ? `"${g.replace(/"/g, '""')}"` : g;
-      };
+      // then quote-wrap via the shared csvCell (core.ts, A247).
+      const esc = (c: string) => csvCell(/^[=+\-@\t\r]/.test(c) ? `'${c}` : c);
       const rows = [
         ['date', 'time', 'symbol', 'side', 'qty', 'pnl'],
         ...dash.allTrades.map(t => [t.date, t.time, t.root, t.side, String(t.qty ?? 1), String(t.pnl)]),
@@ -782,6 +777,20 @@
   $effect(() => {
     if (freshApp) onboardingActive = true;
   });
+
+  // F56: login-gated launch (staging-only). Armed by the ACCOUNT_GATE constant or a bb:flags override;
+  // prod/demo are NEVER gated (the isStaging guard here). When armed, App probes /api/me at boot
+  // (refreshSession, below) and holds the whole app behind LaunchGate until a user is signed in —
+  // `!account.user` covers both the in-flight probe (gate shows its own skeleton) and the logged-out
+  // state. On login/register `account.user` flips and the gate unmounts, so the normal flow (staging
+  // is seeded → dashboard; on prod after a CH16 promotion this composes BEFORE F48's onboarding).
+  const gateArmed = isStaging && accountGateEnabled();
+  const gateBlocking = $derived(gateArmed && !account.user);
+
+  // F45/CH16: a quick branded splash over the boot sequence, on every surface. Purely visual —
+  // mounted alongside boot, removed the instant the shell is ready (dash.loaded) or on BootSplash's
+  // own 3s safety timeout; never blocks or delays boot.
+  let bootSplash = $state(true);
   // F47: batch intake — every file runs gates → parse → import; recognized non-trade exports are
   // NAMED (Cash History, Account Balance History, …) instead of getting the generic A178 refusal.
   // Sequential on purpose: imports hit the same Store and A219 reconciliation applies in order.
@@ -895,8 +904,8 @@
   // A179: one flavor phrase per page load (module-scope pick — stable for the session).
   const flavor = pickFlavor();
 
-  // Admin-managed flags (A89): the maintenance banner (betaRibbon is superseded by the version-based
-  // Beta pill in the header). Applied once resolved; dashboard renders on defaults first.
+  // Admin-managed flags (A89): the maintenance banner (the dead betaRibbon/showBetaAdapters keys
+  // were retired in A245). Applied once resolved; dashboard renders on defaults first.
   let flags = $state<AppFlags>({ ...APP_FLAGS });
   // Import-quality notice (A113): close-event exports without per-contract quantity are billed as a
   // single contract, so commissions can be understated — flag it when every trade lacks a real qty.
@@ -934,6 +943,9 @@
       console.error('app boot failed', e);
       dash.error = e instanceof Error ? e.message : String(e);
     });
+    // F56: only when the gate is armed (staging + flag) do we probe /api/me — prod/demo issue no
+    // account traffic at all. refreshSession never throws; account.loaded flips when it settles.
+    if (gateArmed) void refreshSession();
     fetch('/api/status', { headers: { Accept: 'application/json' } })
       .then(r => (r.ok ? (r.json() as Promise<{ mode?: string; label?: string }>) : null))
       .then(v => (statusRec = v))
@@ -975,7 +987,18 @@
   </div>
 {/snippet}
 
-<AppShell {sections} {active} onnavigate={navigate} title={active === 'account' ? 'Account' : navLabel(active)} hideNav={needsOnboarding}>
+<!-- F45: branded boot splash (staging only) — fixed overlay above the A206 skeletons; unmounts on ready. -->
+{#if bootSplash}
+  <BootSplash ready={dash.loaded} ondismiss={() => (bootSplash = false)} />
+{/if}
+
+<AppShell
+  {sections}
+  {active}
+  onnavigate={navigate}
+  title={active === 'account' ? 'Account' : navLabel(active)}
+  hideNav={needsOnboarding || gateBlocking}
+>
   {#snippet actions()}
     <div class="flex min-w-0 flex-1 items-center gap-2">
       <!-- A179/A225: rotating flavor text — one phrase per page load; hidden on narrow viewports.
@@ -1016,6 +1039,17 @@
 
   <StatusBanner maintenance={flags.maintenanceBanner} {importWarning} />
 
+  {#if gateBlocking}
+    <!-- F56: hold the whole app behind the login gate (staging + flag). LaunchGate is self-contained
+         over account.svelte.ts; on login/register account.user flips and this branch falls through to
+         the normal flow (onboarding or dashboard). -->
+    <LaunchGate />
+  {:else}
+    {@render appBody()}
+  {/if}
+</AppShell>
+
+{#snippet appBody()}
   <!-- A235: every imported file is toggled off — say so instead of bouncing to onboarding. -->
   {#if dash.loaded && !needsOnboarding && !dash.allTrades.length && dash.csvFiles.length}
     <div class="mb-4 rounded-md border border-chart-4/40 bg-chart-4/10 px-3 py-2 text-xs text-chart-4" role="status">
@@ -1220,8 +1254,8 @@
             coverage={coverageLines}
           />
         {/await}
-      {:else if active === 'account' && isStaging}
-        <!-- F53 (staging): passkey accounts phase 1 — promote via CH16 once the D1 binding is live. -->
+      {:else if active === 'account'}
+        <!-- F53: passkey accounts (CH16-promoted; demo is read-only via isDemo). -->
         {#await SCREEN_LOADERS.account()}
           {@render screenSkeleton()}
         {:then Account}
@@ -1239,4 +1273,4 @@
       {/if}
     </div>
   {/key}
-</AppShell>
+{/snippet}

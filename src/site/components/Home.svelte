@@ -12,6 +12,21 @@
   // state (first feature active, "Checking status…") so it matches hydration exactly.
   import { onMount } from 'svelte';
 
+  // F38 — Stripe donations MVP (test-mode wiring). Donations are Stripe-dashboard-created PAYMENT
+  // LINKS: hosted, full-redirect checkout pages opened in a new tab — no Stripe.js on this page, so
+  // this needs ZERO CSP change (see docs/stripe-assessment-r15.md). OWNER ACTION: create the two
+  // Payment Links in the Stripe dashboard (TEST MODE first — exercise with card 4242 4242 4242 4242
+  // — then swap in the live-mode URLs at launch) and paste them below. Keep BOTH tiers ONE-TIME
+  // Prices: a recurring "$50/year" would be a Stripe *Subscription*, which needs a Customer, a
+  // billing portal, and webhook provisioning Blotterbook doesn't build until accounts/CloudStore
+  // exist (R15 open question #2) — a Payment Link can't do recurring + "customer chooses amount"
+  // at once anyway. Leave a value '' until it's ready: that tier's button stays in its "Donations
+  // open soon" state below; once set, it renders as a real link styled as a button.
+  const DONATION_LINKS: { once25: string; tier50: string } = {
+    once25: '', // Stripe Payment Link URL — "Back the project — $25 (one-time)"
+    tier50: '', // Stripe Payment Link URL — "Back the project — $50 (one-time — NOT /year, see above)"
+  };
+
   // ---- header border on scroll ----
   let scrolled = $state(false);
 
@@ -43,7 +58,7 @@
       icon: '<path d="M12 3l7 4v5c0 4-3 7-7 9-4-2-7-5-7-9V7z"/>',
       graphic:
         '<rect class="gx-panel" x="34" y="22" width="192" height="96" rx="9"/><line class="gx-grid" x1="34" y1="44" x2="226" y2="44"/><circle class="gx-faint" cx="48" cy="33" r="3.2"/><circle class="gx-faint" cx="60" cy="33" r="3.2"/><circle class="gx-faint" cx="72" cy="33" r="3.2"/><path class="gx-stroke-primary" d="M118 82 v-10 a12 12 0 0 1 24 0 v10"/><rect class="gx-primary" x="112" y="80" width="36" height="28" rx="4"/><circle class="gx-panel" cx="130" cy="92" r="3"/>',
-      body: "Your CSV is parsed and stored entirely in your browser via IndexedDB. Trade data never leaves the page — the only network calls are the app's own reference data.",
+      body: "Your CSVs (or an ATAS X .xlsx export) are parsed and stored entirely in your browser via IndexedDB — one file or a whole batch, even mixed platforms. Trade data never leaves the page — the only network calls are the app's own reference data.",
     },
     {
       title: 'True after-cost performance',
@@ -64,21 +79,21 @@
       icon: '<path d="M4 7h16M4 12h16M4 17h10"/>',
       graphic:
         '<line class="gx-grid" x1="22" y1="116" x2="238" y2="116"/><rect class="gx-primary" x="40" y="58" width="22" height="58" rx="2"/><rect class="gx-primary" x="68" y="74" width="22" height="42" rx="2"/><rect class="gx-take" x="120" y="44" width="22" height="72" rx="2"/><rect class="gx-take" x="148" y="66" width="22" height="50" rx="2"/><rect class="gx-green" x="200" y="84" width="22" height="32" rx="2"/>',
-      body: 'Model AMP, EdgeClear, Tradovate / NinjaTrader, Optimus, thinkorswim, Interactive Brokers, and TradeStation. Switch broker or data feed and watch the cost — and your net — change.',
+      body: 'Model AMP, EdgeClear, Discount Trading, Tradovate / NinjaTrader, Optimus, thinkorswim, Interactive Brokers, and TradeStation. Switch broker or data feed and watch the cost — and your net — change.',
     },
     {
       title: 'Equity curve & calendar',
       icon: '<path d="M3 12l4-4 4 4 4-6 4 8"/><path d="M3 20h18"/>',
       graphic:
         '<line class="gx-grid" x1="20" y1="116" x2="128" y2="116"/><path class="gx-area" d="M22 110 L48 92 L74 86 L100 60 L124 38 L124 116 L22 116 Z"/><path class="gx-line" d="M22 110 L48 92 L74 86 L100 60 L124 38"/><rect class="gx-panel" x="150" y="26" width="92" height="92" rx="7"/><rect class="gx-green" x="156" y="32" width="18" height="18" rx="3"/><rect class="gx-faint" x="176" y="32" width="18" height="18" rx="3"/><rect class="gx-green" x="196" y="32" width="18" height="18" rx="3"/><rect class="gx-red" x="216" y="32" width="18" height="18" rx="3"/><rect class="gx-red" x="156" y="52" width="18" height="18" rx="3"/><rect class="gx-green" x="176" y="52" width="18" height="18" rx="3"/><rect class="gx-green" x="196" y="52" width="18" height="18" rx="3"/><rect class="gx-faint" x="216" y="52" width="18" height="18" rx="3"/><rect class="gx-faint" x="156" y="72" width="18" height="18" rx="3"/><rect class="gx-green" x="176" y="72" width="18" height="18" rx="3"/><rect class="gx-red" x="196" y="72" width="18" height="18" rx="3"/><rect class="gx-green" x="216" y="72" width="18" height="18" rx="3"/><rect class="gx-green" x="156" y="92" width="18" height="18" rx="3"/><rect class="gx-faint" x="176" y="92" width="18" height="18" rx="3"/><rect class="gx-green" x="196" y="92" width="18" height="18" rx="3"/><rect class="gx-green" x="216" y="92" width="18" height="18" rx="3"/>',
-      body: 'A cumulative performance graph with Gross / Net / Take-home overlays and hover detail, plus a Sunday-first monthly calendar of daily PnL with weekly summaries and day-notes.',
+      body: 'A cumulative performance graph with Gross / Net / Take-home overlays and hover detail, plus a Sunday-first monthly calendar of daily PnL with weekly summaries and day-notes. Dashboard modules can be shown, hidden, and reordered to match how you work.',
     },
     {
       title: 'Filters, journal & statistics',
       icon: '<path d="M3 5h18l-7 8v5l-4 2v-7z"/>',
       graphic:
         '<path class="gx-stroke-primary" d="M28 32 H118 L84 70 V108 L62 118 V70 Z"/><rect class="gx-panel" x="150" y="34" width="90" height="22" rx="5"/><rect class="gx-green" x="158" y="42" width="26" height="6" rx="3"/><rect class="gx-panel" x="150" y="62" width="90" height="22" rx="5"/><rect class="gx-primary" x="158" y="70" width="44" height="6" rx="3"/><rect class="gx-panel" x="150" y="90" width="90" height="22" rx="5"/><rect class="gx-take" x="158" y="98" width="18" height="6" rx="3"/>',
-      body: 'Filter by date, symbol, side, session (RTH/ETH), and weekday. Keep day-notes per session. Read expectancy, profit factor, drawdown, streaks, and an illustrative Sharpe — all after costs.',
+      body: 'Filter by date, symbol, side, session (RTH/ETH), and weekday. Keep day-notes per session. Group the blotter by day, symbol, or platform, and click any analytics bucket to drill into its trades. Read expectancy, profit factor, drawdown, streaks, and an illustrative Sharpe — all after costs.',
     },
   ];
   let activeFeat = $state(0);
@@ -358,9 +373,12 @@
       Bring trades from the platform you already use
     </h2>
     <p class="mb-2 max-w-[680px] text-[clamp(15px,1.6vw,17px)] leading-[1.6] text-muted-foreground">
-      Blotterbook auto-detects your export's format and normalizes it — your broker is a separate, cost-only setting. <b>TradingView</b> is
-      verified against real exports; the others are in <b>beta</b>, built from each platform's documented format and exercised with
-      synthetic test data. Step-by-step export guides live in the <a href="howto.html">How&nbsp;To</a>.
+      Blotterbook auto-detects your export's format and normalizes it — your broker is a separate, cost-only setting. Import one file or a
+      whole batch, even mixing platforms — each file gets its own detection status. <b>TradingView</b>,
+      <b>Tradovate&nbsp;/&nbsp;NinjaTrader</b>,
+      <b>Quantower</b>, and <b>ATAS&nbsp;X</b> (a single .xlsx export) are verified against real exports; the rest are in <b>beta</b>, built
+      from each platform's documented format and exercised with synthetic test data. Step-by-step export guides live in the
+      <a href="howto.html">How&nbsp;To</a>.
     </p>
     <ul
       class="plat-grid mt-[34px] grid list-none grid-cols-3 gap-3 p-0 max-[760px]:grid-cols-2 max-[460px]:grid-cols-1"
@@ -380,11 +398,38 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-tradovate"
-          ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
-            class="flex-1 text-[15px] font-semibold">Tradovate</b
-          ><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a
+          ><span
+            class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
+            aria-hidden="true"
+          ></span><b class="flex-1 text-[15px] font-semibold">Tradovate / NinjaTrader</b><span
+            class="pstate font-mono text-[10.5px] text-chart-2">Verified · real exports</span
+          ></a
+        >
+      </li>
+      <li>
+        <a
+          class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          href="howto.html#imp-quantower"
+          ><span
+            class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
+            aria-hidden="true"
+          ></span><b class="flex-1 text-[15px] font-semibold">Quantower</b><span class="pstate font-mono text-[10.5px] text-chart-2"
+            >Verified · real exports</span
+          ></a
+        >
+      </li>
+      <li>
+        <a
+          class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          href="howto.html#imp-atas"
+          ><span
+            class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
+            aria-hidden="true"
+          ></span><b class="flex-1 text-[15px] font-semibold">ATAS X</b><span class="pstate font-mono text-[10.5px] text-chart-2"
+            >Verified · real exports (.xlsx)</span
+          ></a
         >
       </li>
       <li>
@@ -526,9 +571,9 @@
           $25 <small class="text-[14px] font-normal text-muted-foreground">one-time</small>
         </div>
         <div class="mt-[6px] font-mono text-[22px] font-bold tracking-[-0.02em]">
-          $50 <small class="text-[14px] font-normal text-muted-foreground">/ year</small>
+          $50 <small class="text-[14px] font-normal text-muted-foreground">one-time</small>
         </div>
-        <ul class="my-4 mb-[22px] flex list-none flex-col gap-[10px] p-0">
+        <ul class="my-4 mb-[18px] flex list-none flex-col gap-[10px] p-0">
           <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-muted-foreground">
             <svg
               viewBox="0 0 24 24"
@@ -551,7 +596,31 @@
             >Supporter recognition (planned)
           </li>
         </ul>
-        <p class="mt-auto text-[12px] leading-[1.5] text-muted-foreground">Donations open soon — secure checkout via Stripe.</p>
+        <div class="mt-auto flex flex-col gap-2">
+          {#if DONATION_LINKS.once25}
+            <a
+              class="inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
+              href={DONATION_LINKS.once25}
+              target="_blank"
+              rel="noopener noreferrer">Back with $25 &rarr;</a
+            >
+          {:else}
+            <p class="text-[12px] leading-[1.5] text-muted-foreground">$25 one-time — donations open soon via Stripe.</p>
+          {/if}
+          {#if DONATION_LINKS.tier50}
+            <a
+              class="inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
+              href={DONATION_LINKS.tier50}
+              target="_blank"
+              rel="noopener noreferrer">Back with $50 &rarr;</a
+            >
+          {:else}
+            <p class="text-[12px] leading-[1.5] text-muted-foreground">$50 one-time — donations open soon via Stripe.</p>
+          {/if}
+          <p class="text-[11px] leading-[1.4] text-muted-foreground">
+            A voluntary, non-refundable donation — not a purchase, and it grants no product access or entitlement.
+          </p>
+        </div>
       </div>
 
       <div class="plan flex flex-col rounded-[14px] border border-border bg-card p-[26px] opacity-[0.62]">
@@ -617,9 +686,10 @@
         <p
           class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground"
         >
-          It reads a balance-history CSV exported from TradingView. Required columns are <code>Time</code>,
-          <code>Realized PnL (value)</code>, and <code>Action</code>; each row is treated as one position-close event. Everything is parsed
-          and stored locally in your browser via IndexedDB — your trade data never leaves the page.
+          It reads the trade-history export from your trading platform — a CSV for most platforms, or a single <code>.xlsx</code> workbook for
+          ATAS X — and auto-detects the format. You can import one file or a whole batch, even mixing platforms and export types; each file gets
+          its own detection status, and Blotterbook normalizes and de-duplicates everything into one trade history. Everything is parsed and stored
+          locally in your browser via IndexedDB — your trade data never leaves the page.
         </p>
       </details>
       <details class="border-b border-border">
@@ -680,9 +750,9 @@
         <p
           class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground"
         >
-          Modeled brokers include AMP, EdgeClear, Tradovate / NinjaTrader, Optimus, Charles Schwab (thinkorswim), Interactive Brokers, and
-          TradeStation. Instruments are CME futures, reduced to a root ticker (for example <code>MESM2025</code> becomes <code>MES</code>).
-          Unknown symbols fall back to a default fee and are flagged.
+          Modeled brokers include AMP, EdgeClear, Discount Trading, Tradovate / NinjaTrader, Optimus, Charles Schwab (thinkorswim),
+          Interactive Brokers, and TradeStation. Instruments are CME futures, reduced to a root ticker (for example <code>MESM2025</code>
+          becomes <code>MES</code>). Unknown symbols fall back to a default fee and are flagged.
         </p>
       </details>
       <details class="border-b border-border">
@@ -728,9 +798,10 @@
         <p
           class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground"
         >
-          The app is <b>free for everyone</b> and stays free. You can optionally <b>back the project</b> with a $25 one-time or $50/year
-          donation (checkout via Stripe, coming soon). The only planned paid feature is <b>synced workspaces</b> — end-to-end-encrypted cross-device
-          sync at about $5/month — which isn't ready yet. Nothing else is gated.
+          The app is <b>free for everyone</b> and stays free. You can optionally <b>back the project</b> with a $25 or $50 one-time,
+          non-refundable donation (checkout via Stripe, coming soon) — it's not a purchase and grants no product access. The only planned
+          paid feature is <b>synced workspaces</b> — end-to-end-encrypted cross-device sync at about $5/month — which isn't ready yet. Nothing
+          else is gated.
         </p>
       </details>
     </div>

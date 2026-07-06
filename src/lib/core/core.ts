@@ -152,18 +152,15 @@ export function compute(tr: Trade[]) {
   // Track best/worst here (running, not Math.max(...pnls) — spreading a large array as
   // args overflows the call stack on big fills exports, blanking the whole dashboard).
   // F15: also track the PEAK-RELATIVE drawdown %, and the drawdown DURATION (trades from the
-  // pre-drop peak to the trough). peakIdx remembers which trade set the running peak; when a new
-  // deepest drop is found we snapshot the peak value (for %) and the peak→trough span (for duration).
+  // pre-drop peak to the trough); when a new deepest drop is found we snapshot the peak value
+  // (for %) and the peak→trough curve span (for duration).
   // peakCurveIdx / ddPeakCurveIdx / ddTroughCurveIdx are CURVE indices (curve[0] is the leading 0),
   // so the drawdown card can mark peak→trough directly off m.curve without re-walking it (CH23).
   let eq = 0,
     peak = 0,
-    peakIdx = 0,
     peakCurveIdx = 0,
     maxDD = 0,
     ddPeakVal = 0,
-    ddStart = 0,
-    ddEnd = 0,
     ddPeakCurveIdx = 0,
     ddTroughCurveIdx = 0,
     best = n ? -Infinity : 0,
@@ -174,15 +171,12 @@ export function compute(tr: Trade[]) {
     const ci = idx + 1; // curve index of this running equity
     if (eq > peak) {
       peak = eq;
-      peakIdx = idx;
       peakCurveIdx = ci;
     }
     const dd = peak - eq;
     if (dd > maxDD) {
       maxDD = dd;
       ddPeakVal = peak;
-      ddStart = peakIdx;
-      ddEnd = idx;
       ddPeakCurveIdx = peakCurveIdx;
       ddTroughCurveIdx = ci;
     }
@@ -194,7 +188,7 @@ export function compute(tr: Trade[]) {
   // drawdown), the peak-relative % is undefined → null ('—'), not a wrong-looking 0.0%.
   const maxDDpct = ddPeakVal > 0 ? (maxDD / ddPeakVal) * 100 : maxDD > 0 ? null : 0;
   // A170: duration from the CURVE indices (curve[0] is the pre-trade origin), which count the
-  // inception case correctly — ddEnd−ddStart was off by one there (peakIdx starts at trade 0).
+  // inception case correctly (a trade-index delta was off by one there).
   const maxDDdur = maxDD > 0 ? ddTroughCurveIdx - ddPeakCurveIdx : 0;
   // F15: profit concentration — % of total NET profit delivered by the 5 biggest winners. A high
   // figure (or >100%, meaning the rest nets negative) flags reliance on a handful of outlier trades.
@@ -405,7 +399,18 @@ export const usdWhole = (v: number) => {
   const r = Math.round(v);
   return (r < 0 ? '-' : '+') + '$' + Math.abs(r).toLocaleString('en-US');
 };
+// Whole-dollar USD from a CENTS integer (accounts donation totals, F54) — unsigned (a donation total
+// is never negative), Intl-formatted so it stays locale-stable like usd()/usdWhole() (A247; was a
+// verbatim local `fmtMoney` in Account.svelte).
+export const usdCents = (cents: number) =>
+  (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 export const cls = (v: number) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
+// Quote/escape ONE CSV cell (quote-wrap + double embedded quotes when the value contains a comma,
+// quote, or newline) — the shared quoting half of xlsx.ts's ATAS-journal-sheet-to-CSV conversion and
+// App.svelte's trade export (A247). Pure RFC4180-ish quoting only, no spreadsheet-formula
+// neutralization — a caller writing a CSV meant to be OPENED in a spreadsheet app (App.svelte's
+// export) layers the A154 formula-prefix neutralization on top of this.
+export const csvCell = (c: string) => (/[",\n\r]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c);
 // Ratio/number formatters shared by the Svelte overview / advanced-stats / stat-card modal so the
 // "∞ / —" handling can't drift between them.
 export const ratio = (v: number) => (v === Infinity ? '∞' : Number.isFinite(v) ? v.toFixed(2) : '—');

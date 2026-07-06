@@ -73,8 +73,8 @@ should match that bar: short, procedure-shaped, with the exact greps/file touch-
   (2) a `{#snippet <key>Body()}`; (3) the render dispatch chain (~line 1157); (4) an **A189
   `moduleThumb` SVG branch** (~line 1114 — geometry attrs + `fill-chart-*` utilities only, CSP-clean);
   (5) `moduleHeader` comes free. Plus the guardrails: tokens only (chart-1..5 for data color), demo
-  non-mutation for any write, `check-bundle-size` 600 KiB budget, e2e/no-dead-controls allow-list, and
-  a changelog entry.
+  non-mutation for any write, the `check-bundle-size` budget (see that script's header for the
+  current figure), e2e/no-dead-controls allow-list, and a changelog entry.
 - **Stays manual:** the module's actual analytics/markup.
 - **Why P2 not P1:** single-file and recently exercised (A203), so the pattern is fresh in-repo; no
   scheduled next module. The thumbnail + dispatch are the classic forgotten steps a checklist catches.

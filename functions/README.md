@@ -1,8 +1,10 @@
-# Pages Functions — accounts, payments, storage tiers (scaffold)
+# Pages Functions — accounts, payments, storage tiers
 
-> **Status: scaffold only.** None of this is wired into the app yet. These
-> files exist so the architecture is in place before accounts/payments are
-> built. The app today is 100% local (IndexedDB) and ships no account UI.
+> **Status: live (accounts phases 1–2).** Passkey accounts (F53), donation
+> provisioning via the verified Stripe webhook (F54), and recovery email +
+> magic-link re-enrollment (F55) are implemented; the Account screen is
+> staging-gated in the app. Trade data stays 100% local (IndexedDB) — these
+> functions hold identity + entitlements ONLY (guardrail S25).
 
 Cloudflare Pages serves everything under `/functions/*` as edge functions
 (Workers). They're the thin server layer the app will use for the things that
@@ -30,13 +32,54 @@ so adding the cloud tier does not touch the rest of the app.
 4. The app calls `GET /api/me` to learn the signed-in user's tier and picks the
    matching `Store` implementation.
 
-## Endpoints (stubs)
+## Accounts + donations (F53 passkeys · F54 donations · F55 recovery)
 
-- `functions/api/checkout.ts` — create a Stripe Checkout session. **Stub.**
-- `functions/api/webhook.ts`  — receive + verify Stripe webhooks, provision
-  accounts/entitlements. **Stub.**
-- `functions/api/me.ts`       — return the current user's storage tier. **Stub** that
-  returns `{ tier: "local", cloudSync: false }` so `Entitlements.current()` has something to call.
+Backed by the D1 database bound as **`ACCOUNTS_DB`** (schema: [`functions/schema.sql`](schema.sql)).
+Every `/api/account/*` route and the webhook **fail closed with a 503 JSON body** when the binding
+is missing. Shared helpers live in `functions/_lib/accounts.ts` (sessions, challenges, users,
+credentials, donations, recovery tokens) and `functions/_lib/email.ts` (the Resend sender).
+
+**Passkey ceremonies (F53):** `POST /api/account/register-options` · `register-verify` ·
+`login-options` · `login-verify` · `logout`. Sessions are an opaque `__Host-` cookie (only
+`SHA-256(secret)` stored); every mutating route is Origin-checked.
+
+**Donations (F54):**
+
+- `functions/api/checkout.ts` — **implemented.** `POST` with `{ plan?: 'one_time' | 'subscription' }`.
+  Resolves the price ONLY from `STRIPE_PRICE_*` server-side (never a client amount), and when the
+  caller has a session it passes **`client_reference_id = <user id>`** so the webhook can credit the
+  exact account. Returns `{ url }`. Origin-checked; 501 until Stripe is configured.
+- `functions/api/webhook.ts` — **implemented.** Verifies the Stripe signature over the RAW body
+  FIRST (S11), then on `checkout.session.completed` records the donation in `donations` **keyed by
+  the Stripe event id** (replay-safe dedupe — a retried webhook credits exactly once). Linkage:
+  `client_reference_id` → credit that user; else a **verified** matching email → credit; else the
+  row sits **unclaimed** (keyed by lowercased checkout email) and is claimed when that email is
+  verified. Never trusts an unverified checkout email. 501 without the webhook secret, 503 without
+  `ACCOUNTS_DB`.
+- `functions/api/me.ts` — **extended.** Anonymous → `{ tier:'local', cloudSync:false }` (unchanged);
+  authed adds `{ user:{ email, emailVerified, donated, donatedAt, donationTotalCents, createdAt },
+  passkeys:[…] }`. The Account screen reads `donated`/`donatedAt`/`donationTotalCents` for the real
+  supporter status.
+
+**Recovery email + magic-link re-enrollment (F55):**
+
+- `POST /api/account/email-verify-send` — **authed**, Origin-checked. Emails a single-use verify
+  link (15-min TTL). 401 without a session; 503 `{ error:'email unavailable' }` when `RESEND_API_KEY`
+  is unbound.
+- `GET|POST /api/account/email-verify-confirm?token=…` — consumes the token, sets
+  `users.email_verified = 1`, and **claims** any unclaimed donations for that email. GET (the email
+  link) 302-redirects back to `/app/app.html?verified=1#account`; POST returns JSON.
+- `POST /api/account/recover-send` — **unauthed**, Origin-checked. Takes `{ email }`, ALWAYS returns a
+  generic `200` (no account enumeration); emails a magic link only when a **verified** account
+  exists. 503 `{ error:'email unavailable' }` when `RESEND_API_KEY` is unbound.
+- `POST /api/account/recover-verify` — consumes the recovery token and returns fresh WebAuthn
+  **registration** options bound to that user (a new `register` challenge row); the client then posts
+  to `register-verify`, which enrolls the new passkey and starts a session (the standard add-passkey
+  path). Re-asserts `email_verified` and claims donations.
+
+Recovery/verify tokens are stored **hash-only** (`SHA-256(secret)`), single-use (`used_at` stamped on
+consume), and TTL'd (~15 min) — same posture as sessions (S25). Security never depends on the
+fail-open rate limiter (S22/S25).
 
 ## Public endpoints (shipped)
 
@@ -96,14 +139,26 @@ audMatches:true, expired:false`.
 
 ## Environment variables (set in the Pages dashboard when implementing)
 
-- `STRIPE_SECRET_KEY`
+- `STRIPE_SECRET_KEY` — used by `/api/checkout` to create Checkout Sessions via the Stripe REST API.
 - `STRIPE_WEBHOOK_SECRET` — once set, `/api/webhook` verifies the `Stripe-Signature` over the
   raw body (HMAC-SHA256, 5-min replay window) and rejects forgeries with 400 (S13). Until the
   secret is set the endpoint fails closed (501) and never acts on an event.
-- `STRIPE_PRICE_ONE_TIME`, `STRIPE_PRICE_SUBSCRIPTION`
+- `STRIPE_PRICE_ONE_TIME`, `STRIPE_PRICE_SUBSCRIPTION` — the only source of the price id (the client
+  sends a plan NAME, never a price/amount).
+- `RESEND_API_KEY` — **(F55)** the Resend API key for the two transactional emails (verify + recovery
+  magic link). `functions/_lib/email.ts` posts to `https://api.resend.com/emails` via `fetch()` (no
+  SDK). **Unbound → the email endpoints return 503 `{ error:'email unavailable' }`** and never crash.
+  Setup for the owner: create a Resend account, verify the sending domain, mint an API key, and set
+  it (plus `EMAIL_FROM`) in the Pages dashboard.
+- `EMAIL_FROM` — optional From address for F55 emails (e.g. `Blotterbook <no-reply@blotterbook.com>`);
+  defaults to that when unset.
 
 ## Bindings to add when implementing
 
-- **D1** (`DB`) or **KV** (`ACCOUNTS`) for accounts + entitlements.
+- **D1** (`ACCOUNTS_DB`) for accounts + entitlements + donations + recovery tokens — schema in
+  [`functions/schema.sql`](schema.sql). **After ANY change to `schema.sql`** (F54 added `donations`,
+  F55 added `recovery_tokens`) the owner must **re-run** the idempotent apply command so the new
+  tables exist in prod:
+  `npx wrangler d1 execute blotterbook-accounts --remote --file=functions/schema.sql`.
 - **R2** for the subscription tier's stored trade blobs (optionally encrypted
   client-side to preserve the "your data stays yours" guarantee).

@@ -311,7 +311,8 @@ test('staging redesign: Trade Editor edits a core field and it persists (updateT
   // Edit the first row's Symbol cell → ZZTEST, save.
   const symCell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
   await symCell.click();
-  const input = page.locator('table tbody tr').first().locator('td').nth(3).locator('input');
+  // F49: the symbol editor is now a filterable popover portaled to <body>.
+  const input = page.getByPlaceholder('Filter or type a new root…');
   await input.fill('ZZTEST');
   await input.press('Enter');
   await expect(page.getByRole('button', { name: 'Save all' })).toBeVisible();
@@ -724,4 +725,161 @@ test('staging redesign: Commission Compare module adds via the picker and ranks 
   expect(await rows.count()).toBeGreaterThan(3);
   await expect(rows.first().getByText('Cheapest')).toBeVisible();
   await expect(mod.getByText(/exchange\/clearing\/NFA \$\d/)).toBeVisible();
+});
+
+// ── F45: branded boot splash (CH16-promoted to every surface) ───────────────────────────────────
+
+test('staging redesign: F45 boot splash shows during boot, then unmounts once the Dashboard renders', async ({ page }) => {
+  // Hold a boot data request so dash.loaded stays false long enough to observe the splash reliably
+  // (the splash removes itself the instant the shell is ready, so without the hold the assertion races).
+  await page.route('**/data/manifest.json', async route => {
+    await new Promise(r => setTimeout(r, 800));
+    await route.continue();
+  });
+  await page.goto(STAGING);
+  const splash = page.getByTestId('boot-splash');
+  await expect(splash).toBeVisible();
+  await expect(splash).toContainText('Blotterbook');
+
+  // Once boot completes (real KPIs render), the splash fades out and unmounts entirely.
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 8000 });
+  await expect(splash).toHaveCount(0);
+});
+
+test('staging redesign: F45 boot splash shows on demo too, then unmounts (CH16 promoted)', async ({ page }) => {
+  // Demo is seeded, so the Dashboard renders — and by then the splash has removed itself.
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+  await expect(page.getByTestId('boot-splash')).toHaveCount(0);
+
+  // App (prod surface): boot settles (networkidle) with the splash gone (3s safety cap max).
+  await page.goto('/app/app.html', { waitUntil: 'networkidle' });
+  await expect(page.getByTestId('boot-splash')).toHaveCount(0, { timeout: 6000 });
+});
+
+// ── F56: login-gated launch module (flag + staging gated) ───────────────────────────────────────
+
+test('staging redesign: F56 gate is OFF by default — staging boots straight into the app', async ({ page }) => {
+  await bootDashboard(page);
+  await expect(page.getByTestId('launch-gate')).toHaveCount(0);
+});
+
+test('staging redesign: F56 bb:flags override arms the gate (both buttons); demo is never gated', async ({ page }) => {
+  // The bb:flags localStorage override forces ACCOUNT_GATE on without a rebuild (staging-only path).
+  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: true })));
+
+  await page.goto(STAGING, { waitUntil: 'networkidle' });
+  const gate = page.getByTestId('launch-gate');
+  await expect(gate).toBeVisible({ timeout: 8000 });
+  await expect(gate).toContainText('Sign in to launch Blotterbook');
+  await expect(gate.getByRole('button', { name: 'Log in', exact: true })).toBeVisible();
+  await expect(gate.getByRole('button', { name: 'Create account', exact: true })).toBeVisible();
+  // The app is held behind the gate — the real Dashboard KPIs are NOT rendered.
+  await expect(page.getByText('Net P&L', { exact: true })).toHaveCount(0);
+
+  // Create account expands the email + passkey-register form in place.
+  await gate.getByRole('button', { name: 'Create account', exact: true }).click();
+  await expect(gate.getByPlaceholder('you@example.com')).toBeVisible();
+  await expect(gate.getByRole('button', { name: /Create account with a passkey/ })).toBeVisible();
+
+  // Demo is NEVER gated, even with the override set (same origin, so the override is present).
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.getByTestId('launch-gate')).toHaveCount(0);
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+});
+
+// ── F49: editable-cell pickers (moved from the demo spec — demo is read-only for trades) ────────
+test('staging redesign: Trade Editor Date cell opens a calendar popover and picking a day updates the draft (F49)', async ({ page }) => {
+  await bootDashboard(page);
+  await gotoScreen(page, 'Trade Editor');
+  await expect(page.locator('table tbody tr').first()).toBeVisible();
+
+  // Clicking the Date cell (col 1) opens a month-grid calendar, not a bare text input.
+  const dateCell = page.locator('table tbody tr').first().locator('td').nth(1).locator('button');
+  await dateCell.click();
+  const days = page.getByTestId('datepicker-day');
+  await expect(days.first()).toBeVisible();
+  const dayCount = await days.count();
+  expect(dayCount).toBeGreaterThan(0);
+
+  // Mouse path: pick a day → the popover closes and the cell's staged value is exactly that ISO date.
+  const targetIdx = Math.min(9, dayCount - 1);
+  const target = days.nth(targetIdx);
+  const pickedDate = await target.getAttribute('aria-label'); // rendered as the 'YYYY-MM-DD' itself
+  await target.click();
+  await expect(page.getByTestId('datepicker-day')).toHaveCount(0, { timeout: 10_000 }); // popover closed after picking
+  await expect(dateCell).toHaveText(pickedDate);
+
+  // Keyboard path: reopen, arrow off a focused day, then Enter picks whatever is now focused (the
+  // grid handles ArrowLeft/Right/Up/Down + an explicit Enter handler — see onGridKey in
+  // DatePickerPopover.svelte). Locator.press() (not a bare page.keyboard.press) focuses + waits for
+  // actionability on each element itself, so this isn't racing the popover's open-time re-render.
+  await dateCell.click();
+  const days2 = page.getByTestId('datepicker-day');
+  await expect(days2.first()).toBeVisible();
+  // Flake guard: right after open, bits-ui's own open auto-focus can land AFTER our press and steal
+  // focus from the day (load-dependent interleaving). Retry the arrow press until the roving focus
+  // demonstrably holds on a day.
+  const focusedDay = page.locator('[data-testid="datepicker-day"]:focus');
+  await expect(async () => {
+    const midIdx = Math.min(5, (await days2.count()) - 2);
+    await days2.nth(midIdx).press('ArrowRight');
+    await expect(focusedDay).toHaveCount(1, { timeout: 500 });
+  }).toPass({ timeout: 10_000 });
+  const focusedLabel = await focusedDay.getAttribute('aria-label');
+  expect(focusedLabel).toBeTruthy();
+  await focusedDay.press('Enter'); // actionability-checked press on the focused day itself
+  await expect(page.getByTestId('datepicker-day')).toHaveCount(0, { timeout: 10_000 });
+  await expect(dateCell).toHaveText(focusedLabel);
+
+  // Escape closes without staging a pick.
+  const beforeEscape = await dateCell.textContent();
+  await dateCell.click();
+  await expect(page.getByTestId('datepicker-day').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('datepicker-day')).toHaveCount(0, { timeout: 10_000 });
+  await expect(dateCell).toHaveText(beforeEscape ?? '');
+});
+
+test('staging redesign: Trade Editor Symbol cell opens a filterable list; filtering, picking, and a custom root all work (F49)', async ({
+  page,
+}) => {
+  await bootDashboard(page);
+  await gotoScreen(page, 'Trade Editor');
+  await expect(page.locator('table tbody tr').first()).toBeVisible();
+
+  const symCell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
+  await symCell.click();
+  const filterInput = page.getByPlaceholder('Filter or type a new root…');
+  await expect(filterInput).toBeFocused(); // opens with the filter already focused (keyboard path)
+
+  // The unfiltered list holds every known root (dataset symbols + EXCH/MICRO/NOT_MICRO fee roots).
+  const options = page.getByTestId('symbolselect-option');
+  const totalCount = await options.count();
+  expect(totalCount).toBeGreaterThan(0);
+
+  // Type-to-filter narrows the list to matches, case-insensitively.
+  await filterInput.fill('es');
+  await expect(options.first()).toBeVisible();
+  const filteredTexts = await options.allTextContents();
+  expect(filteredTexts.length).toBeGreaterThan(0);
+  expect(filteredTexts.length).toBeLessThanOrEqual(totalCount);
+  for (const t of filteredTexts) expect(t.toUpperCase()).toContain('ES');
+
+  // Picking an existing option sets the cell's value and closes the popover.
+  const pickedOption = (await options.first().textContent())?.trim();
+  await options.first().click();
+  await expect(page.getByTestId('symbolselect-list')).toHaveCount(0);
+  await expect(symCell).toHaveText(pickedOption ?? '');
+
+  // Custom-root path: typing an unlisted root surfaces a free-text 'Use "…"' row at the top of the
+  // list, and picking it sets the cell to exactly the typed (canonicalized) root.
+  await symCell.click();
+  await filterInput.fill('zzcustom');
+  const custom = page.getByTestId('symbolselect-custom');
+  await expect(custom).toBeVisible();
+  await expect(custom).toHaveText('Use "ZZCUSTOM"');
+  await custom.click();
+  await expect(page.getByTestId('symbolselect-list')).toHaveCount(0);
+  await expect(symCell).toHaveText('ZZCUSTOM');
 });

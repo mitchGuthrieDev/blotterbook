@@ -12,11 +12,12 @@ flowchart TD
     S1 --> S2["lint — ESLint"]
     S2 --> S3["typecheck — tsc(core)+tsc(functions)+svelte-check"]
     S3 --> S4["format:check — Prettier"]
-    S4 --> S5["test:unit — 8 node suites"]
+    S4 --> S5["test:unit — 9 node suites"]
     S5 --> S6["build — build-manifest + vite → dist/"]
-    S6 --> S7["size-budget — /app/ bundle ≤ 600 KiB"]
+    S6 --> S7["size-budget — /app/ bundle ≤ 840 KiB"]
     S7 --> S8["check-deploy — deploy contract + version classification"]
-    S8 --> S9["test:e2e — Playwright, boot every surface from dist/"]
+    S8 --> S8B["check-mermaid — every docs/ mermaid block still parses"]
+    S8B --> S9["test:e2e — Playwright, boot every surface from dist/"]
     S9 --> S10["re-run scripts/build-manifest.mjs"]
     S10 --> GATE{"git status clean?"}
     GATE -->|"dirty"| FAIL["FAIL — committed manifest.json drifted"]
@@ -29,7 +30,11 @@ flowchart TD
 ## Notes
 
 - **Any step is a hard gate** — lint, typecheck, format, unit, build, size-budget, deploy-contract,
-  and e2e all fail the run on error. The diagram shows the happy path; a failure at any node stops it.
+  the Mermaid-diagram check, and e2e all fail the run on error. The diagram shows the happy path; a
+  failure at any node stops it.
+- **`check-mermaid`** parses every ```` ```mermaid ```` block under `docs/` (reuses the Playwright
+  Chromium install) so a diagram edit that no longer parses fails CI instead of silently rendering as
+  an error box on GitHub — see [the architecture-diagrams README](README.md#ci-drift-gate).
 - **The drift gate is the finale.** Because `dist/` is gitignored, CI re-runs the deterministic
   `build-manifest.mjs` and asserts `git status` is clean — proving the committed
   `static/data/manifest.json` matches what the tooling produces. If you edit any `static/data/*.json`

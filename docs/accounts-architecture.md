@@ -2,6 +2,18 @@
 
 **Date:** 2026-07-05 · **Backlog item:** R24 · **Status:** written architecture (no code changed)
 
+> **Implementation note (accuracy check against the shipped code):** F53 (Phase 1) shipped
+> 2026-07-05 largely per this plan, but with structural details that evolved during the build —
+> `functions/schema.sql` is the current source of truth for the actual tables, not the sketch below.
+> Notably: sessions use a split `id` (public lookup key) + `secret_hash` design rather than a single
+> hashed opaque token; `recovery_tokens` carries a `purpose` (`'verify'` | `'recover'`) column serving
+> both email verification and lost-passkey recovery in one table; and `donations` gained
+> `stripe_customer_id`/`claimed_at` instead of a `mode` column. `functions/api/account/` also already
+> has endpoints beyond the four Phase-1 ceremony routes (`email-verify-send`/`-confirm`,
+> `recover-send`/`-verify`) even though F54/F55 show as open in the backlog at time of writing — treat
+> `functions/schema.sql` and `functions/api/account/*` as ground truth over the SQL/API sketch below,
+> which records the original design intent and rationale (still valid) rather than the final shape.
+
 ## Recommendation (up front)
 
 - **Auth = passkeys only (WebAuthn), built on `@simplewebauthn/server` + `@simplewebauthn/browser`**
@@ -173,3 +185,42 @@ Paid before any paying sync tier) and on the CloudStore initiative being real.
   fail-open rate limiter (extends S22); challenges/sessions/recovery tokens single-use + TTL'd.
 - **(existing) A16 / A17 / S11** — unchanged; A16 gates Phase 4, A17 is honored (D1 only), S11's
   verify-before-provision ordering is preserved by Phase 2.
+
+## R25 — passkeys-only review (2026-07-06)
+
+A short decision review now that F53–F55 have shipped the passkey ceremonies, donation provisioning,
+and the recovery/verify flows. Question on the table: is passkeys-only auth the right posture, and
+should we add a phone/email MFA factor?
+
+**Risks of passkeys-only.**
+
+- **Ecosystem lock-in / device loss.** A passkey created in iCloud Keychain or Google Password
+  Manager syncs *within* that ecosystem but not across them. A user who loses their whole ecosystem
+  (or switches Apple↔Android) can be locked out. *Mitigated by F55:* verified recovery email →
+  magic-link re-enrollment, plus the second-passkey nudge (enroll one on a phone via cross-device QR)
+  so most users already hold two independent authenticators.
+- **Managed / locked-down devices.** Corporate MDM or kiosk browsers can disable WebAuthn platform
+  authenticators or block cross-device (hybrid) flows, leaving a user with no way to enroll. Roaming
+  security keys work but we can't assume them. The recovery email is the escape hatch here too.
+- **Old browser / OS gaps.** Passkeys need a reasonably current OS + browser; discoverable-credential
+  (usernameless) login needs newer still. Pre-passkey environments simply can't create an account —
+  acceptable for a modern trading-tools audience, but real tail exclusion.
+- **Shared computers.** No password to type is a security win, but a synced passkey on a shared
+  machine's platform authenticator is a footgun; the usual guidance (don't save your passkey on a
+  shared device) applies and is a support/education cost, not a code one.
+- **Signup abandonment.** "Create a passkey" is still unfamiliar; some users bounce at the OS prompt.
+  Blotterbook softens this because **accounts are optional** — the app is fully usable logged-out, so
+  a failed passkey ceremony never blocks the core product (unlike the Phase 3 hard-gate tension,
+  still unresolved — Open question 1).
+
+**Phone/email MFA recommendation.** F55's magic link **is already an email possession factor** — it
+gates account recovery and donation claiming, so we have a second factor without new PII. SMS OTP
+would add a phone number (PII we otherwise never collect — counter to the privacy posture), recurring
+per-message cost, carrier/deliverability complexity, and it is **more phishable and SIM-swappable**
+than either a passkey or a single-use email link — a net downgrade as a security factor.
+
+**Recommendation: stay passkeys + verified email recovery; do NOT add SMS.** Passkeys remain the
+primary (phishing-resistant, no shared secret) factor and the emailed magic link is a sufficient,
+low-PII recovery/possession factor; SMS OTP adds cost, PII, and phishability for no security gain.
+Keep investing in the F55 mitigations (push the second-passkey nudge, keep recovery email verified
+and prominent) rather than a new channel.

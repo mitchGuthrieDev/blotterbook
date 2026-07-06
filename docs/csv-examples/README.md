@@ -22,17 +22,22 @@ the ground-truth reference for future adapter/format questions — fixtures in
    same conventions) — NinjaTrader runs on the Tradovate platform. One adapter family covers both,
    and **headers cannot distinguish the platforms**; label the family "Tradovate / NinjaTrader"
    (matches the `brokers.json` broker name).
-2. **The existing beta `tradovate` adapter already parses both platforms' `Orders.csv` to the
-   cent** against the platform's own `Performance.csv` ground truth: Tradovate 9 round trips net
-   −$13.75 ✓; NinjaTrader 2 round trips net +$325.00 ✓ (sides, qty, entry/exit times, holdMs all
-   populated). That is the A103 verification bar for Tradovate.
-3. **Per-type triage** (the F47 classification):
+2. **The `tradovate` adapter parses `Orders.csv` to the cent** against the platform's own
+   `Performance.csv` ground truth: Tradovate 9 round trips net −$13.75 ✓; NinjaTrader 2 round trips
+   net +$325.00 ✓ (sides, qty, entry/exit times, holdMs all populated). That was the A103
+   verification bar for Tradovate, since cleared — the whole Tradovate/NinjaTrader family
+   (`tradovate`, `tradovate-perf`, `tradovate-fills`) now ships `beta:false` (A209).
+3. **Per-type triage** (the F47 classification; all three trade-bearing types are now parsed,
+   post-A209):
    - `Performance.csv` — authoritative paired round trips (symbol, qty, buy/sell price, `$x.xx`
-     pnl, bought/sold timestamps, duration). Best single import source; **refused today**.
+     pnl, bought/sold timestamps, duration). Best single import source; parsed by the `tradovate-perf`
+     adapter.
    - `Fills.csv` — per-fill rows **with real `commission` (1.29/fill for ES — matches the
-     `brokers.json` TRADOVATE std 1.29/side)** → the A208 real-commission pipeline; refused today.
-   - `Orders.csv` — detected + parsed today (avg-fill-price based, FIFO-paired; no commission
-     column, so real costs are lost through this path).
+     `brokers.json` TRADOVATE std 1.29/side)** → the A208 real-commission pipeline; parsed by the
+     `tradovate-fills` adapter.
+   - `Orders.csv` — detected + parsed by the `tradovate` adapter (avg-fill-price based, FIFO-paired;
+     no commission column, so real costs are lost through this path — prefer `Fills.csv` when both
+     are available).
    - `Cash History.csv` — funding + per-contract Exchange Fee / commission cash lines; not trades
      (recognized-non-trade for F47; possible future fee-enrichment source).
    - `Account Balance History.csv` — daily balance + realized PnL only (too coarse; skip).
@@ -48,10 +53,12 @@ the ground-truth reference for future adapter/format questions — fixtures in
 7. **Quantower `Trades.csv`** is the import source: per-fill executions with per-fill realized
    Gross/Net P/L **and a Fee column** (→ `Fill.realized` + `Fill.commission`), full contract codes
    (`MESU26`), 12-hour AM/PM timestamps (`normTime` handles them), and a **UTF-8 BOM** on the
-   header. `Orders history.csv` is order-lifecycle noise (Opened/Filled/Cancelled). **Both files
-   currently misdetect as TradeStation** and refuse with a TradeStation-named error — the new sniff
-   must out-score it (A209).
+   header. `Orders history.csv` is order-lifecycle noise (Opened/Filled/Cancelled). Both files used
+   to misdetect as TradeStation and refuse with a TradeStation-named error; the shipped `quantower`
+   adapter's sniff now scores 5 to out-rank TradeStation's generic date/time match (A209, shipped —
+   `beta:false`).
 8. **ATAS X exports one `.xlsx`** (zip+XML, sharedStrings, Excel-serial timestamps) with three
    sheets: Statistics (aggregates), **Journal** (closed round trips: open/close time+price+volume,
-   PnL — the import source), Executions (fills). We parse only CSV text today — F52 owns the
-   xlsx-path decision (minimal reader vs lazy-loaded parser vs documented save-as-CSV).
+   PnL — the import source), Executions (fills). F52 shipped the xlsx-path decision: a
+   dependency-free minimal reader (`src/lib/core/xlsx.ts`) reads the Journal sheet and hands the
+   result to the standard CSV-text pipeline as the `atas` adapter (`beta:false`, A209/F52).

@@ -52,6 +52,11 @@ export async function onRequestPost(ctx: Ctx) {
       .trim()
       .toLowerCase();
     if (!EMAIL_RE.test(email) || email.length > 254) return json({ error: 'A valid email address is required.' }, 400);
+    // S26(1): this 409 ACCEPTS account-existence enumeration on the signup path — a by-design
+    // tradeoff for standard passwordless-signup UX (tell the visitor immediately to log in instead
+    // of silently proceeding into a dead-end registration). recover-send stays deliberately
+    // enumeration-safe (always 200) since THAT path is the one an attacker would use to probe emails
+    // at scale; this one requires attempting a real registration per guess.
     if (await userByEmail(db, email)) return json({ error: 'An account with that email already exists — log in instead.' }, 409);
   }
 

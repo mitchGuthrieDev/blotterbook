@@ -46,11 +46,16 @@ re-platform), and [`docs/architecture.md`](docs/architecture.md).
   mount points (`<div id="app">` + `<script type="module" src="./main.ts">`, body
   `data-mode="app|demo|staging"`). The Svelte app lives in `src/app/`: the redesigned sidebar-shell
   `App.svelte` (an `AppShell` + hash router) + `screens/` (Dashboard/Calendar/Analytics/Blotter/
-  CsvLibrary/TradeEditor/Reports) + `parts/` (CostSetup/Onboarding/ActivityTerminal/Definitions/
-  StatusBanner) + `lib/{dashboard.svelte.ts,actions,files,flags,nav,analytics,reports}`. It reuses the
-  **pure-logic core** in `src/lib/core/` (A29, native TS per A61): `adapters` / `compute`+`costModel`
-  in `core` / `store` / `sampledata` / `demostore` / `curveseries` / `report`, with `format` shared by
-  the app *and* the info pages. Cross-component state is Svelte runes (`$state`/`$derived`), not a
+  CsvLibrary/TradeEditor/Reports/Account — Account is staging-gated, F53) + `parts/` (BootSplash/
+  CostSetup/Onboarding/ActivityTerminal/Definitions/StatusBanner/DashTabs/DatePickerPopover/
+  DetectionStatus/EditableCellPopover/FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/
+  ScreenshotLightbox/SegmentedControl/SymbolSelect/TagInput) +
+  `lib/{dashboard.svelte.ts,account.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports}`.
+  It reuses the **pure-logic core** in `src/lib/core/` (A29, native TS per A61): `adapters` (+ `xlsx`
+  for the ATAS X .xlsx path, F52) / `intake` (CSV gates + cross-export reconciliation, A177/A219) /
+  `compute`+`costModel` in `core` / `store` / `sampledata` / `demostore` / `curveseries` / `report`,
+  with `format` shared by the app *and* the info pages. Cross-component state is Svelte runes
+  (`$state`/`$derived`), not a
   shared globals object. The mode-aware store seam (context `'bb:store'`) picks the real IndexedDB
   `Store` (app/staging) or the in-memory `DemoStore` (demo, so **demo persists nothing** — by
   construction). `main.ts` mounts this ONE mode-aware `App.svelte` on every surface — mode is derived
@@ -73,7 +78,7 @@ npm run preview                  # serve the built dist/ locally (production-lik
 
 # Tests / lint (the CI suite — run before pushing)
 npm test                         # = lint + typecheck + format:check + test:unit
-npm run test:unit                # the 8 node suites: adapters / auth / version / flags / tax / demostore / curveandreport / compute
+npm run test:unit                # the 9 node suites: adapters / auth / version / flags / tax / demostore / curveandreport / compute / accounts
 npm run lint                     # ESLint (flat config; .ts skipped — typechecked instead, A79)
 npm run typecheck                # tsc (src/lib/**/*.ts except src/lib/components) + tsc(functions) + svelte-check (src/app + src/site + src/lib/components) — A61
 npm run test:e2e                 # Playwright render tests — BUILDS then serves dist/, boots every surface
@@ -296,7 +301,9 @@ conforms to the rules below; keep it that way.
       sampledata.ts     demo CSV sample data  ·  curveseries.ts  pure daily gross/net/take series
       demostore.ts      in-memory Store implementation for demo (never persists)
       adapters.ts       platform CSV adapters + format auto-detection + fills matcher
-      intake.ts         CSV intake gates — file/MIME/size + binary/row-cap checks (A177)
+      xlsx.ts           dependency-free .xlsx reader for the ATAS X statistics export (F52)
+      intake.ts         CSV intake gates — file/MIME/size + binary/row-cap checks (A177) + cross-export
+                        reconciliation (reconcileImport — A219)
       store.ts          IndexedDB persistence (trades, journal, meta, trademeta, files, filetext —
                         F37 per-file CSV provenance) + Store.local seam
       entitlements.ts   storage-tier resolver (scaffold; INTENTIONALLY not loaded)
@@ -315,11 +322,17 @@ conforms to the rules below; keep it that way.
     staging.html        Svelte mount, data-mode="staging" (key-gated, isolated IndexedDB)
     main.ts             entry: imports tailwind.css + side-effect format + mount(App)  ·  ONE mode-aware App.svelte on every surface
     App.svelte          the redesigned sidebar-shell root (AppShell + hash router) — mode-aware via PAGE_MODE (CH16)
-    screens/            the app screens (<script lang="ts">): Dashboard/Calendar/Analytics/Blotter/CsvLibrary/TradeEditor/Reports
-    parts/              cross-screen pieces: CostSetup/Onboarding/ActivityTerminal/Definitions/StatusBanner
-    lib/                app-only glue (TS): dashboard.svelte.ts (dashboard state factory), actions.ts (styleProps),
-                        files.ts (readImage/downloadBlob — ex util.js, A76), flags.ts (APP_FLAGS), nav.ts,
-                        analytics.ts + reports.ts (Analytics / Reports view-model builders)
+    screens/            the app screens (<script lang="ts">): Dashboard/Calendar/Analytics/Blotter/CsvLibrary/
+                        TradeEditor/Reports/Account (Account is staging-gated pending the accounts backend, F53)
+    parts/              cross-screen pieces: BootSplash/CostSetup/Onboarding/ActivityTerminal/Definitions/
+                        StatusBanner/DashTabs/DatePickerPopover/DetectionStatus/EditableCellPopover/
+                        FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/ScreenshotLightbox/
+                        SegmentedControl/SymbolSelect/TagInput
+    lib/                app-only glue (TS): dashboard.svelte.ts (dashboard state factory), account.svelte.ts
+                        (F53 auth/session state), pagination.svelte.ts, actions.ts (styleProps), batch.ts
+                        (multi-file import queue, F47), files.ts (readImage/downloadBlob — ex util.js, A76),
+                        flags.ts (APP_FLAGS), flavor.ts, motion.ts, nav.ts, analytics.ts + reports.ts
+                        (Analytics / Reports view-model builders)
   site/                 MARKETING + INFO — Svelte SSG (A69; prerendered at build by scripts/vite-ssg.mjs, hydrated in place)
     components/         Home / Howto / Roadmap / Changelog / Legal / Admin .svelte (the page components)
     lib/                shared chrome: Nav.svelte, Footer.svelte, SiteShell.svelte (base/typography styles + globals)
@@ -349,14 +362,18 @@ conforms to the rules below; keep it that way.
     changelog.json      curated, version-keyed release notes (hand-maintained)
 /functions/             Cloudflare Pages Functions — TypeScript (A78) — PINNED at repo root — see functions/README.md
   _middleware.ts        key-gates /app/staging.html
+  _lib/                 accounts.ts (D1 users/credentials/sessions/challenges/donations/recovery_tokens +
+                        session cookie), auth.ts (admin token + Stripe sig verify), http.ts, types.ts
   api/{geo,status,config,admin-key}.ts  geo · status · feature flags · admin token
-  api/{me,checkout,webhook}.ts   Stripe/accounts scaffold
+  api/{me,checkout,webhook}.ts   storage tier + passkey/session state (me) · Stripe donations (checkout/webhook, F54)
+  api/account/*.ts      passkey register/login/logout + email-verify + recovery endpoints (F53/F55)
+  schema.sql             D1 schema for the accounts tables above (apply via wrangler; see functions/README.md)
 /scripts/
   build-manifest.mjs    regenerates static/data/manifest.json content hashes
   bump-version.mjs      two-track version bump from a merge commit (run by CI; classifies src/ + static/ paths)
   vite-ssg.mjs          A69 SSG plugin — server-renders the site components into their templates at build time (A95: moved here from the repo root)
-  check-bundle-size.mjs dev-only /app/-surface JS size budget (600 KiB ceiling since CH16) — fails the build if the app bundle crosses it (A96)
-  test-*.mjs            the CI test suite (adapters / auth / version / flags / tax / demostore / curveandreport / compute)
+  check-bundle-size.mjs dev-only /app/-surface JS size budget (840 KiB ceiling as of A223) — fails the build if the app bundle crosses it (A96)
+  test-*.mjs            the CI test suite (adapters / auth / version / flags / tax / demostore / curveandreport / compute / accounts)
 /e2e/                   Playwright render/E2E specs (dev-only — R19 Tier A)
 /dist/                  Vite build output (GITIGNORED) — the artifact Cloudflare Pages serves (A26)
 vite.config.mjs         Vite multi-page build config (root:src, publicDir:static, 10 HTML entries → dist/)
@@ -373,9 +390,12 @@ LICENSE                 proprietary — all rights reserved
 ```
 loadRefData()   manifest.json → brokers/exchange-fees/feeds/state-tax (cache-busted by hash)
 CSV text
-  → intake gates       checkCsvFile/checkCsvText — type/size/binary/row caps (A177)
+  → intake gates       checkCsvFile/checkCsvText — type/size/binary/row caps (A177); an .xlsx
+                       (ATAS X) file routes through xlsx.ts's atasXlsxToCsv() first (F52)
   → Adapters.detect()  sniff header → platform (per-adapter minScore gate — A178)
   → Adapters.parse()   platform adapter → normalized trades (fills go through pairFills())
+  → reconcileImport()  cross-export authority/derived-peer resolution drops phantom fills-derived
+                       round trips when a same-family closed export corroborates a window (A219)
   → Store.addTrades / getAllTrades   delta-merge + persist (IndexedDB); duplicates MERGE
                        provenance + ENRICH missing fields; the file record + raw text persist
                        alongside (F37), trades carry fileIds

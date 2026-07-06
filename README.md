@@ -42,7 +42,7 @@ parsed, computed, and stored locally. No accounts, no uploads, no tracking.
   </tr>
   <tr>
     <td width="160"><img src="src/assets/why-platforms.svg" alt="Several platform CSV exports auto-detected and normalized into one unified trade table" width="150"></td>
-    <td><b>Multi-platform import.</b> TradingView is fully verified; Tradovate, Rithmic, Sierra Chart, TradeStation, MotiveWave, Webull, Interactive Brokers, and Schwab/thinkorswim are supported in beta.</td>
+    <td><b>Multi-platform import.</b> TradingView, Tradovate/NinjaTrader, Quantower, and ATAS X are fully verified against real exports; Rithmic, Sierra Chart, TradeStation, MotiveWave, Webull, Interactive Brokers, and Schwab/thinkorswim are supported in beta.</td>
   </tr>
   <tr>
     <td width="160"><img src="src/assets/why-deps.svg" alt="A small content-hashed bundle built from pinned, audited dependencies, loading fast" width="150"></td>
@@ -111,7 +111,7 @@ and the only planned paid feature is cross-device sync.
 - **[`CLAUDE.md`](CLAUDE.md)** — quick operational reference: commands, the file-by-file map, and
   the conventions to follow when changing the code.
 - **[`functions/README.md`](functions/README.md)** — the Cloudflare Pages Functions backend
-  (admin/Live indicator, and the accounts/payments scaffold).
+  (admin/Live indicator, the passkey-accounts system, and Stripe donations).
 
 ## Roadmap
 

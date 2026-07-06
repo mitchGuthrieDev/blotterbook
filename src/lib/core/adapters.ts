@@ -200,7 +200,6 @@ function normTime(s: unknown): string {
 // Parse as UTC (trailing Z) so a hold-time DELTA is independent of the runner's timezone and stable
 // across a DST boundary (A120) — entry/exit are wall-clock strings, and we want the wall-clock span.
 const tms = (iso: string) => new Date(String(iso).replace(' ', 'T') + 'Z').getTime();
-const round2 = (v: number) => Math.round(v * 100) / 100;
 const sideWord = (s: string): 'buy' | 'sell' | '' => {
   s = String(s).toLowerCase();
   if (/\b(buy|bot|bought|b|long)\b/.test(s)) return 'buy';

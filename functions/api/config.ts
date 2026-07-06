@@ -6,9 +6,10 @@
    POST → admin only (x-admin-key must match the ADMIN_KEY secret). Body is a partial config to
           merge: { flags?: {...} }. Flag keys are allow-listed to DEFAULTS.flags (S19).
 
-   Defaults: { flags: { showBetaAdapters:true, maintenanceBanner:false, betaRibbon:false } }
+   Defaults: { flags: { maintenanceBanner:false } }
    (R9: the reference-data "cache version" field was removed — nothing consumed it; reference
-   data is cache-busted by per-file hashes in data/manifest.json, not a KV timestamp.) */
+   data is cache-busted by per-file hashes in data/manifest.json, not a KV timestamp.)
+   (A245: showBetaAdapters and betaRibbon were retired — dead flags no app code ever read.) */
 
 import { isAdminAuthorized } from '../_lib/auth.ts';
 import { json, rateLimited, cachedJson, purgeCached } from '../_lib/http.ts';
@@ -22,7 +23,7 @@ interface Config {
   updatedAt?: string;
 }
 const DEFAULTS: Config = {
-  flags: { showBetaAdapters: true, maintenanceBanner: false, betaRibbon: false },
+  flags: { maintenanceBanner: false },
 };
 
 async function read(kv: KVNamespace | undefined): Promise<Config> {
