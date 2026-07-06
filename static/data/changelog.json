@@ -4,6 +4,16 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.58.0",
+      "date": "2026-07-06",
+      "title": "Donations are open",
+      "summary": "You can now back Blotterbook with a one-time $25 donation through Stripe — the app stays free for everyone, and a donation is never a purchase.",
+      "highlights": [
+        "The homepage 'Back the project' card now opens a real Stripe checkout for a one-time $25 donation.",
+        "Donations are voluntary and non-refundable — they keep the free app free and fund new adapters, analytics, and fixes; they grant no product access."
+      ]
+    },
+    {
       "version": "0.57.0",
       "date": "2026-07-06",
       "title": "Accounts arrive everywhere, smarter trade editing, and a fresh coat of polish",

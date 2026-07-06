@@ -22,24 +22,26 @@
    THIS to arm the gate. accountGateEnabled() also honors a `bb:flags` localStorage override (staging
    testing / manual QA) so the gate can be forced on without a rebuild; the caller still gates on
    isStaging, so prod/demo are never affected. */
-export const ACCOUNT_GATE = false;
+export const ACCOUNT_GATE = true;
 
 export const APP_FLAGS = { maintenanceBanner: false, ACCOUNT_GATE };
 export type AppFlags = typeof APP_FLAGS;
 
-/** F56: is the login gate armed? True when the ACCOUNT_GATE constant is on, OR a `bb:flags`
- *  localStorage override sets `{ "ACCOUNT_GATE": true }` (e2e/manual, no rebuild). Never throws; the
- *  caller is responsible for the isStaging guard (prod/demo are never gated). */
+/** F56: is the login gate armed? A `bb:flags` localStorage override with an `ACCOUNT_GATE` key wins in
+ *  BOTH directions (force on for manual QA, or force OFF for e2e/QA bypass — no rebuild); otherwise the
+ *  compile-time ACCOUNT_GATE constant decides. Never throws; the caller is responsible for the
+ *  isStaging guard (prod/demo are never gated). */
 export function accountGateEnabled(): boolean {
-  if (ACCOUNT_GATE) return true;
   try {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('bb:flags') : null;
-    if (!raw) return false;
-    const o = JSON.parse(raw) as Record<string, unknown>;
-    return !!o.ACCOUNT_GATE;
+    if (raw) {
+      const o = JSON.parse(raw) as Record<string, unknown>;
+      if (o && typeof o === 'object' && 'ACCOUNT_GATE' in o) return !!o.ACCOUNT_GATE;
+    }
   } catch {
-    return false;
+    /* ignore a malformed override — fall through to the constant */
   }
+  return ACCOUNT_GATE;
 }
 
 /** Fetch the admin-managed flags from /api/config, applying only known keys over the APP_FLAGS

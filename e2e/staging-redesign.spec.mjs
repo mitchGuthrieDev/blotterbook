@@ -16,8 +16,11 @@ const gotoScreen = async (page, name) => {
   // document <h1>, so scope to the header).
   await expect(page.locator('header h1')).toHaveText(name);
 };
-// Boot into the dashboard with real metrics rendered.
+// Boot into the dashboard with real metrics rendered. The F56 login gate is armed by default on
+// staging (ACCOUNT_GATE = true), so bypass it via the bb:flags override — these specs exercise the
+// dashboard, not the gate itself (the gate has its own tests at the bottom of this file).
 const bootDashboard = async page => {
+  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
   await page.goto(STAGING, { waitUntil: 'networkidle' });
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
 };
@@ -736,6 +739,8 @@ test('staging redesign: F45 boot splash shows during boot, then unmounts once th
     await new Promise(r => setTimeout(r, 800));
     await route.continue();
   });
+  // Bypass the F56 gate (armed by default) so boot proceeds to the real dashboard for this splash test.
+  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
   await page.goto(STAGING);
   const splash = page.getByTestId('boot-splash');
   await expect(splash).toBeVisible();
@@ -759,15 +764,8 @@ test('staging redesign: F45 boot splash shows on demo too, then unmounts (CH16 p
 
 // ── F56: login-gated launch module (flag + staging gated) ───────────────────────────────────────
 
-test('staging redesign: F56 gate is OFF by default — staging boots straight into the app', async ({ page }) => {
-  await bootDashboard(page);
-  await expect(page.getByTestId('launch-gate')).toHaveCount(0);
-});
-
-test('staging redesign: F56 bb:flags override arms the gate (both buttons); demo is never gated', async ({ page }) => {
-  // The bb:flags localStorage override forces ACCOUNT_GATE on without a rebuild (staging-only path).
-  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: true })));
-
+test('staging redesign: F56 gate is ARMED by default — staging boots to the launch gate (both buttons)', async ({ page }) => {
+  // ACCOUNT_GATE = true, so staging boots to the login gate with NO override present.
   await page.goto(STAGING, { waitUntil: 'networkidle' });
   const gate = page.getByTestId('launch-gate');
   await expect(gate).toBeVisible({ timeout: 8000 });
@@ -781,8 +779,16 @@ test('staging redesign: F56 bb:flags override arms the gate (both buttons); demo
   await gate.getByRole('button', { name: 'Create account', exact: true }).click();
   await expect(gate.getByPlaceholder('you@example.com')).toBeVisible();
   await expect(gate.getByRole('button', { name: /Create account with a passkey/ })).toBeVisible();
+});
 
-  // Demo is NEVER gated, even with the override set (same origin, so the override is present).
+test('staging redesign: F56 bb:flags override can force the gate OFF (QA bypass); demo is never gated', async ({ page }) => {
+  // The bb:flags override wins in both directions — force the armed gate OFF without a rebuild.
+  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
+  await page.goto(STAGING, { waitUntil: 'networkidle' });
+  await expect(page.getByTestId('launch-gate')).toHaveCount(0);
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 8000 });
+
+  // Demo is NEVER gated regardless of the flag (isStaging guard); it boots straight to the dashboard.
   await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
   await expect(page.getByTestId('launch-gate')).toHaveCount(0);
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });

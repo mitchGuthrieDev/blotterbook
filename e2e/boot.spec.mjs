@@ -32,6 +32,11 @@ const surfaces = [
     // boots straight into the redesigned Dashboard.
     name: 'staging',
     path: '/app/staging.html',
+    // F56: the login gate is armed by default on staging (ACCOUNT_GATE = true) — bypass it via the
+    // bb:flags override so this boot-health check reaches the dashboard (the gate has its own specs).
+    init: async page => {
+      await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
+    },
     check: async page => {
       await expect(page.locator('nav[aria-label="Primary"]')).toContainText('Dashboard');
       await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
@@ -85,6 +90,7 @@ const surfaces = [
 for (const s of surfaces) {
   test(`${s.name} boots with no console/page errors`, async ({ page }) => {
     const errors = watchErrors(page);
+    if (s.init) await s.init(page);
     await page.goto(s.path, { waitUntil: 'networkidle' });
     await page.waitForTimeout(500);
     await s.check(page);

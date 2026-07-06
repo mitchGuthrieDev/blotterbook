@@ -4339,8 +4339,8 @@
       "effort": "small",
       "status": "done",
       "completedDate": "2026-07-06",
-      "partial": true,
-      "doneNote": "Pricing card wired to Stripe Payment Links via the DONATION_LINKS constant in Home.svelte (per-tier: empty URL keeps 'donations open soon'); both tiers ONE-TIME (recurring would need a Subscription), $50 '/ year' label fixed, non-refundable/not-a-purchase disclaimer added. REMAINING (owner-gated): create the Payment Links in Stripe (test mode first) + paste URLs; F18/A202 legal pack before live mode."
+      "partial": false,
+      "doneNote": "Pricing card wired to Stripe Payment Links via the DONATION_LINKS constant in Home.svelte (per-tier: empty URL keeps 'donations open soon'); both tiers ONE-TIME (recurring would need a Subscription), $50 '/ year' label fixed, non-refundable/not-a-purchase disclaimer added. LIVE (2026-07-06): the single $25 one-time Payment Link is wired in DONATION_LINKS.once25 and the card renders the working Stripe button; the $50 tier was dropped per owner decision (re-enable by setting tier50). Live-mode still pending the F18 legal pack."
     },
     {
       "id": "CH37",

@@ -23,8 +23,8 @@
   // at once anyway. Leave a value '' until it's ready: that tier's button stays in its "Donations
   // open soon" state below; once set, it renders as a real link styled as a button.
   const DONATION_LINKS: { once25: string; tier50: string } = {
-    once25: '', // Stripe Payment Link URL — "Back the project — $25 (one-time)"
-    tier50: '', // Stripe Payment Link URL — "Back the project — $50 (one-time — NOT /year, see above)"
+    once25: 'https://buy.stripe.com/fZubJ1cKE2tabyN2sb5wI00', // Stripe Payment Link — "Back the project — $25 (one-time)"
+    tier50: '', // No second tier for now (owner decision 2026-07-06) — set a Payment Link URL to re-enable the $50 button.
   };
 
   // ---- header border on scroll ----
@@ -570,9 +570,6 @@
         <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em]">
           $25 <small class="text-[14px] font-normal text-muted-foreground">one-time</small>
         </div>
-        <div class="mt-[6px] font-mono text-[22px] font-bold tracking-[-0.02em]">
-          $50 <small class="text-[14px] font-normal text-muted-foreground">one-time</small>
-        </div>
         <ul class="my-4 mb-[18px] flex list-none flex-col gap-[10px] p-0">
           <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-muted-foreground">
             <svg
@@ -614,8 +611,6 @@
               target="_blank"
               rel="noopener noreferrer">Back with $50 &rarr;</a
             >
-          {:else}
-            <p class="text-[12px] leading-[1.5] text-muted-foreground">$50 one-time — donations open soon via Stripe.</p>
           {/if}
           <p class="text-[11px] leading-[1.4] text-muted-foreground">
             A voluntary, non-refundable donation — not a purchase, and it grants no product access or entitlement.
@@ -798,10 +793,9 @@
         <p
           class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground"
         >
-          The app is <b>free for everyone</b> and stays free. You can optionally <b>back the project</b> with a $25 or $50 one-time,
-          non-refundable donation (checkout via Stripe, coming soon) — it's not a purchase and grants no product access. The only planned
-          paid feature is <b>synced workspaces</b> — end-to-end-encrypted cross-device sync at about $5/month — which isn't ready yet. Nothing
-          else is gated.
+          The app is <b>free for everyone</b> and stays free. You can optionally <b>back the project</b> with a $25 one-time, non-refundable
+          donation (checkout via Stripe) — it's not a purchase and grants no product access. The only planned paid feature is
+          <b>synced workspaces</b> — end-to-end-encrypted cross-device sync at about $5/month — which isn't ready yet. Nothing else is gated.
         </p>
       </details>
     </div>
