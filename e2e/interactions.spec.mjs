@@ -167,7 +167,7 @@ test('demo: Trade Editor Date cell opens a calendar popover and picking a day up
   await days2.nth(midIdx).press('ArrowRight');
   const focusedLabel = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
   expect(focusedLabel).toBeTruthy();
-  await page.locator(`[data-testid="datepicker-day"][aria-label="${focusedLabel}"]`).press('Enter');
+  await page.keyboard.press('Enter'); // acts on whatever currently has focus — no re-query race
   await expect(page.getByTestId('datepicker-day')).toHaveCount(0);
   await expect(dateCell).toHaveText(focusedLabel);
 
