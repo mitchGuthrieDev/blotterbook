@@ -14,6 +14,9 @@ import {
   DEMO_BROKER,
   DEMO_FEED,
   DEMO_STATE,
+  currentDrawdown,
+  currentStreak,
+  streakRecords,
 } from '../../lib/core/core.ts';
 import { Adapters } from '../../lib/core/adapters.ts';
 import { cleanTags, fileId } from '../../lib/core/store.ts';
@@ -31,6 +34,7 @@ import type {
   CsvFileRec,
   ParseResult,
 } from '../../lib/core/types.ts';
+import type { DashModuleData } from '../screens/Dashboard.svelte';
 
 /**
  * Resolve values from the CSV files (F37 provenance) that contributed to a trade. Indexes `files`
@@ -129,6 +133,61 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   });
   const cost = $derived(costModel(metricsActive, costInputs));
   const dateRange = $derived(allTrades.length ? `${allTrades[0].date} → ${allTrades[allTrades.length - 1].date}` : '');
+
+  // F39/A142: full-fidelity Dashboard batch-1 module data (Today · Drawdown Status · Streak Monitor)
+  // off the scope-active Metrics — per-TRADE granularity that the Dashboard's series-only fallback
+  // can't reach (exact per-day trade counts, trades-since-peak, per-trade streak records). App.svelte
+  // forwards this as `moduleData={dash.dashModuleData}`; without the wire the Dashboard degrades to
+  // its own day-level derivation of the same shape, so the modules render either way.
+  const dashModuleData = $derived.by<DashModuleData>(() => {
+    const m = metricsActive;
+    const day = m.days.length ? m.days[m.days.length - 1] : null;
+    let lastDay: DashModuleData['lastDay'] = null;
+    if (day) {
+      // A single day's trades can be large (fills exports) — fold, never Math.max(...spread) (A153).
+      const bw = m.trades.reduce((a, t) => (t.date === day.date ? { best: Math.max(a.best, t.pnl), worst: Math.min(a.worst, t.pnl) } : a), {
+        best: -Infinity,
+        worst: Infinity,
+      });
+      lastDay = {
+        date: day.date,
+        net: day.pnl,
+        trades: day.trades,
+        wins: day.wins,
+        winRate: day.trades ? (100 * day.wins) / day.trades : 0,
+        best: day.trades ? bw.best : 0,
+        worst: day.trades ? bw.worst : 0,
+        capped: false,
+      };
+    }
+    const cd = currentDrawdown(m.curve);
+    const dayPnls = m.days.map(d => d.pnl);
+    return {
+      lastDay,
+      avgDaily: m.avgDaily,
+      avgTrades: m.avgTrades,
+      winDayPct: m.winDayPct,
+      activeDays: m.active,
+      dd: {
+        current: cd.dd,
+        currentPct: cd.ddPct,
+        sincePeak: cd.sincePeak,
+        unit: 'trade',
+        maxDD: m.maxDD,
+        maxDDpct: m.maxDDpct,
+        maxDDdur: m.maxDDdur,
+        recovery: m.recovery,
+        atHigh: cd.atHigh,
+      },
+      streak: {
+        trade: { ...currentStreak(m.pnls), capped: false },
+        day: currentStreak(dayPnls),
+        rec: { maxWin: m.mcw, maxLoss: m.mcl, maxWinSum: m.maxWinStk, maxLossSum: m.maxLossStk },
+        recUnit: 'trade',
+        dayRec: streakRecords(dayPnls),
+      },
+    };
+  });
 
   // F37: build the file record + provenance-stamped trades for a successful parse. `size`/`rows`
   // come from the raw text; overlap is patched in after addTrades reports duplicates.
@@ -586,6 +645,9 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     },
     get dateRange() {
       return dateRange;
+    },
+    get dashModuleData() {
+      return dashModuleData;
     },
     get isDemo() {
       return isDemo;

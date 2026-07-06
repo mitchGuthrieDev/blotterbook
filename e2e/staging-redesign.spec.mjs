@@ -730,6 +730,58 @@ test('staging redesign: Commission Compare module adds via the picker and ranks 
   await expect(mod.getByText(/exchange\/clearing\/NFA \$\d/)).toBeVisible();
 });
 
+// ── F39/A142: Dashboard batch-1 modules (Today / Drawdown Status / Streak Monitor) ──────────────
+
+test('staging redesign: F39 batch-1 modules add via the picker and render real metrics', async ({ page }) => {
+  test.setTimeout(60_000);
+  await bootDashboard(page);
+
+  // All three are picker-addable (not in the default layout) — add them in one pass.
+  await page.getByRole('button', { name: 'Add modules' }).click();
+  const dlg = page.getByRole('dialog');
+  for (const label of ['Today / Last Session', 'Drawdown Status', 'Streak Monitor']) {
+    await dlg.locator('label', { hasText: label }).locator('input[type=checkbox]').check();
+  }
+  await dlg.getByRole('button', { name: /Add module/ }).click();
+
+  // Today / Last Session: the latest active day, framed against the baseline + win-day rate.
+  const today = page.locator('#dashmod-today');
+  await expect(today).toBeVisible();
+  await expect(today.getByText(/Last session/)).toBeVisible();
+  await expect(today.getByText('Win-day rate')).toBeVisible();
+  await expect(today.getByText(/\$[\d,]/).first()).toBeVisible(); // a real money figure
+
+  // Drawdown Status: distance-from-high card with the max-DD record + recovery factor.
+  const dd = page.locator('#dashmod-ddstatus');
+  await expect(dd).toBeVisible();
+  await expect(dd.getByText('Distance from your equity high')).toBeVisible();
+  await expect(dd.getByText('Max drawdown')).toBeVisible();
+  await expect(dd.getByText('Recovery factor')).toBeVisible();
+
+  // Streak Monitor: current run vs the record streaks.
+  const streak = page.locator('#dashmod-streak');
+  await expect(streak).toBeVisible();
+  await expect(streak.getByText('Current run')).toBeVisible();
+  await expect(streak.getByText('Record win streak')).toBeVisible();
+  await expect(streak.getByText('Record loss streak')).toBeVisible();
+});
+
+// ── A242: the standalone Definitions module is retired → its caveats are contextual info popovers ─
+
+test('staging redesign: A242 — Definitions module gone, its caveats reachable via info popovers', async ({ page }) => {
+  await bootDashboard(page);
+  // The standalone Definitions & Caveats card no longer exists anywhere on the Dashboard.
+  await expect(page.getByText('Definitions & Caveats')).toHaveCount(0);
+
+  // The parsing caveat now lives behind a tap-friendly "what is this?" popover on the KPI stat row.
+  const info = page.getByRole('button', { name: 'What is this?' });
+  expect(await info.count()).toBeGreaterThan(0);
+  await info.first().click();
+  const pop = page.locator('[data-slot="popover-content"]');
+  await expect(pop).toBeVisible();
+  await expect(pop.getByText(/realized/)).toBeVisible(); // "one realized-P&L event"
+});
+
 // ── F45: branded boot splash (CH16-promoted to every surface) ───────────────────────────────────
 
 test('staging redesign: F45 boot splash shows during boot, then unmounts once the Dashboard renders', async ({ page }) => {

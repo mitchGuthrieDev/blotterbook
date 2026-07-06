@@ -1109,6 +1109,7 @@
           />
         </div>
         <Dashboard
+          moduleData={dash.dashModuleData}
           stats={dStats}
           series={dashSeries}
           dateRange={dash.dateRange}
