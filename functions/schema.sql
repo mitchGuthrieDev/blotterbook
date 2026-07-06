@@ -1,4 +1,5 @@
--- Blotterbook accounts — D1 schema (Accounts Phase 1, F53; architecture: docs/accounts-architecture.md).
+-- Blotterbook accounts — D1 schema (Accounts Phase 1 F53 + Phase 2 F54 + Phase 3 F55;
+-- architecture: docs/accounts-architecture.md).
 -- Guardrail S25: identity + entitlements ONLY — no trade data ever lands in these tables.
 --
 -- Apply it with wrangler (one-time setup; see also functions/README.md):
@@ -10,7 +11,10 @@
 -- (Pages dashboard → Settings → Functions → D1 database bindings → variable name `ACCOUNTS_DB`).
 -- Every /api/account/* endpoint fails closed with a 503 JSON body until the binding exists.
 --
--- Phase 2 (F54) adds the `donations` table + Phase 3 (F55) `recovery_tokens` — not created yet.
+-- ⚠ RE-RUN REQUIRED: every table below uses `CREATE TABLE IF NOT EXISTS`, so this file is
+-- idempotent — after ANY change here (F54 added `donations`, F55 added `recovery_tokens`), the
+-- owner MUST re-run the `wrangler d1 execute ... --file=functions/schema.sql` command above
+-- against the bound database so the new tables exist in prod. Existing rows are untouched.
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,                        -- crypto.randomUUID()
@@ -60,3 +64,40 @@ CREATE TABLE IF NOT EXISTS challenges (
 );
 CREATE INDEX IF NOT EXISTS idx_challenges_challenge ON challenges (challenge);
 CREATE INDEX IF NOT EXISTS idx_challenges_expires ON challenges (expires_at);
+
+-- Donations (Accounts Phase 2 — F54). ONE row per Stripe `checkout.session.completed` event,
+-- keyed by the Stripe EVENT ID so a replayed/duplicated webhook is a no-op (INSERT collides on
+-- the PK → dedupe for free, S11). A donation is either credited immediately (client_reference_id
+-- from /api/checkout, or an already-VERIFIED matching email) or stored UNCLAIMED (user_id NULL)
+-- keyed by the lowercased checkout email, then claimed later when that email is verified (F55).
+-- S25: identity + payment metadata only — never any trade data.
+CREATE TABLE IF NOT EXISTS donations (
+  id TEXT PRIMARY KEY,                        -- Stripe event id ⇒ replay-safe dedupe (S11)
+  user_id TEXT,                               -- NULL until claimed by a VERIFIED matching email
+  email TEXT,                                 -- lowercased checkout email (the claim key)
+  amount_cents INTEGER,
+  currency TEXT,
+  stripe_customer_id TEXT,                    -- copied onto users.stripe_customer_id when credited
+  created_at INTEGER NOT NULL,                -- ms epoch (when the webhook processed it)
+  claimed_at INTEGER                          -- when it was credited to a user (NULL = unclaimed)
+);
+CREATE INDEX IF NOT EXISTS idx_donations_email ON donations (email);
+CREATE INDEX IF NOT EXISTS idx_donations_user ON donations (user_id);
+
+-- Recovery / verification tokens (Accounts Phase 3 — F55). The emailed link carries an opaque
+-- `id.secret` pair; only SHA-256(secret) is stored (same posture as sessions — a D1 leak never
+-- yields a usable token). SINGLE-USE (used_at stamped on consume) + short TTL (~15 min).
+--   purpose 'verify'  → confirm ownership of users.email (sets users.email_verified = 1)
+--   purpose 'recover' → magic-link passkey RE-enrollment (issues fresh WebAuthn register options)
+CREATE TABLE IF NOT EXISTS recovery_tokens (
+  id TEXT PRIMARY KEY,                        -- random public half of the token (lookup key)
+  user_id TEXT,                               -- nullable; set for both purposes today
+  email TEXT NOT NULL,                        -- lowercased target email
+  purpose TEXT NOT NULL,                      -- 'verify' | 'recover'
+  token_hash TEXT NOT NULL,                   -- base64url(SHA-256(secret half)) — secret never stored
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at INTEGER                             -- single-use: set on first successful consume
+);
+CREATE INDEX IF NOT EXISTS idx_recovery_user ON recovery_tokens (user_id);
+CREATE INDEX IF NOT EXISTS idx_recovery_expires ON recovery_tokens (expires_at);

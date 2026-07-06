@@ -14,6 +14,7 @@ import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequest
 
 export interface AccountUser {
   email: string;
+  emailVerified: boolean;
   donated: boolean;
   donatedAt: number | null;
   donationTotalCents: number;
@@ -142,5 +143,48 @@ export function logout(): Promise<boolean> {
     await api('/api/account/logout', {});
     account.user = null;
     account.passkeys = [];
+  });
+}
+
+/* ---- F55: recovery email + verification --------------------------------------------------- */
+
+/** Send the signed-in user an email-verification link. Returns true when the request succeeded
+ *  (or the address was already verified). Not a WebAuthn ceremony — no passkey prompt. */
+export async function emailVerifySend(): Promise<boolean> {
+  if (account.busy) return false;
+  account.busy = true;
+  account.error = '';
+  try {
+    await api('/api/account/email-verify-send', {});
+    return true;
+  } catch (e) {
+    account.error = messageOf(e);
+    return false;
+  } finally {
+    account.busy = false;
+  }
+}
+
+/** Request a passkey-recovery magic link for an email (logged-out "lost your passkey?" flow).
+ *  Enumeration-safe by design: the server always answers generically, so this resolves true
+ *  whenever the request was accepted — it never reveals whether the account exists. */
+export async function recoverSend(email: string): Promise<boolean> {
+  try {
+    await api('/api/account/recover-send', { email: email.trim().toLowerCase() });
+    return true;
+  } catch (_) {
+    // A 503 (email unavailable) is the only actionable failure; otherwise stay generic.
+    return account.available;
+  }
+}
+
+/** Complete recovery from a magic-link token: exchange it for fresh registration options, run the
+ *  passkey ceremony, and enroll a new passkey (register-verify starts the session). */
+export function completeRecovery(token: string): Promise<boolean> {
+  return ceremony(async () => {
+    const { options } = await api<{ options: PublicKeyCredentialCreationOptionsJSON }>('/api/account/recover-verify', { token });
+    const { startRegistration } = await webauthn();
+    const response = await startRegistration({ optionsJSON: options });
+    await api('/api/account/register-verify', { response });
   });
 }

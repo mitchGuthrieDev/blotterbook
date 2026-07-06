@@ -374,7 +374,8 @@
     </h2>
     <p class="mb-2 max-w-[680px] text-[clamp(15px,1.6vw,17px)] leading-[1.6] text-muted-foreground">
       Blotterbook auto-detects your export's format and normalizes it — your broker is a separate, cost-only setting. Import one file or a
-      whole batch, even mixing platforms — each file gets its own detection status. <b>TradingView</b>, <b>Tradovate&nbsp;/&nbsp;NinjaTrader</b>,
+      whole batch, even mixing platforms — each file gets its own detection status. <b>TradingView</b>,
+      <b>Tradovate&nbsp;/&nbsp;NinjaTrader</b>,
       <b>Quantower</b>, and <b>ATAS&nbsp;X</b> (a single .xlsx export) are verified against real exports; the rest are in <b>beta</b>, built
       from each platform's documented format and exercised with synthetic test data. Step-by-step export guides live in the
       <a href="howto.html">How&nbsp;To</a>.
@@ -402,8 +403,8 @@
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
             aria-hidden="true"
-          ></span><b class="flex-1 text-[15px] font-semibold">Tradovate / NinjaTrader</b><span class="pstate font-mono text-[10.5px] text-chart-2"
-            >Verified · real exports</span
+          ></span><b class="flex-1 text-[15px] font-semibold">Tradovate / NinjaTrader</b><span
+            class="pstate font-mono text-[10.5px] text-chart-2">Verified · real exports</span
           ></a
         >
       </li>
@@ -685,10 +686,10 @@
         <p
           class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground"
         >
-          It reads the trade-history export from your trading platform — a CSV for most platforms, or a single <code>.xlsx</code> workbook
-          for ATAS X — and auto-detects the format. You can import one file or a whole batch, even mixing platforms and export types; each
-          file gets its own detection status, and Blotterbook normalizes and de-duplicates everything into one trade history. Everything is
-          parsed and stored locally in your browser via IndexedDB — your trade data never leaves the page.
+          It reads the trade-history export from your trading platform — a CSV for most platforms, or a single <code>.xlsx</code> workbook for
+          ATAS X — and auto-detects the format. You can import one file or a whole batch, even mixing platforms and export types; each file gets
+          its own detection status, and Blotterbook normalizes and de-duplicates everything into one trade history. Everything is parsed and stored
+          locally in your browser via IndexedDB — your trade data never leaves the page.
         </p>
       </details>
       <details class="border-b border-border">
@@ -799,8 +800,8 @@
         >
           The app is <b>free for everyone</b> and stays free. You can optionally <b>back the project</b> with a $25 or $50 one-time,
           non-refundable donation (checkout via Stripe, coming soon) — it's not a purchase and grants no product access. The only planned
-          paid feature is <b>synced workspaces</b> — end-to-end-encrypted cross-device sync at about $5/month — which isn't ready yet.
-          Nothing else is gated.
+          paid feature is <b>synced workspaces</b> — end-to-end-encrypted cross-device sync at about $5/month — which isn't ready yet. Nothing
+          else is gated.
         </p>
       </details>
     </div>

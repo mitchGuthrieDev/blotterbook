@@ -5,6 +5,7 @@
    The WebAuthn attestation/assertion crypto itself is @simplewebauthn/server's (tested
    upstream); these tests cover OUR logic: session token hash/verify, challenge single-use +
    TTL (S25), Origin checks, fail-closed ACCOUNTS_DB behavior, and the /api/me shapes. */
+import { createHmac } from 'node:crypto';
 import {
   SESSION_COOKIE,
   createSession,
@@ -18,6 +19,11 @@ import {
   sha256b64u,
   createUser,
   insertCredential,
+  createRecoveryToken,
+  consumeRecoveryToken,
+  donationById,
+  userByEmail,
+  setEmailVerified,
 } from '../functions/_lib/accounts.ts';
 import { onRequestGet as meGet } from '../functions/api/me.ts';
 import { onRequestPost as registerOptions } from '../functions/api/account/register-options.ts';
@@ -25,6 +31,14 @@ import { onRequestPost as registerVerify } from '../functions/api/account/regist
 import { onRequestPost as loginOptions } from '../functions/api/account/login-options.ts';
 import { onRequestPost as loginVerify } from '../functions/api/account/login-verify.ts';
 import { onRequestPost as logout } from '../functions/api/account/logout.ts';
+import { onRequestPost as webhook } from '../functions/api/webhook.ts';
+import { onRequestPost as emailVerifySend } from '../functions/api/account/email-verify-send.ts';
+import {
+  onRequestGet as emailVerifyConfirmGet,
+  onRequestPost as emailVerifyConfirm,
+} from '../functions/api/account/email-verify-confirm.ts';
+import { onRequestPost as recoverSend } from '../functions/api/account/recover-send.ts';
+import { onRequestPost as recoverVerify } from '../functions/api/account/recover-verify.ts';
 
 let pass = 0,
   fail = 0;
@@ -42,7 +56,7 @@ const ok = (name, cond) => {
    Interprets the fixed statement set accounts.ts issues (INSERT/SELECT/UPDATE/DELETE with
    `col = ?` conditions). Throws on anything unrecognized so a new query can't silently no-op. */
 function mockDb() {
-  const tables = { users: [], credentials: [], sessions: [], challenges: [] };
+  const tables = { users: [], credentials: [], sessions: [], challenges: [], donations: [], recovery_tokens: [] };
   const where = (rows, clause, args, offset = 0) => {
     const conds = clause.split(/ AND /i).map(c => c.trim().match(/^(\w+) = \?$/)[1]);
     return rows.filter(r => conds.every((col, i) => r[col] === args[offset + i]));
@@ -104,6 +118,31 @@ const req = (path, { method = 'POST', origin = ORIGIN, cookie = null, body = {} 
 const cookieFor = token => `${SESSION_COOKIE}=${token}`;
 const clientDataFor = challenge => Buffer.from(JSON.stringify({ type: 'webauthn.create', challenge })).toString('base64url');
 const DAY = 24 * 3600 * 1000;
+
+// Sign a Stripe webhook body exactly as verifyStripeSignature expects: HMAC-SHA256 hex over `t.body`.
+const WH_SECRET = 'whsec_test';
+const signedWebhook = (rawBody, { secret = WH_SECRET, t = Math.floor(Date.now() / 1000) } = {}) => {
+  const mac = createHmac('sha256', secret).update(`${t}.${rawBody}`).digest('hex');
+  return new Request(ORIGIN + '/api/webhook', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'stripe-signature': `t=${t},v1=${mac}` },
+    body: rawBody,
+  });
+};
+const checkoutEvent = (id, { email, ref, amount = 2500, customer = 'cus_1' } = {}) =>
+  JSON.stringify({
+    id,
+    type: 'checkout.session.completed',
+    data: {
+      object: {
+        amount_total: amount,
+        currency: 'usd',
+        customer,
+        customer_details: email ? { email } : null,
+        client_reference_id: ref ?? null,
+      },
+    },
+  });
 
 console.log('Session token hash/verify round-trip:');
 {
@@ -319,6 +358,262 @@ console.log('\n/api/me shapes + logout:');
   ok('logout deleted the session row', !db.tables.sessions.some(s => s.id === token.split('.')[0]));
   const after = await meGet({ request: req('/api/me', { method: 'GET', cookie: cookieFor(token) }), env });
   ok('/api/me anonymous after logout', !('user' in (await after.json())));
+}
+
+console.log('\nWebhook (F54) — signature gate + provisioning:');
+{
+  // Signature verification GATES everything — a forged/bad-sig event provisions nothing.
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db, STRIPE_WEBHOOK_SECRET: WH_SECRET };
+  const noSecret = await webhook({ request: signedWebhook(checkoutEvent('evt_ns')), env: { ACCOUNTS_DB: db } });
+  ok('501 when STRIPE_WEBHOOK_SECRET unset', noSecret.status === 501);
+  const badSig = new Request(ORIGIN + '/api/webhook', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=9999999999,v1=deadbeef' },
+    body: checkoutEvent('evt_forged', { email: 'x@y.co' }),
+  });
+  const forged = await webhook({ request: badSig, env });
+  ok('forged signature rejected (400)', forged.status === 400);
+  ok('...and a forged event provisions NOTHING', db.tables.donations.length === 0 && db.tables.users.length === 0);
+  // Fail closed: verified event but ACCOUNTS_DB unbound → 503 (never silently dropped).
+  const noDb = await webhook({
+    request: signedWebhook(checkoutEvent('evt_nodb', { email: 'x@y.co' })),
+    env: { STRIPE_WEBHOOK_SECRET: WH_SECRET },
+  });
+  ok('503 when ACCOUNTS_DB unbound (verified event not dropped)', noDb.status === 503);
+  // Non-checkout events are acked (200) but do nothing.
+  const other = await webhook({
+    request: signedWebhook(JSON.stringify({ id: 'evt_other', type: 'invoice.paid', data: { object: {} } })),
+    env,
+  });
+  ok('unrelated event type acked 200, no donation', other.status === 200 && db.tables.donations.length === 0);
+}
+
+console.log('\nWebhook — client_reference_id crediting + replay dedupe:');
+{
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db, STRIPE_WEBHOOK_SECRET: WH_SECRET };
+  const user = await createUser(db, 'ref@example.com');
+  const r1 = await webhook({ request: signedWebhook(checkoutEvent('evt_ref1', { ref: user.id, amount: 2500 })), env });
+  const j1 = await r1.json();
+  ok('client_reference_id credits that user (200, credited)', r1.status === 200 && j1.credited === true);
+  let u = await userByEmail(db, 'ref@example.com');
+  ok('user marked donated with the amount', u.donated_at != null && u.donation_total_cents === 2500);
+  ok(
+    'donation row keyed by event id, claimed',
+    db.tables.donations.length === 1 && db.tables.donations[0].id === 'evt_ref1' && db.tables.donations[0].claimed_at != null
+  );
+  // Replay the SAME event id → deduped, credited exactly once.
+  const r2 = await webhook({ request: signedWebhook(checkoutEvent('evt_ref1', { ref: user.id, amount: 2500 })), env });
+  const j2 = await r2.json();
+  ok('replayed event id is deduped (no second credit)', r2.status === 200 && j2.deduped === true);
+  u = await userByEmail(db, 'ref@example.com');
+  ok('total NOT doubled on replay', u.donation_total_cents === 2500 && db.tables.donations.length === 1);
+  // A DIFFERENT event id for the same user accumulates.
+  await webhook({ request: signedWebhook(checkoutEvent('evt_ref2', { ref: user.id, amount: 1000 })), env });
+  u = await userByEmail(db, 'ref@example.com');
+  ok('a distinct event accumulates the total', u.donation_total_cents === 3500 && db.tables.donations.length === 2);
+}
+
+console.log('\nWebhook — verified-email credit vs. unclaimed → claim-on-verify:');
+{
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db, STRIPE_WEBHOOK_SECRET: WH_SECRET };
+  // (a) email matches a VERIFIED user (no client_reference_id) → credited directly.
+  const verified = await createUser(db, 'ok@example.com');
+  await setEmailVerified(db, verified.id);
+  await webhook({ request: signedWebhook(checkoutEvent('evt_ve', { email: 'OK@Example.com', amount: 500 })), env });
+  const vu = await userByEmail(db, 'ok@example.com');
+  ok('verified matching email is credited', vu.donated_at != null && vu.donation_total_cents === 500);
+
+  // (b) email matches an UNVERIFIED user → NOT credited; donation sits unclaimed.
+  const pending = await createUser(db, 'wait@example.com'); // email_verified = 0
+  const rc = await webhook({ request: signedWebhook(checkoutEvent('evt_un', { email: 'wait@example.com', amount: 1500 })), env });
+  ok('unverified email is NOT auto-credited (never trust checkout email)', (await rc.json()).credited === false);
+  let pu = await userByEmail(db, 'wait@example.com');
+  ok('...user stays non-donor', pu.donated_at == null && (pu.donation_total_cents ?? 0) === 0);
+  const row = await donationById(db, 'evt_un');
+  ok('...donation stored UNCLAIMED, keyed by email', row.user_id == null && row.email === 'wait@example.com' && row.claimed_at == null);
+
+  // (c) the user verifies their email → the unclaimed donation is claimed.
+  const token = await createRecoveryToken(db, { userId: pending.id, email: pending.email, purpose: 'verify' });
+  const conf = await emailVerifyConfirm({ request: req('/api/account/email-verify-confirm', { body: { token } }), env });
+  ok('email-verify-confirm 200', conf.status === 200);
+  pu = await userByEmail(db, 'wait@example.com');
+  ok('email now verified', pu.email_verified === 1);
+  ok('unclaimed donation is claimed on verify', pu.donated_at != null && pu.donation_total_cents === 1500);
+  const claimed = await donationById(db, 'evt_un');
+  ok('donation row now bound to the user', claimed.user_id === pending.id && claimed.claimed_at != null);
+}
+
+console.log('\nRecovery/verify token lifecycle (single-use, TTL, hash-only — S25):');
+{
+  const db = mockDb();
+  const u = await createUser(db, 'tok@example.com');
+  const token = await createRecoveryToken(db, { userId: u.id, email: u.email, purpose: 'verify' });
+  const secret = token.split('.')[1];
+  const stored = db.tables.recovery_tokens[0];
+  ok('token is id.secret shaped', token.split('.').length === 2);
+  ok('raw secret never stored (hash only)', stored.token_hash !== secret && stored.token_hash === (await sha256b64u(secret)));
+  // wrong secret must NOT burn the token
+  const wrong = await consumeRecoveryToken(db, token.split('.')[0] + '.' + 'z'.repeat(43), 'verify');
+  ok('wrong secret rejected without burning', wrong === null && db.tables.recovery_tokens[0].used_at == null);
+  // wrong purpose rejected
+  ok('wrong purpose rejected', (await consumeRecoveryToken(db, token, 'recover')) === null);
+  // correct consume works once, then single-use
+  const first = await consumeRecoveryToken(db, token, 'verify');
+  ok('valid token consumes once', first?.user_id === u.id);
+  ok('token now marked used', db.tables.recovery_tokens[0].used_at != null);
+  ok('second consume returns null (single-use)', (await consumeRecoveryToken(db, token, 'verify')) === null);
+  // expired token rejected (and burned)
+  const expTok = await createRecoveryToken(db, { userId: u.id, email: u.email, purpose: 'recover' }, Date.now() - 20 * 60 * 1000);
+  ok('expired token rejected', (await consumeRecoveryToken(db, expTok, 'recover')) === null);
+}
+
+console.log('\nEmail send endpoints (fetch stubbed) — fail-closed + enumeration-safe:');
+{
+  const sent = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    sent.push({ url: String(url), body: init?.body ? JSON.parse(init.body) : null });
+    return new Response(JSON.stringify({ id: 'email_1' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    const db = mockDb();
+    // ---- email-verify-send ----
+    // 503 fail-closed shapes
+    const noDb = await emailVerifySend({ request: req('/api/account/email-verify-send'), env: {} });
+    ok('email-verify-send 503 when ACCOUNTS_DB unbound', noDb.status === 503 && /ACCOUNTS_DB/.test((await noDb.json()).error));
+    const user = await createUser(db, 'send@example.com');
+    const { token: sess } = await createSession(db, user.id);
+    const noKey = await emailVerifySend({
+      request: req('/api/account/email-verify-send', { cookie: cookieFor(sess) }),
+      env: { ACCOUNTS_DB: db },
+    });
+    ok(
+      "email-verify-send 503 { error:'email unavailable' } when RESEND_API_KEY unbound",
+      noKey.status === 503 && (await noKey.json()).error === 'email unavailable'
+    );
+    const noAuth = await emailVerifySend({
+      request: req('/api/account/email-verify-send'),
+      env: { ACCOUNTS_DB: db, RESEND_API_KEY: 're_x' },
+    });
+    ok('email-verify-send 401 without a session', noAuth.status === 401);
+    const okSend = await emailVerifySend({
+      request: req('/api/account/email-verify-send', { cookie: cookieFor(sess) }),
+      env: { ACCOUNTS_DB: db, RESEND_API_KEY: 're_x' },
+    });
+    ok(
+      'email-verify-send 200 + one email dispatched with a verify link',
+      okSend.status === 200 && sent.length === 1 && /email-verify-confirm\?token=/.test(sent[0].body.html)
+    );
+    ok(
+      'email-verify-send cross-origin rejected 403',
+      (
+        await emailVerifySend({
+          request: req('/api/account/email-verify-send', { origin: 'https://evil.example', cookie: cookieFor(sess) }),
+          env: { ACCOUNTS_DB: db, RESEND_API_KEY: 're_x' },
+        })
+      ).status === 403
+    );
+
+    // ---- recover-send: enumeration-safe, identical body for hit/miss/unverified ----
+    sent.length = 0;
+    const rdb = mockDb();
+    const renv = { ACCOUNTS_DB: rdb, RESEND_API_KEY: 're_x' };
+    const known = await createUser(rdb, 'known@example.com');
+    await setEmailVerified(rdb, known.id);
+    await createUser(rdb, 'unverified@example.com'); // exists but not verified
+    const hit = await recoverSend({ request: req('/api/account/recover-send', { body: { email: 'known@example.com' } }), env: renv });
+    const miss = await recoverSend({ request: req('/api/account/recover-send', { body: { email: 'nobody@example.com' } }), env: renv });
+    const unver = await recoverSend({
+      request: req('/api/account/recover-send', { body: { email: 'unverified@example.com' } }),
+      env: renv,
+    });
+    const bodies = await Promise.all([hit, miss, unver].map(r => r.text()));
+    ok(
+      'recover-send returns an identical generic 200 for hit / miss / unverified',
+      hit.status === 200 && bodies[0] === bodies[1] && bodies[1] === bodies[2]
+    );
+    ok(
+      'recover-send emails ONLY the verified account (1 mail sent, to it, with a recover link)',
+      sent.length === 1 && /\?recover=/.test(sent[0].body.html)
+    );
+    const rNoKey = await recoverSend({
+      request: req('/api/account/recover-send', { body: { email: 'known@example.com' } }),
+      env: { ACCOUNTS_DB: rdb },
+    });
+    ok(
+      "recover-send 503 { error:'email unavailable' } when RESEND unbound",
+      rNoKey.status === 503 && (await rNoKey.json()).error === 'email unavailable'
+    );
+    const rNoDb = await recoverSend({ request: req('/api/account/recover-send', { body: { email: 'known@example.com' } }), env: {} });
+    ok('recover-send 503 when ACCOUNTS_DB unbound', rNoDb.status === 503 && /ACCOUNTS_DB/.test((await rNoDb.json()).error));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+console.log('\nRecovery re-enrollment (recover-verify) — issues a session-bound register challenge:');
+{
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db };
+  const user = await createUser(db, 'rec@example.com');
+  await setEmailVerified(db, user.id);
+  // seed an unclaimed donation so recovery also exercises the claim path
+  await webhook({
+    request: signedWebhook(checkoutEvent('evt_recdon', { email: 'other@nope.co' })),
+    env: { ACCOUNTS_DB: db, STRIPE_WEBHOOK_SECRET: WH_SECRET },
+  }); // unrelated, stays unclaimed
+  const token = await createRecoveryToken(db, { userId: user.id, email: user.email, purpose: 'recover' });
+  const rv = await recoverVerify({ request: req('/api/account/recover-verify', { body: { token } }), env });
+  const rvJson = await rv.json();
+  ok('recover-verify 200 with fresh registration options', rv.status === 200 && typeof rvJson.options?.challenge === 'string');
+  // The register challenge is BOUND to the recovered user → register-verify enrolls the passkey and
+  // starts a session (the WebAuthn attestation crypto itself is @simplewebauthn/server's, tested upstream).
+  const bound = db.tables.challenges.find(c => c.challenge === rvJson.options.challenge);
+  ok('...bound to the recovered user (register-verify will start their session)', bound?.type === 'register' && bound?.user_id === user.id);
+  ok('recovery marks the email verified', (await userByEmail(db, 'rec@example.com')).email_verified === 1);
+  // token is single-use — a second recover-verify fails
+  const again = await recoverVerify({ request: req('/api/account/recover-verify', { body: { token } }), env });
+  ok('recover-verify rejects a reused token (400)', again.status === 400);
+  // fail-closed + origin
+  ok(
+    'recover-verify 503 when ACCOUNTS_DB unbound',
+    (await recoverVerify({ request: req('/api/account/recover-verify', { body: { token: 'x.y' } }), env: {} })).status === 503
+  );
+  ok(
+    'recover-verify cross-origin rejected 403',
+    (await recoverVerify({ request: req('/api/account/recover-verify', { origin: 'https://evil.example', body: { token: 'x.y' } }), env }))
+      .status === 403
+  );
+}
+
+console.log('\nemail-verify-confirm — GET redirect + POST + fail modes:');
+{
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db };
+  const user = await createUser(db, 'conf@example.com');
+  const token = await createRecoveryToken(db, { userId: user.id, email: user.email, purpose: 'verify' });
+  const getReq = new Request(ORIGIN + '/api/account/email-verify-confirm?token=' + encodeURIComponent(token), { method: 'GET' });
+  const gr = await emailVerifyConfirmGet({ request: getReq, env });
+  ok('GET confirm redirects (302) back to the app with a flag', gr.status === 302 && /verified=1/.test(gr.headers.get('Location') || ''));
+  ok('...and set email_verified', (await userByEmail(db, 'conf@example.com')).email_verified === 1);
+  // an invalid/used token: GET → redirect to expired, POST → 400
+  const badGet = await emailVerifyConfirmGet({
+    request: new Request(ORIGIN + '/api/account/email-verify-confirm?token=bogus.tok', { method: 'GET' }),
+    env,
+  });
+  ok(
+    'GET confirm with a bad token redirects to expired',
+    badGet.status === 302 && /verify=expired/.test(badGet.headers.get('Location') || '')
+  );
+  const badPost = await emailVerifyConfirm({ request: req('/api/account/email-verify-confirm', { body: { token: 'bogus.tok' } }), env });
+  ok('POST confirm with a bad token → 400', badPost.status === 400);
+  ok(
+    'email-verify-confirm 503 when ACCOUNTS_DB unbound',
+    (await emailVerifyConfirm({ request: req('/api/account/email-verify-confirm', { body: { token } }), env: {} })).status === 503
+  );
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

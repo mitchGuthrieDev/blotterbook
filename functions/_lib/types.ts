@@ -23,6 +23,12 @@ export interface Env {
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ONE_TIME?: string;
   STRIPE_PRICE_SUBSCRIPTION?: string;
+  /** Resend API key for the F55 transactional emails (verify + recovery magic link). Unbound →
+   *  the email endpoints fail closed with 503 { error: 'email unavailable' } (never a crash). */
+  RESEND_API_KEY?: string;
+  /** From address for F55 emails (e.g. `Blotterbook <no-reply@blotterbook.com>`). Optional —
+   *  falls back to a sensible default when unset. */
+  EMAIL_FROM?: string;
 }
 
 export type Ctx = EventContext<Env, string, Record<string, unknown>>;
