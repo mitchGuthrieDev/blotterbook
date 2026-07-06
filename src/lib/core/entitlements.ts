@@ -11,10 +11,13 @@
      - "local"  : one-time payment      -> IndexedDB only
      - "cloud"  : recurring subscription -> IndexedDB + server sync
 
-   Today BOTH tiers resolve to the local `Store` (IndexedDB via src/lib/core/store.ts):
-   `CloudStore` (the write-behind wrapper) lands in F63 and swaps in for "cloud"
-   without touching any consumer — every caller depends only on the `StoreLike`
-   interface. So wiring this now is behaviorally a no-op: it establishes the seam.
+   `storeFor(tier)` returns the BASE Store for the tier — today BOTH tiers resolve
+   to the local `Store` (IndexedDB via src/lib/core/store.ts). The `CloudStore`
+   write-behind wrapper is NOT layered here: it is applied at the APP boundary
+   (App.svelte wraps every non-demo store via cloudsync's `wrapStore`) and gated to
+   the cloud tier at RUNTIME by the sync controller (A256). This module is core /
+   framework-agnostic and must not import the app-level wrapper — so it only ever
+   picks the base implementation; wrapping + the cloud-tier gate live one layer up.
 
    S25 note: /api/me carries identity + entitlements ONLY; no trade data ever
    crosses it. `current()` never throws — any fetch/parse failure falls back to
@@ -46,11 +49,12 @@ export const Entitlements = {
     }
   },
 
-  /** The Store implementation backing a given tier. Both tiers use the local `Store` today; F63's
-   *  `CloudStore` swaps in here for "cloud" (a `StoreLike`, so no consumer changes). */
+  /** The BASE Store implementation backing a given tier — the local `Store` for both tiers today. The
+   *  CloudStore write-behind wrapper is layered at the App boundary (cloudsync's `wrapStore`) and
+   *  gated to the cloud tier at runtime by the controller (A256), NOT here — this is core code and
+   *  must not reach up into the app-level wrapper. */
   storeFor(tier: Tier): StoreLike {
-    // F63: return the CloudStore for 'cloud'. Until then both tiers are the local Store — a no-op.
-    void tier;
+    void tier; // both tiers resolve to the local Store; the cloud write-behind is layered app-side.
     return Store;
   },
 };

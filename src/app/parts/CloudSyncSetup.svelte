@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Cloud-sync SETUP flow (F61b — docs/synced-workspaces.md "Key management"). Staging-gated; mounted
-  // only from the Account screen when isStaging. Generates the account IK + the ONE escrow recovery
+  // Cloud-sync SETUP flow (F61b — docs/synced-workspaces.md "Key management"). Prod + staging (not
+  // demo); mounted from the Account screen for any logged-in user. Generates the account IK + the ONE escrow recovery
   // key (F61a crypto core, lazily imported by vault.svelte.ts), renders the recovery key ONCE for the
   // user to DOWNLOAD/copy with an unmissable warning, and REQUIRES an explicit "I've saved my recovery
   // key" confirmation before finishing. Optionally sets a passphrase (Argon2id KEK). The recovery key
@@ -12,7 +12,7 @@
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
   import { Checkbox } from '$lib/components/ui/checkbox';
-  import { beginSetup, finishSetup, cancelSetup, vault } from '../lib/vault.svelte.ts';
+  import { beginSetup, finishSetup, cancelSetup, vault, passphraseStrong, MIN_PASSPHRASE } from '../lib/vault.svelte.ts';
   import { downloadBlob } from '../lib/files.ts';
 
   interface Props {
@@ -92,7 +92,7 @@
     }
   }
 
-  const canFinish = $derived(saved && !vault.busy && (!usePassphrase || passphrase.trim().length >= 8));
+  const canFinish = $derived(saved && !vault.busy && (!usePassphrase || passphraseStrong(passphrase)));
 </script>
 
 <Dialog.Root bind:open>
@@ -156,13 +156,14 @@
             <Input
               type="password"
               autocomplete="new-password"
-              placeholder="At least 8 characters"
+              placeholder="At least {MIN_PASSPHRASE} characters"
               bind:value={passphrase}
               aria-label="Cloud-sync passphrase"
+              aria-invalid={passphrase.length > 0 && !passphraseStrong(passphrase)}
             />
             <p class="text-xs text-muted-foreground">
-              A passphrase lets you unlock on browsers without passkey PRF support. It's convenience only — the recovery key stays the root
-              of trust.
+              Use at least {MIN_PASSPHRASE} characters mixing letters, numbers, or symbols. A passphrase lets you unlock on browsers without passkey
+              PRF support — it's convenience only; the downloaded recovery key stays the strong root of trust.
             </p>
           {/if}
         </div>

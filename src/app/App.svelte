@@ -87,13 +87,16 @@
   // local Store (F59); Entitlements only picks the implementation. The real tier probe
   // (Entitlements.current() → /api/me) is deferred to F63, where CloudStore actually consumes it —
   // so prod issues no new account traffic here (F56). Demo mounts the in-memory DemoStore.
-  // F63: on STAGING, the local Store is wrapped in a CloudStore (write-behind sync) — reads still hit
+  // A256/F63: every NON-DEMO store is wrapped in a CloudStore (write-behind sync) — reads still hit
   // IndexedDB (offline-first; network never on the read path), writes also enqueue a DEBOUNCED
-  // encrypted push once a workspace is opted into cloud sync + unlocked. It is a pure passthrough
-  // until then, so boot is unchanged. Prod/demo use the plain Store/DemoStore — CloudStore is never
-  // constructed there, so those surfaces NEVER sync (demo non-persistence holds by construction).
+  // encrypted push. The wrapper is INERT until a cloud-tier user opts a workspace into sync + unlocks:
+  // the controller gates every push on tier === 'cloud' + an unlocked IK, so on local-tier prod (and
+  // until a workspace is enabled) wrapping is a pure passthrough and boot is unchanged. Selection here
+  // is DEMO-vs-not; the cloud-tier gate is the controller's RUNTIME check (A256). Demo uses the plain
+  // in-memory DemoStore — CloudStore is never constructed there, so demo NEVER syncs (non-persistence
+  // holds by construction).
   const localStore = isDemo ? createDemoStore() : Entitlements.storeFor('local');
-  const store = isStaging ? wrapStore(localStore) : localStore;
+  const store = isDemo ? localStore : wrapStore(localStore);
   const SEEDED = isStaging || isDemo;
   const dash = createDashboard(store, { seed: SEEDED, isDemo });
   const dashTabsState = createDashTabs(store, { isStaging });
@@ -902,9 +905,11 @@
     // F56: only when the gate is armed (staging + flag) do we probe /api/me — prod/demo issue no
     // account traffic at all. refreshSession never throws; account.loaded flips when it settles.
     if (gateArmed) void refreshSession();
-    // F63: initialize cloud sync on STAGING ONLY (probes the tier, wires focus/connectivity, settles
-    // per-workspace status). Prod/demo never call this — no /api/sync or /api/me traffic there.
-    if (isStaging) configureCloudSync({ localStore, dash });
+    // A256/F63: initialize cloud sync on every NON-DEMO surface (probes the tier, wires focus/
+    // connectivity, settles per-workspace status). It stays inert on local tier — no /api/sync
+    // (write-behind) traffic until a cloud-tier user enables + unlocks a workspace. Demo never calls
+    // this, so demo never syncs.
+    if (!isDemo) configureCloudSync({ localStore, dash });
     fetch('/api/status', { headers: { Accept: 'application/json' } })
       .then(r => (r.ok ? (r.json() as Promise<{ mode?: string; label?: string }>) : null))
       .then(v => (statusRec = v))
@@ -946,9 +951,11 @@
   </div>
 {/snippet}
 
-<!-- A132: the workspace switcher — STAGING ONLY (F59's named-local-workspaces UI). Passed into
-     AppShell's sidebarHeader slot only when isStaging, so prod/demo never even receive the snippet
-     (AppShell renders nothing when it's undefined) — the single Default/Demo workspace is unaffected. -->
+<!-- A132/CH16: the workspace switcher — prod + staging (NOT demo). Named local workspaces need a real
+     per-workspace IndexedDB; the in-memory DemoStore can't do multiple workspaces, so the switcher is
+     hidden on demo (sidebarHeader stays undefined → AppShell renders nothing) and the single Demo
+     workspace is unaffected. On prod/staging it drives dash's F59 workspace passthroughs + the F63
+     cloud-sync status row (which reads sensibly as inert "cloud tier required" on local tier). -->
 {#snippet sidebarHeader(railCollapsed: boolean)}
   <WorkspaceSwitcher {dash} collapsed={railCollapsed} />
 {/snippet}
@@ -964,7 +971,7 @@
   onnavigate={navigate}
   title={active === 'account' ? 'Account' : navLabel(active)}
   hideNav={needsOnboarding || gateBlocking}
-  sidebarHeader={isStaging ? sidebarHeader : undefined}
+  sidebarHeader={isDemo ? undefined : sidebarHeader}
 >
   {#snippet actions()}
     <div class="flex min-w-0 flex-1 items-center gap-2">
@@ -1271,7 +1278,7 @@
         {#await SCREEN_LOADERS.account()}
           {@render screenSkeleton()}
         {:then Account}
-          <Account.default {isDemo} {isStaging} />
+          <Account.default {isDemo} />
         {/await}
       {:else}
         <div class="grid min-h-[60vh] place-items-center">

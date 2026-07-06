@@ -243,6 +243,11 @@ Landed staging-only; the CH16 prod promote is intentionally **not** done yet. Ke
   file record can't converge to a fixed point the way content-hash trades do. Trades still carry
   their `fileIds`; a device lacking the file records just treats those trades as always-included.
   Deleting a file still propagates (its cascade emits **trade** tombstones, which sync).
+  **Intentional consequence (A267):** because file records themselves don't sync, per-file
+  *provenance / include-exclude state can DIVERGE across devices* — a file present (or excluded) on
+  device A may be absent on device B. This is by design and harmless to the numbers: the **trades**
+  (and their tombstones) sync, so every device computes identical metrics regardless of which file
+  records it happens to hold.
 - **Pauses gracefully.** Locked (`getIK()` null) or offline ⇒ sync pauses; a local write never blocks
   and never throws. The `WorkspaceSwitcher` affordance surfaces not-synced / synced (last pull) /
   syncing / offline / locked / error, an **Enable sync** action (cloud tier + unlocked only; local
@@ -274,4 +279,11 @@ Landed staging-only; the CH16 prod promote is intentionally **not** done yet. Ke
 - **Whole-snapshot LWW** — a stale device's push clobbers another device's offline edits; rejected.
 - **Cloud-primary store** — breaks offline and pulls compute toward the network; rejected.
 - **Passphrase-as-sole-root** — replaced by the downloaded escrow recovery key (owner decision); a
-  passphrase remains optional convenience / the no-PRF unlock path.
+  passphrase remains optional convenience / the no-PRF unlock path. Its strength floor (A264) is a
+  length + basic-variety check (12+ chars, 2+ character classes) — deliberately not a zxcvbn
+  dependency, and it does not touch the Argon2id cost (which would change every unlock's timing).
+- **Version-bumping the sync backend on its own** — a change touching only `functions/**` (the
+  `/api/sync/*` edge layer) bumps **neither** version track: `scripts/bump-version.mjs`'s
+  `classifySurfaces` treats `functions/` as no-bump (it's the pinned edge layer, not a browser-served
+  surface). This is intentional (A267) — the shipped client bundle is what versions track; a
+  server-only change rides along with whatever client change ships next.

@@ -1,11 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { watchErrors } from './helpers.mjs';
 
-// A132 (rescoped): the workspace-switcher UI over F59's named local workspaces. STAGING ONLY — the
-// switcher lives in the sidebar header slot and is gated by isStaging in App.svelte, so prod/demo
-// never mount it (asserted at the bottom of this file). Each test gets a fresh, isolated browser
-// context (Playwright default), so the workspace registry (Store.local, per F59) starts at the single
-// migrated "Default" workspace every time — no cross-test bleed.
+// A132 (rescoped) / CH16: the workspace-switcher UI over F59's named local workspaces. PROD + STAGING
+// (not demo) — the switcher lives in the sidebar header slot; App.svelte passes it in for every
+// non-demo surface, so prod renders it too (asserted at the bottom), while demo (in-memory DemoStore,
+// no multiple workspaces) never mounts it. Each test gets a fresh, isolated browser context
+// (Playwright default), so the workspace registry (Store.local, per F59) starts at the single migrated
+// "Default" workspace every time — no cross-test bleed.
 
 const STAGING = '/app/staging.html';
 const nav = page => page.locator('nav[aria-label="Primary"]');
@@ -120,18 +121,61 @@ test('workspace switcher: delete removes a workspace and Delete disables again a
   await expect(page.getByRole('menuitem', { name: 'Delete…' })).toHaveAttribute('aria-disabled', 'true');
 });
 
-test('workspace switcher: prod and demo never render it (staging-only, F59 dimension inert elsewhere)', async ({ page }) => {
+test('workspace switcher: renders on PROD after import (CH16-promoted), sync-status reads inert on local tier', async ({ page }) => {
+  test.setTimeout(60_000);
+  // A fresh prod install boots to first-run onboarding (nav — and the switcher — hidden). Import a
+  // CSV + Launch to reach the dashboard, then the promoted switcher renders.
+  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
   await page.goto('/app/app.html', { waitUntil: 'networkidle' });
-  await expect(page.getByRole('button', { name: /^Switch workspace: /, exact: false })).toHaveCount(0);
+  await page.evaluate(() => indexedDB.deleteDatabase('blotterbook'));
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.getByRole('heading', { name: 'Welcome to Blotterbook' })).toBeVisible({ timeout: 6000 });
 
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser', { timeout: 3000 }),
+    page.getByRole('button', { name: 'Choose CSV files' }).click(),
+  ]);
+  await chooser.setFiles([
+    {
+      name: 'trades.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(
+        'Time,Action,Realized PnL (value)\n' +
+          '2026-06-02 10:00:00,"Close long position for symbol MESM2025 at price 5310.00",50.00\n' +
+          '2026-06-02 11:30:00,"Close short position for symbol MNQM2025 at price 18000.00",-20.00\n'
+      ),
+    },
+  ]);
+  const launch = page.getByRole('button', { name: /Launch Blotterbook/ });
+  await expect(launch).toBeEnabled({ timeout: 6000 });
+  await launch.click();
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+
+  // CH16: the switcher now ships on prod — the single migrated "Default" workspace is active.
+  await expect(trigger(page)).toBeVisible();
+  await expect.poll(() => activeName(page)).toBe('Default');
+
+  // The F63 sync-status row reads sensibly (not a broken state) on prod's local tier: the e2e static
+  // server can't run functions, so /api/me fails → local tier → the inert "cloud tier required" hint.
+  await trigger(page).click();
+  await expect(page.getByTestId('sync-status')).toBeVisible();
+  await expect(page.getByText('cloud tier required')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  await page.evaluate(() => indexedDB.deleteDatabase('blotterbook')); // leave the surface clean
+});
+
+test('workspace switcher: DEMO never renders it (in-memory DemoStore has no multiple workspaces)', async ({ page }) => {
   await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
   await expect(page.getByRole('button', { name: /^Switch workspace: /, exact: false })).toHaveCount(0);
 });
 
-// F63: cloud sync is STAGING-GATED + opt-in. Prod and demo never construct a CloudStore or configure
-// the controller, so they must issue ZERO /api/sync/* traffic no matter what the account looks like.
-test('cloud sync: demo and prod never call /api/sync (no CloudStore off staging)', async ({ page }) => {
+// A256/F63: cloud sync is opt-in PER WORKSPACE. Prod now WRAPS the Store in a CloudStore and configures
+// the controller (A256), but with no workspace opted into sync — and no writes — the write-behind push
+// never fires, so prod still issues ZERO /api/sync/* traffic no matter what the account looks like.
+// Demo never constructs a CloudStore at all.
+test('cloud sync: demo and prod never call /api/sync (inert CloudStore off enabled workspaces)', async ({ page }) => {
   const syncCalls = [];
   page.on('request', r => {
     if (r.url().includes('/api/sync')) syncCalls.push(r.url());

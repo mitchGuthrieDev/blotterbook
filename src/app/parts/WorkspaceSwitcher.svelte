@@ -1,8 +1,8 @@
 <script lang="ts">
   // Workspace switcher (A132, rescoped) — the user-facing UI over F59's named local workspaces.
-  // STAGING ONLY (App.svelte gates it via isStaging before ever passing this into AppShell's
-  // sidebarHeader slot); prod and demo are unaffected and keep the single Default/Demo workspace with
-  // no switcher. Drives dash's F59 passthroughs exclusively (activeWorkspace/listWorkspaces/
+  // PROD + STAGING (NOT demo): App.svelte passes this into AppShell's sidebarHeader slot for every
+  // non-demo surface; demo can't do multiple workspaces (in-memory DemoStore), so it keeps the single
+  // Demo workspace with no switcher. Drives dash's F59 passthroughs exclusively (activeWorkspace/listWorkspaces/
   // createWorkspace/renameWorkspace/switchWorkspace/removeWorkspace) — never touches Store.local or
   // indexedDB directly (A4 seam).
   //
@@ -13,7 +13,7 @@
   // The per-workspace SYNC STATUS row (F63) replaces the old "Sync coming soon" stub: it shows the
   // active workspace's real state — not-synced / synced (last pull) / syncing / offline / locked /
   // error — plus an "Enable sync" action (cloud tier + unlocked only; local tier shows an inert
-  // "cloud tier required" hint). STAGING ONLY, like the rest of the switcher.
+  // "cloud tier required" hint). PROD + STAGING (not demo), like the rest of the switcher.
   import {
     Layers,
     ChevronsUpDown,

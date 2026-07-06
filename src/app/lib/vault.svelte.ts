@@ -18,8 +18,8 @@
  * └────────────────────────────────────────────────────────────────────────────────────────────┘
  *
  * `crypto.ts` (and the Argon2id wasm it lazy-loads) is DYNAMICALLY imported on the cloud-sync path
- * only, so it stays out of the /app boot bundle (A96). Staging-gated: the Account screen only mounts
- * these flows when isStaging; demo never syncs or encrypts. */
+ * only, so it stays out of the /app boot bundle (A96). Prod + staging (not demo): the Account screen
+ * mounts these flows for any logged-in user; demo never syncs or encrypts. */
 
 import type { WrappedIK } from '../../lib/core/types.ts';
 
@@ -54,6 +54,25 @@ export const vault = $state({
   /** the enrolled unlock methods (for the unlock modal's method picker). */
   methods: [] as UnlockMethodMeta[],
 });
+
+/* ── A264: passphrase strength floor ────────────────────────────────────────────────────────────
+ * The optional passphrase is a CONVENIENCE / no-PRF unlock path — the downloaded escrow recovery key
+ * is the strong root of trust (owner decision; see docs/synced-workspaces.md "Not doing"). But a weak
+ * passphrase still widens the attack surface on the wrapped-IK blob, so require a meaningful minimum:
+ * 12+ characters with at least two character classes. This is a deliberate length + basic-variety
+ * check, NOT a heavy zxcvbn dependency, and it does NOT raise the Argon2id cost (which would change
+ * every unlock's timing). */
+export const MIN_PASSPHRASE = 12;
+export function passphraseStrong(p: string): boolean {
+  const s = p.trim();
+  if (s.length < MIN_PASSPHRASE) return false;
+  let classes = 0;
+  if (/[a-z]/.test(s)) classes++;
+  if (/[A-Z]/.test(s)) classes++;
+  if (/[0-9]/.test(s)) classes++;
+  if (/[^a-zA-Z0-9]/.test(s)) classes++;
+  return classes >= 2;
+}
 
 /* ── fixed PRF evaluation input ────────────────────────────────────────────────────────────────
  * WebAuthn PRF derives a per-credential secret from (credential, input). We feed a FIXED,
