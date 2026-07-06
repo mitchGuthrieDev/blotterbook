@@ -4,7 +4,7 @@
   //   app     → real IndexedDB Store, NO seed (empty → first-run onboarding)
   //   demo    → in-memory DemoStore (never persists), seeded, every write isDemo-guarded
   //   staging → real IndexedDB Store isolated to blotterbookStaging, seeded
-  // Screens read real data via props (the same components the /dev harness previews with mock data).
+  // Screens read real data via props.
   import { onMount, setContext } from 'svelte';
   import { Store } from '../lib/core/store.ts';
   import { createDemoStore } from '../lib/core/demostore.ts';

@@ -111,7 +111,7 @@ and the only planned paid feature is cross-device sync.
 - **[`CLAUDE.md`](CLAUDE.md)** — quick operational reference: commands, the file-by-file map, and
   the conventions to follow when changing the code.
 - **[`functions/README.md`](functions/README.md)** — the Cloudflare Pages Functions backend
-  (admin/Live indicator, and the accounts/payments scaffold).
+  (admin/Live indicator, the passkey-accounts system, and Stripe donations).
 
 ## Roadmap
 

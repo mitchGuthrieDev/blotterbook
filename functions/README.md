@@ -1,8 +1,10 @@
-# Pages Functions — accounts, payments, storage tiers (scaffold)
+# Pages Functions — accounts, payments, storage tiers
 
-> **Status: scaffold only.** None of this is wired into the app yet. These
-> files exist so the architecture is in place before accounts/payments are
-> built. The app today is 100% local (IndexedDB) and ships no account UI.
+> **Status: live (accounts phases 1–2).** Passkey accounts (F53), donation
+> provisioning via the verified Stripe webhook (F54), and recovery email +
+> magic-link re-enrollment (F55) are implemented; the Account screen is
+> staging-gated in the app. Trade data stays 100% local (IndexedDB) — these
+> functions hold identity + entitlements ONLY (guardrail S25).
 
 Cloudflare Pages serves everything under `/functions/*` as edge functions
 (Workers). They're the thin server layer the app will use for the things that

@@ -2,7 +2,7 @@
 // Boots the real engine (loadRefData → Store → restore/seed) and exposes the shared reactive data the
 // redesign screens read — trades, filters, metrics (compute), cost (costModel), per-trade meta, setup,
 // and the calendar cursor — plus the actions to mutate them. A .svelte.ts module so it can own runes.
-// The same pure-logic core (A29) the current App.svelte drives; this just packages it for the new shell.
+// Drives the same pure-logic core (A29) as everything else; App.svelte owns one instance per boot.
 import {
   loadRefData,
   compute,

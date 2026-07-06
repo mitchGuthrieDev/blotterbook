@@ -2,6 +2,18 @@
 
 **Date:** 2026-07-05 · **Backlog item:** R24 · **Status:** written architecture (no code changed)
 
+> **Implementation note (accuracy check against the shipped code):** F53 (Phase 1) shipped
+> 2026-07-05 largely per this plan, but with structural details that evolved during the build —
+> `functions/schema.sql` is the current source of truth for the actual tables, not the sketch below.
+> Notably: sessions use a split `id` (public lookup key) + `secret_hash` design rather than a single
+> hashed opaque token; `recovery_tokens` carries a `purpose` (`'verify'` | `'recover'`) column serving
+> both email verification and lost-passkey recovery in one table; and `donations` gained
+> `stripe_customer_id`/`claimed_at` instead of a `mode` column. `functions/api/account/` also already
+> has endpoints beyond the four Phase-1 ceremony routes (`email-verify-send`/`-confirm`,
+> `recover-send`/`-verify`) even though F54/F55 show as open in the backlog at time of writing — treat
+> `functions/schema.sql` and `functions/api/account/*` as ground truth over the SQL/API sketch below,
+> which records the original design intent and rationale (still valid) rather than the final shape.
+
 ## Recommendation (up front)
 
 - **Auth = passkeys only (WebAuthn), built on `@simplewebauthn/server` + `@simplewebauthn/browser`**

@@ -310,9 +310,9 @@ not tax advice.
 
 The broker/fee/feed/state tables live in `/data/*.json` and are fetched at runtime
 by `loadRefData()` before anything renders. Edit a JSON file to change rates — no
-app code changes. Brokers modeled: **AMP, EdgeClear, Tradovate / NinjaTrader,
-Optimus, Charles Schwab (thinkorswim), Interactive Brokers, TradeStation,
-TradingView PaperTrade** (zero commission).
+app code changes. Brokers modeled: **AMP, EdgeClear, Discount Trading, Tradovate /
+NinjaTrader, Optimus, Charles Schwab (thinkorswim), Interactive Brokers,
+TradeStation, TradingView PaperTrade** (zero commission).
 
 | File | Contents |
 | --- | --- |

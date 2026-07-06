@@ -20,14 +20,25 @@ never trade data.
 ## 1 · Intake (A177/A178)
 
 Every CSV enters through one of two intake points — the CSV Library upload zone/picker or the
-first-run Onboarding dropzone — and both run the same two-stage gate from
-[`src/lib/core/intake.ts`](../src/lib/core/intake.ts) **before** parsing:
+first-run Onboarding dropzone (both now accept a **batch** of files in one action, F47) — and both
+run the same two-stage gate from [`src/lib/core/intake.ts`](../src/lib/core/intake.ts) **before**
+parsing:
 
 - `checkCsvFile` (pre-read): extension/MIME allowlist (`.csv/.txt/.tsv` or `text/*`) + a 20 MB size
   cap — an oversized or wrong-type file is refused before it's ever read into memory.
 - `checkCsvText` (post-read): binary sniff (NUL bytes / control-char density) + a 250k row cap.
   This one also runs *inside* `Adapters.parse` as belt-and-braces, so any future intake path is
   covered regardless.
+- **The ATAS X `.xlsx` exception (F52):** a file `isXlsxFile()` recognizes is routed through
+  `atasXlsxToCsv()` (`src/lib/core/xlsx.ts` — a dependency-free ZIP/OOXML reader scoped to ATAS's
+  Journal sheet) *before* the text gates; the resulting CSV text then runs through `checkCsvText` +
+  `Adapters.parse` exactly like any other import. The normal binary-sniff rejection of a raw `.xlsx`
+  (a ZIP container) is not weakened — this is an explicit, narrow allowlisted route, not a bypass.
+- **Cross-export reconciliation (A219):** after parsing, `reconcileImport()` (also in `intake.ts`)
+  compares an incoming import against same-platform-family trades already in the store so a
+  fills-derived round trip that a same-family *closed* export proves never happened (or vice versa)
+  is dropped rather than silently double-counted — see the file's header comment for the full
+  authority/derived-peer model.
 
 ## 2 · Detection + normalization (`src/lib/core/adapters.ts`)
 
