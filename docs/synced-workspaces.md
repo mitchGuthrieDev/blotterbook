@@ -76,7 +76,7 @@ credential, we cannot derive keys from a passkey directly. We use **envelope enc
 account IDENTITY KEY (IK)   (random 256-bit — the account's root secret; never leaves the client in clear)
     │  wrapped once per UNLOCK METHOD → opaque "wrapped-IK" blobs, stored server-side:
     ├─ KEK from each enrolled PASSKEY    (WebAuthn PRF ext → HKDF → AES-KW)   ← per-device unlock
-    ├─ KEK from an optional PASSPHRASE   (Argon2id/PBKDF2 → AES-KW)           ← no-PRF browsers / convenience
+    ├─ KEK from an optional PASSPHRASE   (Argon2id[wasm] → AES-KW)            ← no-PRF browsers / convenience
     └─ KEK from the ESCROW RECOVERY KEY  (random 256-bit, downloaded ONCE)    ← the single guaranteed root
     │
     └─►  IK wraps each per-workspace DEK  (AES-KW).  The DEKs (AES-GCM) actually encrypt records.
@@ -196,8 +196,12 @@ exists.** Steps 4–6 concentrate the E2E work.
 2. **F59 — Named local workspaces:** per-workspace IndexedDB + registry + active-workspace seam.
    **A132** (rescoped) is the switcher UI + persisted preference riding on this — still local-only here.
 3. **F60 — Cloud entitlement flip:** `me.ts` + wire `Entitlements.current()/storeFor()`.
-4. **F61 — E2E crypto layer:** envelope encryption, PRF/passphrase/escrow-recovery KEKs, wrapped-DEK
-   handling, `blinded_id`, the setup + recovery-key-download UI.
+4. **F61 — E2E crypto layer**, split for reviewability: **F61a** — the crypto core (`crypto.ts`: IK
+   gen, AES-KW wrap/unwrap per method, HKDF-from-PRF, **Argon2id-wasm** passphrase KDF, `blinded_id`
+   HMAC) — pure + node-tested in isolation; **F61b** — the setup/unlock UI (recovery-key download,
+   passphrase entry, PRF probe + enroll-a-PRF-passkey guidance, unlock modal), staging-gated in the
+   Account screen. Passphrase KDF = **Argon2id via wasm** (owner decision 2026-07-06): memory-hard,
+   ~30–50 KiB against the ~125 KiB bundle headroom; the full-entropy escrow key stays the real root.
 5. **F62 — `/api/sync`** over R2 + a D1 change-index (encrypted-blob store, `seq` cursor, session-gated,
    fail-closed).
 6. **F63 — `CloudStore` write-behind** wrapping `Store`, selected by `storeFor('cloud')`; push/pull +
