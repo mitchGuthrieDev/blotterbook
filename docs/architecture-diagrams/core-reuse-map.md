@@ -11,6 +11,8 @@ site, and the `Store` interface is the seam a future `CloudStore` drops into.
 flowchart TD
     subgraph CORE["src/lib/core/ — pure-logic core (framework-agnostic TS, node-tested)"]
         ADP["adapters.ts — CSV detect/parse/pairFills"]
+        XLS["xlsx.ts — dependency-free ATAS X .xlsx reader (F52)"]
+        INT["intake.ts — file/text intake gates + reconcileImport (A177/A219)"]
         CMP["core.ts — compute · costModel · rateFor · helpers · event bus"]
         RPT["report.ts — report builder (screen/md/email)"]
         CRV["curveseries.ts — daily gross/net/take series"]

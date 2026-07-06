@@ -30,12 +30,14 @@
   // tag/note edits. On demo, writes are disabled (dataDisabled). shadcn-svelte primitives; color in P&L.
   import { Plus, Trash2, Tag, StickyNote, Pencil, ImagePlus, Image, X } from '@lucide/svelte';
   import { cn } from '$lib/utils';
-  import { usdWhole } from '../../lib/core/core.ts';
+  import { usdWhole, EXCH, MICRO, NOT_MICRO } from '../../lib/core/core.ts';
   import { cleanTag } from '../../lib/core/store.ts';
   import { readImage } from '../lib/files.ts';
   import { createPagination } from '../lib/pagination.svelte.ts';
   import PaginationControls from '../parts/PaginationControls.svelte';
   import TagInput from '../parts/TagInput.svelte';
+  import DatePickerPopover from '../parts/DatePickerPopover.svelte';
+  import SymbolSelect from '../parts/SymbolSelect.svelte';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Checkbox } from '$lib/components/ui/checkbox';
@@ -199,7 +201,6 @@
         isNew: true,
       },
     ];
-    startEdit(id, 'symbol');
   }
   function toggleRow(id: string, v: boolean) {
     const next = new Set(selected);
@@ -234,6 +235,20 @@
     bulkTag = '';
   }
   const numText = (v: number) => (Number.isFinite(v) ? `${v}` : '—');
+
+  // F49: the Symbol cell editor's option list — every root already in the dataset (draft rows) plus
+  // every root the fee tables know about (EXCH's keys + the MICRO/NOT_MICRO tier overrides), so the
+  // picker surfaces roots the trader hasn't imported yet. Live imports of the exported `let`s from
+  // core.ts always read the current runtime values (loadRefData() resolves before the app mounts —
+  // see docs/architecture.md's boot sequence — so this is populated by the time this screen renders).
+  const symbolOptions = $derived.by(() => {
+    const set = new Set<string>();
+    for (const r of draft) if (r.symbol) set.add(r.symbol.toUpperCase());
+    for (const root of Object.keys(EXCH)) set.add(root);
+    for (const root of MICRO) set.add(root);
+    for (const root of NOT_MICRO) set.add(root);
+    return [...set].sort();
+  });
 </script>
 
 {#snippet textCell(row: EditorRow, field: 'symbol' | 'date' | 'time', value: string, align: string)}
@@ -256,6 +271,22 @@
     </button>
   {:else}
     <span class={cn('block w-full px-1.5 py-1 text-sm', align)}>{value || '—'}</span>
+  {/if}
+{/snippet}
+
+{#snippet dateCell(row: EditorRow)}
+  {#if canEdit('date')}
+    <DatePickerPopover value={row.date} onchange={v => setText(row.id, 'date', v)} class="text-left" />
+  {:else}
+    <span class="block w-full px-1.5 py-1 text-sm text-left">{row.date || '—'}</span>
+  {/if}
+{/snippet}
+
+{#snippet symbolCell(row: EditorRow)}
+  {#if canEdit('symbol')}
+    <SymbolSelect value={row.symbol} options={symbolOptions} onchange={v => setText(row.id, 'symbol', v)} class="text-left" />
+  {:else}
+    <span class="block w-full px-1.5 py-1 text-sm text-left">{row.symbol || '—'}</span>
   {/if}
 {/snippet}
 
@@ -369,9 +400,9 @@
                   {#if dirty}<span class="size-1.5 rounded-full bg-primary" title="Unsaved"></span>{/if}
                 </span>
               </Table.Cell>
-              <Table.Cell class="p-1 text-muted-foreground">{@render textCell(row, 'date', row.date, 'text-left')}</Table.Cell>
+              <Table.Cell class="p-1 text-muted-foreground">{@render dateCell(row)}</Table.Cell>
               <Table.Cell class="p-1 text-muted-foreground">{@render textCell(row, 'time', row.time, 'text-left')}</Table.Cell>
-              <Table.Cell class="p-1 font-medium">{@render textCell(row, 'symbol', row.symbol, 'text-left')}</Table.Cell>
+              <Table.Cell class="p-1 font-medium">{@render symbolCell(row)}</Table.Cell>
               <Table.Cell class="p-1">
                 {#if canEdit('side')}
                   <button type="button" onclick={() => toggleSide(row.id)} title="Toggle side">

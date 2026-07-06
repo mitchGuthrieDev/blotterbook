@@ -4,10 +4,16 @@
 
 ## Verdict: CUSTOM
 
+> **Note (post-A223):** the `/app/` bundle budget cited below (640 KiB, ~22 KiB headroom at the time
+> of this eval) has since been raised to 840 KiB (`scripts/check-bundle-size.mjs`) — gridstack's
+> ~83 KiB minified weight would no longer force a budget raise on its own. The bundle-size argument
+> below is accordingly weaker than when this eval was written; the DOM-ownership/drag-semantics
+> reasoning is unaffected and the verdict stands unless F29 revisits it.
+
 Build F29 phase 1 as a minimal custom grid on the primitives we already own (`styleProps` CSSOM
 action + `modOrder`/`modKeyFor` + Store.local + the A186 staged-save model). Gridstack **passes**
 the CSP gate (v12 is CSSOM/CSS-variable based — see below), so this is *not* a disqualification on
-the make-or-break test; it loses on bundle size (~83 KiB minified vs ~22 KiB headroom), DOM
+the make-or-break test; it loses on bundle size (~83 KiB minified vs ~22 KiB headroom at eval time), DOM
 ownership (fights Svelte's keyed `{#each}` + `animate:flip`), and keyboard a11y (none built in).
 Phase 1 needs none of gridstack's 2-D packing engine. Revisit gridstack only if a later phase
 demands true 2-D drag-anywhere + collision/compaction — the CSP finding below stays valid for that

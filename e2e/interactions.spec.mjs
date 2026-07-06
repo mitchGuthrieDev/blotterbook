@@ -79,13 +79,15 @@ test('demo: write controls are disabled — cost model + data management + CSV i
   await expect(brokerTrigger).toBeDisabled();
 
   // Trade Editor: a staged cell edit cannot be saved — "Save all" is disabled on demo.
+  // F49: the Symbol cell opens a filterable Popover list (portaled to <body>) instead of a bare
+  // inline input, so the filter input is queried at the page level, not scoped under the <td>.
   await gotoScreen(page, 'Trade Editor');
   await expect(page.locator('table tbody tr').first()).toBeVisible();
   const cell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
   await cell.click();
-  const input = page.locator('table tbody tr').first().locator('td').nth(3).locator('input');
-  await input.fill('ZZDEMO');
-  await input.press('Enter');
+  const symbolFilter = page.getByPlaceholder('Filter or type a new root…');
+  await symbolFilter.fill('ZZDEMO');
+  await symbolFilter.press('Enter');
   // A161: assert the control EXISTS before asserting disabled — the old `if (count())` guard
   // vacuously passed if "Save all" was ever renamed/removed, silencing the demo write-guard.
   const saveAll = page.getByRole('button', { name: 'Save all' });
@@ -111,12 +113,13 @@ test('demo: Trade Editor stages edits in-memory but persists nothing across relo
   await expect(page.locator('table tbody tr').first()).toBeVisible();
 
   // Edit the first row's Symbol cell → ZZDEMO (an in-memory draft edit). On demo the Save-all control
-  // is DISABLED (isDemo), so the staged edit can never be persisted.
+  // is DISABLED (isDemo), so the staged edit can never be persisted. F49: the Symbol cell's filter
+  // input lives in a portaled Popover, not inside the <td> — query it at the page level.
   const symCell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
   await symCell.click();
-  const input = page.locator('table tbody tr').first().locator('td').nth(3).locator('input');
-  await input.fill('ZZDEMO');
-  await input.press('Enter');
+  const symbolFilter = page.getByPlaceholder('Filter or type a new root…');
+  await symbolFilter.fill('ZZDEMO');
+  await symbolFilter.press('Enter');
   const saveAll = page.getByRole('button', { name: 'Save all' });
   await expect(saveAll).toHaveCount(1); // A161: no vacuous pass if the control is renamed
   await expect(saveAll).toBeDisabled();
@@ -130,6 +133,92 @@ test('demo: Trade Editor stages edits in-memory but persists nothing across relo
   await gotoScreen(page, 'Trade Editor');
   await expect(page.locator('table tbody tr').first()).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText('ZZDEMO')).toHaveCount(0); // the edit did not survive
+});
+
+test('demo: Trade Editor Date cell opens a calendar popover and picking a day updates the draft (F49)', async ({ page }) => {
+  await bootDashboard(page);
+  await gotoScreen(page, 'Trade Editor');
+  await expect(page.locator('table tbody tr').first()).toBeVisible();
+
+  // Clicking the Date cell (col 1) opens a month-grid calendar, not a bare text input.
+  const dateCell = page.locator('table tbody tr').first().locator('td').nth(1).locator('button');
+  await dateCell.click();
+  const days = page.getByTestId('datepicker-day');
+  await expect(days.first()).toBeVisible();
+  const dayCount = await days.count();
+  expect(dayCount).toBeGreaterThan(0);
+
+  // Mouse path: pick a day → the popover closes and the cell's staged value is exactly that ISO date.
+  const targetIdx = Math.min(9, dayCount - 1);
+  const target = days.nth(targetIdx);
+  const pickedDate = await target.getAttribute('aria-label'); // rendered as the 'YYYY-MM-DD' itself
+  await target.click();
+  await expect(page.getByTestId('datepicker-day')).toHaveCount(0); // popover closed after picking
+  await expect(dateCell).toHaveText(pickedDate);
+
+  // Keyboard path: reopen, arrow off a focused day, then Enter picks whatever is now focused (the
+  // grid handles ArrowLeft/Right/Up/Down + an explicit Enter handler — see onGridKey in
+  // DatePickerPopover.svelte). Locator.press() (not a bare page.keyboard.press) focuses + waits for
+  // actionability on each element itself, so this isn't racing the popover's open-time re-render.
+  await dateCell.click();
+  const days2 = page.getByTestId('datepicker-day');
+  await expect(days2.first()).toBeVisible();
+  const midIdx = Math.min(5, (await days2.count()) - 2);
+  await days2.nth(midIdx).press('ArrowRight');
+  const focusedLabel = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+  expect(focusedLabel).toBeTruthy();
+  await page.locator(`[data-testid="datepicker-day"][aria-label="${focusedLabel}"]`).press('Enter');
+  await expect(page.getByTestId('datepicker-day')).toHaveCount(0);
+  await expect(dateCell).toHaveText(focusedLabel);
+
+  // Escape closes without staging a pick.
+  const beforeEscape = await dateCell.textContent();
+  await dateCell.click();
+  await expect(page.getByTestId('datepicker-day').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('datepicker-day')).toHaveCount(0);
+  await expect(dateCell).toHaveText(beforeEscape ?? '');
+});
+
+test('demo: Trade Editor Symbol cell opens a filterable list; filtering, picking, and a custom root all work (F49)', async ({ page }) => {
+  await bootDashboard(page);
+  await gotoScreen(page, 'Trade Editor');
+  await expect(page.locator('table tbody tr').first()).toBeVisible();
+
+  const symCell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
+  await symCell.click();
+  const filterInput = page.getByPlaceholder('Filter or type a new root…');
+  await expect(filterInput).toBeFocused(); // opens with the filter already focused (keyboard path)
+
+  // The unfiltered list holds every known root (dataset symbols + EXCH/MICRO/NOT_MICRO fee roots).
+  const options = page.getByTestId('symbolselect-option');
+  const totalCount = await options.count();
+  expect(totalCount).toBeGreaterThan(0);
+
+  // Type-to-filter narrows the list to matches, case-insensitively.
+  await filterInput.fill('es');
+  await expect(options.first()).toBeVisible();
+  const filteredTexts = await options.allTextContents();
+  expect(filteredTexts.length).toBeGreaterThan(0);
+  expect(filteredTexts.length).toBeLessThanOrEqual(totalCount);
+  for (const t of filteredTexts) expect(t.toUpperCase()).toContain('ES');
+
+  // Picking an existing option sets the cell's value and closes the popover.
+  const pickedOption = (await options.first().textContent())?.trim();
+  await options.first().click();
+  await expect(page.getByTestId('symbolselect-list')).toHaveCount(0);
+  await expect(symCell).toHaveText(pickedOption ?? '');
+
+  // Custom-root path: typing an unlisted root surfaces a free-text 'Use "…"' row at the top of the
+  // list, and picking it sets the cell to exactly the typed (canonicalized) root.
+  await symCell.click();
+  await filterInput.fill('zzcustom');
+  const custom = page.getByTestId('symbolselect-custom');
+  await expect(custom).toBeVisible();
+  await expect(custom).toHaveText('Use "ZZCUSTOM"');
+  await custom.click();
+  await expect(page.getByTestId('symbolselect-list')).toHaveCount(0);
+  await expect(symCell).toHaveText('ZZCUSTOM');
 });
 
 test('demo: feedback dialog builds a mailto draft from ONLY the typed text (A105)', async ({ page }) => {

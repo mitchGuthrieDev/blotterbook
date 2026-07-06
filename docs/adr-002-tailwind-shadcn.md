@@ -96,8 +96,10 @@ invariant (no literal `style=""` in markup) is unchanged and still enforced.
   hash — style such elements with utilities (global) or the primitive itself, not scoped descendant
   CSS. For a trigger that must keep bespoke scoped styling, use bits-ui's `child` snippet so the real
   element stays in the parent template (Svelte scoping + `class:` directives keep working).
-- The **A96 size budget** is **600 KiB** (`scripts/check-bundle-size.mjs`; raised 480 → 600 at the
-  CH16 cutover) — the documented cost of the bits-ui + Floating-UI accessible-component system.
+- The **A96 size budget** was raised 480 → 600 KiB at the CH16 cutover — the documented cost of the
+  bits-ui + Floating-UI accessible-component system — and has since been raised further as later
+  feature work landed (`scripts/check-bundle-size.mjs`; 840 KiB as of A223 — see that file's header
+  comments for the full raise history).
 - New components are added with `npx shadcn-svelte add <name>`; because we own the vendored source,
   bespoke customization happens in place.
 

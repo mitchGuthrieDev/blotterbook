@@ -71,8 +71,9 @@ caching so each day is fetched once.
   the trade). **Tick data is out** (GBs/day; also the expensive schema).
 - Demo: replay must run off `DemoStore` fixtures — a small canned bar set in `sampledata.ts`; no
   fetch, no persistence (invariant).
-- Bundle: lightweight-charts is ~45 KB gz but the `/app/` surface has a 600 KiB JS budget
-  (`check-bundle-size.mjs`) — lazy-load the replay screen behind a dynamic import.
+- Bundle: lightweight-charts is ~45 KB gz but the `/app/` surface has a fixed JS budget (see
+  `check-bundle-size.mjs`'s current `BUDGET_BYTES` — 840 KiB as of A223, raised several times since
+  this eval) — lazy-load the replay screen behind a dynamic import regardless of the exact figure.
 
 ## UI surface
 
@@ -116,5 +117,5 @@ TradeEditor part), state via runes + the `bb:store` context, no new global state
   replay chart, LRU cap + Data-manager surface).
 - **R11d (discussion → feat, gated on Q2):** opt-in user-keyed vendor fetch with consent UX and
   whole-day request granularity.
-- **R11e (chore, S):** evaluate lightweight-charts vs. hand-rolled canvas against the 600 KiB
-  bundle budget and CSP; record the choice as a mini-ADR.
+- **R11e (chore, S):** evaluate lightweight-charts vs. hand-rolled canvas against the current
+  bundle budget (`check-bundle-size.mjs`) and CSP; record the choice as a mini-ADR.

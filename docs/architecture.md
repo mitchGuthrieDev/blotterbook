@@ -214,7 +214,9 @@ format. The flow is two-step so a bad file never silently corrupts your data:
 2. **Start Blotterbook** (landing) or **Import** (Manage data) commits the parsed
    trades.
 
-Only `.csv` files are accepted, and nothing loads until a parse succeeds.
+`.csv`/`.txt`/`.tsv` files are accepted (plus `.xlsx` for the ATAS X statistics export, F52 —
+routed through `xlsx.ts` into the same CSV-text pipeline before the normal gates apply), and
+nothing loads until a parse succeeds.
 
 The reference format is the **TradingView** "List of trades" export — required
 columns (matched case-insensitively by substring): **`Time`**, **`Realized PnL
@@ -261,13 +263,16 @@ pnl, symbol, root, side[, qty, entryTime, exitTime, holdMs] }` — so `compute()
   otherwise PnL is computed from price × a built-in futures **point-value** map
   (unknown roots default to ×1, correct for equities).
 
-Supported platforms: **TradingView** (verified), plus **Tradovate, Rithmic
-R\|Trader, Sierra Chart, TradeStation, MotiveWave, Webull, Interactive Brokers,
-Schwab/thinkorswim** — these are `beta`, built from documented formats and
-exercised by `scripts/test-adapters.mjs` with synthetic samples. They're flagged
-*(beta — verify the numbers)* in the UI until validated against a real export.
-**Adding a platform** = one object in `adapters.ts` (`sniff` + `toTrades`) and a
-fixture in the test.
+Supported platforms: **TradingView** (balance history + order history),
+**Tradovate/NinjaTrader** (orders + performance + fills), **Quantower**, and
+**ATAS X** (via the `.xlsx` statistics export, F52) are verified against real
+exports (A209). **Rithmic R\|Trader, Sierra Chart, TradeStation, MotiveWave,
+Webull, Interactive Brokers, Schwab/thinkorswim** are `beta` — built from
+documented formats and exercised by `scripts/test-adapters.mjs` with synthetic
+samples. They're flagged *(beta — verify the numbers)* in the UI until validated
+against a real export (tracked in backlog **A103**). **Adding a platform** = one
+object in `adapters.ts` (`sniff` + `toTrades` + `minScore`) and a fixture in the
+test.
 
 ## Cost model
 
@@ -339,22 +344,25 @@ short SHA-256 **content hash**. At boot the app fetches `manifest.json` with
 Trade data and day-notes are stored in **IndexedDB** via `src/lib/core/store.ts`. Nothing
 is uploaded.
 
-- **Stores:** `trades` (keyed by the dedupe id), `journal` (per-day notes keyed by
-  date — each a `{text, tags, shots}` annotation), `meta` (setup + saved filters),
-  and `trademeta` (per-trade tags/note/screenshots, keyed by trade id; added in DB
-  v2).
+- **Stores (DB v3):** `trades` (keyed by the dedupe id), `journal` (per-day notes
+  keyed by date — each a `{text, tags, shots}` annotation), `meta` (setup + saved
+  filters), `trademeta` (per-trade tags/note/screenshots, keyed by trade id; added
+  in DB v2), and `files`/`filetext` (per-file CSV provenance — metadata and the
+  raw text stored in separate stores so listing the library never loads
+  megabytes; added in DB v3, F37).
 - **Delta merge:** `Store.addTrades()` skips ids already present, so re-imports
   only add new trades.
 - **Demo data is never persisted** — it lives in memory only.
 - **Erase all local data** (Manage data → Danger zone) calls `Store.purge()` to
-  wipe all four stores after a confirm.
+  wipe all six stores after a confirm.
 
 The app never touches `indexedDB` directly — it goes through the `Store`
 interface. A future cloud backend implements the same interface, so adding cloud
 sync won't touch the rest of the app. The manager added `deleteTrade`,
 `getAllJournal`, `deleteJournal`, `getAllMeta`,
-`getTradeMeta`/`saveTradeMeta`/`deleteTradeMeta`/`allTradeMeta`, `exportAll`, and
-`importAll` to that interface.
+`getTradeMeta`/`saveTradeMeta`/`deleteTradeMeta`/`allTradeMeta`, `exportAll`,
+`importAll`, and (F37 per-file provenance) `getFiles`/`addFile`/`updateFile`/
+`deleteFile`/`getFileText`/`filesBytes` to that interface.
 
 Separate, unrelated version numbers are intentionally **not** touched by the
 release automation: `store.ts` `DB_VERSION` (IndexedDB schema), the backup-file
@@ -519,9 +527,11 @@ release notes), and `legal.html` (disclaimers, terms, privacy summary).
 - **Hold time depends on the export** — fills-based imports get hold time from the
   round-trip matcher; closed-position exports like TradingView carry only the close
   timestamp.
-- **Beta adapters need real-export validation** — the eight non-TradingView
-  adapters are built from documented formats and synthetic tests. Header changes on
-  a platform's side can break detection.
+- **Beta adapters need real-export validation** — 7 of the 14 adapters (Rithmic,
+  Sierra Chart, TradeStation, MotiveWave, Webull, Interactive Brokers,
+  Schwab/thinkorswim) are still built from documented formats and synthetic
+  tests, not a real export (backlog **A103**). Header changes on a platform's
+  side can break detection.
 - **Fills PnL can approximate** — when a fills export has no realized PnL, it's
   computed from price × a built-in futures point-value map; unrecognized futures
   roots fall back to ×1 (correct for equities, wrong for an unlisted contract until
