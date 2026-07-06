@@ -547,6 +547,18 @@
       "partial": false,
       "prompt": "From R1 pass 9 (synced-workspaces audit). Two comment/dead-branch fixes: (1) the dead encrypted-workspace-name branch at functions/api/sync/workspaces.ts:82-85 — the client never sends `name`, so the branch is unreachable; remove it or note it as reserved. (2) the stale 'passkey' comment at functions/_lib/sync.ts:60 where the actual wire value is `prf`. Done when: the unreachable branch is removed/annotated and the comment matches the real wire value.",
       "doneNote": null
+    },
+    {
+      "id": "A269",
+      "title": "Sync: tombstone store keyed by bare id collides trade vs trademeta (lost trade delete → cross-device duplicate on every edit)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "From R1 pass 9 follow-up (synced-workspaces; on the promote path). The `tombstones` object store in src/lib/core/store.ts is keyed by the bare record `id`, but a trade and its per-trade meta share an id — so `updateTrade(oldId,...)` calls deleteTrade(oldId) (writes a `trade` tombstone) then deleteTradeMeta(oldId) (OVERWRITES it with a `trademeta` tombstone). The OLD trade's deletion then never carries a `trade`-typed tombstone, so cloudsync-core.collectChanges never emits a `trade:oldId` delete and the pre-edit trade is never removed on other devices → a duplicate (old + new) after EVERY editor edit — a real cross-device convergence bug. Fix: key the tombstone store by the composite `${type}:${id}` (add a `key` field, keyPath 'key'). The store is new on this unmerged branch, so no prod migration: bump DB_VERSION and, in onupgradeneeded, delete+recreate the tombstones store with the new keyPath (clearing the transient delete-log pre-GA is fine). Update every write path (deleteTrade / deleteJournal / deleteTradeMeta / saveJournal + saveTradeMeta empty-clear / deleteFile cascade / updateTrade's clearTombstone / purge), getTombstones() (hand back the plain {id,type,updated} shape), and the suppressedByTombstone lookup in addTrades (look up `trade:${id}`); mirror all of it in DemoStore. collectChanges already blinds tombstones as `${type}:${id}`, so it just needs getTombstones to yield type+id. Add coverage: a real-Store test that updateTrade on a trade WITH trademeta produces BOTH a `trade` and a `trademeta` tombstone (no collision) and that collectChanges emits the old trade's delete; DemoStore parity. Done when: both tombstones coexist, the old trade delete propagates on reconcile, and typecheck/lint/format/test:unit/build+size all green.",
+      "doneNote": null
     }
   ],
   "howToDrive": [

@@ -326,6 +326,21 @@ ok('local.get fallback', s.local.get('missing', 'fb') === 'fb');
   const newer = await sf.addTrades([{ ...t('2026-06-01 10:00:00', 55), updated: tomb.updated + 1000 }]);
   ok('A255: a NEWER re-add resurrects the trade (LWW over the tombstone)', newer.added === 1 && (await sf.tradeCount()) === 1);
 }
+{
+  // A269: tombstones are keyed by the composite `${type}:${id}`, so a trade and its per-trade meta
+  // (which share an id) get DISTINCT tombstones instead of one clobbering the other.
+  const sf = createDemoStore();
+  await sf.addTrades([t('2026-07-01 10:00:00', 8)]);
+  const id = sf.tradeId(t('2026-07-01 10:00:00', 8));
+  await sf.saveTradeMeta(id, { note: 'n' });
+  await sf.deleteTrade(id);
+  await sf.deleteTradeMeta(id);
+  const tombs = await sf.getTombstones();
+  ok(
+    'A269: a trade + a trademeta tombstone for the SAME id coexist (no collision)',
+    tombs.some(tb => tb.id === id && tb.type === 'trade') && tombs.some(tb => tb.id === id && tb.type === 'trademeta')
+  );
+}
 
 // ── F59: demo is a SINGLE in-memory workspace; the dimension is inert (never persists) ──
 {

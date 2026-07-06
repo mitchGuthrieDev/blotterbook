@@ -143,7 +143,7 @@ function memStore() {
           }
           continue;
         }
-        const tb = tombs.get(id); // F58/A255: LWW suppression — a tombstone at/after the incoming
+        const tb = tombs.get(`trade:${id}`); // F58/A255/A269: LWW suppression, composite-keyed lookup
         if (tb && tb.updated >= (t.updated ?? 0)) continue; // clock suppresses; a newer record resurrects
         trades.set(id, { ...t, id, updated: Date.now() });
         added++;
@@ -152,14 +152,14 @@ function memStore() {
     },
     async deleteTrade(id) {
       trades.delete(id);
-      tombs.set(id, { id, type: 'trade', updated: Date.now() });
+      tombs.set(`trade:${id}`, { id, type: 'trade', updated: Date.now() }); // A269 composite key
     },
     async getAllJournal() {
       return [...journal.values()];
     },
     async deleteJournal(date) {
       journal.delete(date);
-      tombs.set(date, { id: date, type: 'journal', updated: Date.now() });
+      tombs.set(`journal:${date}`, { id: date, type: 'journal', updated: Date.now() }); // A269 composite key
     },
     async saveJournal(date, rec) {
       const r = typeof rec === 'string' ? { text: rec } : rec || {};
@@ -170,7 +170,7 @@ function memStore() {
       if (text || tags.length || shots.length) journal.set(date, { date, text, tags, shots, updated: Date.now() });
       else {
         journal.delete(date);
-        tombs.set(date, { id: date, type: 'journal', updated: Date.now() });
+        tombs.set(`journal:${date}`, { id: date, type: 'journal', updated: Date.now() }); // A269 composite key
       }
     },
     async allTradeMeta() {
@@ -184,12 +184,12 @@ function memStore() {
       if (tags.length || note || shots.length) trademeta.set(id, { id, tags, note, shots, updated: Date.now() });
       else {
         trademeta.delete(id);
-        tombs.set(id, { id, type: 'trademeta', updated: Date.now() });
+        tombs.set(`trademeta:${id}`, { id, type: 'trademeta', updated: Date.now() }); // A269 composite key
       }
     },
     async deleteTradeMeta(id) {
       trademeta.delete(id);
-      tombs.set(id, { id, type: 'trademeta', updated: Date.now() });
+      tombs.set(`trademeta:${id}`, { id, type: 'trademeta', updated: Date.now() }); // A269 composite key
     },
     async getAllMeta() {
       return [...meta.entries()].map(([key, { value, updated }]) => ({ key, value, updated }));

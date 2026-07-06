@@ -1,7 +1,17 @@
 'use strict';
 import { Adapters } from './adapters.ts';
 import { checkCsvText } from './intake.ts';
-import type { Trade, Annotation, StoredJournal, StoredTradeMeta, StoreLike, CsvFileRec, Tombstone, Workspace } from './types.ts';
+import type {
+  Trade,
+  Annotation,
+  StoredJournal,
+  StoredTradeMeta,
+  StoreLike,
+  CsvFileRec,
+  Tombstone,
+  TombstoneType,
+  Workspace,
+} from './types.ts';
 /* ============================================================
    Local persistence — IndexedDB
 
@@ -43,7 +53,8 @@ const WS_REGISTRY_KEY = IS_STAGING ? 'bb:staging:workspaces' : 'bb:workspaces';
 const WS_ACTIVE_KEY = IS_STAGING ? 'bb:staging:activeWorkspace' : 'bb:activeWorkspace';
 // The Default workspace's stable id (the legacy single-DB world = the one-workspace case of the model).
 const DEFAULT_WS_ID = 'default';
-const DB_VERSION = 4; // v4 (F58): + tombstones store (delete-log); v3 (F37): + files / filetext
+const DB_VERSION = 5; // v5 (A269): tombstones re-keyed by composite `${type}:${id}` (trade + trademeta
+// share an id, so an id-only key collided); v4 (F58): + tombstones store (delete-log); v3 (F37): + files / filetext
 const TRADES = 'trades';
 const JOURNAL = 'journal';
 const META = 'meta';
@@ -51,8 +62,16 @@ const TRADEMETA = 'trademeta'; // per-trade tags / note / screenshots, keyed by 
 const FILES = 'files'; // imported-CSV metadata records (F37), keyed by content-hash id
 const FILETEXT = 'filetext'; // raw CSV text per file, keyed by the same id — split from the
 // metadata row so listing the library never loads megabytes of text
-const TOMBSTONES = 'tombstones'; // F58 delete-log: { id, type, updated } keyed by the removed
-// record's id — makes a delete distinguishable from "not synced yet" and blocks re-import resurrection
+const TOMBSTONES = 'tombstones'; // F58 delete-log: { key, id, type, updated }. A269: keyed by the
+// COMPOSITE `${type}:${id}` (not the bare id) — a trade and its per-trade meta share an id, so an
+// id-only key let deleteTradeMeta(id) clobber deleteTrade(id)'s tombstone (a lost trade delete). The
+// composite lets both coexist. Makes a delete distinguishable from "not synced yet" + blocks resurrection.
+// The composite key for a tombstone record — must match cloudsync-core's `${type}:${id}` blinding
+// input. Exported so DemoStore keys its in-memory delete-log the identical way (no drift, like tradeId).
+export const tombstoneKey = (type: TombstoneType, id: string): string => `${type}:${id}`;
+// The stored tombstone record: the composite `key` is the keyPath; `id`/`type`/`updated` are the
+// Tombstone fields the sync layer + suppression predicate read back.
+const tombstoneRec = (type: TombstoneType, id: string, updated: number) => ({ key: tombstoneKey(type, id), id, type, updated });
 
 // Screenshots are inlined data: URIs rendered straight into an <img src>. Only well-formed base64
 // image data URIs are allowed — this drops any `javascript:`/`data:text/html`/SVG payload before it
@@ -157,9 +176,12 @@ function open() {
       if (!db.objectStoreNames.contains(TRADEMETA)) db.createObjectStore(TRADEMETA, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(FILES)) db.createObjectStore(FILES, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(FILETEXT)) db.createObjectStore(FILETEXT, { keyPath: 'id' });
-      // F58 (v4): the delete-log. A pre-v4 DB upgrades cleanly — no tombstones present means nothing
-      // is suppressed, i.e. exactly today's behavior, until the user's next delete records one.
-      if (!db.objectStoreNames.contains(TOMBSTONES)) db.createObjectStore(TOMBSTONES, { keyPath: 'id' });
+      // F58 (v4): the delete-log. A269 (v5): re-keyed by the composite `${type}:${id}`. The store is
+      // new on the (unmerged) synced-workspaces branch, so there is no prod migration concern — drop +
+      // recreate with the new keyPath (clearing the transient delete-log pre-GA is fine; a fresh device
+      // full-reconciles anyway). A pre-v4 DB (no tombstones) just gets the store created empty.
+      if (db.objectStoreNames.contains(TOMBSTONES)) db.deleteObjectStore(TOMBSTONES);
+      db.createObjectStore(TOMBSTONES, { keyPath: 'key' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -183,11 +205,12 @@ function reqP<T = unknown>(r: IDBRequest<T>): Promise<T> {
     r.onerror = () => reject(r.error);
   });
 }
-// F58: drop a tombstone by id (own tx). Used by updateTrade — an editor re-add is an explicit
-// user action, not an import, so it must not be suppressed by the delete it just logged.
-function clearTombstone(id: string): Promise<void> {
+// F58: drop a tombstone (own tx). Used by updateTrade — an editor re-add is an explicit user action,
+// not an import, so it must not be suppressed by the delete it just logged. A269: keyed by the
+// composite `${type}:${id}`.
+function clearTombstone(type: TombstoneType, id: string): Promise<void> {
   return tx(TOMBSTONES, 'readwrite').then(store => {
-    store.delete(id);
+    store.delete(tombstoneKey(type, id));
     return done(store);
   });
 }
@@ -345,7 +368,9 @@ export const Store: StoreLike = {
       const tr = tombStore.getAll();
       tr.onerror = () => reject(tr.error);
       tr.onsuccess = () => {
-        const tombs = new Map<string, Tombstone>((tr.result as Tombstone[]).map(r => [r.id, r]));
+        // A269: tombstones are keyed by the composite `${type}:${id}`, so index by that and look up
+        // the TRADE tombstone specifically (`trade:${id}`) — a trademeta tombstone must not suppress a trade.
+        const tombs = new Map<string, Tombstone>((tr.result as Array<Tombstone & { key: string }>).map(r => [r.key, r]));
         const kr = store.getAll();
         kr.onerror = () => reject(kr.error);
         kr.onsuccess = () => {
@@ -374,7 +399,7 @@ export const Store: StoreLike = {
             }
             // F58: a fresh insert is the only place resurrection can happen — an import re-adding a
             // trade the user deleted. Consult the delete-log via the single isolated predicate.
-            if (suppressedByTombstone(tombs.get(id), t)) continue;
+            if (suppressedByTombstone(tombs.get(tombstoneKey('trade', id)), t)) continue;
             // A154: computed id LAST so a crafted input object carrying its own `id` key (e.g. a
             // tampered backup) can never override the content hash the dedupe/meta paths rely on.
             // fileIds is copied to a plain array — a Svelte $state proxy would throw in the
@@ -422,7 +447,7 @@ export const Store: StoreLike = {
     if (text || tags.length || shots.length) t.objectStore(JOURNAL).put({ date, text, tags, shots, updated: Date.now() });
     else {
       t.objectStore(JOURNAL).delete(date);
-      t.objectStore(TOMBSTONES).put({ id: date, type: 'journal', updated: Date.now() });
+      t.objectStore(TOMBSTONES).put(tombstoneRec('journal', date, Date.now()));
     }
     return done(t.objectStore(JOURNAL));
   },
@@ -446,7 +471,7 @@ export const Store: StoreLike = {
     const db = await open();
     const t = db.transaction([TRADES, TOMBSTONES], 'readwrite');
     t.objectStore(TRADES).delete(id);
-    t.objectStore(TOMBSTONES).put({ id, type: 'trade', updated: Date.now() });
+    t.objectStore(TOMBSTONES).put(tombstoneRec('trade', id, Date.now()));
     return done(t.objectStore(TRADES));
   },
 
@@ -463,7 +488,7 @@ export const Store: StoreLike = {
     // F58: an editor re-add is an EXPLICIT user action, not an import — clear any tombstone for the
     // new id so addTrades doesn't suppress it. Covers the identity-preserving edit (only tags/note
     // changed → tradeId(next) === oldId, which deleteTrade just tombstoned).
-    await clearTombstone(id);
+    await clearTombstone('trade', id);
     await this.addTrades([next]);
     await this.saveTradeMeta(id, { tags: meta?.tags ?? old.tags, note: meta?.note ?? old.note, shots: meta?.shots ?? old.shots });
     return { id };
@@ -481,7 +506,7 @@ export const Store: StoreLike = {
     const db = await open();
     const t = db.transaction([JOURNAL, TOMBSTONES], 'readwrite');
     t.objectStore(JOURNAL).delete(date);
-    t.objectStore(TOMBSTONES).put({ id: date, type: 'journal', updated: Date.now() });
+    t.objectStore(TOMBSTONES).put(tombstoneRec('journal', date, Date.now()));
     return done(t.objectStore(JOURNAL));
   },
 
@@ -510,7 +535,7 @@ export const Store: StoreLike = {
     if (tags.length || note || shots.length) t.objectStore(TRADEMETA).put({ id, tags, note, shots, updated: Date.now() });
     else {
       t.objectStore(TRADEMETA).delete(id);
-      t.objectStore(TOMBSTONES).put({ id, type: 'trademeta', updated: Date.now() });
+      t.objectStore(TOMBSTONES).put(tombstoneRec('trademeta', id, Date.now()));
     }
     return done(t.objectStore(TRADEMETA));
   },
@@ -519,7 +544,7 @@ export const Store: StoreLike = {
     const db = await open();
     const t = db.transaction([TRADEMETA, TOMBSTONES], 'readwrite');
     t.objectStore(TRADEMETA).delete(id);
-    t.objectStore(TOMBSTONES).put({ id, type: 'trademeta', updated: Date.now() });
+    t.objectStore(TOMBSTONES).put(tombstoneRec('trademeta', id, Date.now()));
     return done(t.objectStore(TRADEMETA));
   },
   async allTradeMeta() {
@@ -530,7 +555,10 @@ export const Store: StoreLike = {
   /* ---- F58 delete-log: every removal path records a tombstone; the sync layer reads these ---- */
   async getTombstones() {
     const store = await tx(TOMBSTONES, 'readonly');
-    return reqP<Tombstone[]>(store.getAll());
+    const all = await reqP<Array<Tombstone & { key: string }>>(store.getAll());
+    // A269: records carry the composite `key` as their keyPath; hand back the plain Tombstone shape
+    // ({ id, type, updated }) the sync layer + suppression predicate expect.
+    return all.map(({ id, type, updated }) => ({ id, type, updated }));
   },
 
   /* ---- F37 per-file CSV provenance: metadata in FILES, raw text in FILETEXT ---- */
@@ -595,7 +623,7 @@ export const Store: StoreLike = {
           else {
             tradeStore.delete(rec.id as string);
             metaStore.delete(rec.id as string);
-            tombStore.put({ id: rec.id as string, type: 'trade', updated: Date.now() });
+            tombStore.put(tombstoneRec('trade', rec.id as string, Date.now()));
             removedTrades++;
           }
         }

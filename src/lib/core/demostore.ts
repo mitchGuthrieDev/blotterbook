@@ -10,7 +10,7 @@
    The dedupe key (tradeId) and the screenshot allow-list (validShot) are imported VERBATIM from
    store.js (A29) so they can never drift from the real backend. Backup restore (importAll) is a
    no-op in demo (restore is disabled), avoiding any duplication of store.js's sanitization. */
-import { tradeId, validShot, cleanTags, setField, LOCAL_BACKUP_RE, sha256Hex, suppressedByTombstone } from './store.ts';
+import { tradeId, validShot, cleanTags, setField, LOCAL_BACKUP_RE, sha256Hex, suppressedByTombstone, tombstoneKey } from './store.ts';
 import type { Annotation, Trade, StoredJournal, StoredTradeMeta, StoreLike, CsvFileRec, Tombstone, Workspace } from './types.ts';
 
 // F59: demo is a SINGLE in-memory workspace and never persists — the workspace dimension is inert.
@@ -25,7 +25,7 @@ export function createDemoStore(): StoreLike {
   const trademeta = new Map<string, StoredTradeMeta>(); // id -> {id,tags,note,shots,updated}
   const files = new Map<string, CsvFileRec>(); // F37 parity: id -> file record (metadata)
   const filetexts = new Map<string, string>(); // id -> raw CSV text
-  const tombstones = new Map<string, Tombstone>(); // F58 parity: id -> {id,type,updated} delete-log
+  const tombstones = new Map<string, Tombstone>(); // F58/A269 parity: `${type}:${id}` -> {id,type,updated} delete-log
   const mem = new Map<string, unknown>(); // in-memory stand-in for Store.local (no localStorage)
 
   const sortByTime = (arr: Trade[]) => arr.slice().sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
@@ -87,8 +87,9 @@ export function createDemoStore(): StoreLike {
           }
           continue;
         }
-        // F58 parity: suppress resurrecting a trade the user deleted (same isolated predicate).
-        if (suppressedByTombstone(tombstones.get(id), t)) continue;
+        // F58/A269 parity: suppress resurrecting a trade the user deleted (same isolated predicate);
+        // look up the TRADE tombstone via the composite key so a trademeta tombstone can't suppress it.
+        if (suppressedByTombstone(tombstones.get(tombstoneKey('trade', id)), t)) continue;
         // A154 parity with Store.addTrades: computed id last, so an input `id` can't override it.
         trades.set(id, { ...t, id, updated: Date.now() }); // F58 parity: stamp the LWW clock
         added++;
@@ -103,15 +104,15 @@ export function createDemoStore(): StoreLike {
     },
     async deleteTrade(id) {
       trades.delete(id);
-      tombstones.set(id, { id, type: 'trade', updated: Date.now() }); // F58 parity
+      tombstones.set(tombstoneKey('trade', id), { id, type: 'trade', updated: Date.now() }); // F58/A269 parity
     },
     async updateTrade(oldId, next, m) {
       const old = trademeta.get(oldId);
       trades.delete(oldId);
-      tombstones.set(oldId, { id: oldId, type: 'trade', updated: Date.now() }); // F58: tombstone the OLD id
+      tombstones.set(tombstoneKey('trade', oldId), { id: oldId, type: 'trade', updated: Date.now() }); // F58: tombstone the OLD id
       trademeta.delete(oldId);
       const id = tradeId(next);
-      tombstones.delete(id); // F58: an editor re-add is explicit, not an import — don't suppress it
+      tombstones.delete(tombstoneKey('trade', id)); // F58: an editor re-add is explicit, not an import — don't suppress it
       if (!trades.has(id)) trades.set(id, { ...next, id, updated: Date.now() });
       const tags = cleanTags(m?.tags ?? old?.tags ?? []);
       const note = (m?.note ?? old?.note ?? '').trim();
@@ -129,7 +130,7 @@ export function createDemoStore(): StoreLike {
       else {
         // A252 parity: clearing to empty records a tombstone (so the delete syncs, no resurrection).
         journal.delete(date);
-        tombstones.set(date, { id: date, type: 'journal', updated: Date.now() });
+        tombstones.set(tombstoneKey('journal', date), { id: date, type: 'journal', updated: Date.now() });
       }
     },
     async getJournal(date) {
@@ -144,7 +145,7 @@ export function createDemoStore(): StoreLike {
     },
     async deleteJournal(date) {
       journal.delete(date);
-      tombstones.set(date, { id: date, type: 'journal', updated: Date.now() }); // F58 parity
+      tombstones.set(tombstoneKey('journal', date), { id: date, type: 'journal', updated: Date.now() }); // F58/A269 parity
     },
 
     async getAllMeta() {
@@ -168,12 +169,12 @@ export function createDemoStore(): StoreLike {
       else {
         // A252 parity: an empty clear records a tombstone (so the delete syncs, no resurrection).
         trademeta.delete(id);
-        tombstones.set(id, { id, type: 'trademeta', updated: Date.now() });
+        tombstones.set(tombstoneKey('trademeta', id), { id, type: 'trademeta', updated: Date.now() });
       }
     },
     async deleteTradeMeta(id) {
       trademeta.delete(id);
-      tombstones.set(id, { id, type: 'trademeta', updated: Date.now() }); // F58 parity
+      tombstones.set(tombstoneKey('trademeta', id), { id, type: 'trademeta', updated: Date.now() }); // F58/A269 parity
     },
     async allTradeMeta() {
       return [...trademeta.values()];
@@ -205,7 +206,7 @@ export function createDemoStore(): StoreLike {
         else {
           trades.delete(tid);
           trademeta.delete(tid); // A216: no orphaned meta
-          tombstones.set(tid, { id: tid, type: 'trade', updated: Date.now() }); // F58 parity
+          tombstones.set(tombstoneKey('trade', tid), { id: tid, type: 'trade', updated: Date.now() }); // F58/A269 parity
           removedTrades++;
         }
       }

@@ -33,7 +33,7 @@ globalThis.localStorage = (() => {
 
 const { Store } = await import('../src/lib/core/store.ts');
 const { genWorkspaceDek, dekBytesOf, encryptRecord, blindId } = await import('../src/lib/core/crypto.ts');
-const { deriveWsKeys, mergeRecords, pullAndMerge } = await import('../src/app/lib/cloudsync-core.ts');
+const { deriveWsKeys, mergeRecords, pullAndMerge, collectChanges } = await import('../src/app/lib/cloudsync-core.ts');
 
 let pass = 0;
 const ok = (name, cond) => {
@@ -111,23 +111,36 @@ const onePage = records => ({
   );
 }
 
-/* (iii) updateTrade (delete-old + re-add) → a reconcile of the PRE-EDIT trade does not resurrect it ── */
+/* (iii) A269: updateTrade on a trade WITH trademeta produces BOTH a trade AND a trademeta tombstone
+   (the composite key stops deleteTradeMeta from clobbering deleteTrade's), so the OLD trade's delete
+   propagates — a reconcile of the pre-edit trade does not resurrect it, and collectChanges emits the
+   trade delete another device would apply. ───────────────────────────────────────────────────────── */
 {
   await Store.purge();
   await Store.addTrades([trade('2025-03-01 10:00:00', 'MESZ2025', 'long', 20)]);
   const oldId = Store.tradeId(trade('2025-03-01 10:00:00', 'MESZ2025', 'long', 20));
+  await Store.saveTradeMeta(oldId, { note: 'pre-edit note' }); // the trade carries per-trade meta
   const { id: newId } = await Store.updateTrade(oldId, trade('2025-03-01 10:00:00', 'MESZ2025', 'long', 99), {});
-  // NOTE: TOMBSTONES is keyed by id alone, so deleteTradeMeta(oldId) overwrites deleteTrade(oldId)'s
-  // 'trade' tombstone with a 'trademeta' one (a pre-existing id-collision, out of scope here). What
-  // matters for resurrection: oldId is left tombstoned at all, and suppressedByTombstone ignores type.
+  const tombs = await Store.getTombstones();
   ok(
-    'updateTrade re-keys the trade + leaves the old id tombstoned',
-    newId !== oldId && (await Store.tradeCount()) === 1 && (await Store.getTombstones()).some(t => t.id === oldId)
+    'A269: a trade tombstone AND a trademeta tombstone for the old id COEXIST (no collision)',
+    newId !== oldId &&
+      (await Store.tradeCount()) === 1 &&
+      tombs.some(t => t.id === oldId && t.type === 'trade') &&
+      tombs.some(t => t.id === oldId && t.type === 'trademeta')
   );
+  // Propagation: collectChanges emits the OLD trade's delete (deleted:true) that another device applies
+  // to drop the pre-edit trade — the bug was this delete NEVER being emitted (clobbered tombstone).
+  const changes = await collectChanges(Store, 0);
+  ok(
+    'A269: the old trade delete IS emitted by collectChanges (propagates to other devices)',
+    changes.some(c => c.type === 'trade' && c.key === oldId && c.deleted)
+  );
+  // And locally the pre-edit trade record can't resurrect on reconcile.
   const preEdit = { ...trade('2025-03-01 10:00:00', 'MESZ2025', 'long', 20), id: oldId, updated: 1 };
   await mergeRecords(Store, keys, [await pulled('trade', oldId, preEdit, 1)]);
   ok(
-    'a reconcile of the pre-edit trade does NOT resurrect it',
+    'A269: a reconcile of the pre-edit trade does NOT resurrect it',
     !(await Store.getAllTrades()).some(t => t.id === oldId) && (await Store.tradeCount()) === 1
   );
 }
