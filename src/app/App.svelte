@@ -23,12 +23,13 @@
     pad2,
     tone,
     MONTH_NAMES,
+    csvCell,
   } from '../lib/core/core.ts';
   import { isBetaPhase } from '../lib/core/format.ts';
   import { Badge } from '$lib/components/ui/badge';
   import { Skeleton } from '$lib/components/ui/skeleton';
   import AppShell from '$lib/components/shell/AppShell.svelte';
-  import { createDashboard } from './lib/dashboard.svelte.ts';
+  import { createDashboard, resolveFromFiles } from './lib/dashboard.svelte.ts';
   import { dailySeries } from '../lib/core/curveseries.ts';
   import { navSections, navLabel } from './lib/nav';
   import { UserRound } from '@lucide/svelte';
@@ -575,13 +576,10 @@
   // F46: provenance platform per trade — fileIds → the contributing file records' labels, compacted
   // (the family adapters' '(orders)'-style type suffix is per-FILE detail; the trade-level column
   // shows the platform). Overlap trades list each distinct platform once; legacy/no-provenance → ''.
-  const fileById = $derived(new Map(dash.csvFiles.map(f => [f.id, f])));
+  // A249: resolveFromFiles (dashboard.svelte.ts) owns the shared "index csvFiles by id, scan
+  // t.fileIds" idiom; this caller's pick collects every distinct label.
   function platformOf(t: Trade): string {
-    const labels = (t.fileIds ?? [])
-      .map(id => fileById.get(id))
-      .filter((f): f is NonNullable<typeof f> => !!f)
-      .map(f => (f.platformLabel || f.platform || '').replace(/\s*\(.*\)$/, ''))
-      .filter(Boolean);
+    const labels = resolveFromFiles(t, dash.csvFiles, f => (f.platformLabel || f.platform || '').replace(/\s*\(.*\)$/, '') || undefined);
     return [...new Set(labels)].join(' · ');
   }
 
@@ -638,11 +636,8 @@
     else if (kind === 'csv') {
       // A154: neutralize spreadsheet formula prefixes (= + - @ tab) with a leading apostrophe so a
       // cell that reached the store un-sanitized can't execute when the export opens in Excel/Sheets,
-      // then quote-wrap as before.
-      const esc = (c: string) => {
-        const g = /^[=+\-@\t\r]/.test(c) ? `'${c}` : c;
-        return /[",\n]/.test(g) ? `"${g.replace(/"/g, '""')}"` : g;
-      };
+      // then quote-wrap via the shared csvCell (core.ts, A247).
+      const esc = (c: string) => csvCell(/^[=+\-@\t\r]/.test(c) ? `'${c}` : c);
       const rows = [
         ['date', 'time', 'symbol', 'side', 'qty', 'pnl'],
         ...dash.allTrades.map(t => [t.date, t.time, t.root, t.side, String(t.qty ?? 1), String(t.pnl)]),
@@ -909,8 +904,8 @@
   // A179: one flavor phrase per page load (module-scope pick — stable for the session).
   const flavor = pickFlavor();
 
-  // Admin-managed flags (A89): the maintenance banner (betaRibbon is superseded by the version-based
-  // Beta pill in the header). Applied once resolved; dashboard renders on defaults first.
+  // Admin-managed flags (A89): the maintenance banner (the dead betaRibbon/showBetaAdapters keys
+  // were retired in A245). Applied once resolved; dashboard renders on defaults first.
   let flags = $state<AppFlags>({ ...APP_FLAGS });
   // Import-quality notice (A113): close-event exports without per-contract quantity are billed as a
   // single contract, so commissions can be understated — flag it when every trade lacks a real qty.

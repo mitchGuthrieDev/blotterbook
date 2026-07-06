@@ -32,6 +32,28 @@ import type {
   ParseResult,
 } from '../../lib/core/types.ts';
 
+/**
+ * Resolve values from the CSV files (F37 provenance) that contributed to a trade. Indexes `files`
+ * by id and scans them IN `files`' OWN ORDER for the ones the trade references (`t.fileIds`),
+ * collecting `pick(file)` results and skipping files `pick` doesn't resolve (e.g. no broker
+ * override). Passing `files` pre-sorted (e.g. the newest-first `csvFiles`) lets a caller rely on
+ * that order for a first-match pick — see `brokerFor` below. Replaces three ad hoc "index csvFiles
+ * by id, then scan t.fileIds" idioms (A249) that each wanted something different back (a first
+ * match, a some()-style membership check, or every distinct label) — each caller supplies its own
+ * `pick` and reduces the result itself.
+ */
+export function resolveFromFiles<T>(t: Trade, files: CsvFileRec[], pick: (f: CsvFileRec) => T | undefined): T[] {
+  if (!t.fileIds?.length) return [];
+  const ids = new Set(t.fileIds);
+  const out: T[] = [];
+  for (const f of files) {
+    if (!ids.has(f.id)) continue;
+    const v = pick(f);
+    if (v !== undefined) out.push(v);
+  }
+  return out;
+}
+
 export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?: boolean }) {
   // Demo mounts the in-memory DemoStore (nothing persists by construction), but every write path is
   // ALSO isDemo-guarded here (A87 belt-and-suspenders) and the UI disables the controls — so demo can
@@ -94,11 +116,9 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   const brokerFor = $derived.by(() => {
     const overridden = new Map(csvFiles.filter(f => f.broker).map(f => [f.id, f.broker as string]));
     if (!overridden.size) return undefined;
-    return (t: Trade) => {
-      if (!t.fileIds?.length) return undefined;
-      for (const f of csvFiles) if (overridden.has(f.id) && t.fileIds.includes(f.id)) return overridden.get(f.id);
-      return undefined;
-    };
+    // A249: resolveFromFiles scans csvFiles in ITS order (newest-first) — [0] is the override of
+    // the newest contributing file that has one, same as the hand-rolled loop this replaced.
+    return (t: Trade) => resolveFromFiles(t, csvFiles, f => overridden.get(f.id))[0];
   });
   const costInputs = $derived({
     broker: setup.broker,
@@ -310,14 +330,16 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   // family — 'tradingview' (balance history, closed/authoritative) vs 'tradingview-orders'
   // (fills/derived) share the family 'tradingview'. kindOf comes from the adapter registry.
   const ADAPTER_KIND = new Map(Adapters.list().map(a => [a.id, a.kind]));
+  // A249: this splitter is adapter-registry-shaped (mirrors the platform id convention adapters.ts
+  // defines) — left here rather than moved, per the R1 audit's optional call.
   const family = (platformId: string) => platformId.split('-')[0];
   function reconcileOpts(platformId: string, files: CsvFileRec[]) {
     const F = family(platformId);
     const authority = new Set(files.filter(f => family(f.platform) === F && ADAPTER_KIND.get(f.platform) === 'closed').map(f => f.id));
     const derived = new Set(files.filter(f => family(f.platform) === F && ADAPTER_KIND.get(f.platform) === 'fills').map(f => f.id));
     return {
-      isAuthority: (t: Trade) => !!t.fileIds?.some(id => authority.has(id)),
-      isDerivedPeer: (t: Trade) => !!t.fileIds?.some(id => derived.has(id)),
+      isAuthority: (t: Trade) => resolveFromFiles(t, files, f => authority.has(f.id) || undefined).length > 0,
+      isDerivedPeer: (t: Trade) => resolveFromFiles(t, files, f => derived.has(f.id) || undefined).length > 0,
     };
   }
   /** Preview-time reconciliation count (sync — in-memory state) for the import sheet. */

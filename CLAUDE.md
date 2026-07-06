@@ -46,9 +46,10 @@ re-platform), and [`docs/architecture.md`](docs/architecture.md).
   mount points (`<div id="app">` + `<script type="module" src="./main.ts">`, body
   `data-mode="app|demo|staging"`). The Svelte app lives in `src/app/`: the redesigned sidebar-shell
   `App.svelte` (an `AppShell` + hash router) + `screens/` (Dashboard/Calendar/Analytics/Blotter/
-  CsvLibrary/TradeEditor/Reports/Account — Account is staging-gated, F53) + `parts/` (CostSetup/
-  Onboarding/ActivityTerminal/Definitions/StatusBanner/DashTabs/DetectionStatus/FeedbackDialog/
-  ModuleCarousel/PaginationControls/ScreenshotLightbox/SegmentedControl/TagInput) +
+  CsvLibrary/TradeEditor/Reports/Account — Account is staging-gated, F53) + `parts/` (BootSplash/
+  CostSetup/Onboarding/ActivityTerminal/Definitions/StatusBanner/DashTabs/DatePickerPopover/
+  DetectionStatus/EditableCellPopover/FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/
+  ScreenshotLightbox/SegmentedControl/SymbolSelect/TagInput) +
   `lib/{dashboard.svelte.ts,account.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports}`.
   It reuses the **pure-logic core** in `src/lib/core/` (A29, native TS per A61): `adapters` (+ `xlsx`
   for the ATAS X .xlsx path, F52) / `intake` (CSV gates + cross-export reconciliation, A177/A219) /
@@ -323,9 +324,10 @@ conforms to the rules below; keep it that way.
     App.svelte          the redesigned sidebar-shell root (AppShell + hash router) — mode-aware via PAGE_MODE (CH16)
     screens/            the app screens (<script lang="ts">): Dashboard/Calendar/Analytics/Blotter/CsvLibrary/
                         TradeEditor/Reports/Account (Account is staging-gated pending the accounts backend, F53)
-    parts/              cross-screen pieces: CostSetup/Onboarding/ActivityTerminal/Definitions/StatusBanner/
-                        DashTabs/DetectionStatus/FeedbackDialog/ModuleCarousel/PaginationControls/
-                        ScreenshotLightbox/SegmentedControl/TagInput
+    parts/              cross-screen pieces: BootSplash/CostSetup/Onboarding/ActivityTerminal/Definitions/
+                        StatusBanner/DashTabs/DatePickerPopover/DetectionStatus/EditableCellPopover/
+                        FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/ScreenshotLightbox/
+                        SegmentedControl/SymbolSelect/TagInput
     lib/                app-only glue (TS): dashboard.svelte.ts (dashboard state factory), account.svelte.ts
                         (F53 auth/session state), pagination.svelte.ts, actions.ts (styleProps), batch.ts
                         (multi-file import queue, F47), files.ts (readImage/downloadBlob — ex util.js, A76),

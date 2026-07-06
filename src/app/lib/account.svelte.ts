@@ -28,6 +28,7 @@ export interface AccountPasskey {
   backedUp: boolean;
 }
 interface MeResponse {
+  // contract-only (legacy anonymous shape), not read by the app — A249
   tier?: string;
   cloudSync?: boolean;
   user?: AccountUser;

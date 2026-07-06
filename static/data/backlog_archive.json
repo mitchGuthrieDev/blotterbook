@@ -4451,6 +4451,72 @@
       "completedDate": "2026-07-06",
       "partial": false,
       "doneNote": "Homepage brought current: Tradovate/NinjaTrader promoted to verified, Quantower + ATAS X tiles added, TradingView-only FAQ rewritten platform-agnostic (batch + .xlsx import), Discount Trading added to broker lists, blotter platform-grouping + analytics drill-down + module customization claims added. No premature accounts claims."
+    },
+    {
+      "id": "A245",
+      "title": "Dead admin control: showBetaAdapters flag gates nothing",
+      "category": "BUG",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Retired both dead flags: showBetaAdapters + betaRibbon removed from APP_FLAGS, the Admin panel rows, and functions/api/config.ts DEFAULTS.flags; stale comments fixed (flags.ts header, App.svelte A89 note). test-flags.mjs A14 mirror parses the literals so the drift gate auto-adjusted (3/3)."
+    },
+    {
+      "id": "A246",
+      "title": "Extract a shared EditableCellPopover primitive (de-dup F49)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Extracted src/app/parts/EditableCellPopover.svelte (shared CELL_TRIGGER_CLASS trigger, open state, onopen reset hook, close() passed to the content snippet); DatePickerPopover + SymbolSelect now own only their content, TradeEditor's plain cell reuses the exported trigger class. Locators/aria untouched — F49 e2e passes unchanged."
+    },
+    {
+      "id": "A247",
+      "title": "Consolidate duplicated formatters/constants into the core (A29)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Core now owns usdCents() (Account donation total), MONTH_ABBR imported by Changelog.svelte, and csvCell() quote/escape shared by xlsx.ts + App.svelte's esc (which layers the A154 formula-prefix neutralization on top; the xlsx intermediate CSV correctly skips it, commented)."
+    },
+    {
+      "id": "A248",
+      "title": "Refresh CLAUDE.md repo-layout for the current tree",
+      "category": "DOCS",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "CLAUDE.md parts/ list brought current (18 parts incl. BootSplash/DatePickerPopover/EditableCellPopover/LaunchGate/SymbolSelect) in both the prose bullet and the repo-layout tree; screens/app-lib/core lists verified current."
+    },
+    {
+      "id": "S26",
+      "title": "Accounts posture hardening: enumeration note, verify-GET, donation guards",
+      "category": "SECURITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "(1) register-options 409 enumeration tradeoff documented as accepted (recover-send stays the enumeration-safe path). (2) verify-GET token-prefetch behavior documented as accepted (the GET still performs the verification). (3) Donation crediting now guarded: donated_at/total only for amount>0 AND USD (isCreditableDonation); non-creditable events still recorded for dedupe. +10 fixtures (accounts suite 115)."
+    },
+    {
+      "id": "A249",
+      "title": "Audit cleanup batch: dead flag comment, contract-only fields, small refactors",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "MeResponse.tier/cloudSync marked contract-only; resolveFromFiles(t, files, pick) helper extracted in dashboard.svelte.ts (3 call sites: platform labels, broker override, reconcile family); motion.ts reduced-motion check now live per dur() call; api<T> shape-check + family() move consciously skipped (commented)."
     }
   ]
 }

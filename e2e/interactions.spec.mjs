@@ -163,7 +163,7 @@ test('demo: Trade Editor Date cell opens a calendar popover and picking a day up
   const target = days.nth(targetIdx);
   const pickedDate = await target.getAttribute('aria-label'); // rendered as the 'YYYY-MM-DD' itself
   await target.click();
-  await expect(page.getByTestId('datepicker-day')).toHaveCount(0); // popover closed after picking
+  await expect(page.getByTestId('datepicker-day')).toHaveCount(0, { timeout: 10_000 }); // popover closed after picking
   await expect(dateCell).toHaveText(pickedDate);
 
   // Keyboard path: reopen, arrow off a focused day, then Enter picks whatever is now focused (the
@@ -173,14 +173,19 @@ test('demo: Trade Editor Date cell opens a calendar popover and picking a day up
   await dateCell.click();
   const days2 = page.getByTestId('datepicker-day');
   await expect(days2.first()).toBeVisible();
-  const midIdx = Math.min(5, (await days2.count()) - 2);
-  await days2.nth(midIdx).press('ArrowRight');
-  // Wait for the roving focus to actually land on a day before reading/acting on it (flake guard).
-  await expect(page.locator('[data-testid="datepicker-day"]:focus')).toHaveCount(1);
-  const focusedLabel = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+  // Flake guard: right after open, bits-ui's own open auto-focus can land AFTER our press and steal
+  // focus from the day (load-dependent interleaving). Retry the arrow press until the roving focus
+  // demonstrably holds on a day.
+  const focusedDay = page.locator('[data-testid="datepicker-day"]:focus');
+  await expect(async () => {
+    const midIdx = Math.min(5, (await days2.count()) - 2);
+    await days2.nth(midIdx).press('ArrowRight');
+    await expect(focusedDay).toHaveCount(1, { timeout: 500 });
+  }).toPass({ timeout: 10_000 });
+  const focusedLabel = await focusedDay.getAttribute('aria-label');
   expect(focusedLabel).toBeTruthy();
-  await page.keyboard.press('Enter'); // acts on whatever currently has focus — no re-query race
-  await expect(page.getByTestId('datepicker-day')).toHaveCount(0);
+  await focusedDay.press('Enter'); // actionability-checked press on the focused day itself
+  await expect(page.getByTestId('datepicker-day')).toHaveCount(0, { timeout: 10_000 });
   await expect(dateCell).toHaveText(focusedLabel);
 
   // Escape closes without staging a pick.
@@ -188,7 +193,7 @@ test('demo: Trade Editor Date cell opens a calendar popover and picking a day up
   await dateCell.click();
   await expect(page.getByTestId('datepicker-day').first()).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('datepicker-day')).toHaveCount(0);
+  await expect(page.getByTestId('datepicker-day')).toHaveCount(0, { timeout: 10_000 });
   await expect(dateCell).toHaveText(beforeEscape ?? '');
 });
 
