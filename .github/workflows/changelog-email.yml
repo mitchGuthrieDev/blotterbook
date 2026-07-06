@@ -1,0 +1,76 @@
+name: Changelog email
+
+# F44 — when a NEW curated changelog entry lands on main (docs/changelog-email-a141.md), tell the
+# deployed /api/notify-changelog endpoint to broadcast the top release to confirmed subscribers.
+#
+# WHY a dedicated workflow (not version-bump.yml): the curated changelog entry lands in its own
+# hand-authored commit (per CLAUDE.md), separate from the [skip ci] release-bump commit — so this is
+# paths-filtered on static/data/changelog.json and only that file's changes trigger a send. The send
+# itself is idempotent server-side (the changelog_sends ledger), so a duplicate/re-run never
+# double-mails a version.
+#
+# CONFIG (owner-gated): set two repo secrets — CHANGELOG_NOTIFY_URL (the deployed origin, e.g.
+# https://blotterbook.com) and CHANGELOG_NOTIFY_SECRET (matching the Pages env var of the same name).
+# When either is unset the job no-ops cleanly, so forks / unconfigured repos never fail.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - static/data/changelog.json
+
+permissions:
+  contents: read
+
+# Don't overlap sends if two changelog commits land close together.
+concurrency:
+  group: changelog-email-main
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    # Belt-and-suspenders: never fire on our own release-bump commit (it doesn't touch changelog.json,
+    # but the paths filter + this guard both hold).
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Broadcast the latest changelog release
+        env:
+          NOTIFY_URL: ${{ secrets.CHANGELOG_NOTIFY_URL }}
+          NOTIFY_SECRET: ${{ secrets.CHANGELOG_NOTIFY_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NOTIFY_URL}" ] || [ -z "${NOTIFY_SECRET}" ]; then
+            echo "CHANGELOG_NOTIFY_URL / CHANGELOG_NOTIFY_SECRET not set — skipping the changelog broadcast."
+            exit 0
+          fi
+
+          # The version we just committed — the send should broadcast exactly this one.
+          EXPECTED="$(node -e "process.stdout.write((require('./static/data/changelog.json').releases[0]||{}).version||'')")"
+          echo "Committed top release: ${EXPECTED:-<none>}"
+
+          # Cloudflare Pages needs a moment to deploy the new commit before the live changelog.json
+          # reflects it (and before /api/notify-changelog reads the new top release). Poll for it.
+          for attempt in $(seq 1 20); do
+            LIVE="$(curl -fsS "${NOTIFY_URL%/}/data/changelog.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{process.stdout.write((JSON.parse(s).releases[0]||{}).version||'')}catch(e){}})" || true)"
+            if [ -n "$EXPECTED" ] && [ "$LIVE" = "$EXPECTED" ]; then
+              echo "Live deploy is up to date (${LIVE})."
+              break
+            fi
+            echo "Waiting for deploy… (attempt ${attempt}, live=${LIVE:-<none>})"
+            sleep 30
+          done
+
+          echo "POSTing /api/notify-changelog…"
+          HTTP_CODE="$(curl -sS -o /tmp/notify-body.json -w '%{http_code}' \
+            -X POST "${NOTIFY_URL%/}/api/notify-changelog" \
+            -H "x-changelog-secret: ${NOTIFY_SECRET}")"
+          echo "Response ${HTTP_CODE}:"
+          cat /tmp/notify-body.json || true
+          echo
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "::error::notify-changelog returned ${HTTP_CODE}"
+            exit 1
+          fi

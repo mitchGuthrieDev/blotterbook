@@ -17,7 +17,8 @@ const PAGES = [
   { path: '/howto.html', must: ['How to use Blotterbook', 'What is futures trading?', 'Importing by platform', 'Tradovate'] },
   { path: '/roadmap.html', must: ['Available now', 'In progress', 'Numbers you can trust to the cent'] },
   // Changelog server-renders the inline fallback (the live notes load via fetch on hydration).
-  { path: '/changelog.html', must: ['Changelog', 'Beta released', 'class="entry'] },
+  // F44: the changelog-email signup section is server-rendered (present before hydration).
+  { path: '/changelog.html', must: ['Changelog', 'Beta released', 'class="entry', 'Get release notes by email', 'id="subscribe"'] },
   { path: '/legal.html', must: ['Legal &amp; Disclaimers', 'Not a broker. Not advice.', 'Terms of Service'] },
   { path: '/admin.html', must: ['Configuration', 'Feature flags', 'Backlog'] },
 ];

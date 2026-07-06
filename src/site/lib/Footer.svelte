@@ -28,6 +28,7 @@
         <a class="text-[13px] text-muted-foreground no-underline hover:underline" href="howto.html">How To</a>
         <a class="text-[13px] text-muted-foreground no-underline hover:underline" href="roadmap.html">Roadmap</a>
         <a class="text-[13px] text-muted-foreground no-underline hover:underline" href="changelog.html">Changelog</a>
+        <a class="text-[13px] text-muted-foreground no-underline hover:underline" href="changelog.html#subscribe">Email updates</a>
         <a class="text-[13px] text-muted-foreground no-underline hover:underline" href="legal.html">Legal</a>
         <a class="text-[13px] text-muted-foreground no-underline hover:underline" href="/app/">Launch</a>
         <a class="text-[13px] text-muted-foreground no-underline hover:underline" href="mailto:contact@blotterbook.com?subject=Blotterbook"

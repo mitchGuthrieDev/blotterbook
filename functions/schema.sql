@@ -1,6 +1,7 @@
 -- Blotterbook accounts — D1 schema (Accounts Phase 1 F53 + Phase 2 F54 + Phase 3 F55;
--- architecture: docs/accounts-architecture.md).
--- Guardrail S25: identity + entitlements ONLY — no trade data ever lands in these tables.
+-- architecture: docs/accounts-architecture.md). Also hosts the F44 changelog-email list (below).
+-- Guardrail S25: identity + entitlements (+ changelog-email addresses) ONLY — no trade data ever
+-- lands in these tables.
 --
 -- Apply it with wrangler (one-time setup; see also functions/README.md):
 --
@@ -12,9 +13,10 @@
 -- Every /api/account/* endpoint fails closed with a 503 JSON body until the binding exists.
 --
 -- ⚠ RE-RUN REQUIRED: every table below uses `CREATE TABLE IF NOT EXISTS`, so this file is
--- idempotent — after ANY change here (F54 added `donations`, F55 added `recovery_tokens`), the
--- owner MUST re-run the `wrangler d1 execute ... --file=functions/schema.sql` command above
--- against the bound database so the new tables exist in prod. Existing rows are untouched.
+-- idempotent — after ANY change here (F54 added `donations`, F55 added `recovery_tokens`, F44 added
+-- `subscribers` + `changelog_sends`), the owner MUST re-run the
+-- `wrangler d1 execute ... --file=functions/schema.sql` command above against the bound database so
+-- the new tables exist in prod. Existing rows are untouched.
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,                        -- crypto.randomUUID()
@@ -101,3 +103,29 @@ CREATE TABLE IF NOT EXISTS recovery_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_recovery_user ON recovery_tokens (user_id);
 CREATE INDEX IF NOT EXISTS idx_recovery_expires ON recovery_tokens (expires_at);
+
+-- Changelog (Blotterlog) email subscriptions (F44 — docs/changelog-email-a141.md). Double opt-in
+-- list + a per-version send ledger for idempotency. The confirm + unsubscribe links carry an opaque
+-- `id.secret` pair; only SHA-256(secret) is stored (same posture as sessions/recovery — a D1 leak
+-- never yields a usable link). Plaintext email is REQUIRED to send, so it is stored as-is; the table
+-- is single-purpose, raw addresses are never logged (hash in logs), and unsubscribe HARD-DELETES.
+-- Guardrail S25/A141: email + changelog content ONLY — never any trade/journal data.
+CREATE TABLE IF NOT EXISTS subscribers (
+  id TEXT PRIMARY KEY,                        -- randomB64u(16) — public lookup half of both link tokens
+  email TEXT UNIQUE NOT NULL,                 -- lowercased; required plaintext to send
+  status TEXT NOT NULL DEFAULT 'pending',     -- 'pending' | 'confirmed' (only confirmed rows are ever mailed)
+  confirm_token_hash TEXT,                    -- base64url(SHA-256(secret)) for the confirm link; cleared on confirm
+  unsub_token_hash TEXT NOT NULL,             -- base64url(SHA-256(secret)) for one-click unsubscribe (stable per row)
+  created_at INTEGER NOT NULL,                -- ms epoch (signup) — pending rows > 7 days are purged
+  confirmed_at INTEGER,                       -- when pending → confirmed (the consent record)
+  last_sent_at INTEGER                        -- per-address cooldown on confirm-mail re-sends (abuse control, S22)
+);
+CREATE INDEX IF NOT EXISTS idx_subscribers_status ON subscribers (status);
+
+-- One row per changelog version already emailed → the send trigger is idempotent (a re-run, or a
+-- second push touching changelog.json, never double-sends a release). Keyed by the prod version.
+CREATE TABLE IF NOT EXISTS changelog_sends (
+  version TEXT PRIMARY KEY,                   -- changelog release version that was mailed
+  sent_at INTEGER NOT NULL,
+  recipient_count INTEGER                     -- confirmed recipients at send time (0 is still recorded)
+);

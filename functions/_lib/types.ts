@@ -29,6 +29,14 @@ export interface Env {
   /** From address for F55 emails (e.g. `Blotterbook <no-reply@blotterbook.com>`). Optional —
    *  falls back to a sensible default when unset. */
   EMAIL_FROM?: string;
+  /** Shared secret the changelog-email send trigger (.github/workflows/changelog-email.yml) presents
+   *  to POST /api/notify-changelog (constant-time compared — F44). Unbound → the endpoint is disabled
+   *  (503), so no one can trigger a broadcast on a deploy that isn't wired for it. */
+  CHANGELOG_NOTIFY_SECRET?: string;
+  /** Cloudflare Turnstile secret for the changelog signup form's abuse control (F44). Unbound →
+   *  Turnstile is skipped entirely (defense-in-depth only, S22 — the double opt-in + confirmed-only
+   *  send rule are the real invariants, never this). */
+  TURNSTILE_SECRET?: string;
 }
 
 export type Ctx = EventContext<Env, string, Record<string, unknown>>;
