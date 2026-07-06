@@ -143,7 +143,8 @@ function memStore() {
           }
           continue;
         }
-        if (tombs.has(id)) continue; // F58 suppress-resurrection
+        const tb = tombs.get(id); // F58/A255: LWW suppression — a tombstone at/after the incoming
+        if (tb && tb.updated >= (t.updated ?? 0)) continue; // clock suppresses; a newer record resurrects
         trades.set(id, { ...t, id, updated: Date.now() });
         added++;
       }
@@ -162,13 +163,29 @@ function memStore() {
     },
     async saveJournal(date, rec) {
       const r = typeof rec === 'string' ? { text: rec } : rec || {};
-      journal.set(date, { date, text: r.text || '', tags: r.tags || [], shots: r.shots || [], updated: Date.now() });
+      const text = (r.text || '').trim();
+      const tags = r.tags || [];
+      const shots = r.shots || [];
+      // A252 parity: an empty clear DELETES + records a tombstone (the real Store does this now).
+      if (text || tags.length || shots.length) journal.set(date, { date, text, tags, shots, updated: Date.now() });
+      else {
+        journal.delete(date);
+        tombs.set(date, { id: date, type: 'journal', updated: Date.now() });
+      }
     },
     async allTradeMeta() {
       return [...trademeta.values()];
     },
     async saveTradeMeta(id, m) {
-      trademeta.set(id, { id, tags: m.tags || [], note: m.note || '', shots: m.shots || [], updated: Date.now() });
+      const tags = m.tags || [];
+      const note = (m.note || '').trim();
+      const shots = m.shots || [];
+      // A252 parity: an empty clear DELETES + records a tombstone.
+      if (tags.length || note || shots.length) trademeta.set(id, { id, tags, note, shots, updated: Date.now() });
+      else {
+        trademeta.delete(id);
+        tombs.set(id, { id, type: 'trademeta', updated: Date.now() });
+      }
     },
     async deleteTradeMeta(id) {
       trademeta.delete(id);

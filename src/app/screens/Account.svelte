@@ -2,9 +2,9 @@
   // Account screen (Accounts Phase 1 — F53; docs/accounts-architecture.md). Self-contained over
   // the account.svelte.ts state module — no routing props. Logged out: passkey login + create-
   // account (email → register ceremony). Logged in: account info, donation badge placeholder
-  // (F54 wires the real status), the passkey list with add-another, sign-out, and a disabled
-  // Workspaces stub (Phase 4). Demo surface: every control disabled + a note (demo never mutates);
-  // the session probe is skipped so demo issues no account traffic at all.
+  // (F54 wires the real status), the passkey list with add-another, sign-out, and the staging-gated
+  // cloud-sync key card (F61b — set up / unlock / add-a-method). Demo surface: every control disabled
+  // + a note (demo never mutates); the session probe is skipped so demo issues no account traffic.
   import { onMount } from 'svelte';
   import {
     HeartHandshake,
@@ -12,7 +12,6 @@
     LogOut,
     Plus,
     UserRound,
-    Boxes,
     MailCheck,
     ShieldAlert,
     LifeBuoy,
@@ -46,6 +45,7 @@
     registerPrfPasskey,
   } from '../lib/account.svelte.ts';
   import { vault, refreshVault, lock, prfSupported, setPassphrase, regenerateRecoveryKey, addPasskeyMethod } from '../lib/vault.svelte.ts';
+  import { onSyncUnlocked } from '../lib/cloudsync.svelte.ts';
   import { downloadBlob } from '../lib/files.ts';
   import CloudSyncSetup from '../parts/CloudSyncSetup.svelte';
   import UnlockModal from '../parts/UnlockModal.svelte';
@@ -464,21 +464,9 @@
       </Card.Root>
 
       <CloudSyncSetup bind:open={setupOpen} ondone={() => void refreshVault()} />
-      <UnlockModal bind:open={unlockOpen} />
+      <!-- A257: converge the controller's status when the vault is unlocked FROM this screen (matches
+           WorkspaceSwitcher) — otherwise cloudSync.status stays stuck at 'locked'. -->
+      <UnlockModal bind:open={unlockOpen} onunlocked={() => onSyncUnlocked()} />
     {/if}
-
-    <Card.Root>
-      <Card.Header>
-        <Card.Title class="flex items-center gap-2 text-muted-foreground"><Boxes class="size-4" /> Workspaces</Card.Title>
-      </Card.Header>
-      <Card.Content class="flex flex-col gap-2">
-        <p class="text-sm text-muted-foreground">Synced workspaces — coming later.</p>
-        <p class="text-xs text-muted-foreground">
-          Named workspaces with cloud-synced settings will live here. Trade data itself stays in this browser unless a future opt-in sync
-          tier says otherwise.
-        </p>
-        <Button variant="outline" size="sm" class="self-start" disabled>Coming soon</Button>
-      </Card.Content>
-    </Card.Root>
   {/if}
 </div>

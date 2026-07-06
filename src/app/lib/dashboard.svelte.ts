@@ -20,6 +20,7 @@ import {
 } from '../../lib/core/core.ts';
 import { Adapters } from '../../lib/core/adapters.ts';
 import { cleanTags, fileId } from '../../lib/core/store.ts';
+import { cancelActiveSync } from './cloudsync.svelte.ts';
 import { reconcileImport } from '../../lib/core/intake.ts';
 import { demoCSV } from '../../lib/core/sampledata.ts';
 import type {
@@ -528,12 +529,19 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
   async function switchWorkspace(id: string) {
     if (isDemo) return; // demo is a single in-memory workspace — the dimension is inert
     if (id === store.activeWorkspace().id) return;
+    // A251: abort + await any in-flight cloud sync for the CURRENT workspace before flipping the
+    // active DB — otherwise a mid-flight pull/push could read/write one workspace's records under the
+    // other's identity + keys. A no-op on prod/demo (sync is never configured there).
+    await cancelActiveSync();
     await store.setActiveWorkspace(id);
     await reloadWorkspaceData();
   }
   /** Delete a workspace; if it was the active one the store switches away, so reload onto the new one. */
   async function removeWorkspace(id: string) {
     if (isDemo) return store.activeWorkspace();
+    // A251: quiesce in-flight sync first — the same cross-workspace-corruption guard as switch, and it
+    // also releases the DB handle before deleteWorkspace's deleteDatabase runs.
+    await cancelActiveSync();
     const wasActive = store.activeWorkspace().id === id;
     const nowActive = await store.deleteWorkspace(id);
     if (wasActive) await reloadWorkspaceData();

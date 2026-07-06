@@ -126,7 +126,11 @@ export function createDemoStore(): StoreLike {
       const tags = cleanTags(r.tags); // A130: parity with the real Store's canonical tag form
       const shots = Array.isArray(r.shots) ? r.shots.filter(validShot) : [];
       if (text || tags.length || shots.length) journal.set(date, { date, text, tags, shots, updated: Date.now() });
-      else journal.delete(date);
+      else {
+        // A252 parity: clearing to empty records a tombstone (so the delete syncs, no resurrection).
+        journal.delete(date);
+        tombstones.set(date, { id: date, type: 'journal', updated: Date.now() });
+      }
     },
     async getJournal(date) {
       const rec = journal.get(date);
@@ -161,7 +165,11 @@ export function createDemoStore(): StoreLike {
       const note = (m.note || '').trim();
       const shots = (m.shots || []).filter(validShot);
       if (tags.length || note || shots.length) trademeta.set(id, { id, tags, note, shots, updated: Date.now() });
-      else trademeta.delete(id);
+      else {
+        // A252 parity: an empty clear records a tombstone (so the delete syncs, no resurrection).
+        trademeta.delete(id);
+        tombstones.set(id, { id, type: 'trademeta', updated: Date.now() });
+      }
     },
     async deleteTradeMeta(id) {
       trademeta.delete(id);

@@ -26,7 +26,9 @@ import {
   type SyncTransport,
   type WireRecord,
   type WsKeys,
+  type PullPage,
 } from './cloudsync-core.ts';
+import { onEvent } from '../../lib/core/core.ts';
 
 type SyncStatus = 'off' | 'syncing' | 'synced' | 'offline' | 'locked' | 'error';
 
@@ -59,6 +61,34 @@ let localStore: StoreLike | null = null;
 let dashRef: { reload(): Promise<void> } | null = null;
 const sessions = new Map<string, WsKeys>(); // wsId → { recordKey, blindKey } — dropped on lock
 const reconciled = new Set<string>(); // wsIds that have had their FULL since=0 reconcile this session
+
+/* ── A251: workspace-switch barrier — a switch must NEVER read/write one workspace's records under
+ * another's identity. TWO layers: (a) `cancelActiveSync()` (awaited by dashboard.switchWorkspace /
+ * removeWorkspace BEFORE `store.setActiveWorkspace`) aborts + awaits the in-flight op so the active
+ * workspace only flips once no sync is in flight; (b) every runSync/runPush captures the sync
+ * `generation` + its workspace id and re-checks it (via `shouldAbort` threaded into pushChanges/
+ * pullAndMerge) before each store read/write batch, aborting with the cursor/watermark UNADVANCED if
+ * it changed. Bumping `syncGeneration` aborts any run started before the bump; `inFlight` is the
+ * promise a switch awaits. No deadlock: aborts land between network round-trips, so `inFlight`
+ * settles promptly. */
+let syncGeneration = 0;
+let inFlight: Promise<void> = Promise.resolve();
+
+/** Cancel + await any in-flight sync / debounced push for the current workspace. The dashboard awaits
+ *  this BEFORE flipping the active workspace (A251). Never throws. */
+export async function cancelActiveSync(): Promise<void> {
+  syncGeneration++; // abort any run captured under an earlier generation
+  if (pushTimer) {
+    clearTimeout(pushTimer);
+    pushTimer = null;
+  }
+  dirtyDuringPush = false;
+  try {
+    await inFlight;
+  } catch {
+    /* an aborted/failed in-flight run must never reject into the switch path */
+  }
+}
 
 /* ── Store.local persistence (cursor + enabled flag only — NEVER a key; F63 uses the seam, not IDB) */
 const enabledKey = (id: string) => `bb:sync:${id}:on`;
@@ -102,7 +132,7 @@ const transport: SyncTransport = {
       headers: { Accept: 'application/json' },
     });
     if (!res.ok) throw new Error(`Pull failed (${res.status}).`);
-    return (await res.json()) as { records: []; nextSince: number; more: boolean };
+    return (await res.json()) as PullPage;
   },
 };
 
@@ -138,6 +168,30 @@ export function configureCloudSync(opts: { localStore: StoreLike; dash: { reload
     });
     window.addEventListener('focus', () => void syncActiveWorkspace());
   }
+  // A254: a local "erase all data" (purge) of the active workspace must DISABLE its sync + reset its
+  // cursor/watermark, or the next since=0 reconcile re-downloads everything the user just purged.
+  onEvent('data:erased', () => onErased());
+  refreshSyncStatus();
+}
+
+/** A254: after a local purge of the active workspace, stop it re-downloading on the next reconcile —
+ *  DISABLE sync for it and reset its cursor + pushed-watermark. This is the safe client-side stop;
+ *  propagating the erase to the server as record deletions (so OTHER devices also drop the data) is a
+ *  filed follow-up, out of `src/` scope here. */
+function onErased(): void {
+  if (!localStore) return;
+  syncGeneration++; // abort any in-flight run + neutralize a pending debounced push for this workspace
+  if (pushTimer) {
+    clearTimeout(pushTimer);
+    pushTimer = null;
+  }
+  dirtyDuringPush = false;
+  const id = localStore.activeWorkspace().id;
+  localStore.local.set(enabledKey(id), false); // opt-out: no reconcile until the user re-enables
+  localStore.local.remove(cursorKey(id));
+  localStore.local.remove(pushedKey(id));
+  sessions.delete(id);
+  reconciled.delete(id);
   refreshSyncStatus();
 }
 
@@ -248,42 +302,55 @@ export async function enableCloudSync(): Promise<boolean> {
 async function runSync(opts: { full?: boolean; id?: string }): Promise<void> {
   const id = opts.id ?? activeId();
   if (!localStore || !isEnabled(id)) return;
-  if (!getIK()) {
-    if (sessions.has(id)) sessions.clear();
-    if (id === activeId()) cloudSync.status = 'locked';
-    return;
-  }
-  if (!onLine()) {
-    if (id === activeId()) cloudSync.status = 'offline';
-    return;
-  }
-  const keys = await ensureKeys(id);
-  if (!keys) {
-    if (id === activeId()) cloudSync.status = getIK() ? 'off' : 'locked';
-    return;
-  }
-  if (id === activeId()) cloudSync.status = 'syncing';
-  try {
-    // PULL first — a full since=0 reconcile closes F62's concurrent-push seq race; steady-state is
-    // incremental from the persisted cursor.
-    const since = opts.full ? 0 : Number(localStore.local.get(cursorKey(id), 0)) || 0;
-    const { cursor, merged } = await pullAndMerge(localStore, keys, transport, id, since);
-    localStore.local.set(cursorKey(id), cursor);
-    // PUSH write-behind. The watermark is -1 until the first push completes (so a freshly-enabled
-    // workspace uploads everything), then the last cutoff — always incremental, independent of `full`.
-    const watermark = Number(localStore.local.get(pushedKey(id), -1));
-    const newWatermark = await pushChanges(localStore, keys, transport, id, watermark);
-    localStore.local.set(pushedKey(id), newWatermark);
-    reconciled.add(id);
-    cloudSync.lastPull = Date.now();
-    if (merged && dashRef && id === activeId()) await dashRef.reload();
-    if (id === activeId()) cloudSync.status = 'synced';
-  } catch (e) {
-    if (id === activeId()) {
-      cloudSync.error = messageOf(e);
-      cloudSync.status = 'error';
+  // A251: capture the sync generation + workspace id up front. `aborted()` is true once a switch is
+  // pending (generation bumped) OR the active workspace no longer matches — it gates every store
+  // batch (threaded into pullAndMerge/pushChanges) and every persistence step below.
+  const gen = syncGeneration;
+  const store = localStore;
+  const aborted = () => syncGeneration !== gen || store.activeWorkspace().id !== id;
+  const run = (async () => {
+    if (!getIK()) {
+      if (sessions.has(id)) sessions.clear();
+      if (id === activeId()) cloudSync.status = 'locked';
+      return;
     }
-  }
+    if (!onLine()) {
+      if (id === activeId()) cloudSync.status = 'offline';
+      return;
+    }
+    const keys = await ensureKeys(id);
+    if (!keys) {
+      if (id === activeId()) cloudSync.status = getIK() ? 'off' : 'locked';
+      return;
+    }
+    if (aborted()) return;
+    if (id === activeId()) cloudSync.status = 'syncing';
+    try {
+      // PULL first — a full since=0 reconcile closes F62's concurrent-push seq race; steady-state is
+      // incremental from the persisted cursor.
+      const since = opts.full ? 0 : Number(store.local.get(cursorKey(id), 0)) || 0;
+      const { cursor, merged } = await pullAndMerge(store, keys, transport, id, since, aborted);
+      if (aborted()) return; // a switch landed — leave the cursor unadvanced
+      store.local.set(cursorKey(id), cursor);
+      // PUSH write-behind. The watermark is -1 until the first push completes (so a freshly-enabled
+      // workspace uploads everything), then the last cutoff — always incremental, independent of `full`.
+      const watermark = Number(store.local.get(pushedKey(id), -1));
+      const newWatermark = await pushChanges(store, keys, transport, id, watermark, aborted);
+      if (aborted()) return; // a switch landed mid-push — leave the watermark unadvanced
+      store.local.set(pushedKey(id), newWatermark);
+      reconciled.add(id);
+      cloudSync.lastPull = Date.now();
+      if (merged && dashRef && id === activeId()) await dashRef.reload();
+      if (id === activeId()) cloudSync.status = 'synced';
+    } catch (e) {
+      if (!aborted() && id === activeId()) {
+        cloudSync.error = messageOf(e);
+        cloudSync.status = 'error';
+      }
+    }
+  })();
+  inFlight = run.catch(() => {});
+  await run;
 }
 
 /** Explicit sync of the active workspace (full reconcile on the first run of a session, or when
@@ -326,17 +393,31 @@ async function runPush(): Promise<void> {
   const id = activeId();
   const keys = sessions.get(id);
   if (!keys) return;
+  // A251: same generation/workspace guard as runSync — a switch mid-push must not push this
+  // workspace's rows under another id, nor advance the wrong watermark.
+  const gen = syncGeneration;
+  const store = localStore;
+  const aborted = () => syncGeneration !== gen || store.activeWorkspace().id !== id;
   pushing = true;
   cloudSync.status = 'syncing';
+  const run = (async () => {
+    try {
+      const watermark = Number(store.local.get(pushedKey(id), -1));
+      const newWatermark = await pushChanges(store, keys, transport, id, watermark, aborted);
+      if (aborted()) return;
+      store.local.set(pushedKey(id), newWatermark);
+      cloudSync.lastPull = cloudSync.lastPull || 0;
+      cloudSync.status = 'synced';
+    } catch (e) {
+      if (!aborted()) {
+        cloudSync.error = messageOf(e);
+        cloudSync.status = 'error';
+      }
+    }
+  })();
+  inFlight = run.catch(() => {});
   try {
-    const watermark = Number(localStore.local.get(pushedKey(id), -1));
-    const newWatermark = await pushChanges(localStore, keys, transport, id, watermark);
-    localStore.local.set(pushedKey(id), newWatermark);
-    cloudSync.lastPull = cloudSync.lastPull || 0;
-    cloudSync.status = 'synced';
-  } catch (e) {
-    cloudSync.error = messageOf(e);
-    cloudSync.status = 'error';
+    await run;
   } finally {
     pushing = false;
     if (dirtyDuringPush) {

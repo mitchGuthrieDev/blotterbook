@@ -215,13 +215,17 @@ export function tradeId(t: Trade): string {
   return fnv(`${t.time}|${t.symbol}|${t.side}|${t.pnl}` + (t.dup ? `|${t.dup}` : ''));
 }
 
-// F58: does an existing tombstone suppress re-inserting an incoming trade in addTrades? The ONE
-// isolated place the import-resurrection policy lives. Current policy: a tombstone wins — a deleted
-// trade stays deleted even if a later CSV re-imports it. The alternative is timestamp-LWW —
-// `return !!tomb && tomb.updated >= (incoming.updated ?? 0)` (a newer re-import resurrects) — a
-// one-line swap; the product decision is still open, so keep this trivial to flip.
+// F58/A255: does an existing tombstone suppress re-inserting an incoming trade in addTrades? The ONE
+// isolated place the import-resurrection policy lives. Policy: timestamp-LWW — a tombstone suppresses
+// the re-insert ONLY when the delete is at least as recent as the incoming record's clock. So a
+// stale/clockless re-import (a plain CSV row has no `updated` ⇒ 0) stays suppressed, but a record
+// carrying a NEWER `updated` (e.g. a peer device that enriched the trade after the delete, arriving
+// via the sync merge → importAll → addTrades) RESURRECTS it. This is the convergence-required
+// behavior: it makes trade merges LWW-consistent with the journal/trademeta/meta stores
+// (cloudsync-core's LWW gate), so two devices can't permanently diverge on a delete-vs-newer-edit
+// race. (A255 deliberately flipped the old unconditional "delete always wins over re-import" default.)
 export function suppressedByTombstone(tomb: Tombstone | undefined, incoming: Trade): boolean {
-  return !!tomb;
+  return !!tomb && tomb.updated >= (incoming.updated ?? 0);
 }
 
 /** Content-hash id for an imported CSV (F37) — a re-upload of the byte-identical file dedupes. */
@@ -404,14 +408,23 @@ export const Store: StoreLike = {
   // F16: a day note is now a rich annotation { text, tags[], shots[] } (was text-only). Accepts a
   // bare string (legacy callers) or the record object; deletes the row when fully empty.
   async saveJournal(date, rec) {
-    const store = await tx(JOURNAL, 'readwrite');
     const r: Annotation = typeof rec === 'string' ? { text: rec } : rec || {};
     const text = (r.text || '').trim();
     const tags = cleanTags(r.tags); // A130: canonicalize live tags (same form as restore)
     const shots = Array.isArray(r.shots) ? r.shots.filter(s => this.validShot(s)) : [];
-    if (text || tags.length || shots.length) store.put({ date, text, tags, shots, updated: Date.now() });
-    else store.delete(date);
-    return done(store);
+    // A252: clearing a note to empty is a DELETE, not a bare drop. Route the empty branch through the
+    // SAME delete+tombstone tx as deleteJournal (JOURNAL + TOMBSTONES in ONE readwrite tx) so the
+    // deletion is recorded in the delete-log and syncs — a bare store.delete(date) left no tombstone,
+    // so collectChanges reported nothing and the next reconcile RESURRECTED the cleared note. B6/B34:
+    // both ops are issued synchronously in one tx, no await between them.
+    const db = await open();
+    const t = db.transaction([JOURNAL, TOMBSTONES], 'readwrite');
+    if (text || tags.length || shots.length) t.objectStore(JOURNAL).put({ date, text, tags, shots, updated: Date.now() });
+    else {
+      t.objectStore(JOURNAL).delete(date);
+      t.objectStore(TOMBSTONES).put({ id: date, type: 'journal', updated: Date.now() });
+    }
+    return done(t.objectStore(JOURNAL));
   },
 
   // Always returns the normalized record shape so callers don't branch on legacy {date,text} rows.
@@ -484,15 +497,22 @@ export const Store: StoreLike = {
     return rec || { id, tags: [], note: '', shots: [] };
   },
   async saveTradeMeta(id, m) {
-    const store = await tx(TRADEMETA, 'readwrite');
     const tags = cleanTags(m.tags); // A130: canonicalize live tags (same form as restore)
     const note = (m.note || '').trim();
     // Enforce the screenshot allow-list here too (matches saveJournal — S15/S18); .filter also
     // yields a plain array, so a Svelte $state proxy can't reach IndexedDB's structured clone.
     const shots = (m.shots || []).filter(s => validShot(s));
-    if (tags.length || note || shots.length) store.put({ id, tags, note, shots, updated: Date.now() });
-    else store.delete(id); // empty → remove the record
-    return done(store);
+    // A252: an empty clear is a DELETE — route it through the SAME delete+tombstone tx as
+    // deleteTradeMeta (TRADEMETA + TOMBSTONES in ONE readwrite tx) so the removal is logged and syncs
+    // instead of silently resurrecting on the next reconcile. B6/B34: both ops synchronous, one tx.
+    const db = await open();
+    const t = db.transaction([TRADEMETA, TOMBSTONES], 'readwrite');
+    if (tags.length || note || shots.length) t.objectStore(TRADEMETA).put({ id, tags, note, shots, updated: Date.now() });
+    else {
+      t.objectStore(TRADEMETA).delete(id);
+      t.objectStore(TOMBSTONES).put({ id, type: 'trademeta', updated: Date.now() });
+    }
+    return done(t.objectStore(TRADEMETA));
   },
   async deleteTradeMeta(id) {
     // F58: delete + tombstone in one tx — the delete half of per-trade-meta LWW.
@@ -761,8 +781,12 @@ export const Store: StoreLike = {
       const store = await tx(META, 'readwrite');
       for (const mm of data.meta) {
         if (!mm || mm.key == null) continue;
-        if (mm.key === 'savedFilters') store.put({ key: 'savedFilters', value: cleanSavedFilters(mm.value) });
-        else if (mm.key === 'setup' && mm.value && typeof mm.value === 'object') store.put({ key: 'setup', value: mm.value });
+        // A260: preserve the payload's `updated` (the LWW clock) — a sync-merge meta record carries
+        // one, and dropping it made every reconcile treat these rows as freshly changed and re-push/
+        // re-pull them. A backup with no clock falls back to now (a one-time restore, not a sync churn).
+        const updated = typeof mm.updated === 'number' ? mm.updated : Date.now();
+        if (mm.key === 'savedFilters') store.put({ key: 'savedFilters', value: cleanSavedFilters(mm.value), updated });
+        else if (mm.key === 'setup' && mm.value && typeof mm.value === 'object') store.put({ key: 'setup', value: mm.value, updated });
         // unknown meta keys are dropped (allow-list)
       }
       await done(store);

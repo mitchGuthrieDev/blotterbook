@@ -306,6 +306,26 @@ ok('local.get fallback', s.local.get('missing', 'fb') === 'fb');
   const re = await sf.addTrades([t('2026-05-06 10:00:00', 3)]);
   ok('F58: purge clears suppression (a fresh re-import adds again)', re.added === 1 && (await sf.tradeCount()) === 1);
 }
+{
+  // A255: trade tombstone suppression is now LWW (was unconditional) — convergence-consistent with
+  // journal/trademeta/meta. A clockless or OLDER re-import stays suppressed; a record carrying a
+  // NEWER `updated` (e.g. a peer device's post-delete enrichment arriving via the sync merge)
+  // RESURRECTS the deleted trade.
+  const sf = createDemoStore();
+  await sf.addTrades([t('2026-06-01 10:00:00', 55)]);
+  const id = sf.tradeId(t('2026-06-01 10:00:00', 55));
+  await sf.deleteTrade(id);
+  const tomb = (await sf.getTombstones()).find(tb => tb.id === id);
+  // clockless re-import (a plain CSV row has no `updated`) → stays suppressed.
+  const clockless = await sf.addTrades([t('2026-06-01 10:00:00', 55)]);
+  ok('A255: a clockless re-import stays suppressed by the tombstone', clockless.added === 0 && (await sf.tradeCount()) === 0);
+  // OLDER-than-the-tombstone re-add → still suppressed.
+  const older = await sf.addTrades([{ ...t('2026-06-01 10:00:00', 55), updated: tomb.updated - 1000 }]);
+  ok('A255: an OLDER re-add stays suppressed (LWW)', older.added === 0 && (await sf.tradeCount()) === 0);
+  // NEWER-than-the-tombstone re-add → resurrects.
+  const newer = await sf.addTrades([{ ...t('2026-06-01 10:00:00', 55), updated: tomb.updated + 1000 }]);
+  ok('A255: a NEWER re-add resurrects the trade (LWW over the tombstone)', newer.added === 1 && (await sf.tradeCount()) === 1);
+}
 
 // ── F59: demo is a SINGLE in-memory workspace; the dimension is inert (never persists) ──
 {

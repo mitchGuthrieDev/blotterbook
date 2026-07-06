@@ -175,20 +175,29 @@ async function toWire(
  * them, and pushes in ≤15-record chunks. Returns the NEW watermark: a cutoff captured BEFORE the
  * scan, so any write that lands mid-push keeps `updated > watermark` and is caught next cycle
  * (nothing is skipped). Pass `watermark < 0` for the initial full push (every record incl. legacy).
+ *
+ * A251: `shouldAbort` is checked BEFORE the store read and before each push batch. If it fires — the
+ * active workspace changed out from under this op, or a switch is pending — the push bails and returns
+ * the watermark UNCHANGED (never advancing it, never reading one workspace's records under another's
+ * identity). Any batch already sent is a harmless server-side LWW no-op re-sent next cycle.
  */
 export async function pushChanges(
   store: StoreLike,
   keys: WsKeys,
   transport: SyncTransport,
   workspaceId: string,
-  watermark: number
+  watermark: number,
+  shouldAbort: () => boolean = () => false
 ): Promise<number> {
   const cutoff = Date.now();
+  if (shouldAbort()) return watermark; // don't even read the store if the workspace changed
   const changes = await collectChanges(store, watermark);
   if (!changes.length) return Math.max(watermark, cutoff);
+  if (shouldAbort()) return watermark; // re-check after the async read, before anything is pushed
   const { encryptRecord, blindId } = await cryptoCore();
   const wire = await Promise.all(changes.map(c => toWire(keys, c, { encryptRecord, blindId })));
   for (let i = 0; i < wire.length; i += MAX_PUSH_RECORDS) {
+    if (shouldAbort()) return watermark; // a switch landed mid-push — stop, leave the watermark unadvanced
     await transport.push(workspaceId, wire.slice(i, i + MAX_PUSH_RECORDS));
   }
   return Math.max(watermark, cutoff);
@@ -225,10 +234,21 @@ export async function mergeRecords(store: StoreLike, keys: WsKeys, records: Pull
   const { decryptRecord } = await cryptoCore();
 
   // Resolve to the latest record per (type:key) by `updated` (LWW within the batch).
+  // A263 (poison-pill resilience): decrypt each record in its OWN try/catch. A single corrupt or
+  // undecryptable blob (a flipped byte, a bad JSON envelope, the wrong key) is skipped + counted — it
+  // must NOT throw and wedge the whole pull; the rest of the batch still merges and the cursor still
+  // advances, so one bad record can't permanently break sync.
   const latest = new Map<string, Resolved>();
+  let skipped = 0;
   for (const r of records) {
     if (!WIRE_TYPES.has(r.type)) continue; // ignore an unknown/legacy record type defensively
-    const obj = JSON.parse(dec.decode(await decryptRecord(keys.recordKey, JSON.parse(r.ciphertext)))) as Record<string, unknown>;
+    let obj: Record<string, unknown>;
+    try {
+      obj = JSON.parse(dec.decode(await decryptRecord(keys.recordKey, JSON.parse(r.ciphertext)))) as Record<string, unknown>;
+    } catch {
+      skipped++;
+      continue;
+    }
     const type = r.type as WireType;
     const key = realKey(type, obj);
     if (!key) continue;
@@ -236,6 +256,7 @@ export async function mergeRecords(store: StoreLike, keys: WsKeys, records: Pull
     const prev = latest.get(id);
     if (!prev || r.updated >= prev.updated) latest.set(id, { type, key, updated: r.updated, deleted: r.deleted, obj });
   }
+  if (skipped) console.warn(`cloudsync: skipped ${skipped} undecryptable record(s) during merge`);
 
   // Snapshot local `updated` per record + the local tombstones, for the LWW gate.
   const [trades, journal, trademeta, meta, tombs] = await Promise.all([
@@ -308,17 +329,23 @@ export async function pullAndMerge(
   keys: WsKeys,
   transport: SyncTransport,
   workspaceId: string,
-  since: number
+  since: number,
+  shouldAbort: () => boolean = () => false
 ): Promise<{ cursor: number; merged: number }> {
   let cursor = since;
   const all: PulledRecord[] = [];
   // Page until caught up (bounded loop — the server caps each page + always advances nextSince).
+  // A251: if the active workspace changes mid-pull (a switch is pending), bail with the cursor
+  // UNADVANCED (`since`) and merge NOTHING — so one workspace's records can never be written into
+  // another's local Store, and the next reconcile re-reads from the persisted (unmoved) cursor.
   for (let guard = 0; guard < 10000; guard++) {
+    if (shouldAbort()) return { cursor: since, merged: 0 };
     const page = await transport.pull(workspaceId, cursor);
     all.push(...page.records);
     cursor = page.nextSince;
     if (!page.more || !page.records.length) break;
   }
+  if (shouldAbort()) return { cursor: since, merged: 0 }; // bail before writing the merge into the store
   await mergeRecords(store, keys, all);
   return { cursor, merged: all.length };
 }

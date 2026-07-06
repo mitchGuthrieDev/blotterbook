@@ -126,11 +126,22 @@ async function guard(run: () => Promise<void>): Promise<boolean> {
 
 /* ── session lifecycle ─────────────────────────────────────────────────────────────────────────*/
 
+/** Runtime-guard a wire `method` string against the WrappedIK method set (A262) — the value comes off
+ *  the network, so validate rather than blind-cast, and drop any row with an unrecognized method. */
+const UNLOCK_METHODS: ReadonlySet<string> = new Set<WrappedIK['method']>(['prf', 'passphrase', 'recovery']);
+function isUnlockMethod(m: unknown): m is WrappedIK['method'] {
+  return typeof m === 'string' && UNLOCK_METHODS.has(m);
+}
+
 /** Probe cloud-sync setup state (which unlock methods exist). Safe to call at mount; never throws. */
 export async function refreshVault(): Promise<void> {
   try {
     const rows = await fetchWrappedIks();
-    vault.methods = rows.map(r => ({ method: r.method as WrappedIK['method'], keyId: r.key_id }));
+    vault.methods = rows.reduce<UnlockMethodMeta[]>((acc, r) => {
+      // The type guard narrows r.method, so no cast is needed and an unknown method is dropped (A262).
+      if (isUnlockMethod(r.method)) acc.push({ method: r.method, keyId: r.key_id });
+      return acc;
+    }, []);
     vault.setUp = vault.methods.length > 0;
   } catch (_) {
     vault.methods = [];
