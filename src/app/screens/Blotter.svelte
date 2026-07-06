@@ -48,6 +48,7 @@
   import PaginationControls from '../parts/PaginationControls.svelte';
   import TagInput from '../parts/TagInput.svelte';
   import { fade } from 'svelte/transition';
+  import { MediaQuery } from 'svelte/reactivity';
 
   let {
     rows,
@@ -79,6 +80,13 @@
   let cols = $state({ prices: true, costs: true, context: true });
   let selected = $state<Set<string>>(new Set());
   let openId = $state<string | null>(null);
+
+  // A221: below Tailwind's sm breakpoint the 13-column table is replaced by a card list (one card
+  // per trade). Conditional RENDER (A200 pattern via MediaQuery, not CSS-hiding) so the rows never
+  // exist twice in the DOM/a11y tree; desktop table is unchanged. Selection/tap-to-open reuse the
+  // same `selected`/`openId` state as the desktop table — bulk actions (tag/delete) stay in the one
+  // shared toolbar above, so mobile keeps full parity rather than deferring bulk-ops to desktop.
+  const isNarrow = new MediaQuery('(max-width: 639px)');
 
   const SIDE_LBL: Record<string, string> = { all: 'All sides', Long: 'Long', Short: 'Short' };
   const GROUP_LBL: Record<string, string> = {
@@ -234,22 +242,26 @@
           <Select.Item value="platform">Group by platform</Select.Item>
         </Select.Content>
       </Select.Root>
-      <Popover.Root>
-        <Popover.Trigger>
-          {#snippet child({ props })}
-            <Button {...props} variant="outline" size="sm"><Columns3 class="size-4" /> Columns</Button>
-          {/snippet}
-        </Popover.Trigger>
-        <Popover.Content class="w-48" align="start">
-          <p class="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Column groups</p>
-          <div class="space-y-2 text-sm">
-            <label class="flex items-center gap-2 text-muted-foreground"><Checkbox checked disabled /> Core</label>
-            <label class="flex items-center gap-2"><Checkbox bind:checked={cols.prices} /> Prices &amp; hold</label>
-            <label class="flex items-center gap-2"><Checkbox bind:checked={cols.costs} /> Costs</label>
-            <label class="flex items-center gap-2"><Checkbox bind:checked={cols.context} /> Context</label>
-          </div>
-        </Popover.Content>
-      </Popover.Root>
+      {#if !isNarrow.current}
+        <!-- A221: the column-group toggle only applies to the desktop table; the mobile card list
+             always shows a fixed field set, so the control is a no-op there and stays hidden. -->
+        <Popover.Root>
+          <Popover.Trigger>
+            {#snippet child({ props })}
+              <Button {...props} variant="outline" size="sm"><Columns3 class="size-4" /> Columns</Button>
+            {/snippet}
+          </Popover.Trigger>
+          <Popover.Content class="w-48" align="start">
+            <p class="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Column groups</p>
+            <div class="space-y-2 text-sm">
+              <label class="flex items-center gap-2 text-muted-foreground"><Checkbox checked disabled /> Core</label>
+              <label class="flex items-center gap-2"><Checkbox bind:checked={cols.prices} /> Prices &amp; hold</label>
+              <label class="flex items-center gap-2"><Checkbox bind:checked={cols.costs} /> Costs</label>
+              <label class="flex items-center gap-2"><Checkbox bind:checked={cols.context} /> Context</label>
+            </div>
+          </Popover.Content>
+        </Popover.Root>
+      {/if}
       <span class="ml-auto text-xs text-muted-foreground">{filtered.length} of {rows.length} trades</span>
     </div>
 
@@ -285,111 +297,183 @@
   </Card.Header>
 
   <Card.Content class="p-0">
-    <!-- F50: tighter cell padding — the default p-2 wasted width across 13+ columns -->
-    <Table.Root class="[&_td]:px-2 [&_td]:py-1.5 [&_th]:px-2">
-      <Table.Header>
-        <Table.Row class="hover:bg-transparent">
-          <Table.Head class="w-9 pl-3">
-            <Checkbox checked={allSelected} indeterminate={someSelected} onCheckedChange={toggleAll} aria-label="Select all" />
-          </Table.Head>
-          {@render sortHead('time', 'Date / time', 'w-28 whitespace-nowrap')}
-          {@render sortHead('sym', 'Symbol', 'w-16')}
-          <Table.Head class="w-14">Side</Table.Head>
-          {@render sortHead('qty', 'Qty', 'w-10 text-right')}
-          {@render sortHead('pnl', 'P&L', 'w-20 text-right')}
-          {#if cols.prices}
-            <Table.Head class="w-16 text-right">Entry</Table.Head>
-            <Table.Head class="w-16 text-right">Exit</Table.Head>
-            <Table.Head class="w-14 text-right">Hold</Table.Head>
-          {/if}
-          {#if cols.costs}
-            <Table.Head class="w-16 text-right">Fees</Table.Head>
-            <Table.Head class="w-20 text-right">Net</Table.Head>
-          {/if}
-          {#if cols.context}
-            <Table.Head>Tags</Table.Head>
-            <Table.Head class="w-16">Session</Table.Head>
-            <Table.Head class="w-24">Platform</Table.Head>
-          {/if}
-        </Table.Row>
-      </Table.Header>
-      <Table.Body>
+    {#if isNarrow.current}
+      <!-- A221: mobile card list — one card per trade (symbol+side+qty / P&L+date-time / tags),
+           replacing the 13-column table below sm. Tap opens the same detail Sheet as the desktop
+           row; the small leading checkbox reuses the same `selected` set as bulk actions above. -->
+      <div class="divide-y divide-border" role="list" aria-label="Trades">
         {#each groups as g (g.key)}
           {#if groupBy !== 'none'}
-            <Table.Row class="bg-secondary/40 hover:bg-secondary/40">
-              <Table.Cell colspan={colCount} class="py-1.5 pl-3">
-                <span class="text-xs font-semibold">{g.label}</span>
-                <span class="ml-2 text-xs text-muted-foreground">{g.trades.length} trades</span>
-                <span class={cn('ml-2 text-xs font-semibold tabular-nums', g.subtotal >= 0 ? 'text-chart-2' : 'text-destructive')}
-                  >{money(g.subtotal)}</span
-                >
-              </Table.Cell>
-            </Table.Row>
+            <div class="flex items-center gap-2 bg-secondary/40 px-3 py-1.5">
+              <span class="text-xs font-semibold">{g.label}</span>
+              <span class="text-xs text-muted-foreground">{g.trades.length} trades</span>
+              <span class={cn('ml-auto text-xs font-semibold tabular-nums', g.subtotal >= 0 ? 'text-chart-2' : 'text-destructive')}
+                >{money(g.subtotal)}</span
+              >
+            </div>
           {/if}
           {#each g.trades as t (t.id)}
-            <Table.Row class="cursor-pointer" data-state={selected.has(t.id) ? 'selected' : undefined} onclick={() => (openId = t.id)}>
-              <Table.Cell class="pl-3" onclick={e => e.stopPropagation()}>
-                <Checkbox checked={selected.has(t.id)} onCheckedChange={v => toggleRow(t.id, v)} aria-label="Select trade" />
-              </Table.Cell>
-              <Table.Cell class="text-muted-foreground">
-                <span class="flex items-center gap-1.5">
-                  {t.date.slice(5)}
-                  {t.time}
+            <!-- The card click is a pointer-only convenience (mirrors the desktop row) — the symbol
+                 <button> below is the real keyboard/AT trigger for opening the detail sheet. -->
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div
+              role="listitem"
+              class={cn('flex items-start gap-3 px-3 py-3', selected.has(t.id) && 'bg-secondary/40')}
+              onclick={() => (openId = t.id)}
+            >
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div onclick={e => e.stopPropagation()}>
+                <Checkbox checked={selected.has(t.id)} onCheckedChange={v => toggleRow(t.id, v)} aria-label="Select trade" class="mt-0.5" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <!-- Line 1: symbol + side + qty -->
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <button type="button" class="rounded font-medium hover:underline focus-visible:underline" onclick={() => (openId = t.id)}
+                    >{t.sym}</button
+                  >
+                  {@render sideBadge(t.side)}
+                  <span class="text-xs text-muted-foreground">×{t.qty}</span>
                   {#if t.note}<span class="size-1.5 rounded-full bg-primary" title="Has a note"></span>{/if}
-                </span>
-              </Table.Cell>
-              <Table.Cell class="font-medium">
-                <!-- A real button so keyboard users can open the detail sheet (the row onclick is mouse-only). -->
-                <button type="button" class="rounded hover:underline focus-visible:underline" onclick={() => (openId = t.id)}
-                  >{t.sym}</button
-                >
-              </Table.Cell>
-              <Table.Cell>{@render sideBadge(t.side)}</Table.Cell>
-              <Table.Cell class="text-right tabular-nums">{t.qty}</Table.Cell>
-              <Table.Cell class={cn('text-right font-semibold tabular-nums', t.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}
-                >{money(t.pnl)}</Table.Cell
-              >
-              {#if cols.prices}
-                <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.entry ?? '—'}</Table.Cell>
-                <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.exit ?? '—'}</Table.Cell>
-                <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.holdMin != null ? `${t.holdMin}m` : '—'}</Table.Cell>
-              {/if}
-              {#if cols.costs}
-                <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.fees != null ? money(-t.fees) : '—'}</Table.Cell>
-                <Table.Cell class={cn('text-right tabular-nums', net(t) >= 0 ? 'text-chart-2' : 'text-destructive')}
-                  >{money(net(t))}</Table.Cell
-                >
-              {/if}
-              {#if cols.context}
-                <Table.Cell>
-                  <span class="flex gap-1">
-                    {#each t.tags as tag (tag)}<Badge variant="secondary" class="px-1.5 py-0">{tag}</Badge>{/each}
-                  </span>
-                </Table.Cell>
-                <Table.Cell><span class="text-xs text-muted-foreground">{t.session}</span></Table.Cell>
-                <!-- F50: provenance platform (family-adapter type suffixes already stripped upstream) -->
-                <Table.Cell><span class="whitespace-nowrap text-xs text-muted-foreground">{t.platform || '—'}</span></Table.Cell>
-              {/if}
-            </Table.Row>
+                </div>
+                <!-- Line 2: P&L (prominent) + date/time -->
+                <div class="mt-1 flex items-baseline justify-between gap-2">
+                  <span class={cn('text-base font-semibold tabular-nums', t.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}
+                    >{money(t.pnl)}</span
+                  >
+                  <span class="whitespace-nowrap text-xs text-muted-foreground">{t.date.slice(5)} {t.time}</span>
+                </div>
+                <!-- Line 3: tags -->
+                {#if t.tags.length}
+                  <div class="mt-1.5 flex flex-wrap gap-1">
+                    {#each t.tags as tag (tag)}<Badge variant="secondary" class="px-1.5 py-0 text-[11px]">{tag}</Badge>{/each}
+                  </div>
+                {/if}
+              </div>
+            </div>
           {/each}
         {/each}
-      </Table.Body>
-      <Table.Footer>
-        <Table.Row class="hover:bg-transparent">
-          <Table.Cell colspan={colCount} class="pl-3">
-            <span class="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <span class="text-xs tabular-nums text-muted-foreground"
-                >{pager.start.toLocaleString()}–{pager.end.toLocaleString()} of {filtered.length.toLocaleString()}</span
-              >
-              <PaginationControls {pager} />
-              <span class={cn('ml-auto text-sm font-semibold tabular-nums', totalPnl >= 0 ? 'text-chart-2' : 'text-destructive')}
-                >Net {money(totalPnl)}</span
-              >
-            </span>
-          </Table.Cell>
-        </Table.Row>
-      </Table.Footer>
-    </Table.Root>
+      </div>
+      <div class="flex flex-col gap-2 border-t border-border px-3 py-2">
+        <span class="text-xs tabular-nums text-muted-foreground"
+          >{pager.start.toLocaleString()}–{pager.end.toLocaleString()} of {filtered.length.toLocaleString()}</span
+        >
+        <div class="flex items-center justify-between gap-2">
+          <PaginationControls {pager} />
+          <span class={cn('text-sm font-semibold tabular-nums', totalPnl >= 0 ? 'text-chart-2' : 'text-destructive')}
+            >Net {money(totalPnl)}</span
+          >
+        </div>
+      </div>
+    {:else}
+      <!-- F50: tighter cell padding — the default p-2 wasted width across 13+ columns -->
+      <Table.Root class="[&_td]:px-2 [&_td]:py-1.5 [&_th]:px-2">
+        <Table.Header>
+          <Table.Row class="hover:bg-transparent">
+            <Table.Head class="w-9 pl-3">
+              <Checkbox checked={allSelected} indeterminate={someSelected} onCheckedChange={toggleAll} aria-label="Select all" />
+            </Table.Head>
+            {@render sortHead('time', 'Date / time', 'w-28 whitespace-nowrap')}
+            {@render sortHead('sym', 'Symbol', 'w-16')}
+            <Table.Head class="w-14">Side</Table.Head>
+            {@render sortHead('qty', 'Qty', 'w-10 text-right')}
+            {@render sortHead('pnl', 'P&L', 'w-20 text-right')}
+            {#if cols.prices}
+              <Table.Head class="w-16 text-right">Entry</Table.Head>
+              <Table.Head class="w-16 text-right">Exit</Table.Head>
+              <Table.Head class="w-14 text-right">Hold</Table.Head>
+            {/if}
+            {#if cols.costs}
+              <Table.Head class="w-16 text-right">Fees</Table.Head>
+              <Table.Head class="w-20 text-right">Net</Table.Head>
+            {/if}
+            {#if cols.context}
+              <Table.Head>Tags</Table.Head>
+              <Table.Head class="w-16">Session</Table.Head>
+              <Table.Head class="w-24">Platform</Table.Head>
+            {/if}
+          </Table.Row>
+        </Table.Header>
+        <Table.Body>
+          {#each groups as g (g.key)}
+            {#if groupBy !== 'none'}
+              <Table.Row class="bg-secondary/40 hover:bg-secondary/40">
+                <Table.Cell colspan={colCount} class="py-1.5 pl-3">
+                  <span class="text-xs font-semibold">{g.label}</span>
+                  <span class="ml-2 text-xs text-muted-foreground">{g.trades.length} trades</span>
+                  <span class={cn('ml-2 text-xs font-semibold tabular-nums', g.subtotal >= 0 ? 'text-chart-2' : 'text-destructive')}
+                    >{money(g.subtotal)}</span
+                  >
+                </Table.Cell>
+              </Table.Row>
+            {/if}
+            {#each g.trades as t (t.id)}
+              <Table.Row class="cursor-pointer" data-state={selected.has(t.id) ? 'selected' : undefined} onclick={() => (openId = t.id)}>
+                <Table.Cell class="pl-3" onclick={e => e.stopPropagation()}>
+                  <Checkbox checked={selected.has(t.id)} onCheckedChange={v => toggleRow(t.id, v)} aria-label="Select trade" />
+                </Table.Cell>
+                <Table.Cell class="text-muted-foreground">
+                  <span class="flex items-center gap-1.5">
+                    {t.date.slice(5)}
+                    {t.time}
+                    {#if t.note}<span class="size-1.5 rounded-full bg-primary" title="Has a note"></span>{/if}
+                  </span>
+                </Table.Cell>
+                <Table.Cell class="font-medium">
+                  <!-- A real button so keyboard users can open the detail sheet (the row onclick is mouse-only). -->
+                  <button type="button" class="rounded hover:underline focus-visible:underline" onclick={() => (openId = t.id)}
+                    >{t.sym}</button
+                  >
+                </Table.Cell>
+                <Table.Cell>{@render sideBadge(t.side)}</Table.Cell>
+                <Table.Cell class="text-right tabular-nums">{t.qty}</Table.Cell>
+                <Table.Cell class={cn('text-right font-semibold tabular-nums', t.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}
+                  >{money(t.pnl)}</Table.Cell
+                >
+                {#if cols.prices}
+                  <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.entry ?? '—'}</Table.Cell>
+                  <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.exit ?? '—'}</Table.Cell>
+                  <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.holdMin != null ? `${t.holdMin}m` : '—'}</Table.Cell>
+                {/if}
+                {#if cols.costs}
+                  <Table.Cell class="text-right tabular-nums text-muted-foreground">{t.fees != null ? money(-t.fees) : '—'}</Table.Cell>
+                  <Table.Cell class={cn('text-right tabular-nums', net(t) >= 0 ? 'text-chart-2' : 'text-destructive')}
+                    >{money(net(t))}</Table.Cell
+                  >
+                {/if}
+                {#if cols.context}
+                  <Table.Cell>
+                    <span class="flex gap-1">
+                      {#each t.tags as tag (tag)}<Badge variant="secondary" class="px-1.5 py-0">{tag}</Badge>{/each}
+                    </span>
+                  </Table.Cell>
+                  <Table.Cell><span class="text-xs text-muted-foreground">{t.session}</span></Table.Cell>
+                  <!-- F50: provenance platform (family-adapter type suffixes already stripped upstream) -->
+                  <Table.Cell><span class="whitespace-nowrap text-xs text-muted-foreground">{t.platform || '—'}</span></Table.Cell>
+                {/if}
+              </Table.Row>
+            {/each}
+          {/each}
+        </Table.Body>
+        <Table.Footer>
+          <Table.Row class="hover:bg-transparent">
+            <Table.Cell colspan={colCount} class="pl-3">
+              <span class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span class="text-xs tabular-nums text-muted-foreground"
+                  >{pager.start.toLocaleString()}–{pager.end.toLocaleString()} of {filtered.length.toLocaleString()}</span
+                >
+                <PaginationControls {pager} />
+                <span class={cn('ml-auto text-sm font-semibold tabular-nums', totalPnl >= 0 ? 'text-chart-2' : 'text-destructive')}
+                  >Net {money(totalPnl)}</span
+                >
+              </span>
+            </Table.Cell>
+          </Table.Row>
+        </Table.Footer>
+      </Table.Root>
+    {/if}
   </Card.Content>
 </Card.Root>
 
