@@ -129,14 +129,14 @@ const signedWebhook = (rawBody, { secret = WH_SECRET, t = Math.floor(Date.now() 
     body: rawBody,
   });
 };
-const checkoutEvent = (id, { email, ref, amount = 2500, customer = 'cus_1' } = {}) =>
+const checkoutEvent = (id, { email, ref, amount = 2500, currency = 'usd', customer = 'cus_1' } = {}) =>
   JSON.stringify({
     id,
     type: 'checkout.session.completed',
     data: {
       object: {
         amount_total: amount,
-        currency: 'usd',
+        currency,
         customer,
         customer_details: email ? { email } : null,
         client_reference_id: ref ?? null,
@@ -413,6 +413,43 @@ console.log('\nWebhook — client_reference_id crediting + replay dedupe:');
   await webhook({ request: signedWebhook(checkoutEvent('evt_ref2', { ref: user.id, amount: 1000 })), env });
   u = await userByEmail(db, 'ref@example.com');
   ok('a distinct event accumulates the total', u.donation_total_cents === 3500 && db.tables.donations.length === 2);
+}
+
+console.log('\nWebhook — S26(3) donation credit guard (amountCents > 0 AND currency is usd):');
+{
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db, STRIPE_WEBHOOK_SECRET: WH_SECRET };
+  const user = await createUser(db, 'guard@example.com');
+
+  // Zero-amount event: still RECORDED (dedupe row exists) but does not credit.
+  const zr = await webhook({ request: signedWebhook(checkoutEvent('evt_zero', { ref: user.id, amount: 0 })), env });
+  const zj = await zr.json();
+  ok('zero-amount event acked, not credited', zr.status === 200 && zj.credited === false);
+  let u = await userByEmail(db, 'guard@example.com');
+  ok('zero-amount event recorded but donated_at stays null', u.donated_at == null && (u.donation_total_cents ?? 0) === 0);
+  ok('zero-amount event row IS recorded (dedupe intact)', (await donationById(db, 'evt_zero')) != null);
+
+  // Non-USD event: still RECORDED but does not accumulate.
+  const nr = await webhook({ request: signedWebhook(checkoutEvent('evt_eur', { ref: user.id, amount: 900, currency: 'EUR' })), env });
+  const nj = await nr.json();
+  ok('non-USD event acked, not credited', nr.status === 200 && nj.credited === false);
+  u = await userByEmail(db, 'guard@example.com');
+  ok('non-USD event recorded but does not accumulate the total', u.donated_at == null && (u.donation_total_cents ?? 0) === 0);
+  ok('non-USD event row IS recorded (dedupe intact)', (await donationById(db, 'evt_eur')) != null);
+
+  // USD + positive amount: the normal credit path is unchanged (currency check is case-insensitive).
+  const ur = await webhook({ request: signedWebhook(checkoutEvent('evt_usd_ok', { ref: user.id, amount: 1200, currency: 'USD' })), env });
+  const uj = await ur.json();
+  ok('USD (any case) + positive amount credits normally', ur.status === 200 && uj.credited === true);
+  u = await userByEmail(db, 'guard@example.com');
+  ok('USD path stamps donated_at and accumulates', u.donated_at != null && u.donation_total_cents === 1200);
+
+  // Replay of a non-credited (zero-amount) event stays deduped — and still doesn't retroactively credit.
+  const zr2 = await webhook({ request: signedWebhook(checkoutEvent('evt_zero', { ref: user.id, amount: 0 })), env });
+  const zj2 = await zr2.json();
+  ok('replay of a non-credited event is deduped', zr2.status === 200 && zj2.deduped === true);
+  u = await userByEmail(db, 'guard@example.com');
+  ok('replay does not retroactively credit', u.donation_total_cents === 1200 && db.tables.donations.length === 3);
 }
 
 console.log('\nWebhook — verified-email credit vs. unclaimed → claim-on-verify:');

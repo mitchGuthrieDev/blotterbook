@@ -340,6 +340,15 @@ export async function setEmailVerified(db: AccountsDb, userId: string): Promise<
    (client_reference_id, or an already-verified matching email); otherwise it sits UNCLAIMED and
    is swept onto the user by claimDonationsForUser() the moment that email is verified (F55). */
 
+/** S26(3): the guard for whether a donation event actually credits a user's donor tally. The
+ *  event is still RECORDED + linkage/dedupe still apply either way (insertDonation runs
+ *  unconditionally, keyed by the Stripe event id) — this only gates the donated_at stamp /
+ *  donation_total_cents accumulation in applyDonationToUser, so a $0 line item or a non-USD
+ *  checkout (we only ever configure USD prices — S26) can't inflate a user's donor status. */
+export function isCreditableDonation(amountCents: number, currency: string | null): boolean {
+  return amountCents > 0 && typeof currency === 'string' && currency.toLowerCase() === 'usd';
+}
+
 export async function donationById(db: AccountsDb, id: string) {
   return db.prepare('SELECT * FROM donations WHERE id = ?').bind(id).first<DonationRow>();
 }
@@ -366,14 +375,21 @@ export async function insertDonation(
 }
 
 /** Add a credited amount to a user's donation tally. The FIRST credit stamps donated_at (kept
- *  stable on later credits); the Stripe customer id is recorded when known. Returns the updated row. */
+ *  stable on later credits); the Stripe customer id is recorded when known. Returns the updated row.
+ *
+ *  S26(3): only stamps donated_at / accumulates donation_total_cents when the amount+currency pass
+ *  isCreditableDonation (amountCents > 0 AND currency is 'usd', case-insensitive) — a zero-amount
+ *  or non-USD event still gets recorded (by the caller's insertDonation) and dedupes normally, it
+ *  just doesn't move the donor tally. Not creditable → no-op, returns `user` unchanged. */
 export async function applyDonationToUser(
   db: AccountsDb,
   user: UserRow,
   amountCents: number,
+  currency: string | null,
   stripeCustomerId: string | null,
   now = Date.now()
 ): Promise<UserRow> {
+  if (!isCreditableDonation(amountCents, currency)) return user;
   const donatedAt = user.donated_at ?? now;
   const total = (user.donation_total_cents ?? 0) + amountCents;
   const customer = stripeCustomerId ?? user.stripe_customer_id ?? null;
@@ -386,7 +402,12 @@ export async function applyDonationToUser(
 
 /** Claim every UNCLAIMED donation keyed by this user's email onto the user (called once the email
  *  is verified — F55). Returns how many rows were credited. Never trusts an unverified email:
- *  callers must only invoke this for a user whose email ownership is proven. */
+ *  callers must only invoke this for a user whose email ownership is proven.
+ *
+ *  S26(3): every unclaimed row is still linked to the user (user_id + claimed_at stamped) so it
+ *  never lingers as "unclaimed" — applyDonationToUser separately decides whether it moves the
+ *  tally, so a stale non-USD/zero-amount row gets swept up (stops re-scanning it) without ever
+ *  crediting the user. */
 export async function claimDonationsForUser(db: AccountsDb, user: UserRow, now = Date.now()): Promise<number> {
   const { results } = await db.prepare('SELECT * FROM donations WHERE email = ?').bind(user.email).all<DonationRow>();
   const unclaimed = results.filter(d => d.user_id == null);
@@ -394,8 +415,8 @@ export async function claimDonationsForUser(db: AccountsDb, user: UserRow, now =
   let credited = 0;
   for (const d of unclaimed) {
     await db.prepare('UPDATE donations SET user_id = ?, claimed_at = ? WHERE id = ?').bind(user.id, now, d.id).run();
-    u = await applyDonationToUser(db, u, d.amount_cents ?? 0, d.stripe_customer_id, now);
-    credited++;
+    u = await applyDonationToUser(db, u, d.amount_cents ?? 0, d.currency, d.stripe_customer_id, now);
+    if (isCreditableDonation(d.amount_cents ?? 0, d.currency)) credited++;
   }
   return credited;
 }

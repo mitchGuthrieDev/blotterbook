@@ -21,7 +21,16 @@
 import { json } from '../_lib/http.ts';
 import { verifyStripeSignature } from '../_lib/auth.ts';
 import type { Ctx } from '../_lib/types.ts';
-import { applyDonationToUser, dbUnavailable, donationById, getDb, insertDonation, userByEmail, userById } from '../_lib/accounts.ts';
+import {
+  applyDonationToUser,
+  dbUnavailable,
+  donationById,
+  getDb,
+  insertDonation,
+  isCreditableDonation,
+  userByEmail,
+  userById,
+} from '../_lib/accounts.ts';
 
 interface CheckoutSession {
   amount_total?: unknown;
@@ -99,7 +108,12 @@ export async function onRequestPost({ request, env }: Ctx) {
     },
     now
   );
-  if (creditUser) await applyDonationToUser(db, creditUser, amountCents, customerId, now);
+  // S26(3): the row above is recorded (and dedupe-keyed) regardless — but only actually credit the
+  // user's donor tally (donated_at / donation_total_cents) when the amount is positive AND the
+  // currency is USD (we only ever configure USD Stripe prices, so a non-USD/zero-amount line item
+  // here would be unexpected/anomalous and should not silently inflate donor status).
+  const credited = !!creditUser && isCreditableDonation(amountCents, currency);
+  if (creditUser && credited) await applyDonationToUser(db, creditUser, amountCents, currency, customerId, now);
 
-  return json({ received: true, credited: !!creditUser });
+  return json({ received: true, credited });
 }

@@ -42,6 +42,12 @@ async function confirm(ctx: Ctx, isGet: boolean) {
     token = typeof body?.token === 'string' ? body.token : '';
   }
 
+  // S26(2): an email-client link-prefetcher/scanner can GET this URL before the user clicks,
+  // consuming (burning) the single-use `verify` token. Accepted: the scanner's GET still performs
+  // the intended verification (harmless — email_verified flips true regardless of who clicked), so
+  // the only downside is the user's own later click seeing "expired". We deliberately do NOT add an
+  // interstitial confirm step for that case — on invalid/already-burned token, just redirect with
+  // the existing `?verify=expired` flag like any other expired-token case.
   const row = await consumeRecoveryToken(db, token, 'verify');
   if (!row || !row.user_id) {
     return isGet
