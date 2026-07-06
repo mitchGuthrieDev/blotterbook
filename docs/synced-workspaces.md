@@ -13,9 +13,12 @@ Owner decisions locked for this design (2026-07-06):
   retiring it.
 - **Sync model: record-level delta + tombstones.** Not whole-snapshot LWW.
 - **Workspaces: multiple, named, switchable.** Not one dataset per account.
-- **Recovery: a downloaded escrow recovery key.** At workspace creation the user downloads a one-time
-  recovery key; it is the guaranteed root of trust. (See *Key management* — this replaces
-  passphrase-as-root; a passphrase is optional convenience only.)
+- **Recovery: one downloaded escrow recovery key per ACCOUNT.** An account-level identity key wraps
+  every per-workspace key; the user downloads a single recovery key at cloud-sync setup and it is the
+  guaranteed root of trust. (See *Key management* — this replaces passphrase-as-root; a passphrase is
+  optional convenience only.)
+- **Subscription lapse: period-end + grace.** Cancel keeps sync to period end; a failed payment gets a
+  dunning grace window. (See *Entitlement wiring*.)
 
 ## The moat, stated precisely
 
@@ -65,30 +68,43 @@ toward the network.
 ## Key management (the crux)
 
 Because F55 lets a user enroll **multiple passkeys** and WebAuthn PRF yields a *different* secret per
-credential, we cannot derive "the workspace key" from a passkey directly. We use **envelope
-encryption** (the password-manager pattern):
+credential, we cannot derive keys from a passkey directly. We use **envelope encryption** with an
+**account-level identity key** (owner decision, 2026-07-06 — the password-manager pattern), so there is
+**one** recovery key for the whole account and adding a workspace needs no new key ceremony:
 
 ```
-per-workspace random DEK  (Data Encryption Key — actually encrypts every record; AES-GCM)
-    │  wrapped (encrypted) once per unlock method, producing opaque "wrapped-DEK" blobs:
-    ├─ KEK from each enrolled PASSKEY   (WebAuthn PRF extension → HKDF → AES-KW)   ← per-device unlock
-    ├─ KEK from an optional PASSPHRASE  (Argon2id/PBKDF2 → AES-KW)                 ← convenience / no-PRF browsers
-    └─ KEK from the ESCROW RECOVERY KEY (random 256-bit, shown/downloaded ONCE)    ← guaranteed root of trust
+account IDENTITY KEY (IK)   (random 256-bit — the account's root secret; never leaves the client in clear)
+    │  wrapped once per UNLOCK METHOD → opaque "wrapped-IK" blobs, stored server-side:
+    ├─ KEK from each enrolled PASSKEY    (WebAuthn PRF ext → HKDF → AES-KW)   ← per-device unlock
+    ├─ KEK from an optional PASSPHRASE   (Argon2id/PBKDF2 → AES-KW)           ← no-PRF browsers / convenience
+    └─ KEK from the ESCROW RECOVERY KEY  (random 256-bit, downloaded ONCE)    ← the single guaranteed root
+    │
+    └─►  IK wraps each per-workspace DEK  (AES-KW).  The DEKs (AES-GCM) actually encrypt records.
 ```
 
-- The **DEK never leaves the client in the clear.** The server stores only the wrapped-DEK blobs
-  (ciphertext of a key it can't unwrap) plus the encrypted records.
-- **Adding a passkey** re-wraps the DEK for the new credential's KEK — which requires an already-unlocked
-  device *or* the passphrase *or* the recovery key present. This is why F55's email re-enrollment can
-  restore *login* but not *decryption*: the server has no key to hand back.
-- **Escrow recovery key (owner decision):** generated at workspace creation, rendered once for the user
-  to **download/print**, and used to wrap the DEK. It is **never persisted client-side after the
-  download** and never sent to the server in the clear. Losing every passkey **and** the passphrase is
-  survivable *iff* the user kept this key. If all three are lost, the cloud ciphertext is
-  unrecoverable — **but the local IndexedDB copy still exists.** This trade-off is inherent to
-  zero-knowledge and must be surfaced plainly in the setup UI.
-- **No-PRF browsers** (Safari/Firefox today) use the passphrase KEK to unlock; the passkey is still the
-  login credential, the passphrase is the decryption credential there.
+- **Neither the IK nor any DEK leaves the client in the clear.** The server stores only the wrapped-IK
+  blobs (one per unlock method) + the IK-wrapped per-workspace DEKs + the encrypted records — all
+  ciphertext of keys it can't unwrap.
+- **One recovery key per account.** Generated at cloud-sync setup, rendered **once** for the user to
+  download/print, used to wrap the IK. **Never persisted client-side after download**, never sent to the
+  server in the clear. Adding a workspace only mints a new DEK and wraps it under the existing IK — no
+  new recovery artifact. Losing every passkey **and** the passphrase is survivable *iff* the user kept
+  this one key; if all three are lost the cloud ciphertext is unrecoverable — **but the local IndexedDB
+  copy still exists.** This trade-off is inherent to zero-knowledge and must be surfaced plainly in the
+  setup UI.
+- **Adding a passkey** re-wraps the **IK** (not each DEK) for the new credential's KEK — which requires
+  an already-unlocked device *or* the passphrase *or* the recovery key present. This is why F55's email
+  re-enrollment restores *login* but not *decryption*: the server has no key to hand back.
+- **Unlock is once per session.** WebAuthn PRF only emits its secret during an auth ceremony (a user
+  gesture), so we unlock the IK **once per session** (one passkey tap or passphrase), hold the IK + the
+  active workspace's DEK **in memory only**, and never persist them. Every subsequent push/pull encrypts
+  with the in-memory DEK — no re-tap per sync.
+- **No-PRF browsers** (Safari/Firefox today) unlock the IK via the **passphrase** KEK; the passkey is
+  still the login credential, the passphrase is the decryption credential there.
+- **Compat — existing F53 passkeys can't do PRF.** PRF must be requested at *credential creation*, and
+  passkeys already enrolled were not. So on first cloud-sync setup a user either enrolls a **new**
+  PRF-capable passkey or relies on the passphrase path; the setup flow must detect PRF support
+  (`getClientCapabilities` / a probe) and guide accordingly rather than assuming it.
 
 ## The server's role (deliberately dumb)
 
@@ -96,7 +112,8 @@ Since the server can't read plaintext, it **cannot merge** — it is an ordered 
 
 ```
 sync_records(workspace_id, blinded_id, type, ciphertext, updated, deleted, seq)
-sync_wrapped_keys(workspace_id, method, key_id, wrapped_dek)   -- method ∈ passkey|passphrase|recovery
+sync_wrapped_ik(user_id, method, key_id, wrapped_ik)            -- account IK wrapped per unlock method (passkey|passphrase|recovery)
+sync_workspace_keys(workspace_id, owner_user_id, wrapped_dek)   -- per-workspace DEK wrapped under the account IK
 sync_workspaces(workspace_id, owner_user_id, created_at)        -- names live ENCRYPTED in a record, not here
 ```
 
@@ -120,10 +137,17 @@ The good news holds — trades are a **content-hash union** (conflict-free), jou
 indistinguishable from "not synced yet," and worse, re-importing a CSV would **resurrect** a deleted
 trade. So:
 
-- Every mutating path in `store.ts` records a **tombstone** `{ blinded_id, deleted:true, updated }`.
-- `addTrades` consults tombstones to **suppress resurrection** (a re-import of a file whose trade the
-  user deleted stays deleted unless the tombstone is older than the incoming `updated`).
+- Every mutating path in `store.ts` records a **tombstone** `{ id, type, deleted:true, updated }`.
+- `addTrades` consults tombstones to **suppress resurrection**. **Default policy (open, easily flipped):
+  a tombstone always wins over a CSV re-import** — you deleted it, re-importing the same file won't
+  bring it back; only an explicit user re-add does. The alternative (timestamp-LWW: resurrect if the
+  incoming `updated` is newer than the tombstone) is a one-line change; F58 isolates the decision behind
+  a single predicate.
 - Tombstones sync like any other record and are the delete half of LWW.
+- **Clock-skew caveat:** LWW keys on the wall-clock `updated`, so a device with a fast clock can win a
+  same-record conflict. For a *single user's* devices this is acceptable — trades are content-hash-immune
+  (union, never conflict), and only concurrent edits to the *same* journal/meta record on two devices
+  conflict, which is rare. If it bites, the upgrade path is a hybrid logical clock; we do not need it now.
 
 This is the **only** change to the *existing* local store, it is **moat-neutral** (no crypto, no
 server), and it can land first and independently.
@@ -137,6 +161,10 @@ server), and it can land first and independently.
   switches on `staging`, so this generalizes that seam.
 - **Active workspace id** lives in `Store.local` (the sync, pre-paint localStorage seam) so boot opens
   the correct DB before first render.
+- **Migration of today's data (F59):** the existing `blotterbook` DB every current user already has
+  becomes a **"Default" workspace** automatically on first boot after F59 — seed the registry with one
+  entry pointing at the current DB (keep its name so no rename/copy is needed), set it active. No data
+  moves; the single-DB world is just the one-workspace case of the new model.
 - A **workspace registry** (`[{ id, name, createdAt }]`) also lives in `Store.local` for the switcher;
   when synced, workspace **names travel encrypted** (as a record), never in `sync_workspaces`.
 - **Entitlement split (keeps the free tier graceful):** a *workspace* (a named local dataset) is
@@ -147,6 +175,14 @@ server), and it can land first and independently.
 
 - `me.ts` grants `{ tier:'cloud', cloudSync:true }` when the user has an **active subscription**
   (extend the existing donation/subscription bookkeeping; today it returns `local` unconditionally).
+- **Lapse policy (owner decision, 2026-07-06): period-end + grace.** A cancellation keeps `cloud` until
+  the paid period ends; a failed payment gets a dunning grace window before cutoff. This means the
+  webhook (F54 handles `checkout.session.completed` only) must also handle
+  `customer.subscription.updated` / `customer.subscription.deleted` / `invoice.payment_failed` and
+  persist a subscription row with `status` + `current_period_end`; `me.ts` grants `cloud` while
+  `status ∈ {active, past_due-within-grace}` or `now < current_period_end`. This grows F60 from a
+  one-line flip into real subscription-lifecycle handling — scope it as **medium**, not small.
+  On cutoff, the tier drops to `local`; **local IndexedDB data always remains** (only sync stops).
 - `Entitlements.current()` (scaffold, currently unloaded) starts calling `/api/me`; `storeFor('cloud')`
   returns `CloudStore`, `storeFor('local')` returns `Store`. `App.svelte` already resolves and
   prop-drills one `Store` — it resolves it through `Entitlements` instead of importing `Store` directly.
