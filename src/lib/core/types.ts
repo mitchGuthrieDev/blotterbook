@@ -506,6 +506,76 @@ export interface Workspace {
   createdAt: number;
 }
 
+/* ── Synced-workspaces E2E crypto core (F61a) ──────────────────────────────────────────────────
+ *
+ * Envelope-encryption shapes for the zero-knowledge cloud tier. The server only ever sees the
+ * opaque, self-describing blobs below — never a key, a symbol, a P&L, or a note in the clear.
+ * Implemented in `crypto.ts` (Web Crypto for AES-GCM/AES-KW/HKDF/HMAC; Argon2id via hash-wasm for
+ * the passphrase KEK). All blobs are JSON/base64-serializable so F62 can ship them over the wire. */
+
+/** Argon2id cost parameters for the passphrase KEK (F61a). Tuned for ~200–500 ms on a typical
+ *  device; travels inside a WrappedIK so a device can reproduce the KEK to unwrap the IK. */
+export interface Argon2Params {
+  /** Memory cost in KiB (memory-hardness). */
+  memKiB: number;
+  /** Time cost (passes). */
+  iterations: number;
+  /** Lanes / degree of parallelism. */
+  parallelism: number;
+  /** Derived-key length in bytes (32 = 256-bit KEK). */
+  hashLen: number;
+}
+
+/** How a KEK was derived — embedded verbatim into a WrappedIK so the blob is self-describing and a
+ *  fresh device can rebuild the KEK (given the passkey PRF / passphrase / recovery-key secret) to
+ *  unwrap the IK. Salts are base64. The recovery path needs no stored salt (the key is full-entropy). */
+export type KekDescriptor =
+  { method: 'prf'; hkdfSalt: string } | { method: 'passphrase'; argon2: Argon2Params & { salt: string } } | { method: 'recovery' };
+
+/** A key-encryption key plus the metadata needed to reproduce it. `key` is a non-extractable AES-KW
+ *  CryptoKey used only to wrap/unwrap the IK; `descriptor` is what gets persisted (never the KEK). */
+export interface Kek {
+  key: CryptoKey;
+  descriptor: KekDescriptor;
+}
+
+/** The account identity key wrapped (AES-KW) under one unlock method's KEK. One per enrolled method
+ *  (passkey PRF / passphrase / escrow recovery key). The only IK representation the server stores. */
+export interface WrappedIK {
+  /** Blob schema version. */
+  v: 1;
+  /** Which unlock method's KEK wrapped the IK (also selects the descriptor branch). */
+  method: KekDescriptor['method'];
+  /** Wrapping algorithm — always AES key wrap. */
+  alg: 'AES-KW';
+  /** Base64 of the AES-KW-wrapped IK bytes. */
+  wrapped: string;
+  /** HKDF salt (base64) for the PRF path — present iff `method === 'prf'`. */
+  hkdfSalt?: string;
+  /** Argon2id params + salt for the passphrase path — present iff `method === 'passphrase'`. */
+  argon2?: Argon2Params & { salt: string };
+}
+
+/** A per-workspace data-encryption key wrapped (AES-KW) under the account IK. Minted when a
+ *  workspace opts into sync; adding a workspace needs no new unlock ceremony. */
+export interface WrappedDek {
+  v: 1;
+  alg: 'AES-KW';
+  /** Base64 of the AES-KW-wrapped DEK bytes. */
+  wrapped: string;
+}
+
+/** One AES-GCM-encrypted record (a trade / journal / meta row). Authenticated: a flipped byte or
+ *  the wrong DEK makes decryptRecord throw. IV is fresh-random per record. */
+export interface EncryptedRecord {
+  v: 1;
+  alg: 'AES-GCM';
+  /** Base64 of the 12-byte random IV (never reused with the same DEK). */
+  iv: string;
+  /** Base64 of the ciphertext with the appended GCM auth tag. */
+  ct: string;
+}
+
 export interface StoreLike {
   available(): boolean;
   init(): Promise<boolean>;
