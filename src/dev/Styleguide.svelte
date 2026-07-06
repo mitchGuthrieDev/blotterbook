@@ -120,6 +120,27 @@
     { name: 'rounded-full', cls: 'rounded-full' },
   ];
 
+  // CH37 type-weight scale — mono-forward UI, so weight (not a second typeface) carries hierarchy.
+  // The self-hosted Geist Mono variable woff2 spans the full wght 100–900 axis (verified against the
+  // @font-face `font-weight: 100 900` range in tailwind.css), so every tier below renders as a real
+  // native weight — no faux-bold synthesis. Keep new UI on one of these four; don't reach for a fifth.
+  const weightScale: { cls: string; weight: string; tier: string; example: string }[] = [
+    { cls: 'font-normal', weight: '400', tier: 'Body', example: 'Prose, table cell values, descriptions.' },
+    { cls: 'font-medium', weight: '500', tier: 'Labels + nav', example: 'Field labels, sidebar nav items, tabs, badges.' },
+    {
+      cls: 'font-semibold',
+      weight: '600',
+      tier: 'Emphasis + card headers + table headers',
+      example: 'Card.Title, module headers, table column headers, active-state emphasis.',
+    },
+    {
+      cls: 'font-bold',
+      weight: '700',
+      tier: 'KPI numerals + page titles',
+      example: 'Standalone hero stat values (Dashboard KPI cards), report/page titles.',
+    },
+  ];
+
   const buttonVariants: ButtonVariant[] = ['default', 'secondary', 'outline', 'ghost', 'link', 'destructive'];
   const buttonSizes: Exclude<ButtonSize, 'icon'>[] = ['sm', 'default', 'lg'];
 
@@ -179,7 +200,8 @@
             >{s.badge}</span
           >
         </div>
-        <div class="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{s.value}</div>
+        <!-- CH37: hero KPI numeral tier (700) — matches Dashboard's statCard. -->
+        <div class="mt-2 text-3xl font-bold tracking-tight tabular-nums">{s.value}</div>
         <div class="mt-2 text-xs text-muted-foreground">{s.note}</div>
       </div>
     {/each}
@@ -223,6 +245,22 @@
       <div class="flex flex-col items-center gap-2">
         <div class={`size-16 border border-border bg-secondary ${rdef.cls}`}></div>
         <span class="text-[11px] text-muted-foreground">{rdef.name}</span>
+      </div>
+    {/each}
+  </div>
+
+  <!-- ── Type weight scale (CH37) ──────────────────────────────────────────────────────────── -->
+  {@render section(
+    'Type weight scale',
+    'Mono-forward UI (Geist Mono serves both --font-sans and --font-mono), so weight carries hierarchy instead of a second typeface. Four tiers only — normalize new UI onto one of these.'
+  )}
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    {#each weightScale as w (w.cls)}
+      <div class="rounded-md border border-border bg-card p-4">
+        <div class={`text-2xl tabular-nums ${w.cls}`}>Ag 123</div>
+        <div class="mt-2 text-xs text-foreground">{w.cls} <span class="text-muted-foreground">· {w.weight}</span></div>
+        <div class="mt-1 text-xs font-medium text-muted-foreground">{w.tier}</div>
+        <div class="mt-1 text-[11px] text-muted-foreground">{w.example}</div>
       </div>
     {/each}
   </div>

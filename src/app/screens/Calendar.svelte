@@ -304,7 +304,7 @@
                 <div class="text-[9px] uppercase tracking-wide text-muted-foreground">Wk {w.wk}</div>
                 <div
                   class={cn(
-                    'text-[10px] font-bold tabular-nums',
+                    'text-[10px] font-semibold tabular-nums',
                     w.days ? (w.pnl >= 0 ? 'text-chart-2' : 'text-destructive') : 'text-muted-foreground'
                   )}
                 >
@@ -339,7 +339,7 @@
                     {#if c.rec}
                       <span
                         class={cn(
-                          'mt-auto truncate text-right text-[10px] font-bold tabular-nums sm:text-xs',
+                          'mt-auto truncate text-right text-[10px] font-semibold tabular-nums sm:text-xs',
                           c.rec.pnl >= 0 ? 'text-chart-2' : 'text-destructive'
                         )}>{usdWhole(c.rec.pnl)}</span
                       >

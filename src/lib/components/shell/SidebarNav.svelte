@@ -69,7 +69,8 @@
       {@const isActive = item.key === active}
       {@const Icon = item.icon}
       {@const cls = cn(
-        'flex items-center gap-2.5 rounded-md px-2 py-2 text-sm no-underline transition-colors',
+        // CH37 type-weight scale: nav items are the "labels + nav" tier (500).
+        'flex items-center gap-2.5 rounded-md px-2 py-2 text-sm font-medium no-underline transition-colors',
         collapsed && 'justify-center',
         isActive
           ? 'border border-border bg-secondary text-foreground'

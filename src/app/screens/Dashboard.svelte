@@ -745,7 +745,8 @@
       </div>
       <div
         class={[
-          'mt-2 text-xl font-semibold tracking-tight tabular-nums',
+          // CH37: the hero KPI numeral tier (700) — the one place a standalone number IS the module.
+          'mt-2 text-xl font-bold tracking-tight tabular-nums',
           s.up === undefined ? 'text-foreground' : s.up ? 'text-chart-2' : 'text-destructive',
         ]}
       >
@@ -1229,7 +1230,8 @@
         <Card.Root id="dashmod-{key}" class="h-full">
           {@render moduleHeader(key)}
           <Card.Content>
-            {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'term'}<ActivityTerminal />{:else if key === 'compare'}{@render compareBody()}{:else if key === 'blotter'}{@render blotterBody()}{/if}
+            {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'term'}<ActivityTerminal
+              />{:else if key === 'compare'}{@render compareBody()}{:else if key === 'blotter'}{@render blotterBody()}{/if}
           </Card.Content>
         </Card.Root>
       </div>

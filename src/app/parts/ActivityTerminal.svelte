@@ -81,7 +81,9 @@
 </script>
 
 <div class={cn('rounded-md border border-border bg-card p-3', className)}>
-  <div class="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.5px] text-muted-foreground">
+  <!-- CH37: card-header tier (600), matching the widespread text-xs/[11px] font-semibold uppercase
+       section-header convention used elsewhere (Dashboard moduleHeader, DetectionStatus, etc). -->
+  <div class="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.5px] text-muted-foreground">
     <Terminal class="size-3.5" />
     <span>Activity</span>
   </div>
