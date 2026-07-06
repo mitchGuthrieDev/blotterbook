@@ -29,7 +29,7 @@ flowchart TD
     ROUTER -.->|"account (isStaging only, F53)"| ACC["Account"]
     ROUTER -.->|invalid → default| D
 
-    STORECTX["context('bb:store')<br/>Store / DemoStore"] --> DASHSTATE
+    STORECTX["App.svelte resolves Store / DemoStore<br/>(prop-drilled — no context call)"] --> DASHSTATE
     DASHSTATE["createDashboard(store)<br/>$state + $derived:<br/>filters · metricsAll/Active · cost ·<br/>journal · tradeMeta · savedFilters"]
 
     DASHSTATE -->|"data props"| D

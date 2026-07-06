@@ -22,7 +22,7 @@ sequenceDiagram
     Note over App: side-effect import format.ts + tailwind.css
     App->>App: PAGE_MODE = body.dataset.mode
     App->>App: store = isDemo ? DemoStore : Store
-    App->>App: setContext('bb:store', store)
+    App->>App: resolve store (prop-drilled — no context call)
     App->>Dash: createDashboard(store, {seed, isDemo})
     App->>Dash: onMount → dash.boot()
     activate Dash

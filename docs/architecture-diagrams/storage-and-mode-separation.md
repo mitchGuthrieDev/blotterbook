@@ -26,7 +26,7 @@ flowchart TD
     DEMOH --> MAIN
     STGH --> MAIN
 
-    MAIN --> APP["App.svelte<br/>PAGE_MODE = body.dataset.mode<br/>setContext('bb:store', store)"]
+    MAIN --> APP["App.svelte<br/>PAGE_MODE = body.dataset.mode<br/>resolves store, prop-drills it (no context call)"]
 
     APP --> SWAP{"isDemo ?"}
     SWAP -->|"yes · demo"| DEMOSTORE["createDemoStore()<br/>demostore.ts"]

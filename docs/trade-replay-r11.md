@@ -83,7 +83,7 @@ scrubber (step / play at 1×–60×), and a readout of open position, unrealized
 `pointValue`), and hold time as the clock advances. Phase 1 renders only the trader's own fills for
 the day/session (a "tape of your executions"); Phase 2 fills in candles behind them when bar data
 exists for that `root|date`. Fits the existing pattern: a new `src/app/screens/Replay.svelte` (or a
-TradeEditor part), state via runes + the `bb:store` context, no new global state.
+TradeEditor part), state via runes + the prop-drilled Store (from `App.svelte`), no new global state.
 
 ## Phased build sketch
 
