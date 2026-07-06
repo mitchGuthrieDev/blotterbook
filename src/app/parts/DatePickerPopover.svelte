@@ -89,11 +89,21 @@
 <EditableCellPopover label={value || '—'} class={className} contentClass="w-64" onopen={onOpen}>
   {#snippet content({ close })}
     <div class="flex items-center justify-between pb-2">
-      <button type="button" class="grid size-6 place-items-center rounded hover:bg-accent" aria-label="Previous month" onclick={prevMonth}>
+      <button
+        type="button"
+        class="relative grid size-6 place-items-center rounded hover:bg-accent pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
+        aria-label="Previous month"
+        onclick={prevMonth}
+      >
         <ChevronLeft class="size-3.5" />
       </button>
       <span class="text-xs font-semibold">{MONTH_NAMES[viewMonth]} {viewYear}</span>
-      <button type="button" class="grid size-6 place-items-center rounded hover:bg-accent" aria-label="Next month" onclick={nextMonth}>
+      <button
+        type="button"
+        class="relative grid size-6 place-items-center rounded hover:bg-accent pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
+        aria-label="Next month"
+        onclick={nextMonth}
+      >
         <ChevronRight class="size-3.5" />
       </button>
     </div>

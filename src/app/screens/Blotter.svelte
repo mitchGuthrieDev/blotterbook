@@ -538,7 +538,7 @@
               <Badge variant="secondary" class="gap-1">
                 {tag}{#if !dataDisabled}<button
                     type="button"
-                    class="text-muted-foreground hover:text-foreground"
+                    class="relative text-muted-foreground hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
                     aria-label="Remove tag {tag}"
                     onclick={() => (draftTags = draftTags.filter(x => x !== tag))}><X class="size-3" /></button
                   >{/if}

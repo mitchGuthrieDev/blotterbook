@@ -13,7 +13,12 @@
     <button
       type="button"
       onclick={() => (pager.pageSize = sz)}
-      class={['rounded px-1.5 py-0.5 transition-colors', pager.pageSize === sz ? 'bg-secondary text-foreground' : 'hover:text-foreground']}
+      class={[
+        // A222: touch-target pass — the visible chip stays compact; pointer-coarse gets an
+        // invisible hit-slop instead of growing the row (these sit close together).
+        "relative rounded px-1.5 py-0.5 transition-colors pointer-coarse:before:absolute pointer-coarse:before:-inset-1.5 pointer-coarse:before:content-['']",
+        pager.pageSize === sz ? 'bg-secondary text-foreground' : 'hover:text-foreground',
+      ]}
     >
       {sz === Infinity ? 'All' : sz}
     </button>

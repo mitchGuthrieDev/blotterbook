@@ -29,7 +29,7 @@
     <Button
       variant="ghost"
       size="icon"
-      class="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+      class="relative size-6 shrink-0 text-muted-foreground hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
       aria-label="Dismiss maintenance notice"
       onclick={() => (maintDismissed = true)}
     >
@@ -49,7 +49,7 @@
     <Button
       variant="ghost"
       size="icon"
-      class="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+      class="relative size-6 shrink-0 text-muted-foreground hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
       aria-label="Dismiss warning"
       onclick={() => (warnDismissed = true)}
     >

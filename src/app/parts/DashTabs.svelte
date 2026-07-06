@@ -122,7 +122,7 @@
                 <button
                   {...props}
                   type="button"
-                  class="grid size-6 place-items-center text-muted-foreground hover:bg-accent hover:text-foreground"
+                  class="grid size-6 place-items-center text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:size-8"
                   aria-label="Tab menu: {t.name}"><MoreHorizontal class="size-3.5" /></button
                 >
               {/snippet}
@@ -148,7 +148,7 @@
           <button
             {...tip}
             type="button"
-            class="grid size-6 place-items-center rounded-r-md text-muted-foreground hover:bg-accent hover:text-destructive disabled:opacity-30"
+            class="grid size-6 place-items-center rounded-r-md text-muted-foreground hover:bg-accent hover:text-destructive disabled:opacity-30 pointer-coarse:size-8"
             aria-label="Close tab: {t.name}"
             disabled={tabs.length === 1}
             onclick={() => ondelete(t.id)}><X class="size-3" /></button

@@ -249,7 +249,7 @@
             <button
               {...tip}
               type="button"
-              class="grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+              class="relative grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
               aria-label="Lower target"
               onclick={() => (target = Math.max(0, target - 50))}
             >
@@ -257,13 +257,13 @@
             </button>
           {/snippet}
         </IconTip>
-        <span class="w-12 text-center text-xs tabular-nums">${target}</span>
+        <span class="w-12 text-center text-xs tabular-nums" data-testid="cal-target-value">${target}</span>
         <IconTip label="Raise target by $50">
           {#snippet button(tip)}
             <button
               {...tip}
               type="button"
-              class="grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+              class="relative grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
               aria-label="Raise target"
               onclick={() => (target += 50)}
             >
@@ -461,7 +461,7 @@
                     <Badge variant="secondary" class="gap-1">
                       {t}<button
                         type="button"
-                        class="text-muted-foreground hover:text-foreground"
+                        class="relative text-muted-foreground hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
                         aria-label="Remove tag {t}"
                         onclick={() => removeTag(t)}><X class="size-3" /></button
                       >
@@ -488,7 +488,7 @@
                           <button
                             {...tip}
                             type="button"
-                            class="absolute -right-1.5 -top-1.5 grid size-[18px] place-items-center rounded-full bg-destructive text-white"
+                            class="absolute -right-1.5 -top-1.5 grid size-[18px] place-items-center rounded-full bg-destructive text-white pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
                             aria-label="Remove screenshot"
                             onclick={() => removeShot(i)}><X class="size-3" /></button
                           >

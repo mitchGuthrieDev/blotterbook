@@ -1053,7 +1053,10 @@
                 aria-label={`Status: ${statusPill.text}`}
                 class={[
                   badgeVariants({ variant: 'outline' }),
-                  'cursor-pointer hover:bg-accent',
+                  'relative cursor-pointer hover:bg-accent',
+                  // A222: coarse-pointer hit-slop — below `sm` this pill renders dot-only (~20px
+                  // visual box), so touch users need an invisible enlarged tap area.
+                  "pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']",
                   statusPill.tone === 'up'
                     ? 'border-chart-2/40 text-chart-2'
                     : statusPill.tone === 'warn'

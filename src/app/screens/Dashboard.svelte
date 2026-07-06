@@ -111,7 +111,7 @@
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import IconTip from '$lib/components/IconTip.svelte';
   import { ChevronUp, ChevronDown, EyeOff } from '@lucide/svelte';
-  import { X } from '@lucide/svelte';
+  import { X, Trash2 } from '@lucide/svelte';
   import * as Dialog from '$lib/components/ui/dialog';
   import { flip } from 'svelte/animate';
   import { fade, slide } from 'svelte/transition';
@@ -787,7 +787,7 @@
                         {...tip}
                         type="button"
                         aria-label="Rename filter"
-                        class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                        class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:size-8"
                         onclick={() => doRenameView(v.id, v.name)}
                       >
                         <Pencil class="size-3.5" />
@@ -800,10 +800,13 @@
                         {...tip}
                         type="button"
                         aria-label="Delete filter"
-                        class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-destructive"
+                        class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-destructive pointer-coarse:size-8"
                         onclick={() => filterModel.deleteView?.(v.id)}
                       >
-                        <X class="size-3.5" />
+                        <!-- A222: Trash2 (not X) — the close-tab/dismiss family uses X, so a
+                             destructive delete needs its own icon on touch where the tooltip never
+                             fires (bits-ui Tooltip ignores pointerType === 'touch'). -->
+                        <Trash2 class="size-3.5" />
                       </button>
                     {/snippet}
                   </IconTip>
@@ -851,13 +854,13 @@
                         {...tip}
                         type="button"
                         aria-label="Delete layout"
-                        class="mr-1 grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-destructive"
+                        class="mr-1 grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-destructive pointer-coarse:size-8"
                         onclick={e => {
                           e.stopPropagation();
                           layouts.remove(name);
                         }}
                       >
-                        <X class="size-3.5" />
+                        <Trash2 class="size-3.5" />
                       </button>
                     {/snippet}
                   </IconTip>

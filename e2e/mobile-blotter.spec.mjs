@@ -8,30 +8,30 @@ import { watchErrors } from './helpers.mjs';
 // render (table doesn't), no horizontal scroll, selection/bulk actions stay reachable, and a card
 // tap opens the same detail Sheet as the desktop row.
 //
+// A222 (below): the file also carries the coarse-pointer touch-target pass's interaction coverage —
+// this is the sole e2e file that workstream is allowed to touch (extends A221's scope per the sprint
+// plan), so it's the natural home even though a couple of assertions exercise Calendar/Dashboard.
+//
 // Uses the STAGING surface (real IndexedDB-backed engine, seeded) so bulk delete/tag actually work —
 // the DEMO surface disables those (dataDisabled=isDemo), which would leave the "row actions reachable
 // on mobile" claim untested. The F56 login gate is bypassed the same way staging-redesign.spec.mjs
 // does (bb:flags override), matching that file's bootDashboard helper.
 
 const STAGING = '/app/staging.html';
-const nav = page => page.locator('nav[aria-label="Primary"]');
-const gotoScreen = async (page, name) => {
-  await nav(page).getByRole('button', { name, exact: true }).click();
-  await expect(page.locator('header h1')).toHaveText(name);
-};
 const bootDashboard = async page => {
   await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
   await page.goto(STAGING, { waitUntil: 'networkidle' });
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
 };
-const gotoBlotterMobile = async page => {
+// Mobile nav is a drawer (A182-family pattern) — open it, navigate, drawer closes on pick.
+const gotoScreenMobile = async (page, name) => {
   await page.setViewportSize({ width: 360, height: 780 });
   await bootDashboard(page);
-  // Mobile nav is a drawer (A182-family pattern) — open it, navigate, drawer closes on pick.
   await page.getByRole('button', { name: 'Open navigation' }).click();
-  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Blotter', exact: true }).click();
-  await expect(page.locator('header h1')).toHaveText('Blotter');
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name, exact: true }).click();
+  await expect(page.locator('header h1')).toHaveText(name);
 };
+const gotoBlotterMobile = page => gotoScreenMobile(page, 'Blotter');
 
 test('mobile blotter (360px): cards render instead of the table, no horizontal scroll', async ({ page }) => {
   const errors = watchErrors(page);
@@ -89,4 +89,55 @@ test('mobile blotter (360px): selection + bulk delete stay reachable from the ca
   await page.getByRole('alertdialog').getByRole('button', { name: 'Delete', exact: true }).click();
 
   await expect(page.getByText(`${total - 1} of ${total - 1} trades`)).toBeVisible({ timeout: 4000 });
+});
+
+// A222: coarse-pointer touch-target pass. The sweep raised a tail of sub-24px icon buttons
+// (Calendar's daily-target stepper, chip remove ✕s, the shared Checkbox/Switch primitives, …) to a
+// WCAG-2.2-AA-compliant tap area via an invisible `pointer-coarse:before:absolute` hit-slop (a
+// positioned ::before extending past the visible box — no visual/layout change outside `hasTouch`
+// contexts) rather than growing the control itself. These specs run under real `hasTouch` emulation
+// (which flips `(pointer: coarse)` in Chromium) and TAP just past a control's own visible edge —
+// inside the hit-slop, outside the glyph — to prove the enlarged area is actually reachable, not
+// just present in the stylesheet. A couple of directly-adjacent clusters (DashTabs' menu/close ✕,
+// Dashboard's rename/delete-filter pair) used a plain `pointer-coarse:size-8` bump instead, since an
+// invisible overlay would have bled into the touching neighbor — those are covered by a
+// bounding-box assertion instead of an off-target tap.
+test.describe('A222 coarse-pointer touch targets', () => {
+  test.use({ hasTouch: true });
+
+  test('hasTouch emulation actually flips the pointer-coarse media query', async ({ page }) => {
+    await gotoScreenMobile(page, 'Calendar');
+    expect(await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches)).toBe(true);
+  });
+
+  test('Calendar daily-target stepper: a tap just outside the 20px button still registers', async ({ page }) => {
+    await gotoScreenMobile(page, 'Calendar');
+    const value = page.getByTestId('cal-target-value');
+    const before = await value.innerText();
+    // 4px outside the button's own left edge — inside the pointer-coarse -inset-2 (8px) hit-slop,
+    // outside the size-5 (20px) visible box.
+    await page.getByRole('button', { name: 'Raise target', exact: true }).tap({ position: { x: -4, y: 10 } });
+    await expect(value).not.toHaveText(before);
+  });
+
+  test('mobile Blotter card: a tap just outside the 16px checkbox still toggles selection', async ({ page }) => {
+    await gotoBlotterMobile(page);
+    const checkbox = page
+      .getByRole('list', { name: 'Trades' })
+      .getByRole('listitem')
+      .first()
+      .getByRole('checkbox', { name: 'Select trade' });
+    // 5px outside the checkbox's own box on both axes — inside the shared Checkbox primitive's
+    // pointer-coarse -inset-1.5 (6px) hit-slop, outside the size-4 (16px) visible box.
+    await checkbox.tap({ position: { x: -5, y: -5 } });
+    await expect(page.getByText('1 selected')).toBeVisible();
+  });
+
+  test('DashTabs menu/close buttons grow to 32px on coarse pointers (adjacent cluster — size bump, not hit-slop)', async ({ page }) => {
+    await gotoScreenMobile(page, 'Dashboard');
+    const closeBtn = page.getByRole('button', { name: /^Close tab: /, exact: false }).first();
+    const box = await closeBtn.boundingBox();
+    expect(box.width).toBeGreaterThanOrEqual(32);
+    expect(box.height).toBeGreaterThanOrEqual(32);
+  });
 });

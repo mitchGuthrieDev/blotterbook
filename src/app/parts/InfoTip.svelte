@@ -32,7 +32,7 @@
         {...props}
         type="button"
         aria-label={label}
-        class="inline-grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+        class="relative inline-grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
       >
         <Info class="size-3.5" />
       </button>
