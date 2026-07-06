@@ -489,9 +489,42 @@ export interface Tombstone {
   updated: number;
 }
 
+/** A named local workspace (F59) — a dataset backed by its own IndexedDB database. The registry
+ *  `[{ id, name, dbName, createdAt }]` + the active-workspace pointer live in Store.local (sync,
+ *  pre-paint). "Switch workspace" = open a different DB. When the cloud tier lands (F61+), a
+ *  workspace's name travels ENCRYPTED as a record — never in the plaintext registry. */
+export interface Workspace {
+  /** Stable id — `'default'` for the migrated legacy workspace, a `crypto.randomUUID()` for new ones. */
+  id: string;
+  /** User-facing name. */
+  name: string;
+  /** The CONCRETE IndexedDB database name backing this workspace. The Default workspace keeps the
+   *  legacy name (`blotterbook` / `blotterbookStaging`) so existing data is used in place with no
+   *  copy/move; new workspaces get a suffixed name (`blotterbook:<id>`). */
+  dbName: string;
+  /** Epoch ms of creation. */
+  createdAt: number;
+}
+
 export interface StoreLike {
   available(): boolean;
   init(): Promise<boolean>;
+  /* ---- F59 named local workspaces (per-workspace IndexedDB + a Store.local registry) ---- */
+  /** The active workspace entry — the DB every read/write below targets. */
+  activeWorkspace(): Workspace;
+  /** Every registered workspace (seeds a single Default on first call). */
+  listWorkspaces(): Workspace[];
+  /** Create a new local workspace backed by a fresh (suffixed) IndexedDB; returns the entry. */
+  createWorkspace(name: string): Workspace;
+  /** Rename a workspace; returns the updated entry, or undefined if the id/name was rejected. */
+  renameWorkspace(id: string, name: string): Workspace | undefined;
+  /** Delete a workspace: drop its whole IndexedDB (deleteDatabase) AND remove the registry entry.
+   *  Refuses to delete the last remaining workspace; deleting the active one switches to another.
+   *  Returns the now-active workspace. */
+  deleteWorkspace(id: string): Promise<Workspace>;
+  /** Switch the active workspace: persist the choice and reset the cached connection so the next
+   *  store call opens the newly-active DB. Returns the now-active entry. */
+  setActiveWorkspace(id: string): Promise<Workspace>;
   tradeId(t: Trade): string;
   validShot(s: unknown): boolean;
   addTrades(trades: Trade[]): Promise<{ added: number; duplicate: number; total: number }>;

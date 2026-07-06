@@ -11,7 +11,12 @@
    store.js (A29) so they can never drift from the real backend. Backup restore (importAll) is a
    no-op in demo (restore is disabled), avoiding any duplication of store.js's sanitization. */
 import { tradeId, validShot, cleanTags, setField, LOCAL_BACKUP_RE, sha256Hex, suppressedByTombstone } from './store.ts';
-import type { Annotation, Trade, StoredJournal, StoredTradeMeta, StoreLike, CsvFileRec, Tombstone } from './types.ts';
+import type { Annotation, Trade, StoredJournal, StoredTradeMeta, StoreLike, CsvFileRec, Tombstone, Workspace } from './types.ts';
+
+// F59: demo is a SINGLE in-memory workspace and never persists — the workspace dimension is inert.
+// One synthetic entry (no real IndexedDB name), and every workspace mutation is a safe no-op, so
+// nothing ever reaches IndexedDB/localStorage (the "demo never persists" invariant holds by construction).
+const DEMO_WORKSPACE: Workspace = { id: 'demo', name: 'Demo', dbName: 'demo', createdAt: 0 };
 
 export function createDemoStore(): StoreLike {
   const trades = new Map<string, Trade>(); // id -> {id, ...trade}
@@ -34,6 +39,26 @@ export function createDemoStore(): StoreLike {
     },
     tradeId,
     validShot,
+
+    /* ---- F59 workspaces: demo is one in-memory workspace; every mutation is a non-persisting no-op ---- */
+    activeWorkspace() {
+      return DEMO_WORKSPACE;
+    },
+    listWorkspaces() {
+      return [DEMO_WORKSPACE];
+    },
+    createWorkspace() {
+      return DEMO_WORKSPACE; // no-op: demo can't add a workspace (nothing persists)
+    },
+    renameWorkspace() {
+      return DEMO_WORKSPACE; // no-op
+    },
+    async deleteWorkspace() {
+      return DEMO_WORKSPACE; // no-op: the single demo workspace is never removed
+    },
+    async setActiveWorkspace() {
+      return DEMO_WORKSPACE; // no-op: there is only one demo workspace
+    },
 
     async addTrades(list) {
       let added = 0,

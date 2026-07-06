@@ -47,6 +47,12 @@ for (const m of [
   'tradeId',
   'validShot',
   'getTombstones',
+  'activeWorkspace',
+  'listWorkspaces',
+  'createWorkspace',
+  'renameWorkspace',
+  'deleteWorkspace',
+  'setActiveWorkspace',
 ]) {
   ok('implements ' + m, typeof s[m] === 'function');
 }
@@ -299,6 +305,23 @@ ok('local.get fallback', s.local.get('missing', 'fb') === 'fb');
   ok('F58: purge clears tombstones', (await sf.getTombstones()).length === 0);
   const re = await sf.addTrades([t('2026-05-06 10:00:00', 3)]);
   ok('F58: purge clears suppression (a fresh re-import adds again)', re.added === 1 && (await sf.tradeCount()) === 1);
+}
+
+// ── F59: demo is a SINGLE in-memory workspace; the dimension is inert (never persists) ──
+{
+  const sw = createDemoStore();
+  const one = sw.listWorkspaces();
+  ok('F59: demo lists exactly one synthetic workspace', Array.isArray(one) && one.length === 1);
+  ok('F59: demo active workspace is that entry', sw.activeWorkspace().id === one[0].id);
+  // create/rename/delete/setActive are safe no-ops — the roster stays a single workspace.
+  sw.createWorkspace('Second');
+  ok('F59: demo createWorkspace is a no-op (still one workspace)', sw.listWorkspaces().length === 1);
+  sw.renameWorkspace(one[0].id, 'Renamed');
+  ok('F59: demo renameWorkspace does not persist a change', sw.listWorkspaces()[0].name === one[0].name);
+  const afterSet = await sw.setActiveWorkspace('nope');
+  ok('F59: demo setActiveWorkspace stays on the one workspace', afterSet.id === one[0].id && sw.activeWorkspace().id === one[0].id);
+  const afterDel = await sw.deleteWorkspace(one[0].id);
+  ok('F59: demo deleteWorkspace is a no-op (workspace survives)', afterDel.id === one[0].id && sw.listWorkspaces().length === 1);
 }
 
 // purge clears everything

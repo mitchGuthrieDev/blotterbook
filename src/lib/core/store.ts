@@ -1,7 +1,7 @@
 'use strict';
 import { Adapters } from './adapters.ts';
 import { checkCsvText } from './intake.ts';
-import type { Trade, Annotation, StoredJournal, StoredTradeMeta, StoreLike, CsvFileRec, Tombstone } from './types.ts';
+import type { Trade, Annotation, StoredJournal, StoredTradeMeta, StoreLike, CsvFileRec, Tombstone, Workspace } from './types.ts';
 /* ============================================================
    Local persistence — IndexedDB
 
@@ -29,8 +29,20 @@ import type { Trade, Annotation, StoredJournal, StoredTradeMeta, StoreLike, CsvF
    See functions/README.md for the storage-tier plan.
    ============================================================ */
 // The staging sandbox uses an isolated database so it never touches real data.
-const DB_NAME =
-  typeof document !== 'undefined' && document.body && document.body.dataset.mode === 'staging' ? 'blotterbookStaging' : 'blotterbook';
+const IS_STAGING = typeof document !== 'undefined' && !!document.body && document.body.dataset.mode === 'staging';
+// F59 named local workspaces: ONE IndexedDB database per workspace. The CONCRETE db name is resolved
+// from the ACTIVE workspace at connection time (see open()), not a single const. The **Default**
+// workspace keeps the LEGACY name (blotterbook / blotterbookStaging) so every existing user's data is
+// used IN PLACE — no copy, no move — while new workspaces get a suffixed name (blotterbook:<wsid>).
+// Staging stays isolated: its legacy name, db prefix AND registry keys are all namespaced.
+const LEGACY_DB_NAME = IS_STAGING ? 'blotterbookStaging' : 'blotterbook';
+const WS_DB_PREFIX = IS_STAGING ? 'blotterbookStaging:' : 'blotterbook:';
+// The workspace registry + active-workspace pointer live in Store.local (sync localStorage) so boot
+// resolves the DB name BEFORE first render. Staging-namespaced so the two surfaces never collide.
+const WS_REGISTRY_KEY = IS_STAGING ? 'bb:staging:workspaces' : 'bb:workspaces';
+const WS_ACTIVE_KEY = IS_STAGING ? 'bb:staging:activeWorkspace' : 'bb:activeWorkspace';
+// The Default workspace's stable id (the legacy single-DB world = the one-workspace case of the model).
+const DEFAULT_WS_ID = 'default';
 const DB_VERSION = 4; // v4 (F58): + tombstones store (delete-log); v3 (F37): + files / filetext
 const TRADES = 'trades';
 const JOURNAL = 'journal';
@@ -67,12 +79,76 @@ export const cleanTags = (a: unknown): string[] => [...new Set((Array.isArray(a)
 // couldn't have come from a real store (A154).
 const TRADE_ID_RE = /^[0-9a-f]{8}$/;
 
-let dbp: Promise<IDBDatabase> | null = null; // cached open-promise
+/* ---- Store.local seam (sync localStorage; JSON-encoded, never throws) — module-level so the F59
+   workspace registry can resolve the active DB before first paint, and Store.local delegates here. ---- */
+function lsGet<T>(key: string, fallback: T): T {
+  try {
+    const v = localStorage.getItem(key);
+    return v == null ? fallback : (JSON.parse(v) as T);
+  } catch {
+    return fallback;
+  }
+}
+function lsSet(key: string, val: unknown): boolean {
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+    return true;
+  } catch {
+    return false;
+  }
+}
+function lsRemove(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+/* ---- F59 workspace registry (in Store.local) ----
+   Seed-on-first-boot migration: if no registry exists yet, the existing single DB becomes a single
+   "Default" workspace whose dbName is the LEGACY name — so today's data is used in place with ZERO
+   movement. Idempotent: once the registry exists this early-returns. */
+function ensureWorkspaces(): Workspace[] {
+  const reg = lsGet<Workspace[]>(WS_REGISTRY_KEY, []);
+  if (Array.isArray(reg) && reg.length) return reg;
+  const def: Workspace = { id: DEFAULT_WS_ID, name: 'Default', dbName: LEGACY_DB_NAME, createdAt: Date.now() };
+  lsSet(WS_REGISTRY_KEY, [def]);
+  lsSet(WS_ACTIVE_KEY, def.id);
+  return [def];
+}
+/** The active workspace entry — repairs a dangling active pointer (points at a removed id) to the first. */
+function activeWorkspaceEntry(): Workspace {
+  const reg = ensureWorkspaces();
+  const activeId = lsGet<string>(WS_ACTIVE_KEY, '');
+  const found = reg.find(w => w.id === activeId);
+  if (found) return found;
+  lsSet(WS_ACTIVE_KEY, reg[0].id);
+  return reg[0];
+}
+/** Best-effort deletion of a per-workspace IndexedDB — a blocked/errored delete resolves rather than
+ *  wedging the registry op (the registry entry is removed regardless; the DB is reclaimed later). */
+function deleteDB(name: string): Promise<void> {
+  return new Promise<void>(resolve => {
+    try {
+      const req = indexedDB.deleteDatabase(name);
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+      req.onblocked = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+let dbp: Promise<IDBDatabase> | null = null; // cached open-promise (for the ACTIVE workspace's DB)
 
 function open() {
   if (dbp) return dbp;
+  // F59: the concrete DB name comes from the active workspace (Default → legacy name; others suffixed).
+  const dbName = activeWorkspaceEntry().dbName;
   dbp = new Promise<IDBDatabase>((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    const req = indexedDB.open(dbName, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(TRADES)) db.createObjectStore(TRADES, { keyPath: 'id' });
@@ -227,6 +303,7 @@ export const Store: StoreLike = {
   },
 
   async init() {
+    ensureWorkspaces(); // F59: seed the registry (Default → legacy DB) so open() resolves the active DB
     await open();
     await migrateTags();
     return true;
@@ -797,31 +874,77 @@ export const Store: StoreLike = {
   // module-level validShot (also reused by DemoStore) so the rule has one definition.
   validShot,
 
+  /* ---- F59 named local workspaces: per-workspace IndexedDB + a Store.local registry ----
+     A "workspace" is a named local dataset backed by its own IndexedDB database. The registry +
+     active-workspace pointer live in Store.local (sync, pre-paint). The Default workspace maps to the
+     LEGACY db name so existing data is used in place; new workspaces get a fresh suffixed DB. Every
+     query/mutation goes through Store.local; the only direct IndexedDB touches are deleteDatabase (on
+     delete) and the normal open() (on switch). Switching a workspace = open a different DB. */
+  activeWorkspace() {
+    return activeWorkspaceEntry();
+  },
+  listWorkspaces() {
+    return ensureWorkspaces();
+  },
+  createWorkspace(name) {
+    const reg = ensureWorkspaces();
+    const id = crypto.randomUUID();
+    const clean = (name || '').trim().slice(0, 60) || 'Workspace';
+    const ws: Workspace = { id, name: clean, dbName: WS_DB_PREFIX + id, createdAt: Date.now() };
+    lsSet(WS_REGISTRY_KEY, [...reg, ws]);
+    return ws;
+  },
+  renameWorkspace(id, name) {
+    const reg = ensureWorkspaces();
+    const clean = (name || '').trim().slice(0, 60);
+    let updated: Workspace | undefined;
+    const next = reg.map(w => (w.id === id && clean ? (updated = { ...w, name: clean }) : w));
+    if (updated) lsSet(WS_REGISTRY_KEY, next);
+    return updated;
+  },
+  async deleteWorkspace(id) {
+    const reg = ensureWorkspaces();
+    // Never leave the user with zero workspaces — refuse to delete the last one.
+    if (reg.length <= 1) throw new Error('Cannot delete the last workspace.');
+    const target = reg.find(w => w.id === id);
+    if (!target) return activeWorkspaceEntry();
+    lsSet(
+      WS_REGISTRY_KEY,
+      reg.filter(w => w.id !== id)
+    );
+    // Deleting the ACTIVE workspace: switch to another FIRST (closes+repoints the connection) so the
+    // deleteDatabase below isn't blocked by our own open handle.
+    if (lsGet<string>(WS_ACTIVE_KEY, '') === id) await this.setActiveWorkspace(activeWorkspaceEntry().id);
+    await deleteDB(target.dbName); // drop the whole per-workspace IndexedDB (no-op if never opened)
+    return activeWorkspaceEntry();
+  },
+  async setActiveWorkspace(id) {
+    const reg = ensureWorkspaces();
+    const target = reg.find(w => w.id === id);
+    if (!target) return activeWorkspaceEntry(); // unknown id → no-op
+    lsSet(WS_ACTIVE_KEY, id);
+    // Reset the cached open-promise + close the current connection so the NEXT store call opens the
+    // newly-active DB. migrateTags re-runs on the next init() (idempotent per-DB via its meta flag).
+    const prev = dbp;
+    dbp = null;
+    if (prev) prev.then(db => db.close()).catch(() => {});
+    return target;
+  },
+
   // A13: the ONE synchronous persistence seam for small UI state (panel layout, workspace
   // templates) that must apply before paint, so it can't use the async IndexedDB path. Keeping
   // it here means no app/*.js touches localStorage directly — when the cloud tier lands, this is
-  // the single place that mirrors layout state up. JSON-encodes values; never throws.
+  // the single place that mirrors layout state up. JSON-encodes values; never throws. F59: delegates
+  // to the module-level ls* helpers the workspace registry also uses.
   local: {
     get(key, fallback) {
-      try {
-        const v = localStorage.getItem(key);
-        return v == null ? fallback : JSON.parse(v);
-      } catch (_) {
-        return fallback;
-      }
+      return lsGet(key, fallback);
     },
     set(key, val) {
-      try {
-        localStorage.setItem(key, JSON.stringify(val));
-        return true;
-      } catch (_) {
-        return false;
-      }
+      return lsSet(key, val);
     },
     remove(key) {
-      try {
-        localStorage.removeItem(key);
-      } catch (_) {}
+      lsRemove(key);
     },
   },
 };
