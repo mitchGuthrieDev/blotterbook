@@ -1,10 +1,11 @@
 <script lang="ts" module>
   export type DashStat = { label: string; value: string; badge?: string; up?: boolean; note: string; key?: string };
   export type DayCell = { pnl: number; tr: number };
-  // The default module layout (all four, default order) — exported so the app's workspace-template
-  // save captures THIS when the user hasn't customized yet (A148: saving on the default layout used
-  // to capture [] and applying it blanked the dashboard).
-  export const DEFAULT_MODULE_KEYS = ['perf', 'cal', 'cost', 'adv'];
+  // The default module layout (default order) — exported so the app's workspace-template save
+  // captures THIS when the user hasn't customized yet (A148: saving on the default layout used
+  // to capture [] and applying it blanked the dashboard). A243: Activity Terminal joined the
+  // reorderable module grid (as 'term', paired with Advanced Stats) so it's part of the default set.
+  export const DEFAULT_MODULE_KEYS = ['perf', 'cal', 'cost', 'adv', 'term'];
   // Live filter model for the dashboard Filters popover — current values + option lists + mutators
   // (bound to the app's filter state).
   export type FilterPatch = Partial<{
@@ -195,9 +196,13 @@
     { key: 'cal', label: 'Trading Calendar' },
     { key: 'cost', label: 'Break-even & Cost' },
     { key: 'adv', label: 'Advanced Statistics' },
+    { key: 'term', label: 'Activity Terminal' }, // A243 — pairs with Advanced Statistics on lg+
     { key: 'compare', label: 'Commission Compare' }, // A203 — picker-addable, not in the default layout
     { key: 'blotter', label: 'Recent Trades' }, // F51 — compact blotter; picker-addable, not in the default layout
   ];
+  // A228/A243: modules in this set render lg:col-span-1 (half-width, paired) instead of the default
+  // full-width lg:col-span-2 — cal+cost was the original pairing, adv+term (A243) is the second.
+  const PAIRED_MODULE_KEYS = ['cal', 'cost', 'adv', 'term'];
   const validKeys = (ks?: string[]) => (ks ?? DEFAULT_MODULE_KEYS).filter(k => MODULES.some(m => m.key === k));
   // svelte-ignore state_referenced_locally — initial layout only; the app re-seeds via the prop below.
   let modOrder = $state<string[]>(validKeys(modules));
@@ -1208,20 +1213,23 @@
 
   <!-- Modules — reorderable / hideable / re-addable (persisted to Store.local). A146: reorders
        FLIP into place and add/remove fades (durations collapse under reduced motion).
-       A228: at lg+ the stack becomes a 2-track grid — Trading Calendar and Break-Even & Cost are
-       half-width (side by side when adjacent in the order, as in the default layout); every other
-       module spans both tracks. Narrow viewports keep the single-column stack. -->
+       A228: at lg+ the stack becomes a 2-track grid — paired modules are half-width (side by side
+       when adjacent in the order, as in the default layout); every other module spans both tracks.
+       A243 extended the PAIRED set to also half-width Advanced Statistics + Activity Terminal (same
+       treatment as the original cal/cost pairing). A lone paired module (its partner hidden/moved
+       elsewhere) just takes a half-track row — acceptable, matches the original cal/cost behavior.
+       Narrow viewports keep the single-column stack. -->
   <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
     {#each modOrder as key (key)}
       <div
-        class={['min-w-0', key !== 'cal' && key !== 'cost' && 'lg:col-span-2']}
+        class={['min-w-0', !PAIRED_MODULE_KEYS.includes(key) && 'lg:col-span-2']}
         animate:flip={{ duration: dur(180) }}
         transition:fade={{ duration: dur(140) }}
       >
         <Card.Root id="dashmod-{key}" class="h-full">
           {@render moduleHeader(key)}
           <Card.Content>
-            {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'compare'}{@render compareBody()}{:else if key === 'blotter'}{@render blotterBody()}{/if}
+            {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'term'}<ActivityTerminal />{:else if key === 'compare'}{@render compareBody()}{:else if key === 'blotter'}{@render blotterBody()}{/if}
           </Card.Content>
         </Card.Root>
       </div>
@@ -1280,21 +1288,14 @@
     </Dialog.Content>
   </Dialog.Root>
 
-  <!-- Chrome parity (R12/F27): the boot/activity log + the metric & cost definitions/caveats. -->
-  <div class="grid gap-4 lg:grid-cols-2">
-    <Card.Root>
-      <Card.Header class="pb-2"
-        ><Card.Title class="text-xs uppercase tracking-wider text-muted-foreground">Activity</Card.Title></Card.Header
-      >
-      <Card.Content><ActivityTerminal /></Card.Content>
-    </Card.Root>
-    <Card.Root>
-      <Card.Header class="pb-2"
-        ><Card.Title class="text-xs uppercase tracking-wider text-muted-foreground">Definitions</Card.Title></Card.Header
-      >
-      <Card.Content><Definitions /></Card.Content>
-    </Card.Root>
-  </div>
+  <!-- Chrome parity (R12/F27): the metric & cost definitions/caveats. (The boot/activity log moved
+       into the reorderable module grid above as 'term' — A243 — so it can pair with Advanced Stats.) -->
+  <Card.Root>
+    <Card.Header class="pb-2"
+      ><Card.Title class="text-xs uppercase tracking-wider text-muted-foreground">Definitions</Card.Title></Card.Header
+    >
+    <Card.Content><Definitions /></Card.Content>
+  </Card.Root>
 </div>
 
 <!-- KPI card drill-in dialog -->
