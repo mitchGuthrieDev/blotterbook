@@ -142,12 +142,14 @@ test('demo: Blotter surfaces the F40 contract-expiry column (opt-in) + detail ro
   // F40: the Contract column is OFF by default — enable it via the Columns picker.
   await page.getByRole('button', { name: 'Columns' }).click();
   const popover = page.locator('[data-slot="popover-content"]');
-  await popover.getByText('Contract', { exact: true }).click();
+  // The shadcn Checkbox is a bits-ui button — a wrapping <label> doesn't forward clicks to it, so
+  // click the checkbox control itself.
+  await popover.locator('label', { hasText: 'Contract' }).locator('[data-slot="checkbox"]').click();
   await page.keyboard.press('Escape'); // close the popover
 
   // The column header renders, and the seeded symbols (MESM2025 / MNQM2025 / MCLN2025) derive their
   // compact codes (M25 / N25) — proof the helper runs end-to-end on real data, not just in fixtures.
-  await expect(page.getByRole('columnheader', { name: 'Contract' })).toBeVisible();
+  await expect(page.locator('thead').getByText('Contract', { exact: true })).toBeVisible();
   await expect(
     page
       .locator('table tbody')
