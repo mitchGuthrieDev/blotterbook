@@ -6,7 +6,25 @@
   // Workspaces stub (Phase 4). Demo surface: every control disabled + a note (demo never mutates);
   // the session probe is skipped so demo issues no account traffic at all.
   import { onMount } from 'svelte';
-  import { HeartHandshake, KeyRound, LogOut, Plus, UserRound, Boxes, MailCheck, ShieldAlert, LifeBuoy, X } from '@lucide/svelte';
+  import {
+    HeartHandshake,
+    KeyRound,
+    LogOut,
+    Plus,
+    UserRound,
+    Boxes,
+    MailCheck,
+    ShieldAlert,
+    LifeBuoy,
+    X,
+    Cloud,
+    ShieldCheck,
+    LockKeyhole,
+    LockKeyholeOpen,
+    Download,
+    RefreshCw,
+    Fingerprint,
+  } from '@lucide/svelte';
   import * as Card from '$lib/components/ui/card';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
@@ -25,13 +43,72 @@
     emailVerifySend,
     recoverSend,
     completeRecovery,
+    registerPrfPasskey,
   } from '../lib/account.svelte.ts';
+  import { vault, refreshVault, lock, prfSupported, setPassphrase, regenerateRecoveryKey, addPasskeyMethod } from '../lib/vault.svelte.ts';
+  import { downloadBlob } from '../lib/files.ts';
+  import CloudSyncSetup from '../parts/CloudSyncSetup.svelte';
+  import UnlockModal from '../parts/UnlockModal.svelte';
 
   interface Props {
     /** demo surface — disables every control (demo never mutates) and skips the session probe. */
     isDemo?: boolean;
+    /** staging surface — gates the cloud-sync (E2E key) UI. Prod/demo never render it (F61b). */
+    isStaging?: boolean;
   }
-  let { isDemo = false }: Props = $props();
+  let { isDemo = false, isStaging = false }: Props = $props();
+
+  // ── F61b: cloud-sync key setup / unlock (staging-gated, logged-in only) ──────────────────────
+  const cloudSyncOn = $derived(isStaging && !isDemo && !!account.user);
+  let setupOpen = $state(false);
+  let unlockOpen = $state(false);
+  let prfOk = $state(false);
+  let addPassphrase = $state('');
+  let regenKey = $state(''); // a freshly regenerated recovery key, shown once
+  let regenCopied = $state(false);
+
+  // Lock the in-memory key session whenever the account session ends (logout / expiry). No key is
+  // ever persisted, so this just clears the in-memory IK; a reload has the same effect for free.
+  $effect(() => {
+    if (!account.user) lock();
+  });
+
+  async function onSignOut() {
+    lock();
+    await logout();
+  }
+
+  async function onSetPassphrase() {
+    if (await setPassphrase(addPassphrase)) addPassphrase = '';
+  }
+
+  async function onRegenerate() {
+    const key = await regenerateRecoveryKey();
+    if (key) regenKey = key;
+  }
+
+  function downloadRegen() {
+    const text = [
+      'Blotterbook — cloud-sync recovery key (regenerated)',
+      `Generated ${new Date().toISOString()}`,
+      '',
+      'KEEP THIS SAFE AND PRIVATE. Your previous recovery key no longer works.',
+      '',
+      regenKey,
+      '',
+    ].join('\n');
+    downloadBlob('blotterbook-recovery-key.txt', new Blob([text], { type: 'text/plain' }));
+  }
+
+  async function copyRegen() {
+    try {
+      await navigator.clipboard.writeText(regenKey);
+      regenCopied = true;
+      setTimeout(() => (regenCopied = false), 1500);
+    } catch (_) {
+      /* clipboard blocked — the download path still works */
+    }
+  }
 
   let email = $state('');
   const disabled = $derived(isDemo || account.busy || !account.available);
@@ -84,6 +161,14 @@
     }
     if (recoverToken) void completeRecovery(recoverToken);
     else void refreshSession();
+  });
+
+  // Probe cloud-sync key state + PRF support once the account session resolves (staging only).
+  $effect(() => {
+    if (cloudSyncOn && !vault.loaded && !vault.busy) {
+      void refreshVault();
+      void prfSupported().then(ok => (prfOk = ok));
+    }
   });
 </script>
 
@@ -192,7 +277,7 @@
             <p class="truncate font-mono text-sm text-foreground">{account.user.email}</p>
             <p class="text-xs text-muted-foreground">Member since {fmtDate(account.user.createdAt)}</p>
           </div>
-          <Button variant="outline" size="sm" {disabled} onclick={() => void logout()}>
+          <Button variant="outline" size="sm" {disabled} onclick={() => void onSignOut()}>
             <LogOut class="size-4" />
             Sign out
           </Button>
@@ -280,6 +365,107 @@
         </Button>
       </Card.Content>
     </Card.Root>
+
+    <!-- ── F61b: cloud-sync keys (staging-gated; prod/demo never render this) ─────────────────── -->
+    {#if cloudSyncOn}
+      <Card.Root data-testid="cloud-sync-card">
+        <Card.Header>
+          <Card.Title class="flex items-center gap-2"><Cloud class="size-4" /> Cloud sync (staging)</Card.Title>
+        </Card.Header>
+        <Card.Content class="flex flex-col gap-3">
+          <p class="text-sm text-muted-foreground">
+            End-to-end encrypted, multi-device sync. Your trades are encrypted in this browser with a key we never see — the server only
+            stores ciphertext it can't read.
+          </p>
+
+          {#if !vault.loaded}
+            <Skeleton class="h-9 w-48" />
+          {:else if !vault.setUp}
+            <!-- not set up yet -->
+            <Button data-testid="cloud-setup-open" onclick={() => (setupOpen = true)} class="self-start">
+              <ShieldCheck class="size-4" />
+              Set up cloud sync
+            </Button>
+          {:else if !vault.unlocked}
+            <!-- set up, locked for this session -->
+            <div class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-chart-4/40 bg-chart-4/10 px-3 py-2">
+              <p class="flex items-center gap-2 text-xs text-chart-4">
+                <LockKeyhole class="size-4" /> Locked — unlock once to sync this session.
+              </p>
+              <Button size="sm" data-testid="cloud-unlock-open" onclick={() => (unlockOpen = true)}>
+                <LockKeyholeOpen class="size-4" /> Unlock
+              </Button>
+            </div>
+          {:else}
+            <!-- unlocked in memory for this session -->
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <Badge variant="outline" class="border-chart-2/40 text-chart-2" data-testid="cloud-unlocked">
+                <LockKeyholeOpen class="mr-1 size-3.5" /> Unlocked this session
+              </Badge>
+              <Button variant="outline" size="sm" onclick={() => lock()}>
+                <LockKeyhole class="size-4" /> Lock
+              </Button>
+            </div>
+            <Separator />
+            <!-- add-a-method flows: each re-wraps the SAME in-memory IK under a new KEK -->
+            <div class="flex flex-col gap-3">
+              <p class="text-xs font-medium text-muted-foreground">Unlock methods</p>
+
+              <div class="flex flex-col gap-2">
+                <Label for="add-passphrase" class="flex items-center gap-2"><KeyRound class="size-4" /> Set or change passphrase</Label>
+                <div class="flex gap-2">
+                  <Input
+                    id="add-passphrase"
+                    type="password"
+                    autocomplete="new-password"
+                    placeholder="At least 8 characters"
+                    bind:value={addPassphrase}
+                    disabled={vault.busy}
+                  />
+                  <Button size="sm" disabled={vault.busy || addPassphrase.trim().length < 8} onclick={onSetPassphrase}>Save</Button>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="flex items-center gap-2 text-sm text-foreground"><Fingerprint class="size-4" /> Add a passkey</p>
+                {#if prfOk}
+                  <Button variant="secondary" size="sm" disabled={vault.busy} onclick={() => void addPasskeyMethod(registerPrfPasskey)}>
+                    <Plus class="size-4" /> Add PRF passkey
+                  </Button>
+                {:else}
+                  <span class="text-xs text-muted-foreground">Passkey unlock needs a PRF-capable browser — use a passphrase here.</span>
+                {/if}
+              </div>
+
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="flex items-center gap-2 text-sm text-foreground"><RefreshCw class="size-4" /> Recovery key</p>
+                <Button variant="outline" size="sm" disabled={vault.busy} onclick={onRegenerate}>Regenerate</Button>
+              </div>
+
+              {#if regenKey}
+                <div class="flex flex-col gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3">
+                  <p class="text-xs text-destructive">New recovery key — save it now. Your previous key no longer works.</p>
+                  <code class="block break-all rounded bg-secondary px-2 py-1 font-mono text-sm text-foreground select-all">{regenKey}</code
+                  >
+                  <div class="flex gap-2">
+                    <Button variant="secondary" size="sm" onclick={downloadRegen}><Download class="size-4" /> Download</Button>
+                    <Button variant="outline" size="sm" onclick={copyRegen}>{regenCopied ? 'Copied' : 'Copy'}</Button>
+                    <Button variant="ghost" size="sm" onclick={() => (regenKey = '')}>Done</Button>
+                  </div>
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          {#if vault.error && !setupOpen && !unlockOpen}
+            <p class="text-xs text-destructive" role="alert">{vault.error}</p>
+          {/if}
+        </Card.Content>
+      </Card.Root>
+
+      <CloudSyncSetup bind:open={setupOpen} ondone={() => void refreshVault()} />
+      <UnlockModal bind:open={unlockOpen} />
+    {/if}
 
     <Card.Root>
       <Card.Header>

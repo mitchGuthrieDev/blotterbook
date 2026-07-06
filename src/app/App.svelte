@@ -1261,7 +1261,7 @@
         {#await SCREEN_LOADERS.account()}
           {@render screenSkeleton()}
         {:then Account}
-          <Account.default {isDemo} />
+          <Account.default {isDemo} {isStaging} />
         {/await}
       {:else}
         <div class="grid min-h-[60vh] place-items-center">
