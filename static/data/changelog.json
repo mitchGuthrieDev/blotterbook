@@ -4,6 +4,21 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.60.0",
+      "date": "2026-07-06",
+      "title": "Three new dashboard modules, a mobile-first pass, and release notes by email",
+      "summary": "The dashboard gains Today, Drawdown Status, and Streak Monitor modules, the whole app gets friendlier on phones — a card-style Blotter, swipeable Analytics stats, bigger touch targets — and you can now get Blotterlog release notes by email.",
+      "highlights": [
+        "Three new picker-addable dashboard modules: Today/Last Session, Drawdown Status (distance from your high-water mark), and Streak Monitor (current + record runs).",
+        "Blotter on mobile is now a clean card list — selection, bulk actions, and the detail drawer all work at phone width.",
+        "Analytics: the top stats swipe as cards on mobile and click through to plain-language explainers; the drawdown chart is now interactive with a hover/tap readout and a highlighted max-drawdown span.",
+        "Fills-based imports now remember your exact entry and exit prices, and futures symbols show their contract month (like M25) in an optional Blotter column.",
+        "Backups now include your dashboard layouts, tabs, and workspaces, protected by an integrity checksum — and old backups still restore fine.",
+        "Sign up on the Blotterlog page to get release notes by email — double opt-in, one-click unsubscribe, and your address is deleted the moment you leave.",
+        "A quieter update: buttons and controls across the app are easier to hit on touch screens, the status dot explains itself when tapped, and the app paints its first frame faster."
+      ]
+    },
+    {
       "version": "0.59.1",
       "date": "2026-07-06",
       "title": "Donations are officially live",
