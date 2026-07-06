@@ -129,3 +129,95 @@ CREATE TABLE IF NOT EXISTS changelog_sends (
   sent_at INTEGER NOT NULL,
   recipient_count INTEGER                     -- confirmed recipients at send time (0 is still recorded)
 );
+
+-- Subscriptions (Synced Workspaces Step 3 — F60). ONE current subscription per user (PK = user_id),
+-- kept in sync by the F54 webhook's subscription-lifecycle handlers (customer.subscription.created/
+-- updated/deleted + invoice.payment_failed). /api/me + the /api/sync/* mutating routes read this (via
+-- grantsCloud) to grant the `cloud` storage tier per the LOCKED lapse policy (docs/synced-workspaces.md
+-- — period-end + grace): active/trialing, OR past_due within a dunning grace window (measured from
+-- `past_due_since` — the FIRST failure of the current lapse, A266), OR still inside the paid period
+-- after a cancel (now < current_period_end). S25: billing metadata only — never any trade data.
+-- ⚠ EXISTING DEPLOYMENTS: `past_due_since` (A266) was added after first release. Because SQLite cannot
+--   add a column via CREATE TABLE IF NOT EXISTS, a live DB needs a one-time, run-once migration:
+--     npx wrangler d1 execute blotterbook-accounts --remote --command "ALTER TABLE subscriptions ADD COLUMN past_due_since INTEGER"
+--   (grantsCloud falls back to `updated` for rows written before the column existed, so the app is
+--   safe to deploy before the migration runs; run it once, then re-apply this file for fresh installs.)
+CREATE TABLE IF NOT EXISTS subscriptions (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, -- the account's current subscription
+  stripe_subscription_id TEXT,               -- Stripe subscription id (resolves lifecycle events)
+  stripe_customer_id TEXT,                    -- Stripe customer id (resolves events lacking a ref)
+  status TEXT,                               -- Stripe status: active|trialing|past_due|canceled|unpaid|…
+  current_period_end INTEGER,                -- ms epoch — the paid period end (Stripe sends SECONDS; the webhook converts)
+  updated INTEGER NOT NULL,                   -- ms epoch of the last webhook update
+  past_due_since INTEGER                      -- ms epoch of the FIRST failure of the current past_due run (grace base; NULL when not past_due — A266)
+);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe ON subscriptions (stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions (stripe_customer_id);
+
+-- Processed-webhook-event ledger (F60) — replay-safe dedupe for the subscription-lifecycle events,
+-- keyed by the Stripe EVENT id (the donation path dedupes via the donations PK the same way). A
+-- retried/duplicated delivery collides here and is a no-op.
+-- TODO (A265 — future TTL/compaction job, NOT built here): this ledger grows unbounded. A periodic
+-- cleanup can drop rows older than Stripe's replay/retry window (a few days) since dedupe only needs to
+-- cover that span; the same job should compact `sync_records` tombstones (deleted = 1 rows) once every
+-- device has reconciled past their seq. Neither is required for correctness — only to bound growth.
+CREATE TABLE IF NOT EXISTS webhook_events (
+  id TEXT PRIMARY KEY,                        -- Stripe event id
+  type TEXT,                                  -- the event type processed
+  created_at INTEGER NOT NULL                 -- ms epoch (when the webhook processed it)
+);
+
+-- ── Synced workspaces — the DUMB encrypted-blob transport (F62; docs/synced-workspaces.md) ─────────
+-- Guardrail S25: these tables + the SYNC_BUCKET R2 objects hold ONLY ciphertext, blinded ids, wrapped
+-- (un-unwrappable) key blobs, and timestamps/sizes/seq cursors. The server holds no key and never
+-- decrypts — it can NEVER read a symbol, P&L, note, tag, screenshot, or workspace name. Every
+-- /api/sync/* route is session-gated, Origin-checked on mutations, and fails closed (503) without
+-- ACCOUNTS_DB / SYNC_BUCKET. Every workspace access is authorized to its owner_user_id.
+
+-- The workspace's server identity + ownership. workspace_id is the client's F59 UUID; the NAME lives
+-- ENCRYPTED as a sync_records row (type 'workspace-name'), never in plaintext here.
+CREATE TABLE IF NOT EXISTS sync_workspaces (
+  workspace_id TEXT PRIMARY KEY,             -- client-generated F59 UUID
+  owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL                 -- ms epoch
+);
+CREATE INDEX IF NOT EXISTS idx_sync_workspaces_owner ON sync_workspaces (owner_user_id);
+
+-- The per-workspace DEK wrapped (AES-KW) under the account IK (F61a WrappedDek JSON). Opaque ciphertext
+-- of a key the server cannot unwrap — the client unwraps it in memory to en/decrypt that workspace's records.
+CREATE TABLE IF NOT EXISTS sync_workspace_keys (
+  workspace_id TEXT PRIMARY KEY REFERENCES sync_workspaces(workspace_id) ON DELETE CASCADE,
+  owner_user_id TEXT NOT NULL,               -- denormalized for a fast owner check
+  wrapped_dek TEXT NOT NULL,                 -- F61a WrappedDek JSON (AES-KW under the account IK)
+  updated INTEGER NOT NULL                    -- ms epoch of the last write
+);
+
+-- The account IDENTITY KEY (IK) wrapped once per UNLOCK METHOD (F61a WrappedIK JSON). method is
+-- 'prf' (the WebAuthn PRF passkey path) | 'passphrase' | 'recovery' (opaque to the server); key_id
+-- selects the credential/derivation. Opaque ciphertext of a key the server cannot unwrap.
+CREATE TABLE IF NOT EXISTS sync_wrapped_ik (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  method TEXT NOT NULL,                       -- prf | passphrase | recovery
+  key_id TEXT NOT NULL,                       -- which credential / derivation this blob is for
+  wrapped_ik TEXT NOT NULL,                   -- F61a WrappedIK JSON (AES-KW under the per-method KEK)
+  updated INTEGER NOT NULL,
+  PRIMARY KEY (user_id, method, key_id)
+);
+CREATE INDEX IF NOT EXISTS idx_sync_wrapped_ik_user ON sync_wrapped_ik (user_id);
+
+-- The change-index: one row per encrypted record (trade/journal/meta/…/workspace-name). blinded_id =
+-- HMAC(workspaceKey, tradeId) — NEVER the raw content hash (exposing it would let the store confirm a
+-- guessed trade). seq is a monotonic per-workspace cursor for incremental pull. The ciphertext blob
+-- itself lives in R2 (SYNC_BUCKET) at ciphertext_ref — large records (encrypted screenshots) never sit
+-- in a D1 row. deleted flags a tombstone (the delete half of LWW). Upsert is LWW by `updated`.
+CREATE TABLE IF NOT EXISTS sync_records (
+  workspace_id TEXT NOT NULL,                 -- REFERENCES sync_workspaces(workspace_id) — authorized per request
+  blinded_id TEXT NOT NULL,                   -- HMAC(workspaceKey, tradeId), never the raw hash (S25)
+  seq INTEGER NOT NULL,                       -- monotonic per-workspace sequence (pull cursor)
+  type TEXT NOT NULL,                         -- opaque record-kind label (never inspected)
+  ciphertext_ref TEXT NOT NULL,              -- R2 object key holding the AES-GCM EncryptedRecord blob
+  updated INTEGER NOT NULL,                   -- LWW clock (writing client's wall clock, ms)
+  deleted INTEGER NOT NULL DEFAULT 0,         -- 1 = tombstone
+  PRIMARY KEY (workspace_id, blinded_id)      -- idempotent upsert/dedup per record
+);
+CREATE INDEX IF NOT EXISTS idx_sync_records_seq ON sync_records (workspace_id, seq);

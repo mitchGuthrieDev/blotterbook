@@ -46,6 +46,13 @@ for (const m of [
   'purge',
   'tradeId',
   'validShot',
+  'getTombstones',
+  'activeWorkspace',
+  'listWorkspaces',
+  'createWorkspace',
+  'renameWorkspace',
+  'deleteWorkspace',
+  'setActiveWorkspace',
 ]) {
   ok('implements ' + m, typeof s[m] === 'function');
 }
@@ -202,6 +209,154 @@ ok('local.get fallback', s.local.get('missing', 'fb') === 'fb');
   // Demo restore stays a no-op (never persists) even for a v3 envelope.
   const imp3 = await s3.importAll(dump);
   ok('A236: demo importAll ignores a v3 backup (never persists)', imp3.added === 0);
+}
+
+// ── F58: delete tombstones + `updated` audit (suppress re-import resurrection) ──
+{
+  // (a) delete a trade → re-addTrades the same trade → it stays deleted (not resurrected).
+  const sf = createDemoStore();
+  await sf.addTrades([t('2026-05-01 10:00:00', 40)]);
+  const id = sf.tradeId(t('2026-05-01 10:00:00', 40));
+  await sf.deleteTrade(id);
+  ok(
+    'F58: deleteTrade records a trade tombstone',
+    (await sf.getTombstones()).some(tb => tb.id === id && tb.type === 'trade')
+  );
+  const re = await sf.addTrades([t('2026-05-01 10:00:00', 40)]); // re-import the identical trade
+  ok('F58: a deleted trade is NOT resurrected by re-import', re.added === 0 && (await sf.tradeCount()) === 0);
+}
+{
+  // (b) a tombstone is recorded on each delete path.
+  const sf = createDemoStore();
+  await sf.saveJournal('2026-05-02', { text: 'x' });
+  await sf.deleteJournal('2026-05-02');
+  ok(
+    'F58: deleteJournal tombstones the date',
+    (await sf.getTombstones()).some(tb => tb.id === '2026-05-02' && tb.type === 'journal')
+  );
+  await sf.saveTradeMeta('bbbb2222', { note: 'n' });
+  await sf.deleteTradeMeta('bbbb2222');
+  ok(
+    'F58: deleteTradeMeta tombstones the id',
+    (await sf.getTombstones()).some(tb => tb.id === 'bbbb2222' && tb.type === 'trademeta')
+  );
+  // updateTrade tombstones the OLD id and re-adds under the NEW id (an explicit re-add, not an import).
+  await sf.addTrades([t('2026-05-03 10:00:00', 12)]);
+  const oldId = sf.tradeId(t('2026-05-03 10:00:00', 12));
+  const upd = await sf.updateTrade(oldId, t('2026-05-03 10:00:00', 99), {});
+  ok(
+    'F58: updateTrade tombstones the OLD id',
+    (await sf.getTombstones()).some(tb => tb.id === oldId && tb.type === 'trade')
+  );
+  ok('F58: updateTrade re-adds under the new id', upd.id !== oldId && (await sf.tradeCount()) === 1);
+  // deleteFile tombstones each trade it removes, and that trade can't be re-imported afterward.
+  const sd = createDemoStore();
+  await sd.addTrades([{ ...t('2026-05-04 10:00:00', 5), fileIds: ['fA'] }]);
+  const tid = sd.tradeId(t('2026-05-04 10:00:00', 5));
+  const del = await sd.deleteFile('fA');
+  ok(
+    'F58: deleteFile tombstones the removed trade',
+    del.removedTrades === 1 && (await sd.getTombstones()).some(tb => tb.id === tid && tb.type === 'trade')
+  );
+  const reF = await sd.addTrades([{ ...t('2026-05-04 10:00:00', 5), fileIds: ['fB'] }]);
+  ok('F58: a trade removed via deleteFile is not resurrected by re-import', reF.added === 0 && (await sd.tradeCount()) === 0);
+}
+{
+  // (c) `updated` is present on every written record type (the record-level LWW clock).
+  const sf = createDemoStore();
+  await sf.addTrades([t('2026-05-05 10:00:00', 7)]);
+  ok('F58: written trade carries an updated clock', typeof (await sf.getAllTrades())[0].updated === 'number');
+  await sf.saveJournal('2026-05-05', { text: 'j' });
+  ok('F58: journal record carries updated', typeof (await sf.getAllJournal())[0].updated === 'number');
+  await sf.saveTradeMeta('cccc3333', { note: 'n' });
+  ok('F58: trademeta record carries updated', typeof (await sf.allTradeMeta())[0].updated === 'number');
+  await sf.addFile(
+    {
+      id: 'dddd4444',
+      name: 'f.csv',
+      platform: 'x',
+      platformLabel: 'X',
+      size: 1,
+      rows: 1,
+      tradeCount: 1,
+      overlap: 0,
+      from: '2026-05-05',
+      to: '2026-05-05',
+      imported: '2026-05-05T00:00:00Z',
+      included: true,
+    },
+    'raw'
+  );
+  ok('F58: file record carries updated', typeof (await sf.getFiles())[0].updated === 'number');
+  await sf.setMeta('k', { a: 1 });
+  ok('F58: meta record carries updated', typeof (await sf.getAllMeta())[0].updated === 'number');
+  ok(
+    'F58: `updated` does not enter tradeId (identity unchanged)',
+    sf.tradeId(t('2026-05-05 10:00:00', 7)) === (await sf.getAllTrades())[0].id
+  );
+}
+{
+  // (d) purge clears tombstones — a clean slate, so a later re-import is NOT suppressed.
+  const sf = createDemoStore();
+  await sf.addTrades([t('2026-05-06 10:00:00', 3)]);
+  await sf.deleteTrade(sf.tradeId(t('2026-05-06 10:00:00', 3)));
+  ok('F58: tombstone present before purge', (await sf.getTombstones()).length === 1);
+  await sf.purge();
+  ok('F58: purge clears tombstones', (await sf.getTombstones()).length === 0);
+  const re = await sf.addTrades([t('2026-05-06 10:00:00', 3)]);
+  ok('F58: purge clears suppression (a fresh re-import adds again)', re.added === 1 && (await sf.tradeCount()) === 1);
+}
+{
+  // A255: trade tombstone suppression is now LWW (was unconditional) — convergence-consistent with
+  // journal/trademeta/meta. A clockless or OLDER re-import stays suppressed; a record carrying a
+  // NEWER `updated` (e.g. a peer device's post-delete enrichment arriving via the sync merge)
+  // RESURRECTS the deleted trade.
+  const sf = createDemoStore();
+  await sf.addTrades([t('2026-06-01 10:00:00', 55)]);
+  const id = sf.tradeId(t('2026-06-01 10:00:00', 55));
+  await sf.deleteTrade(id);
+  const tomb = (await sf.getTombstones()).find(tb => tb.id === id);
+  // clockless re-import (a plain CSV row has no `updated`) → stays suppressed.
+  const clockless = await sf.addTrades([t('2026-06-01 10:00:00', 55)]);
+  ok('A255: a clockless re-import stays suppressed by the tombstone', clockless.added === 0 && (await sf.tradeCount()) === 0);
+  // OLDER-than-the-tombstone re-add → still suppressed.
+  const older = await sf.addTrades([{ ...t('2026-06-01 10:00:00', 55), updated: tomb.updated - 1000 }]);
+  ok('A255: an OLDER re-add stays suppressed (LWW)', older.added === 0 && (await sf.tradeCount()) === 0);
+  // NEWER-than-the-tombstone re-add → resurrects.
+  const newer = await sf.addTrades([{ ...t('2026-06-01 10:00:00', 55), updated: tomb.updated + 1000 }]);
+  ok('A255: a NEWER re-add resurrects the trade (LWW over the tombstone)', newer.added === 1 && (await sf.tradeCount()) === 1);
+}
+{
+  // A269: tombstones are keyed by the composite `${type}:${id}`, so a trade and its per-trade meta
+  // (which share an id) get DISTINCT tombstones instead of one clobbering the other.
+  const sf = createDemoStore();
+  await sf.addTrades([t('2026-07-01 10:00:00', 8)]);
+  const id = sf.tradeId(t('2026-07-01 10:00:00', 8));
+  await sf.saveTradeMeta(id, { note: 'n' });
+  await sf.deleteTrade(id);
+  await sf.deleteTradeMeta(id);
+  const tombs = await sf.getTombstones();
+  ok(
+    'A269: a trade + a trademeta tombstone for the SAME id coexist (no collision)',
+    tombs.some(tb => tb.id === id && tb.type === 'trade') && tombs.some(tb => tb.id === id && tb.type === 'trademeta')
+  );
+}
+
+// ── F59: demo is a SINGLE in-memory workspace; the dimension is inert (never persists) ──
+{
+  const sw = createDemoStore();
+  const one = sw.listWorkspaces();
+  ok('F59: demo lists exactly one synthetic workspace', Array.isArray(one) && one.length === 1);
+  ok('F59: demo active workspace is that entry', sw.activeWorkspace().id === one[0].id);
+  // create/rename/delete/setActive are safe no-ops — the roster stays a single workspace.
+  sw.createWorkspace('Second');
+  ok('F59: demo createWorkspace is a no-op (still one workspace)', sw.listWorkspaces().length === 1);
+  sw.renameWorkspace(one[0].id, 'Renamed');
+  ok('F59: demo renameWorkspace does not persist a change', sw.listWorkspaces()[0].name === one[0].name);
+  const afterSet = await sw.setActiveWorkspace('nope');
+  ok('F59: demo setActiveWorkspace stays on the one workspace', afterSet.id === one[0].id && sw.activeWorkspace().id === one[0].id);
+  const afterDel = await sw.deleteWorkspace(one[0].id);
+  ok('F59: demo deleteWorkspace is a no-op (workspace survives)', afterDel.id === one[0].id && sw.listWorkspaces().length === 1);
 }
 
 // purge clears everything

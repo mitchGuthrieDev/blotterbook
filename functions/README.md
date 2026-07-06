@@ -1,10 +1,13 @@
 # Pages Functions — accounts, payments, storage tiers
 
-> **Status: live (accounts phases 1–2).** Passkey accounts (F53), donation
-> provisioning via the verified Stripe webhook (F54), and recovery email +
-> magic-link re-enrollment (F55) are implemented; the Account screen is
-> staging-gated in the app. Trade data stays 100% local (IndexedDB) — these
-> functions hold identity + entitlements ONLY (guardrail S25).
+> **Status: live (accounts phases 1–2; synced-workspaces backend F60/F62 landed, staging-gated).**
+> Passkey accounts (F53), donation provisioning via the verified Stripe webhook (F54), recovery email +
+> magic-link re-enrollment (F55), the **subscription lifecycle → `cloud`-tier grant** (F60), and the
+> **`/api/sync/*` encrypted-blob transport** (F62) are implemented; the Account screen + the whole
+> cloud-sync client are staging-gated in the app (CH16 promote deferred). **Compute stays 100% local on
+> every tier**, and these functions hold identity + entitlements + **ciphertext-only** synced blobs — the
+> server can never read a symbol, P&L, note, tag, or workspace name (guardrail S25, refined not dropped;
+> see [`docs/synced-workspaces.md`](../docs/synced-workspaces.md)).
 
 Cloudflare Pages serves everything under `/functions/*` as edge functions
 (Workers). They're the thin server layer the app will use for the things that
@@ -13,24 +16,30 @@ subscription tier) cloud-hosted storage.
 
 ## Storage tiers
 
-| Tier    | How it's bought          | Where trade data lives         | Status   |
-|---------|--------------------------|--------------------------------|----------|
-| `local` | one-time payment         | IndexedDB (this browser only)  | shipped  |
-| `cloud` | recurring subscription   | IndexedDB **+** server storage | planned  |
+| Tier    | How it's bought          | Where trade data lives                          | Status                    |
+|---------|--------------------------|-------------------------------------------------|---------------------------|
+| `local` | one-time payment         | IndexedDB (this browser only)                   | shipped                   |
+| `cloud` | recurring subscription   | IndexedDB **+** E2E-encrypted server copy (R2)  | built, **staging-gated**  |
 
 The client never branches on the tier when reading/writing data — it goes
-through `Store` (`src/lib/core/store.ts`). A future `CloudStore` implementing the same
-interface gets selected by `Entitlements.storeFor()` (`src/lib/core/entitlements.ts`),
-so adding the cloud tier does not touch the rest of the app.
+through `Store` (`src/lib/core/store.ts`). The `CloudStore` write-behind wrapper
+(`src/app/lib/cloudstore.ts`, F63) implements the same interface and is selected on the `cloud` tier via
+`Entitlements.storeFor()` (`src/lib/core/entitlements.ts`, wired in F60), so the cloud tier does not
+touch the rest of the app. On the `cloud` path, IndexedDB stays primary (offline-first; compute never
+touches the network) and writes are mirrored to the server as **end-to-end-encrypted ciphertext** —
+the server holds no key and can't decrypt.
 
-## Account provisioning flow (planned, à la gwtrade.app)
+## Account provisioning flow
 
 1. User pays on a Stripe Checkout / Payment Link.
 2. Stripe fires a webhook to `POST /api/webhook`.
-3. The webhook verifies the signature and provisions the account + entitlement
-   (one-time -> `local`, subscription -> `cloud`), persisted in **D1** or **KV**.
-4. The app calls `GET /api/me` to learn the signed-in user's tier and picks the
-   matching `Store` implementation.
+3. The webhook verifies the signature and provisions the account + entitlement: a one-time payment
+   credits a donation (`local`); a **subscription** upserts a `subscriptions` row (`status` +
+   `current_period_end`) from the `customer.subscription.*` / `invoice.payment_failed` events (F60).
+   All persisted in **D1** (`ACCOUNTS_DB`).
+4. The app calls `GET /api/me`, which **grants `{ tier:'cloud', cloudSync:true }`** while the
+   subscription is active, within its dunning grace window, or before `current_period_end` (period-end +
+   grace); otherwise `local`. `Entitlements` picks the matching `Store` implementation.
 
 ## Accounts + donations (F53 passkeys · F54 donations · F55 recovery)
 
@@ -49,17 +58,23 @@ credentials, donations, recovery tokens) and `functions/_lib/email.ts` (the Rese
   Resolves the price ONLY from `STRIPE_PRICE_*` server-side (never a client amount), and when the
   caller has a session it passes **`client_reference_id = <user id>`** so the webhook can credit the
   exact account. Returns `{ url }`. Origin-checked; 501 until Stripe is configured.
-- `functions/api/webhook.ts` — **implemented.** Verifies the Stripe signature over the RAW body
-  FIRST (S11), then on `checkout.session.completed` records the donation in `donations` **keyed by
-  the Stripe event id** (replay-safe dedupe — a retried webhook credits exactly once). Linkage:
-  `client_reference_id` → credit that user; else a **verified** matching email → credit; else the
-  row sits **unclaimed** (keyed by lowercased checkout email) and is claimed when that email is
-  verified. Never trusts an unverified checkout email. 501 without the webhook secret, 503 without
+- `functions/api/webhook.ts` — **implemented (F54 + F60).** Verifies the Stripe signature over the RAW
+  body FIRST (S11), then dedupes every event via a `webhook_events` ledger (replay-safe). On
+  `checkout.session.completed` it records the donation in `donations` **keyed by the Stripe event id**.
+  Linkage: `client_reference_id` → credit that user; else a **verified** matching email → credit; else
+  the row sits **unclaimed** (keyed by lowercased checkout email) and is claimed when that email is
+  verified. Never trusts an unverified checkout email. **F60 subscription lifecycle:** it also handles
+  `customer.subscription.created/updated/deleted` + `invoice.payment_failed`, upserting a
+  `subscriptions` row keyed to the user with `status` (`canceled` on delete, `past_due` on invoice
+  failure, else the object status) + `current_period_end`. 501 without the webhook secret, 503 without
   `ACCOUNTS_DB`.
-- `functions/api/me.ts` — **extended.** Anonymous → `{ tier:'local', cloudSync:false }` (unchanged);
-  authed adds `{ user:{ email, emailVerified, donated, donatedAt, donationTotalCents, createdAt },
-  passkeys:[…] }`. The Account screen reads `donated`/`donatedAt`/`donationTotalCents` for the real
-  supporter status.
+- `functions/api/me.ts` — **extended (F54 + F60).** Anonymous → `{ tier:'local', cloudSync:false }`
+  (unchanged); authed adds `{ user:{ email, emailVerified, donated, donatedAt, donationTotalCents,
+  createdAt }, passkeys:[…] }`. **F60:** it reads the `subscriptions` row and **grants
+  `{ tier:'cloud', cloudSync:true }`** while `status ∈ {active, trialing}`, OR `past_due` within a
+  3-day dunning grace, OR `now < current_period_end` after a cancel (period-end + grace) — otherwise
+  `local`. On cutoff the tier drops to `local`; **local IndexedDB data always remains, only sync stops.**
+  The Account screen reads `donated`/`donatedAt`/`donationTotalCents` for the real supporter status.
 
 **Recovery email + magic-link re-enrollment (F55):**
 
@@ -80,6 +95,32 @@ credentials, donations, recovery tokens) and `functions/_lib/email.ts` (the Rese
 Recovery/verify tokens are stored **hash-only** (`SHA-256(secret)`), single-use (`used_at` stamped on
 consume), and TTL'd (~15 min) — same posture as sessions (S25). Security never depends on the
 fail-open rate limiter (S22/S25).
+
+## Synced workspaces — the dumb encrypted-blob transport (F62)
+
+Step 5 of synced workspaces (design: [`docs/synced-workspaces.md`](../docs/synced-workspaces.md)). The
+server is a **deliberately dumb encrypted-blob store**: it holds no key and never decrypts, so it can
+**never read a symbol, P&L, note, tag, screenshot, or workspace name** (guardrail **S25**, strengthened).
+D1 (`ACCOUNTS_DB`) holds the change-index + wrapped-key blobs; R2 (`SYNC_BUCKET`) holds the record
+ciphertext. Shared helpers live in [`functions/_lib/sync.ts`](_lib/sync.ts). Every route is
+**session-gated** (opaque `__Host-` cookie), **Origin-checked** on mutations, **fails closed (503)**
+without `ACCOUNTS_DB` / `SYNC_BUCKET`, and authorizes each workspace to its `owner_user_id` (a
+cross-user or nonexistent workspace answers **404**, so existence never leaks across accounts).
+
+- `POST /api/sync/workspaces` — register (idempotent, owned-by-caller upsert) a workspace + its wrapped
+  DEK (F61a `WrappedDek`) + optional encrypted workspace-name record. `GET` lists the caller's
+  workspaces (ids + wrapped DEKs + `created_at`).
+- `PUT /api/sync/wrapped-ik` — add/rotate one method's wrapped-IK blob (upsert by `method` + `key_id`).
+  `GET` returns every wrapped-IK blob for the caller (unlock on a fresh device).
+- `POST /api/sync/push` — `{ workspace_id, records: [{ blinded_id, type, ciphertext, updated, deleted? }] }`.
+  Stores each ciphertext in R2, upserts the D1 index row under a **monotonic per-workspace `seq`**, and
+  honors **LWW** (a stale `updated` never clobbers a fresher row). Batches over 15 records → **413** (A15
+  subrequest cap; the client chunks).
+- `GET /api/sync/pull?workspace_id=&since=<seq>` — returns records with `seq > since` (≤ 25 per page) with
+  their ciphertext, plus a `nextSince` cursor + `more` flag for incremental paging.
+
+Every response exposes only `{ workspace_id, blinded_id, seq, type, updated, deleted, ciphertext,
+created_at }` + wrapped-key blobs — never a trade field or a plaintext name.
 
 ## Public endpoints (shipped)
 
@@ -190,9 +231,16 @@ audMatches:true, expired:false`.
 ## Bindings to add when implementing
 
 - **D1** (`ACCOUNTS_DB`) for accounts + entitlements + donations + recovery tokens + the F44 changelog
-  list — schema in [`functions/schema.sql`](schema.sql). **After ANY change to `schema.sql`** (F54
-  added `donations`, F55 added `recovery_tokens`, F44 added `subscribers` + `changelog_sends`) the
-  owner must **re-run** the idempotent apply command so the new tables exist in prod:
+  list + the F62 synced-workspaces change-index / wrapped keys — schema in
+  [`functions/schema.sql`](schema.sql). **After ANY change to `schema.sql`** (F54 added `donations`,
+  F55 added `recovery_tokens`, F44 added `subscribers` + `changelog_sends`, **F62 added
+  `sync_workspaces` + `sync_workspace_keys` + `sync_wrapped_ik` + `sync_records`**) the owner must
+  **re-run** the idempotent apply command so the new tables exist in prod:
   `npx wrangler d1 execute blotterbook-accounts --remote --file=functions/schema.sql`.
-- **R2** for the subscription tier's stored trade blobs (optionally encrypted
-  client-side to preserve the "your data stays yours" guarantee).
+- **R2** (`SYNC_BUCKET`) for the synced-workspaces encrypted-record ciphertext blobs (F62). Holds ONLY
+  opaque AES-GCM ciphertext (F61a `EncryptedRecord`), keyed `records/<workspace_id>/<blinded_id>` — never
+  a symbol, P&L, note, tag, screenshot, or workspace name (guardrail S25); D1's `sync_records` rows point
+  at these objects via `ciphertext_ref`. **Every `/api/sync/*` endpoint fails closed with a 503 JSON body
+  when `SYNC_BUCKET` (or `ACCOUNTS_DB`) is unbound.** Create + bind the bucket:
+  `npx wrangler r2 bucket create blotterbook-sync`, then Pages dashboard → Settings → Functions → R2
+  bucket bindings → variable name `SYNC_BUCKET`.

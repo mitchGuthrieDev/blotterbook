@@ -26,6 +26,12 @@
     /** Hide the sidebar rail entirely (+ its topbar toggles) — used for the first-run empty state
      * until a CSV is imported (A144), so onboarding stays focused. */
     hideNav?: boolean;
+    /** Optional content pinned above the nav rail (e.g. a workspace switcher, A132) — rendered
+     * inside BOTH the desktop rail and the mobile drawer. Receives the rail's collapsed state
+     * (always `false` in the mobile drawer, which never collapses) so the snippet can render a
+     * compact icon-only form on the desktop icon rail. Omitted everywhere it isn't needed (the
+     * default `undefined` renders nothing — fully backward-compatible). */
+    sidebarHeader?: Snippet<[boolean]>;
     children: Snippet;
   }
   let {
@@ -37,6 +43,7 @@
     title,
     actions,
     hideNav = false,
+    sidebarHeader,
     children,
   }: Props = $props();
 
@@ -48,9 +55,17 @@
   <!-- Desktop rail: static column, collapsible. Hidden entirely during first-run onboarding (A144). -->
   {#if !hideNav}
     <aside
-      class={['hidden shrink-0 border-r border-border bg-card transition-[width] duration-200 md:block', collapsed ? 'md:w-14' : 'md:w-60']}
+      class={[
+        'hidden shrink-0 border-r border-border bg-card transition-[width] duration-200 md:flex md:flex-col',
+        collapsed ? 'md:w-14' : 'md:w-60',
+      ]}
     >
-      <SidebarNav {brand} {brandHref} {sections} {active} {onnavigate} {collapsed} />
+      {#if sidebarHeader}
+        <div class="shrink-0 border-b border-border p-2">{@render sidebarHeader(collapsed)}</div>
+      {/if}
+      <div class="min-h-0 flex-1">
+        <SidebarNav {brand} {brandHref} {sections} {active} {onnavigate} {collapsed} />
+      </div>
     </aside>
   {/if}
 
@@ -62,17 +77,25 @@
       onclick={() => (mobileOpen = false)}
       role="presentation"
     ></div>
-    <aside class="fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-card md:hidden" transition:fly={{ x: -260, duration: 200 }}>
-      <SidebarNav
-        {brand}
-        {brandHref}
-        {sections}
-        {active}
-        onnavigate={k => {
-          onnavigate?.(k);
-          mobileOpen = false;
-        }}
-      />
+    <aside
+      class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-card md:hidden"
+      transition:fly={{ x: -260, duration: 200 }}
+    >
+      {#if sidebarHeader}
+        <div class="shrink-0 border-b border-border p-2">{@render sidebarHeader(false)}</div>
+      {/if}
+      <div class="min-h-0 flex-1">
+        <SidebarNav
+          {brand}
+          {brandHref}
+          {sections}
+          {active}
+          onnavigate={k => {
+            onnavigate?.(k);
+            mobileOpen = false;
+          }}
+        />
+      </div>
     </aside>
   {/if}
 

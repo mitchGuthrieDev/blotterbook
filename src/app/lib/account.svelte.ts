@@ -128,6 +128,22 @@ export function addPasskey(): Promise<boolean> {
   return runRegistration({});
 }
 
+/** Enroll another passkey WITH the WebAuthn PRF extension enabled (F61b cloud-sync unlock). PRF must
+ *  be requested at credential CREATION — existing F53 passkeys weren't, so cloud-sync unlock needs a
+ *  fresh PRF-capable passkey. This augment is purely CLIENT-SIDE: the register-options/register-verify
+ *  endpoints are unchanged; we only add `extensions: { prf: {} }` to the creation options before
+ *  handing them to the authenticator. */
+export function registerPrfPasskey(): Promise<boolean> {
+  return ceremony(async () => {
+    const { options } = await api<{ options: PublicKeyCredentialCreationOptionsJSON }>('/api/account/register-options', {});
+    const { startRegistration } = await webauthn();
+    // simplewebauthn's extension type predates WebAuthn L3's PRF; cast the augmented value in.
+    const extensions = { ...options.extensions, prf: {} } as unknown as PublicKeyCredentialCreationOptionsJSON['extensions'];
+    const response = await startRegistration({ optionsJSON: { ...options, extensions } });
+    await api('/api/account/register-verify', { response });
+  });
+}
+
 /** Usernameless passkey login (discoverable credential — no email prompt). */
 export function login(): Promise<boolean> {
   return ceremony(async () => {

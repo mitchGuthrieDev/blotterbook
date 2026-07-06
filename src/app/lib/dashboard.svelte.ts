@@ -20,6 +20,7 @@ import {
 } from '../../lib/core/core.ts';
 import { Adapters } from '../../lib/core/adapters.ts';
 import { cleanTags, fileId } from '../../lib/core/store.ts';
+import { cancelActiveSync } from './cloudsync.svelte.ts';
 import { reconcileImport } from '../../lib/core/intake.ts';
 import { demoCSV } from '../../lib/core/sampledata.ts';
 import type {
@@ -245,11 +246,10 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     tradeMeta = new Map(metaRows.map(m => [m.id, m] as const));
     savedFilters = (sf as SavedFilter[]) || [];
   }
-  async function boot() {
-    // A195: 'session initiated' (app:ready) leads the activity log — emitted BEFORE loadRefData,
-    // which fires its own refdata:loaded (the replay buffer preserves emit order for the backfill).
-    emit('app:ready');
-    await loadRefData();
+  // The per-workspace data-init: Store.init (opens the ACTIVE workspace's DB — F59) → optional seed →
+  // load collections → restore setup + calendar cursor. Shared by boot() and switchWorkspace() so a
+  // workspace switch reloads the exact same way boot does, just without re-fetching ref data.
+  async function loadData() {
     if (!store.available()) throw new Error('Local storage is unavailable in this browser');
     await store.init();
     if (opts.seed) await seedIfEmpty();
@@ -262,9 +262,26 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     const last = allTrades.length ? allTrades[allTrades.length - 1].date : null;
     calYear = last ? +last.slice(0, 4) : new Date().getFullYear();
     calMonth = last ? +last.slice(5, 7) - 1 : new Date().getMonth();
+  }
+  async function boot() {
+    // A195: 'session initiated' (app:ready) leads the activity log — emitted BEFORE loadRefData,
+    // which fires its own refdata:loaded (the replay buffer preserves emit order for the backfill).
+    emit('app:ready');
+    await loadRefData();
+    await loadData();
     loaded = true;
     // A151: the shared actions fire bus events for the ActivityTerminal (every emit is a no-op
     // with no subscriber; app:ready leads boot() — A195).
+    emit('data:loaded', { count: allTrades.length });
+  }
+  // F59: reload the app onto whatever workspace is now active (after a switch/delete). Re-opens the
+  // active DB via loadData and resets the live filter set (the new dataset's roots/tags differ). Ref
+  // data is already loaded, so this is the boot tail only.
+  async function reloadWorkspaceData() {
+    loaded = false;
+    filters = { scope: 'all', from: '', to: '', root: '', side: '', session: '', tag: '', dows: [], hours: [] };
+    await loadData();
+    loaded = true;
     emit('data:loaded', { count: allTrades.length });
   }
 
@@ -506,6 +523,31 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     emit('data:imported', { added: res.added });
     return res;
   }
+  /* ---- F59 named local workspaces (the switch path A132's UI drives; core store change is
+     backward-compatible — one Default workspace = today's data) ---- */
+  /** Switch the active workspace, then reload the app onto its dataset (open its DB + reload). */
+  async function switchWorkspace(id: string) {
+    if (isDemo) return; // demo is a single in-memory workspace — the dimension is inert
+    if (id === store.activeWorkspace().id) return;
+    // A251: abort + await any in-flight cloud sync for the CURRENT workspace before flipping the
+    // active DB — otherwise a mid-flight pull/push could read/write one workspace's records under the
+    // other's identity + keys. A no-op on prod/demo (sync is never configured there).
+    await cancelActiveSync();
+    await store.setActiveWorkspace(id);
+    await reloadWorkspaceData();
+  }
+  /** Delete a workspace; if it was the active one the store switches away, so reload onto the new one. */
+  async function removeWorkspace(id: string) {
+    if (isDemo) return store.activeWorkspace();
+    // A251: quiesce in-flight sync first — the same cross-workspace-corruption guard as switch, and it
+    // also releases the DB handle before deleteWorkspace's deleteDatabase runs.
+    await cancelActiveSync();
+    const wasActive = store.activeWorkspace().id === id;
+    const nowActive = await store.deleteWorkspace(id);
+    if (wasActive) await reloadWorkspaceData();
+    return nowActive;
+  }
+
   const noteFor = (date: string) => journal.get(date)?.text ?? '';
   const journalFor = (date: string) => journal.get(date) ?? { text: '', tags: [] as string[], shots: [] as string[] };
   async function saveNote(date: string, text: string, tags?: string[], shots?: string[]) {
@@ -685,6 +727,17 @@ export function createDashboard(store: StoreLike, opts: { seed: boolean; isDemo?
     deleteView,
     renameView,
     sessionOf,
+    // F59 named local workspaces — queries are thin passthroughs; the mutations that change the
+    // active dataset (switch/delete) reload the app. A132's switcher UI drives these.
+    activeWorkspace: () => store.activeWorkspace(),
+    listWorkspaces: () => store.listWorkspaces(),
+    createWorkspace: (name: string) => store.createWorkspace(name),
+    renameWorkspace: (id: string, name: string) => store.renameWorkspace(id, name),
+    switchWorkspace,
+    removeWorkspace,
+    // F63: re-read the active workspace's collections after a cloud-sync pull merges remote changes,
+    // so the UI reflects pulled data (reloadAll only reassigns the $state.raw collections).
+    reload: () => reloadAll(),
   };
 }
 

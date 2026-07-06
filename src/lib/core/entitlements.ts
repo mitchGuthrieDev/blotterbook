@@ -1,35 +1,60 @@
-'use strict';
 /* ============================================================
-   Entitlements — which storage tier the current user gets.
+   Entitlements — which storage tier the current user gets, and which Store
+   implementation backs it.
 
-   This is a SCAFFOLD and is INTENTIONALLY UNLOADED — no module imports it
-   (the Svelte app never mounts it). It's kept as the seam for the planned
-   A4/A16 CloudStore tier; it must stay lint/typecheck-clean so it doesn't
-   bit-rot before it's wired (CH35). Today every user is on the "local" tier:
-   data lives in IndexedDB via Store (src/lib/core/store.ts). Accounts and payments
-   are NOT implemented in the app yet.
+   Wired in F60 (synced workspaces, Step 3). `current()` probes GET /api/me — a
+   Pages Function that resolves the real tier from the signature-verified Stripe
+   subscription row per the locked period-end + grace lapse policy — and returns
+   the tier + cloudSync flag. `storeFor(tier)` selects the Store implementation.
 
-   The planned tiers (see functions/README.md):
-     - "local"  : one-time payment -> IndexedDB only            (today)
-     - "cloud"  : subscription     -> IndexedDB + server storage (future)
+   The tiers (see functions/README.md):
+     - "local"  : one-time payment      -> IndexedDB only
+     - "cloud"  : recurring subscription -> IndexedDB + server sync
 
-   When accounts land, `current()` will call /api/me (a Pages
-   Function backed by Stripe) and return the real tier, and the app
-   will pick a Store implementation from `storeFor(tier)`. Until
-   then it always resolves to "local" and the local Store, so the
-   rest of the app can already be written against this interface.
+   `storeFor(tier)` returns the BASE Store for the tier — today BOTH tiers resolve
+   to the local `Store` (IndexedDB via src/lib/core/store.ts). The `CloudStore`
+   write-behind wrapper is NOT layered here: it is applied at the APP boundary
+   (App.svelte wraps every non-demo store via cloudsync's `wrapStore`) and gated to
+   the cloud tier at RUNTIME by the sync controller (A256). This module is core /
+   framework-agnostic and must not import the app-level wrapper — so it only ever
+   picks the base implementation; wrapping + the cloud-tier gate live one layer up.
+
+   S25 note: /api/me carries identity + entitlements ONLY; no trade data ever
+   crosses it. `current()` never throws — any fetch/parse failure falls back to
+   the local tier so the app boots offline-first regardless.
    ============================================================ */
 import { Store } from './store.ts';
+import type { StoreLike } from './types.ts';
+
+export type Tier = 'local' | 'cloud';
+export interface Entitlement {
+  tier: Tier;
+  cloudSync: boolean;
+}
+
+const LOCAL: Entitlement = { tier: 'local', cloudSync: false };
 
 export const Entitlements = {
-  async current() {
-    // FUTURE: const r = await fetch('/api/me'); return (await r.json()).tier;
-    return { tier: 'local', cloudSync: false };
+  /** Resolve the current entitlement from /api/me. Falls back to the local tier on any error —
+   *  never throws (offline / accounts-not-configured / a D1 hiccup all read as `local`). */
+  async current(): Promise<Entitlement> {
+    try {
+      const res = await fetch('/api/me', { headers: { Accept: 'application/json' }, credentials: 'include' });
+      if (!res.ok) return LOCAL;
+      const data = (await res.json()) as { tier?: unknown; cloudSync?: unknown };
+      const tier: Tier = data.tier === 'cloud' ? 'cloud' : 'local';
+      return { tier, cloudSync: tier === 'cloud' && data.cloudSync === true };
+    } catch (_) {
+      return LOCAL;
+    }
   },
 
-  // Returns the Store implementation backing a given tier.
-  // Both tiers use local Store today; "cloud" will gain a CloudStore later.
-  storeFor(/* tier */) {
+  /** The BASE Store implementation backing a given tier — the local `Store` for both tiers today. The
+   *  CloudStore write-behind wrapper is layered at the App boundary (cloudsync's `wrapStore`) and
+   *  gated to the cloud tier at runtime by the controller (A256), NOT here — this is core code and
+   *  must not reach up into the app-level wrapper. */
+  storeFor(tier: Tier): StoreLike {
+    void tier; // both tiers resolve to the local Store; the cloud write-behind is layered app-side.
     return Store;
   },
 };

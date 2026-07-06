@@ -4,6 +4,18 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.63.0",
+      "date": "2026-07-06",
+      "title": "Named workspaces and end-to-end-encrypted cloud sync",
+      "summary": "Keep separate trading accounts in their own named local workspaces, and — for supporters — sync your journal across devices with end-to-end encryption that keeps your trade data unreadable to us.",
+      "highlights": [
+        "Named local workspaces: keep separate accounts or strategies in their own datasets, each with its own trades, journal, and setup, and switch between them from the sidebar.",
+        "Cloud sync (for supporters): opt any workspace into end-to-end-encrypted sync across your devices. Your trades are encrypted in your browser with a key we never see — the server only ever stores ciphertext it can't read.",
+        "You hold the keys: set up cloud sync with a one-time recovery key (the guaranteed way back in), plus optional passkey or passphrase unlock. Your local copy always stays on your device.",
+        "Everything stays private by default — none of this changes the promise that your trade data never leaves your browser unless you turn on cloud sync yourself."
+      ]
+    },
+    {
       "version": "0.60.0",
       "date": "2026-07-06",
       "title": "Three new dashboard modules, a mobile-first pass, and release notes by email",

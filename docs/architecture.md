@@ -21,6 +21,7 @@ CH16, F13, F14, S19, R1, …) are backlog item ids from
 - [Cost model](#cost-model)
 - [Reference data (JSON) + cache-busting](#reference-data-json--cache-busting)
 - [Local persistence](#local-persistence)
+- [Storage tiers, sync & the refined moat](#storage-tiers-sync--the-refined-moat)
 - [Staging sandbox](#staging-sandbox)
 - [Building a feature (all surfaces share one SPA)](#building-a-feature-all-surfaces-share-one-spa)
 - [Versioning & releases (CH12)](#versioning--releases-ch12)
@@ -58,9 +59,11 @@ in sync with the code — start there for a big-picture view, then read the pros
 
 What remains are practical invariants, not moats:
 
-1. **Client-side by construction** — parsing, metrics, and IndexedDB storage all run in the browser
-   today. This is how the app is *built*, not a hard egress ban; a future cloud-sync tier is on the
-   roadmap.
+1. **Client-side by construction** — parsing, metrics, and IndexedDB storage all run in the browser,
+   and **compute never touches the network on any tier**. This is how the app is *built*, not a hard
+   egress ban: the opt-in `cloud`-tier **synced-workspaces** feature (F58–F63, staging-gated today)
+   egresses trade data *only* as end-to-end-encrypted ciphertext — see
+   [Storage tiers, sync & the refined moat](#storage-tiers-sync--the-refined-moat).
 2. **Standard, pinned dependency tree** — Vite + Svelte 5 + Tailwind v4 + shadcn-svelte/bits-ui plus
    dev tooling (ESLint, Prettier, Playwright). Versions are pinned and the lockfile is committed.
 3. **Deployable to Cloudflare Pages** — ships to Pages, with `/functions/*` as the thin edge layer
@@ -344,28 +347,67 @@ short SHA-256 **content hash**. At boot the app fetches `manifest.json` with
 
 ## Local persistence
 
-Trade data and day-notes are stored in **IndexedDB** via `src/lib/core/store.ts`. Nothing
-is uploaded.
+Trade data and day-notes are stored in **IndexedDB** via `src/lib/core/store.ts`. On prod/demo and
+the `local` tier nothing is uploaded; the opt-in `cloud`-tier sync path egresses only ciphertext
+(see [Storage tiers, sync & the refined moat](#storage-tiers-sync--the-refined-moat)).
 
-- **Stores (DB v3):** `trades` (keyed by the dedupe id), `journal` (per-day notes
+- **Stores (DB v4):** `trades` (keyed by the dedupe id), `journal` (per-day notes
   keyed by date — each a `{text, tags, shots}` annotation), `meta` (setup + saved
   filters), `trademeta` (per-trade tags/note/screenshots, keyed by trade id; added
-  in DB v2), and `files`/`filetext` (per-file CSV provenance — metadata and the
+  in DB v2), `files`/`filetext` (per-file CSV provenance — metadata and the
   raw text stored in separate stores so listing the library never loads
-  megabytes; added in DB v3, F37).
-- **Delta merge:** `Store.addTrades()` skips ids already present, so re-imports
-  only add new trades.
-- **Demo data is never persisted** — it lives in memory only.
+  megabytes; added in DB v3, F37), and `tombstones` (a delete-log `{id, type, updated}`
+  written by every delete path; added in DB v4, F58).
+- **Named workspaces (F59).** The store is workspace-scoped: each named workspace is its **own**
+  IndexedDB database (`blotterbook:<uuid>`), while the pre-F59 **Default** workspace keeps the legacy
+  `blotterbook`/`blotterbookStaging` name (zero migration — the existing DB *is* the Default). The
+  registry + active-workspace id live in `Store.local`; boot opens the active DB before first render.
+- **Delta merge:** `Store.addTrades()` skips ids already present (and consults `tombstones` so a
+  re-import can't resurrect a deleted trade — F58), so re-imports only add genuinely new trades.
+- **Demo data is never persisted** — it lives in memory only, and `DemoStore` never syncs.
 - **Erase all local data** (Manage data → Danger zone) calls `Store.purge()` to
-  wipe all six stores after a confirm.
+  wipe all stores (tombstones included) after a confirm.
 
 The app never touches `indexedDB` directly — it goes through the `Store`
-interface. A future cloud backend implements the same interface, so adding cloud
-sync won't touch the rest of the app. The manager added `deleteTrade`,
+interface. The `CloudStore` write-behind wrapper (F63) implements the same interface, so cloud sync
+layers on without touching the rest of the app. The manager added `deleteTrade`,
 `getAllJournal`, `deleteJournal`, `getAllMeta`,
 `getTradeMeta`/`saveTradeMeta`/`deleteTradeMeta`/`allTradeMeta`, `exportAll`,
-`importAll`, and (F37 per-file provenance) `getFiles`/`addFile`/`updateFile`/
-`deleteFile`/`getFileText`/`filesBytes` to that interface.
+`importAll`, (F37 per-file provenance) `getFiles`/`addFile`/`updateFile`/
+`deleteFile`/`getFileText`/`filesBytes`, (F58) `getTombstones`, and (F59)
+`listWorkspaces`/`activeWorkspace`/`createWorkspace`/`renameWorkspace`/`deleteWorkspace`/
+`setActiveWorkspace` to that interface.
+
+## Storage tiers, sync & the refined moat
+
+> **New with synced workspaces (F58–F63, 2026-07-06; STAGING-GATED — CH16 promote deferred).** Design
+> record: [`docs/synced-workspaces.md`](synced-workspaces.md).
+
+The original moat — *no trade data ever leaves the browser* — is **refined, not dropped**:
+
+> Compute stays 100% local on **every** tier. Trade data leaves the browser **only** for a `cloud`-tier
+> user who has **opted a workspace into sync**, and **only as end-to-end-encrypted ciphertext the server
+> cannot decrypt.** `local`-tier and un-synced workspaces egress nothing.
+
+- **Two tiers, one interface.** `Entitlements` (`src/lib/core/entitlements.ts`, wired in F60) calls
+  `/api/me` and resolves the tier; `storeFor('local')` returns the IndexedDB `Store`. On staging,
+  `App.svelte` additionally wraps the store in a `CloudStore` for opt-in encrypted sync. Every consumer
+  depends only on the `StoreLike` interface (guardrail A4), so this is transparent to screens.
+- **Write-behind topology.** IndexedDB stays the primary store on every browser and tier; reads are
+  local (offline-first). Each write also enqueues a debounced encrypted **push**; connect/unlock/focus
+  triggers a **pull** that re-merges remote records through the existing `importAll` trust boundary
+  (trade content-hash union, journal/meta LWW, deletes via F58 tombstones). Merge is 100% client-side —
+  the server can't decrypt, so it can't merge.
+- **Zero-knowledge keys.** An account **identity key (IK)** wraps every per-workspace **DEK**; the IK is
+  wrapped once per unlock method (passkey PRF / optional Argon2id passphrase / a downloaded escrow
+  recovery key) into blobs the server stores but can't unwrap. Keys live in memory only, unwrapped once
+  per session (`src/app/lib/vault.svelte.ts`). Records travel under a `blinded_id = HMAC(workspaceKey,
+  tradeId)`, never the raw content hash. The server (`/api/sync/*` over R2 + D1) is a deliberately dumb
+  encrypted-blob store — see [`functions/README.md`](../functions/README.md).
+- **Subscription lifecycle (F60).** The Stripe webhook handles `customer.subscription.*` +
+  `invoice.payment_failed`; `me.ts` grants `cloud` while a subscription is active, within its dunning
+  grace window, or before its `current_period_end` (period-end + grace). On cutoff the tier drops to
+  `local` — **local IndexedDB data always remains; only sync stops.**
 
 Separate, unrelated version numbers are intentionally **not** touched by the
 release automation: `store.ts` `DB_VERSION` (IndexedDB schema), the backup-file
@@ -544,6 +586,8 @@ release notes), and `legal.html` (disclaimers, terms, privacy summary).
 - **Calendar-day & session grouping** — both use the literal `Time` value, not the
   CME session day; RTH/ETH assumes the timestamp's clock time.
 - **Sharpe is illustrative** — daily PnL, population std, not annualized.
-- **Local storage is per-browser** — data is not synced across devices and is
+- **Local storage is per-browser** — on prod, data is not synced across devices and is
   cleared if you clear site data. Use **Manage data → Download backup** for a
-  portable JSON snapshot. (Cloud sync is the planned subscription tier.)
+  portable JSON snapshot. (Cross-device sync is the `cloud`-tier **synced-workspaces** feature,
+  F58–F63 — built but **staging-gated**, not yet promoted to prod; see
+  [Storage tiers, sync & the refined moat](#storage-tiers-sync--the-refined-moat).)

@@ -52,6 +52,10 @@ export interface Trade {
    *  in two overlapping exports carries both). Absent = imported pre-F37 (always included).
    *  NOT part of tradeId. */
   fileIds?: string[];
+  /** Epoch ms of the last local write (F58) — the record-level LWW clock for the future sync layer.
+   *  Stamped by Store on every insert/enrich; absent on trades from a store predating F58.
+   *  NOT part of tradeId (identity must not change, or re-imports would stop deduping). */
+  updated?: number;
   /** Stable dedupe id once persisted (Store.tradeId). */
   id?: string;
 }
@@ -467,11 +471,130 @@ export interface CsvFileRec {
    *  files ("this file is my Schwab era") and costModel prices those trades at that broker's
    *  rates. Absent (the norm) = the global setup broker. */
   broker?: string;
+  /** Epoch ms of the last local write (F58) — the record-level LWW clock for the future sync layer.
+   *  Stamped by Store on addFile/updateFile; absent on records predating F58. */
+  updated?: number;
+}
+
+/** A delete-log entry (F58). Every removal path in the Store records one, keyed by the removed
+ *  record's id, so a delete is distinguishable from "not synced yet": addTrades consults them to
+ *  suppress resurrection of a user-deleted trade on re-import, and they are the delete half of
+ *  record-level last-writer-wins for the future sync layer (F62/F63). */
+export type TombstoneType = 'trade' | 'journal' | 'trademeta' | 'file';
+export interface Tombstone {
+  /** The removed record's key — trade/trademeta id, journal date (YYYY-MM-DD), or file id. */
+  id: string;
+  type: TombstoneType;
+  /** Epoch ms of the deletion. */
+  updated: number;
+}
+
+/** A named local workspace (F59) — a dataset backed by its own IndexedDB database. The registry
+ *  `[{ id, name, dbName, createdAt }]` + the active-workspace pointer live in Store.local (sync,
+ *  pre-paint). "Switch workspace" = open a different DB. When the cloud tier lands (F61+), a
+ *  workspace's name travels ENCRYPTED as a record — never in the plaintext registry. */
+export interface Workspace {
+  /** Stable id — `'default'` for the migrated legacy workspace, a `crypto.randomUUID()` for new ones. */
+  id: string;
+  /** User-facing name. */
+  name: string;
+  /** The CONCRETE IndexedDB database name backing this workspace. The Default workspace keeps the
+   *  legacy name (`blotterbook` / `blotterbookStaging`) so existing data is used in place with no
+   *  copy/move; new workspaces get a suffixed name (`blotterbook:<id>`). */
+  dbName: string;
+  /** Epoch ms of creation. */
+  createdAt: number;
+}
+
+/* ── Synced-workspaces E2E crypto core (F61a) ──────────────────────────────────────────────────
+ *
+ * Envelope-encryption shapes for the zero-knowledge cloud tier. The server only ever sees the
+ * opaque, self-describing blobs below — never a key, a symbol, a P&L, or a note in the clear.
+ * Implemented in `crypto.ts` (Web Crypto for AES-GCM/AES-KW/HKDF/HMAC; Argon2id via hash-wasm for
+ * the passphrase KEK). All blobs are JSON/base64-serializable so F62 can ship them over the wire. */
+
+/** Argon2id cost parameters for the passphrase KEK (F61a). Tuned for ~200–500 ms on a typical
+ *  device; travels inside a WrappedIK so a device can reproduce the KEK to unwrap the IK. */
+export interface Argon2Params {
+  /** Memory cost in KiB (memory-hardness). */
+  memKiB: number;
+  /** Time cost (passes). */
+  iterations: number;
+  /** Lanes / degree of parallelism. */
+  parallelism: number;
+  /** Derived-key length in bytes (32 = 256-bit KEK). */
+  hashLen: number;
+}
+
+/** How a KEK was derived — embedded verbatim into a WrappedIK so the blob is self-describing and a
+ *  fresh device can rebuild the KEK (given the passkey PRF / passphrase / recovery-key secret) to
+ *  unwrap the IK. Salts are base64. The recovery path needs no stored salt (the key is full-entropy). */
+export type KekDescriptor =
+  { method: 'prf'; hkdfSalt: string } | { method: 'passphrase'; argon2: Argon2Params & { salt: string } } | { method: 'recovery' };
+
+/** A key-encryption key plus the metadata needed to reproduce it. `key` is a non-extractable AES-KW
+ *  CryptoKey used only to wrap/unwrap the IK; `descriptor` is what gets persisted (never the KEK). */
+export interface Kek {
+  key: CryptoKey;
+  descriptor: KekDescriptor;
+}
+
+/** The account identity key wrapped (AES-KW) under one unlock method's KEK. One per enrolled method
+ *  (passkey PRF / passphrase / escrow recovery key). The only IK representation the server stores. */
+export interface WrappedIK {
+  /** Blob schema version. */
+  v: 1;
+  /** Which unlock method's KEK wrapped the IK (also selects the descriptor branch). */
+  method: KekDescriptor['method'];
+  /** Wrapping algorithm — always AES key wrap. */
+  alg: 'AES-KW';
+  /** Base64 of the AES-KW-wrapped IK bytes. */
+  wrapped: string;
+  /** HKDF salt (base64) for the PRF path — present iff `method === 'prf'`. */
+  hkdfSalt?: string;
+  /** Argon2id params + salt for the passphrase path — present iff `method === 'passphrase'`. */
+  argon2?: Argon2Params & { salt: string };
+}
+
+/** A per-workspace data-encryption key wrapped (AES-KW) under the account IK. Minted when a
+ *  workspace opts into sync; adding a workspace needs no new unlock ceremony. */
+export interface WrappedDek {
+  v: 1;
+  alg: 'AES-KW';
+  /** Base64 of the AES-KW-wrapped DEK bytes. */
+  wrapped: string;
+}
+
+/** One AES-GCM-encrypted record (a trade / journal / meta row). Authenticated: a flipped byte or
+ *  the wrong DEK makes decryptRecord throw. IV is fresh-random per record. */
+export interface EncryptedRecord {
+  v: 1;
+  alg: 'AES-GCM';
+  /** Base64 of the 12-byte random IV (never reused with the same DEK). */
+  iv: string;
+  /** Base64 of the ciphertext with the appended GCM auth tag. */
+  ct: string;
 }
 
 export interface StoreLike {
   available(): boolean;
   init(): Promise<boolean>;
+  /* ---- F59 named local workspaces (per-workspace IndexedDB + a Store.local registry) ---- */
+  /** The active workspace entry — the DB every read/write below targets. */
+  activeWorkspace(): Workspace;
+  /** Every registered workspace (seeds a single Default on first call). */
+  listWorkspaces(): Workspace[];
+  /** Create a new local workspace backed by a fresh (suffixed) IndexedDB; returns the entry. */
+  createWorkspace(name: string): Workspace;
+  /** Rename a workspace; returns the updated entry, or undefined if the id/name was rejected. */
+  renameWorkspace(id: string, name: string): Workspace | undefined;
+  /** Delete a workspace: drop its whole IndexedDB (deleteDatabase) AND remove the registry entry.
+   *  Refuses to delete the last remaining workspace; deleting the active one switches to another.
+   *  Returns the now-active workspace. */
+  deleteWorkspace(id: string): Promise<Workspace>;
+  /** Switch the active workspace: persist the choice and reset the cached connection so the next
+   *  store call opens the newly-active DB. Returns the now-active entry. */
+  setActiveWorkspace(id: string): Promise<Workspace>;
   tradeId(t: Trade): string;
   validShot(s: unknown): boolean;
   addTrades(trades: Trade[]): Promise<{ added: number; duplicate: number; total: number }>;
@@ -497,11 +620,14 @@ export interface StoreLike {
   journalDates(): Promise<Set<string>>;
   getAllJournal(): Promise<StoredJournal[]>;
   deleteJournal(date: string): Promise<unknown>;
-  getAllMeta(): Promise<Array<{ key: string; value: unknown }>>;
+  getAllMeta(): Promise<Array<{ key: string; value: unknown; updated?: number }>>;
   getTradeMeta(id: string): Promise<StoredTradeMeta>;
   saveTradeMeta(id: string, m: TradeMeta): Promise<unknown>;
   deleteTradeMeta(id: string): Promise<unknown>;
   allTradeMeta(): Promise<StoredTradeMeta[]>;
+  /** All delete-log tombstones (F58) — read by the future sync layer (F62/F63) to propagate deletes;
+   *  writes are internal (every removal path records one). */
+  getTombstones(): Promise<Tombstone[]>;
   exportAll(): Promise<Record<string, unknown>>;
   importAll(data: Record<string, unknown>): Promise<{ added: number; dup: number }>;
   setMeta(key: string, value: unknown): Promise<unknown>;

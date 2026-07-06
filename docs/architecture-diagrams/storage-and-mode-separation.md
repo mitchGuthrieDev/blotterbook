@@ -30,24 +30,30 @@ flowchart TD
 
     APP --> SWAP{"isDemo ?"}
     SWAP -->|"yes · demo"| DEMOSTORE["createDemoStore()<br/>demostore.ts"]
-    SWAP -->|"no · app / staging"| REALSTORE["Store<br/>store.ts (IndexedDB)"]
+    SWAP -->|"no · app / staging"| ENT["Entitlements.storeFor('local')<br/>entitlements.ts → Store (IndexedDB)"]
 
-    %% ---- Real IndexedDB backend: separated by DB name ----
-    REALSTORE --> DBNAME{"DB_NAME<br/>mode === 'staging' ?"}
-    DBNAME -->|"staging"| STGDB[("IndexedDB<br/>blotterbookStaging<br/>seeded with sample data")]
-    DBNAME -->|"app · default"| PRODDB[("IndexedDB<br/>blotterbook<br/>empty → first-run onboarding")]
+    %% ---- Staging wraps the real Store in a CloudStore (opt-in E2E sync, F63) ----
+    ENT --> WRAP{"isStaging ?"}
+    WRAP -->|"staging"| CLOUD["CloudStore (wrapStore)<br/>write-behind: reads local, writes enqueue<br/>encrypted push → /api/sync/* (F63)"]
+    WRAP -->|"app · prod"| REALSTORE["Store<br/>store.ts (IndexedDB) — no sync"]
+    CLOUD --> REALSTORE
 
-    subgraph STORES["object stores — same schema in both DBs (DB_VERSION 2)"]
-        OS["trades · journal · meta · trademeta"]
+    %% ---- Real IndexedDB backend: separated by DB name, then per-workspace DB (F59) ----
+    REALSTORE --> DBNAME{"active workspace DB<br/>mode === 'staging' ?"}
+    DBNAME -->|"staging"| STGDB[("IndexedDB<br/>blotterbookStaging (Default)<br/>or blotterbookStaging:&lt;uuid&gt;<br/>seeded with sample data")]
+    DBNAME -->|"app · default"| PRODDB[("IndexedDB<br/>blotterbook (Default)<br/>or blotterbook:&lt;uuid&gt; per workspace<br/>empty → first-run onboarding")]
+
+    subgraph STORES["object stores — same schema in every workspace DB (DB_VERSION 4)"]
+        OS["trades · journal · meta · trademeta · files · filetext · tombstones (F58)"]
     end
     STGDB --- STORES
     PRODDB --- STORES
 
-    %% ---- Demo backend: never touches disk ----
-    DEMOSTORE --> MEM["in-memory Maps / arrays<br/>NO IndexedDB · NO localStorage<br/>lost on reload — 'never persists' by construction"]
+    %% ---- Demo backend: never touches disk, never syncs ----
+    DEMOSTORE --> MEM["in-memory Maps / arrays<br/>NO IndexedDB · NO localStorage · NEVER a cloud store<br/>lost on reload — 'never persists' by construction"]
 
     %% ---- localStorage seam (small sync UI state) ----
-    APP -. "Store.local (sync UI state:<br/>panel layout, workspaces)" .-> LS["localStorage (origin-shared,<br/>namespaced by key prefix)<br/>app: bb:*  ·  staging: bb:staging:*<br/>demo: in-memory Map (no writes)"]
+    APP -. "Store.local (sync UI state:<br/>panel layout · workspace registry + active id (F59)<br/>· sync cursors, never a key (F63))" .-> LS["localStorage (origin-shared,<br/>namespaced by key prefix)<br/>app: bb:*  ·  staging: bb:staging:*<br/>demo: in-memory Map (no writes)"]
 
     classDef db fill:#1f2937,stroke:#9ca3af,color:#e5e7eb;
     classDef mem fill:#3f2937,stroke:#f59e0b,color:#fde68a;
@@ -75,6 +81,16 @@ Two *different* mechanisms — not one shared switch:
   itself (admin credential required; **fails closed with 403** if `ADMIN_KEY` is unset). This is
   access control, orthogonal to the data isolation above. Prod and demo are public.
 - **All access funnels through the `Store` interface** — the app never touches `indexedDB` directly,
-  so a future `CloudStore` (subscription tier) can drop in behind the same async methods.
-- **Dedupe:** `trades` are keyed by a content hash (`tradeId`, FNV-1a over
-  `time|symbol|side|pnl`), so re-uploading an overlapping CSV only inserts genuinely new rows.
+  so the `CloudStore` write-behind wrapper (F63, `cloud` subscription tier) drops in behind the same
+  async methods. On **staging only** `App.svelte` resolves the store through `Entitlements.storeFor()`
+  and wraps it in `CloudStore` (`wrapStore`) for opt-in E2E sync; prod/demo never construct one.
+- **Named workspaces (F59):** the store is now workspace-scoped — each named workspace is its **own**
+  IndexedDB DB (`blotterbook:<uuid>`), while the pre-F59 **Default** keeps the legacy DB name
+  (`blotterbook`/`blotterbookStaging`) so existing data is used in place. The `DB_NAME` seam that
+  already split prod vs. staging now also selects the active workspace's DB; the registry + active id
+  live in `Store.local`.
+- **Dedupe & tombstones:** `trades` are keyed by a content hash (`tradeId`, FNV-1a over
+  `time|symbol|side|pnl`), so re-uploading an overlapping CSV only inserts genuinely new rows — and a
+  `tombstones` store (F58) stops a re-import from resurrecting a deleted trade.
+- **The sync branch is staging-gated** and detailed in [`docs/synced-workspaces.md`](../synced-workspaces.md) +
+  [`docs/data-flow.md`](../data-flow.md) §7a — only ciphertext + blinded ids ever reach `/api/sync/*`.

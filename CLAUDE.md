@@ -11,9 +11,15 @@ accounts/payments/admin backend is in
 **Blotterbook** is a client-side trading journal and cost dashboard for futures
 traders. It parses a balance-history CSV (TradingView and other platforms)
 entirely in the browser, stores it locally in IndexedDB, and renders
-performance / calendar / cost / tax / stats views. **No trade data ever leaves
-the browser.** It's a Vite-built Svelte 5 SPA (ADR-001) that deploys to
-Cloudflare Pages (build → `dist/`) plus `/functions/*` edge functions.
+performance / calendar / cost / tax / stats views. **Compute stays 100% local on
+every tier; the moat is refined, not absolute** — trade data leaves the browser
+*only* for a `cloud`-tier user who opts a workspace into sync, and *only as
+ciphertext the server cannot decrypt* (E2E, zero-knowledge). `local`-tier and
+un-synced workspaces egress nothing. Cloud sync is **staging-gated** today (not
+yet promoted to prod/demo). See
+[`docs/synced-workspaces.md`](docs/synced-workspaces.md). It's a Vite-built
+Svelte 5 SPA (ADR-001) that deploys to Cloudflare Pages (build → `dist/`) plus
+`/functions/*` edge functions.
 
 ## Hard constraints (do not break these)
 
@@ -31,7 +37,15 @@ genuine invariants remain:
   invariant is unchanged: **never add a literal `style=""` attribute to markup** — use utilities or
   the `styleProps` action for dynamic styling.
 - **Demo never mutates or persists** — it mounts the in-memory `DemoStore` (nothing reaches
-  IndexedDB/localStorage by construction) and disables/guards every write path.
+  IndexedDB/localStorage by construction) and disables/guards every write path. `DemoStore` is never
+  a `cloud` store and never syncs.
+- **Egress is ciphertext-only and opt-in.** Compute never touches the network on any tier. Trade data
+  leaves the browser *only* through the **staging-gated** cloud-sync path (F58–F63), *only* for a
+  `cloud`-tier user who opted a workspace in, and *only as E2E ciphertext the server can't decrypt*.
+  Don't add a network read/write to the compute path or send any plaintext trade field to `/functions`.
+- **CSP `script-src` gained `'wasm-unsafe-eval'`** (owner-approved 2026-07-06) so the Argon2id **wasm**
+  (`hash-wasm`, F61a) can compile — this is wasm-specific and does **not** re-enable `'unsafe-inline'`/
+  `'unsafe-eval'` JS (both stay absent). Keep it that narrow.
 - **The committed HTML and data manifest are generated artifacts** that must stay in sync with
   their sources — CI's drift gate fails if they drift (see Commands).
 - **The pure-logic core (`src/lib/core/`) is framework-agnostic** and reused as-is by the app and
@@ -49,19 +63,25 @@ re-platform), and [`docs/architecture.md`](docs/architecture.md).
   CsvLibrary/TradeEditor/Reports/Account — Account is staging-gated, F53) + `parts/` (BootSplash/
   CostSetup/Onboarding/ActivityTerminal/Definitions/StatusBanner/DashTabs/DatePickerPopover/
   DetectionStatus/EditableCellPopover/FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/
-  ScreenshotLightbox/SegmentedControl/SymbolSelect/TagInput) +
-  `lib/{dashboard.svelte.ts,dashtabs.svelte.ts,account.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports}`.
+  ScreenshotLightbox/SegmentedControl/SymbolSelect/TagInput + the staging-gated synced-workspaces
+  parts WorkspaceSwitcher/CloudSyncSetup/UnlockModal, A132/F61b/F63) +
+  `lib/{dashboard.svelte.ts,dashtabs.svelte.ts,account.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports}`
+  plus the staging-gated cloud-sync glue `{vault.svelte.ts` (in-memory key session, F61b)`,cloudstore.ts` (write-behind `StoreLike` wrapper, F63)`,cloudsync-core.ts` (pure push/pull/merge engine, F63)`,cloudsync.svelte.ts` (reactive sync controller, F63)`}`.
   It reuses the **pure-logic core** in `src/lib/core/` (A29, native TS per A61): `adapters` (+ `xlsx`
   for the ATAS X .xlsx path, F52) / `intake` (CSV gates + cross-export reconciliation, A177/A219) /
-  `compute`+`costModel` in `core` / `store` / `sampledata` / `demostore` / `curveseries` / `report`,
-  with `format` shared by the app *and* the info pages. Cross-component state is Svelte runes
-  (`$state`/`$derived`), not a
-  shared globals object. `App.svelte` resolves the mode-aware `Store` (real IndexedDB for app/staging,
-  the in-memory `DemoStore` for demo, so **demo persists nothing** — by construction) once at the top
-  and **prop-drills it** into `createDashboard`/`createDashTabs` and down through screens/parts — there
-  is no `context('bb:store')` seam (a dead `setContext` call was removed in A224; nothing ever read it).
-  A future `CloudStore` still drops in unchanged, since every consumer depends only on the `StoreLike`
-  interface, not on how the instance is threaded. `main.ts` mounts this ONE mode-aware `App.svelte` on
+  `compute`+`costModel` in `core` / `store` (now with delete tombstones + named workspaces, F58/F59) /
+  `sampledata` / `demostore` / `curveseries` / `report` / `entitlements` (storage-tier resolver, wired
+  to `/api/me`, F60) / `crypto` (E2E envelope-encryption core — AES-KW/GCM/HKDF/HMAC + Argon2id via
+  `hash-wasm`, F61a), with `format` shared by the app *and* the info pages. Cross-component state is
+  Svelte runes (`$state`/`$derived`), not a
+  shared globals object. `App.svelte` resolves the mode-aware `Store` (real IndexedDB for app/staging
+  via `Entitlements.storeFor()`, the in-memory `DemoStore` for demo, so **demo persists nothing** — by
+  construction) once at the top and — **on staging only** — wraps it in a `CloudStore` (`wrapStore`,
+  F63) for opt-in encrypted sync, then **prop-drills** the resulting store into
+  `createDashboard`/`createDashTabs` and down through screens/parts — there is no `context('bb:store')`
+  seam (a dead `setContext` call was removed in A224; nothing ever read it). The `CloudStore` is itself
+  a `StoreLike`, so every consumer depends only on the interface, not on how the instance is threaded.
+  `main.ts` mounts this ONE mode-aware `App.svelte` on
   every surface — mode is derived internally from `PAGE_MODE` (`isDemo`/`isStaging`), there is no
   per-surface root.
   *(The former vanilla view layer — render/ui/widgets/datamanager/export/main/state.js +
@@ -310,9 +330,14 @@ conforms to the rules below; keep it that way.
       xlsx.ts           dependency-free .xlsx reader for the ATAS X statistics export (F52)
       intake.ts         CSV intake gates — file/MIME/size + binary/row-cap checks (A177) + cross-export
                         reconciliation (reconcileImport — A219)
-      store.ts          IndexedDB persistence (trades, journal, meta, trademeta, files, filetext —
-                        F37 per-file CSV provenance) + Store.local seam
-      entitlements.ts   storage-tier resolver (scaffold; INTENTIONALLY not loaded)
+      store.ts          IndexedDB persistence (trades, journal, meta, trademeta, files, filetext,
+                        tombstones — F37 provenance + F58 delete-log) + named workspaces (per-workspace
+                        DB `blotterbook:<uuid>`; Default keeps the legacy `blotterbook` name — F59) +
+                        Store.local seam (registry + active-workspace + sync cursors)
+      entitlements.ts   storage-tier resolver — WIRED to /api/me (Tier local|cloud; storeFor()) — F60
+      crypto.ts         E2E envelope-encryption core (F61a): IK gen, AES-KW wrap/unwrap per unlock
+                        method, HKDF-from-PRF, Argon2id passphrase KDF (hash-wasm, dyn-imported),
+                        AES-GCM encrypt/decrypt, blindId/blindKeyFromDekBytes — pure, node-tested
       format.ts         shared esc/platformLabel + version-badge IIFE (ex assets/util.js — A76)
       types.ts          shared TS interfaces (Trade/Fill/CostModel/Metrics/StoreLike/… — A61)
     components/ui/      canonical shadcn-svelte primitives (ADR-002): button, badge, card, checkbox,
@@ -333,12 +358,17 @@ conforms to the rules below; keep it that way.
     parts/              cross-screen pieces: BootSplash/CostSetup/Onboarding/ActivityTerminal/Definitions/
                         StatusBanner/DashTabs/DatePickerPopover/DetectionStatus/EditableCellPopover/
                         FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/ScreenshotLightbox/
-                        SegmentedControl/SymbolSelect/TagInput
-    lib/                app-only glue (TS): dashboard.svelte.ts (dashboard state factory), account.svelte.ts
-                        (F53 auth/session state), pagination.svelte.ts, actions.ts (styleProps), batch.ts
+                        SegmentedControl/SymbolSelect/TagInput + staging-gated synced-workspaces UI:
+                        WorkspaceSwitcher (A132), CloudSyncSetup + UnlockModal (F61b)
+    lib/                app-only glue (TS): dashboard.svelte.ts (dashboard state factory + workspace
+                        switch/reload), account.svelte.ts (F53 auth/session state + PRF passkey enroll),
+                        pagination.svelte.ts, actions.ts (styleProps), batch.ts
                         (multi-file import queue, F47), files.ts (readImage/downloadBlob — ex util.js, A76),
                         flags.ts (APP_FLAGS), flavor.ts, motion.ts, nav.ts, analytics.ts + reports.ts
-                        (Analytics / Reports view-model builders)
+                        (Analytics / Reports view-model builders) + staging-gated cloud-sync glue:
+                        vault.svelte.ts (in-memory key session, F61b), cloudstore.ts (write-behind
+                        StoreLike wrapper), cloudsync-core.ts (pure push/pull/merge engine),
+                        cloudsync.svelte.ts (reactive sync controller) — all F63
   site/                 MARKETING + INFO — Svelte SSG (A69; prerendered at build by scripts/vite-ssg.mjs, hydrated in place)
     components/         Home / Howto / Roadmap / Changelog / Legal / Admin .svelte (the page components)
     lib/                shared chrome: Nav.svelte, Footer.svelte, SiteShell.svelte (base/typography styles + globals)
@@ -369,11 +399,15 @@ conforms to the rules below; keep it that way.
 /functions/             Cloudflare Pages Functions — TypeScript (A78) — PINNED at repo root — see functions/README.md
   _middleware.ts        key-gates /app/staging.html
   _lib/                 accounts.ts (D1 users/credentials/sessions/challenges/donations/recovery_tokens +
-                        session cookie), auth.ts (admin token + Stripe sig verify), http.ts, types.ts
+                        session cookie), auth.ts (admin token + Stripe sig verify), sync.ts (F62 sync
+                        helpers — R2 bucket, ownership, LWW upsert), http.ts, types.ts
   api/{geo,status,config,admin-key}.ts  geo · status · feature flags · admin token
-  api/{me,checkout,webhook}.ts   storage tier + passkey/session state (me) · Stripe donations (checkout/webhook, F54)
+  api/{me,checkout,webhook}.ts   storage tier — grants `cloud` on active/grace subscription (F60) · Stripe
+                        donations + subscription-lifecycle webhook (checkout + customer.subscription.*, F54/F60)
   api/account/*.ts      passkey register/login/logout + email-verify + recovery endpoints (F53/F55)
-  schema.sql             D1 schema for the accounts tables above (apply via wrangler; see functions/README.md)
+  api/sync/*.ts         F62 encrypted-blob transport (workspaces · wrapped-ik · push · pull) over R2 + D1
+  schema.sql             D1 schema — accounts tables + subscriptions/webhook_events (F60) +
+                        sync_records/sync_wrapped_ik/sync_workspace_keys/sync_workspaces (F62); apply via wrangler
 /scripts/
   build-manifest.mjs    regenerates static/data/manifest.json content hashes
   bump-version.mjs      two-track version bump from a merge commit (run by CI; classifies src/ + static/ paths)
@@ -418,12 +452,21 @@ recompute → modes → the no-egress guarantee) is [docs/data-flow.md](docs/dat
 
 The compute pipeline (`adapters`/`compute`/`costModel`) is the **pure-logic core**, reused
 verbatim (A29). The Svelte app drives it: reactive state lives in runes (`$state`/`$derived`)
-inside the components, and `App.svelte` resolves the active `Store` (real IndexedDB for app/staging,
-in-memory `DemoStore` for demo) once and **prop-drills** it into the rune-module factories and down to
+inside the components, and `App.svelte` resolves the active `Store` (real IndexedDB for app/staging via
+`Entitlements.storeFor()`, in-memory `DemoStore` for demo) once and — **on staging only** — wraps it in
+a `CloudStore` (F63) before **prop-drilling** it into the rune-module factories and down to
 screens/parts (no `context()` seam), and `PAGE_MODE` (with `isDemo`/`isStaging` locals derived from
 it) adapts per surface. Boot: `loadRefData()` → `Store.init()` → `restoreSession()`
 (app seeds nothing → empty state shows first-run onboarding; demo seeds in-memory; staging seeds its
 DB first) → `mount()`.
+
+**The sync branch (staging-gated, F58–F63).** On staging, `CloudStore` wraps the local `Store`:
+**reads** stay local (compute never touches the network); each **write** delegates to IndexedDB then
+enqueues a debounced encrypted **push** (`crypto` encrypt → `/api/sync/push`); on connect/unlock/focus a
+**pull** decrypts remote records and re-merges them through the *existing* `importAll` trust boundary
+(trade content-hash union, journal/meta LWW, deletes via F58 tombstones). Keys (account IK + per-workspace
+DEKs) live in memory only, unwrapped once per session by `vault.svelte.ts`. Only ciphertext + blinded ids
+cross the wire — the server can't decrypt. `local`-tier + un-synced workspaces + demo never sync.
 
 The `core.ts` event bus survives the cutover (emitters re-wired in A151 — the CH16 cutover had
 dropped them all): `loadRefData` emits `refdata:loaded`, and the shared actions fire `app:ready`

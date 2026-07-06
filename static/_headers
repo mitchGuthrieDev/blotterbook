@@ -1,10 +1,15 @@
 # Cloudflare Pages — security headers applied to every response.
 #
 # CSP notes:
-# - script-src is 'self' (NO 'unsafe-inline') — every page's JS now lives in its own file
-#   (S9: homepage -> /assets/home.js, admin -> /assets/admin.js, changelog ->
-#   /assets/changelog.js; the app pages already load external scripts). So an injected
+# - script-src is 'self' 'wasm-unsafe-eval' (NO 'unsafe-inline', NO 'unsafe-eval') — every page's
+#   JS now lives in its own file (S9: homepage -> /assets/home.js, admin -> /assets/admin.js,
+#   changelog -> /assets/changelog.js; the app pages already load external scripts). So an injected
 #   inline <script> or onX= handler will not execute, even if markup escaping ever slips.
+#   'wasm-unsafe-eval' (owner-approved 2026-07-06) lets the F61a synced-workspaces crypto core
+#   COMPILE its Argon2id WebAssembly (hash-wasm inlines the wasm as base64 → WebAssembly.compile,
+#   which the default script-src would block). It is WASM-compilation-only: it does NOT re-enable
+#   inline/eval JavaScript ('unsafe-inline'/'unsafe-eval' stay absent), so injected JS still can't
+#   run. The wasm loads lazily on the cloud-sync path only (dynamic import of core/crypto.ts).
 # - style-src is 'self' (NO 'unsafe-inline') — S18/A55 is DONE. There is no inline <style> block
 #   and no style="" attribute on any served page: the marketing/admin pages' static inline CSS was
 #   extracted to linked stylesheets (home.css, admin.css, site.css), and every dynamic style on the
@@ -25,4 +30,4 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
