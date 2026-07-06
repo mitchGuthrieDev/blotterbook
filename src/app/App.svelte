@@ -5,7 +5,7 @@
   //   demo    → in-memory DemoStore (never persists), seeded, every write isDemo-guarded
   //   staging → real IndexedDB Store isolated to blotterbookStaging, seeded
   // Screens read real data via props.
-  import { onMount, setContext } from 'svelte';
+  import { onMount } from 'svelte';
   import { Store } from '../lib/core/store.ts';
   import { createDemoStore } from '../lib/core/demostore.ts';
   import {
@@ -33,6 +33,7 @@
   import * as Popover from '$lib/components/ui/popover';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import { createDashboard, resolveFromFiles } from './lib/dashboard.svelte.ts';
+  import { createDashTabs } from './lib/dashtabs.svelte.ts';
   import { dailySeries } from '../lib/core/curveseries.ts';
   import { navSections, navLabel } from './lib/nav';
   import { UserRound } from '@lucide/svelte';
@@ -65,6 +66,7 @@
   import { account, refreshSession } from './lib/account.svelte.ts';
   import { loadFlags, APP_FLAGS, accountGateEnabled, type AppFlags } from './lib/flags.ts';
   import { pickFlavor } from './lib/flavor.ts';
+  import { createEconOverlay } from './lib/econ.svelte.ts';
   import { Adapters } from '../lib/core/adapters.ts';
   import { checkCsvFile, checkXlsxFile, isXlsxFile } from '../lib/core/intake.ts';
   import { classifyNonTrade, type BatchRow } from './lib/batch.ts';
@@ -78,8 +80,8 @@
   const isStaging = PAGE_MODE === 'staging';
   const store = isDemo ? createDemoStore() : Store;
   const SEEDED = isStaging || isDemo;
-  setContext('bb:store', store);
   const dash = createDashboard(store, { seed: SEEDED, isDemo });
+  const dashTabsState = createDashTabs(store, { isStaging });
 
   // Lazy screen loaders (one Vite chunk each). `import()` caches per specifier, and the shell
   // prefetches them once idle (see onMount), so the first navigation to a screen is instant in
@@ -146,113 +148,19 @@
   );
   // Live filter model for the dashboard Filters popover — reads the app's filter state; the setters
   // mutate it in place so filtered/metrics/series/calendar all re-derive.
-  // Dashboard module layout, persisted to the Store.local seam (staging-namespaced) so hide/reorder/
-  // re-add survives a reload — parity with the app/demo workspace layout.
-  const MOD_KEY = isStaging ? 'bb:staging:dashModules' : 'bb:dashModules';
-
   // ── Dashboard tabs (A135; promoted to all surfaces — CH16) ──────────────────────────────────
-  // Multiple named dashboards, each with its own module layout. The 'main' tab maps to the legacy
-  // MOD_KEY so an existing layout carries over; other tabs persist under suffixed keys. The key is
-  // per-surface namespaced like MOD_KEY/WS_KEY; on demo the in-memory DemoStore.local means tab
-  // edits work but never persist (by construction).
-  type DashTab = { id: string; name: string };
-  const TABS_KEY = isStaging ? 'bb:staging:dashTabs' : 'bb:dashTabs';
-  const persistedTabs = store.local.get(TABS_KEY, null) as { tabs: DashTab[]; active: string } | null;
-  let dashTabs = $state<DashTab[]>(persistedTabs?.tabs?.length ? persistedTabs.tabs : [{ id: 'main', name: 'Main' }]);
-  let activeDashTab = $state<string>(
-    persistedTabs?.active && (persistedTabs.tabs ?? []).some(t => t.id === persistedTabs.active) ? persistedTabs.active : 'main'
-  );
-  const modKeyFor = (tabId: string) => (tabId === 'main' ? MOD_KEY : `${MOD_KEY}:${tabId}`);
-  function persistTabs() {
-    store.local.set(TABS_KEY, { tabs: $state.snapshot(dashTabs), active: activeDashTab });
-  }
-  // A186/A189: module-layout edits STAGE in memory and persist only on an explicit Save — the tab
-  // shows a dirty asterisk meanwhile. Unsaved edits survive tab SWITCHES (in-memory drafts) but are
-  // deliberately discarded on reload (the persisted layout is the saved one).
-  let dirtyTabs = $state<string[]>([]);
-  const draftLayouts: Record<string, string[] | undefined> = {};
-  const markDirty = (id: string) => {
-    if (!dirtyTabs.includes(id)) dirtyTabs = [...dirtyTabs, id];
-  };
-  const clearDirty = (id: string) => (dirtyTabs = dirtyTabs.filter(t => t !== id));
+  // Multiple named dashboards, each with its own module layout, persisted to the Store.local seam
+  // (staging-namespaced keys). Extracted to dashtabs.svelte.ts (A224) — dashTabsState owns the tabs/
+  // dirty/draft-layout runes; App.svelte just wires it to DashTabs + the Dashboard module prop below.
+  const dashModules = $derived(dashTabsState.dashModules);
 
-  function selectDashTab(id: string) {
-    if (id === activeDashTab) return;
-    if (dirtyTabs.includes(activeDashTab)) draftLayouts[activeDashTab] = dashModules ? [...dashModules] : undefined;
-    activeDashTab = id;
-    dashModules = dirtyTabs.includes(id)
-      ? draftLayouts[id] && [...(draftLayouts[id] as string[])]
-      : ((store.local.get(modKeyFor(id)) as string[] | null) ?? undefined);
-    persistTabs();
-  }
-  // Drag-reorder (A186; A192): DashTabs commits the FINAL order once, on drop — one persist per
-  // completed drag. Ignore an order that isn't a permutation of the current tabs (stale drop).
-  function reorderDashTabs(ids: string[]) {
-    if (ids.length !== dashTabs.length) return;
-    const byId = new Map(dashTabs.map(t => [t.id, t]));
-    const next = ids.map(id => byId.get(id)).filter((t): t is DashTab => !!t);
-    if (next.length !== dashTabs.length) return;
-    dashTabs = next;
-    persistTabs();
-  }
-  // Persist the ACTIVE tab's staged layout (the DashTabs Save button; clears the asterisk).
-  function saveTabLayout() {
-    if (dashModules) store.local.set(modKeyFor(activeDashTab), $state.snapshot(dashModules));
-    else store.local.remove(modKeyFor(activeDashTab));
-    delete draftLayouts[activeDashTab];
-    clearDirty(activeDashTab);
-  }
-  function createDashTab() {
-    // A198: no naming prompt — create immediately as "New tab N" (lowest unused N);
-    // the DashTabs menu → Rename covers the real name afterward.
-    let n = 1;
-    const names = new Set(dashTabs.map(t => t.name));
-    while (names.has(`New tab ${n}`)) n++;
-    const name = `New tab ${n}`;
-    const id = Date.now().toString(36) + dashTabs.length;
-    dashTabs = [...dashTabs, { id, name }];
-    selectDashTab(id); // persists tabs + active
-    emit('tab:created', { name }); // A188 — activity-log line
-  }
-  function renameDashTab(id: string) {
-    const cur = dashTabs.find(t => t.id === id);
-    const name = typeof prompt === 'function' ? prompt('Rename tab', cur?.name ?? '') : null;
-    if (!name || !name.trim()) return;
-    dashTabs = dashTabs.map(t => (t.id === id ? { ...t, name: name.trim() } : t));
-    persistTabs();
-  }
-  function moveDashTab(id: string, dir: -1 | 1) {
-    const i = dashTabs.findIndex(t => t.id === id),
-      j = i + dir;
-    if (i < 0 || j < 0 || j >= dashTabs.length) return;
-    const next = [...dashTabs];
-    [next[i], next[j]] = [next[j], next[i]];
-    dashTabs = next;
-    persistTabs();
-  }
-  function deleteDashTab(id: string) {
-    if (dashTabs.length === 1) return;
-    if (typeof confirm === 'function' && !confirm('Delete this dashboard tab? Its module layout is removed.')) return;
-    store.local.remove(modKeyFor(id));
-    delete draftLayouts[id];
-    clearDirty(id);
-    dashTabs = dashTabs.filter(t => t.id !== id);
-    if (activeDashTab === id) selectDashTab(dashTabs[0].id);
-    else persistTabs();
-  }
-
-  // svelte-ignore state_referenced_locally — initial read only; selectDashTab reassigns on switch.
-  let dashModules = $state<string[] | undefined>((store.local.get(modKeyFor(activeDashTab)) as string[] | null) ?? undefined);
-  // A186: layout changes STAGE (dirty asterisk) — saveTabLayout() persists them.
-  function saveModules(order: string[]) {
-    dashModules = order;
-    markDirty(activeDashTab);
-  }
-  // Reset the layout to the default (all modules shown, default order) — staged like any edit.
-  function revertModules() {
-    dashModules = undefined;
-    markDirty(activeDashTab);
-  }
+  // Economic-event overlay (R14/R14b) — a shared reactive instance for the Calendar screen + the
+  // dashboard Calendar module. Persisted pref key is per-surface namespaced like the dashTabs keys;
+  // the dataset is LAZY (loadEconEvents, kept out of the boot loadRefData path). First-run defaults
+  // to 'high' (overlay on, high-impact only) per the owner's v1 decision. Demo uses DemoStore.local
+  // (in-memory) so toggles work but never persist — no special-casing.
+  const ECON_KEY = isStaging ? 'bb:staging:econCal' : 'bb:econCal';
+  const econ = createEconOverlay(store, ECON_KEY);
 
   // Named workspace layout templates (R12 parity): save/apply/delete the module layout by name; revert
   // clears the layout back to the default (all modules). Persisted to Store.local (per-surface key).
@@ -277,8 +185,8 @@
     apply: (name: string) => {
       const order = wsTemplates[name];
       if (order) {
-        saveModules([...order]);
-        saveTabLayout();
+        dashTabsState.saveModules([...order]);
+        dashTabsState.saveTabLayout();
       }
     },
     remove: (name: string) => {
@@ -289,8 +197,8 @@
       persistWs();
     },
     revert: () => {
-      revertModules();
-      saveTabLayout();
+      dashTabsState.revertModules();
+      dashTabsState.saveTabLayout();
     },
   });
 
@@ -487,6 +395,9 @@
     for (const d of dash.metricsAll.days) if (+d.date.slice(0, 4) === dash.calYear) out[d.date] = d.pnl;
     return out;
   });
+  // Econ overlay for the calendar cursor month (R14b) — reactive to the cursor + the overlay mode +
+  // the lazy dataset finishing loading. Empty Map when off/unloaded, so the cells just show no marks.
+  const calEconMonth = $derived(econ.monthEvents(dash.calYear, dash.calMonth + 1));
   const calTradesForDay = (day: number): DayTrade[] =>
     dash.tradesForDay(dateOf(day)).map(t => ({
       time: (t.time || '').slice(11, 16),
@@ -1144,16 +1055,16 @@
         <!-- A135 (promoted CH16): named dashboard tabs, each with its own module layout. -->
         <div class="mb-4">
           <DashTabs
-            tabs={dashTabs}
-            active={activeDashTab}
-            dirty={dirtyTabs}
-            onselect={selectDashTab}
-            oncreate={createDashTab}
-            onrename={renameDashTab}
-            onmove={moveDashTab}
-            onreorder={reorderDashTabs}
-            ondelete={deleteDashTab}
-            onsave={saveTabLayout}
+            tabs={dashTabsState.dashTabs}
+            active={dashTabsState.activeDashTab}
+            dirty={dashTabsState.dirtyTabs}
+            onselect={dashTabsState.selectDashTab}
+            oncreate={dashTabsState.createDashTab}
+            onrename={dashTabsState.renameDashTab}
+            onmove={dashTabsState.moveDashTab}
+            onreorder={dashTabsState.reorderDashTabs}
+            ondelete={dashTabsState.deleteDashTab}
+            onsave={dashTabsState.saveTabLayout}
           />
         </div>
         <Dashboard
@@ -1166,6 +1077,8 @@
           dayPnl={calData.dayPnl}
           firstDow={calData.firstDow}
           daysInMonth={calData.daysInMonth}
+          econMonth={calEconMonth}
+          econDay={dateOf}
           onscope={dash.setScope}
           dayTrades={calTradesForDay}
           getNote={day => dash.noteFor(dateOf(day))}
@@ -1182,7 +1095,7 @@
           onsetupsave={s => dash.saveSetup(s)}
           costDisabled={dash.isDemo}
           modules={dashModules}
-          onmoduleschange={saveModules}
+          onmoduleschange={dashTabsState.saveModules}
           recentTrades={dash.filtered
             .slice(-12)
             .reverse()
@@ -1214,6 +1127,11 @@
             tradesForDay={calTradesForDay}
             getJournal={day => dash.journalFor(dateOf(day))}
             onsavenote={(day, text, tags, shots) => dash.saveNote(dateOf(day), text, tags, shots)}
+            econMonth={calEconMonth}
+            econDay={dateOf}
+            econEventsForDay={date => econ.dayEvents(date)}
+            econMode={econ.mode}
+            oneconmode={m => econ.setMode(m)}
           />
         {/await}
       {:else if active === 'analytics'}

@@ -4737,6 +4737,28 @@
       "completedDate": "2026-07-06",
       "partial": false,
       "doneNote": "Definitions module retired (component deleted); its caveats redistributed as contextual tap-friendly InfoTip popovers on the KPI row (parsing/dates) and Break-Even & Cost (cost-model/tax). It was a fixed card — no stored-layout migration needed; validKeys() drops strays."
+    },
+    {
+      "id": "F43",
+      "title": "Economic-event data on the calendar (FOMC/CPI/NFP + friends, togglable)",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Shipped the R14 econ-event calendar overlay (docs/econ-calendar-r14.md). Data (R14a): static/data/econ-events.json (schemaVersion 1, 482 events — compact {d,t} rows + a types map with label/impact/default-ET/gov src) built by scripts/build-econ-events.mjs from primary US-gov sources (federalreserve.gov FOMC, bea.gov GDP, rule-derived EIA crude with pinned 2025-26 holiday shifts, bls.gov CPI/NFP for 2024+2025+forward-2026); EconEvent/EconEventRow/EconEventsFile types in src/lib/core/types.ts; lazy loadEconEvents()/eventsForDay()/eventsForMonth() in core.ts (kept OUT of the boot loadRefData path, emits econ:loaded); scripts/test-econ.mjs wired into test:unit. Render (R14b): src/app/lib/econ.svelte.ts overlay state; Calendar.svelte + Dashboard cal module render up-to-2 dots+overflow count in the free bottom-left day-cell corner (bg-chart-4 high / bg-muted-foreground medium, CSP-safe utilities) plus an Economic-events drill-in list; Off/High/All SegmentedControl on the Calendar toolbar persisted via Store.local at bb:econCal / bb:staging:econCal, first-run default High (FOMC/CPI/NFP/GDP), All adds weekly EIA. e2e/econ-calendar.spec.mjs (4 specs: markers on real dates, drill-in, persistence across reload, demo creates no IndexedDB). Gates green: npm test, build within the 840KiB budget (701.7KiB), manifest no-drift, e2e 89/89. KNOWN GAP tracked as A250: CPI/NFP 2021-2023 + GDP 2021 omitted (BLS/BEA egress-blocked at build time) and the 2025 CPI/NFP rows are unverified pending a BLS-archive reconciliation."
+    },
+    {
+      "id": "A224",
+      "title": "Svelte idiom cleanups: dead bb:store context, extract dashTabs module, live reduced-motion, form-id sweep",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "A65/A80 svelte-adoption-survey follow-ups. (1) Deleted the dead setContext bb:store seam in src/app/App.svelte (zero getContext consumers — the store was already prop-drilled everywhere) and its now-unused setContext import; corrected the 'context seam' language to 'prop-drilled StoreLike' across CLAUDE.md (3 spots), src/lib/core/core.ts, docs/architecture.md (2) and docs/data-flow.md, preserving the 'a future CloudStore drops in unchanged' intent. Stale bb:store mentions in the Mermaid diagram docs were split into a separate follow-up. (2) Extracted App.svelte's ~145-line dashboard-tabs block into src/app/lib/dashtabs.svelte.ts (createDashTabs(store,{isStaging}) factory mirroring createDashboard — owns dashTabs/activeDashTab/dirtyTabs/dashModules + the CRUD fns; persistence keys bb:dashTabs/bb:staging:dashTabs + bb:dashModules unchanged); App.svelte shrank ~140 lines, pure refactor. (3) was already done as A249 (live reducedMotion()). (4) Form-id/a11y sweep across src/app + src/lib/components: added aria-labels to genuinely-unassociated controls (journal-note textareas in Calendar/Dashboard/Blotter/TradeEditor, Reports custom-range Start/End date inputs, TagInput 'Add tag', SymbolSelect 'Filter symbol'); already-correct pairs and the in-table grid-cell editors left alone. Gates green: npm test (svelte-check 0/0), e2e 89/89."
     }
   ]
 }

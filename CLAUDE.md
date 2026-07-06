@@ -50,16 +50,20 @@ re-platform), and [`docs/architecture.md`](docs/architecture.md).
   CostSetup/Onboarding/ActivityTerminal/Definitions/StatusBanner/DashTabs/DatePickerPopover/
   DetectionStatus/EditableCellPopover/FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/
   ScreenshotLightbox/SegmentedControl/SymbolSelect/TagInput) +
-  `lib/{dashboard.svelte.ts,account.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports}`.
+  `lib/{dashboard.svelte.ts,dashtabs.svelte.ts,account.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports}`.
   It reuses the **pure-logic core** in `src/lib/core/` (A29, native TS per A61): `adapters` (+ `xlsx`
   for the ATAS X .xlsx path, F52) / `intake` (CSV gates + cross-export reconciliation, A177/A219) /
   `compute`+`costModel` in `core` / `store` / `sampledata` / `demostore` / `curveseries` / `report`,
   with `format` shared by the app *and* the info pages. Cross-component state is Svelte runes
   (`$state`/`$derived`), not a
-  shared globals object. The mode-aware store seam (context `'bb:store'`) picks the real IndexedDB
-  `Store` (app/staging) or the in-memory `DemoStore` (demo, so **demo persists nothing** — by
-  construction). `main.ts` mounts this ONE mode-aware `App.svelte` on every surface — mode is derived
-  internally from `PAGE_MODE` (`isDemo`/`isStaging`), there is no per-surface root.
+  shared globals object. `App.svelte` resolves the mode-aware `Store` (real IndexedDB for app/staging,
+  the in-memory `DemoStore` for demo, so **demo persists nothing** — by construction) once at the top
+  and **prop-drills it** into `createDashboard`/`createDashTabs` and down through screens/parts — there
+  is no `context('bb:store')` seam (a dead `setContext` call was removed in A224; nothing ever read it).
+  A future `CloudStore` still drops in unchanged, since every consumer depends only on the `StoreLike`
+  interface, not on how the instance is threaded. `main.ts` mounts this ONE mode-aware `App.svelte` on
+  every surface — mode is derived internally from `PAGE_MODE` (`isDemo`/`isStaging`), there is no
+  per-surface root.
   *(The former vanilla view layer — render/ui/widgets/datamanager/export/main/state.js +
   `partials/app-*.html` — was deleted in A33; the CH16 cutover then retired the pre-redesign
   `App.svelte` + its entire `src/app/components/*` view layer and the `lib/modules.ts` module
@@ -245,8 +249,10 @@ conforms to the rules below; keep it that way.
 - **Svelte 5 runes only.** Props are `$props()` (never `export let`); reactive state is `$state()`
   (never a bare `let`); derived values are `$derived()` (never `$:`); side effects are `$effect()`
   (never `$:` blocks). Don't introduce `createEventDispatcher` — use callback props. Cross-component
-  state here is Svelte **runes + `context('bb:store')`**, not a globals object or `svelte/store`
-  writables; a shared-reactive-state module would be a `.svelte.ts` file, but none exist today.
+  state here is Svelte **runes**, not a globals object or `svelte/store` writables: `App.svelte`
+  instantiates the `.svelte.ts` rune-module factories (`dashboard.svelte.ts`/`dashtabs.svelte.ts`/
+  `pagination.svelte.ts`) and **prop-drills** the resulting state + the `Store` down to screens/parts
+  — there is no `context()` seam for app state.
 - **File extensions.** Components with a template → `.svelte` (all carry `<script lang="ts">`, A61);
   shared reactive-state-with-runes modules → `.svelte.ts`; pure logic / utilities / API calls /
   types → `.ts`. No hand-written `.js` in `src/` (the pure-logic core is native TS — A61).
@@ -412,9 +418,10 @@ recompute → modes → the no-egress guarantee) is [docs/data-flow.md](docs/dat
 
 The compute pipeline (`adapters`/`compute`/`costModel`) is the **pure-logic core**, reused
 verbatim (A29). The Svelte app drives it: reactive state lives in runes (`$state`/`$derived`)
-inside the components, the active `Store` is provided via `context('bb:store')` (real IndexedDB
-for app/staging, in-memory `DemoStore` for demo), and `PAGE_MODE` (with `isDemo`/`isStaging` locals
-derived from it) adapts per surface. Boot: `loadRefData()` → `Store.init()` → `restoreSession()`
+inside the components, and `App.svelte` resolves the active `Store` (real IndexedDB for app/staging,
+in-memory `DemoStore` for demo) once and **prop-drills** it into the rune-module factories and down to
+screens/parts (no `context()` seam), and `PAGE_MODE` (with `isDemo`/`isStaging` locals derived from
+it) adapts per surface. Boot: `loadRefData()` → `Store.init()` → `restoreSession()`
 (app seeds nothing → empty state shows first-run onboarding; demo seeds in-memory; staging seeds its
 DB first) → `mount()`.
 

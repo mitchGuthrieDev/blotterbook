@@ -122,7 +122,8 @@ always reconciles with the cost panel.
 ## 6 · Modes — one app, three storage behaviors
 
 `main.ts` mounts the same `App.svelte` everywhere; `PAGE_MODE` (from `<body data-mode>`) picks the
-seam via `context('bb:store')`:
+`Store` instance, which `App.svelte` then prop-drills into the rune-module factories and down through
+screens/parts (no `context()` seam):
 
 - **app** — real IndexedDB (`blotterbook`), no seeding; empty → onboarding.
 - **staging** — real IndexedDB, **isolated** database (`blotterbookStaging`), seeded.

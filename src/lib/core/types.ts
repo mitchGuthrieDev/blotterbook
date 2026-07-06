@@ -343,6 +343,70 @@ export interface StateTaxFile {
   model?: Partial<TaxModel>;
 }
 
+/* ---- economic-event calendar (econ-events.json, R14/R14a) ---- */
+
+/** An event's market-impact level — the UI defaults to `high`-only (weekly EIA is `medium`). */
+export type EconImpact = 'high' | 'medium' | 'low';
+
+/** A category descriptor in econ-events.json's `types` map (one per event kind). All rows of a type
+ *  inherit these defaults; a row's own `et` overrides `et` when a release shifted off its usual time. */
+export interface EconEventType {
+  /** Human label, e.g. `FOMC rate decision`. */
+  label: string;
+  impact: EconImpact;
+  /** Default release time, ET, `HH:MM` (24h). Government releases are ET; dates are pinned to the ET
+   *  calendar date (R14 open-question 1) so "CPI day" matches how traders talk. */
+  et: string;
+  /** Publishing agency host, for attribution (e.g. `federalreserve.gov`). */
+  src: string;
+}
+
+/** One economic-event row (compact — a type key + a date; per-row `et` only when it deviates from
+ *  the type default). The full record the UI consumes is the row joined with its `EconEventType`. */
+export interface EconEventRow {
+  /** ET calendar date, `YYYY-MM-DD`. */
+  d: string;
+  /** Type key into `EconEventsFile.types`. */
+  t: string;
+  /** Per-row release time, ET `HH:MM` — present ONLY when it deviates from the type's default `et`
+   *  (e.g. a holiday-shifted EIA report). Absent ⇒ the type default. */
+  et?: string;
+  /** Optional label suffix for a row that needs disambiguating within its type (e.g. a GDP estimate
+   *  `Advance`/`2nd`/`3rd`, or an EIA `(holiday)` note) — appended to the type label in the UI. */
+  note?: string;
+}
+
+/** A resolved event for a given day — the row joined with its type's defaults (label/impact/src) and
+ *  the effective `et` (row override ?? type default). The pure `eventsForDay`/`eventsForMonth`
+ *  helpers return these so the render layer never re-joins. */
+export interface EconEvent {
+  /** ET calendar date, `YYYY-MM-DD`. */
+  date: string;
+  /** Type key (`fomc`/`cpi`/`nfp`/`gdp`/`eiaCl`). */
+  type: string;
+  /** Display label (type label + any row `note`). */
+  label: string;
+  impact: EconImpact;
+  /** Effective release time, ET `HH:MM`. */
+  et: string;
+  src: string;
+}
+
+/** econ-events.json — curated US-government economic-release calendar (R14a). Same ref-data posture
+ *  as the other /data files: schemaVersion + manifest cache-bust. Two-field rows keep it compact
+ *  (~tens of KB); the `types` map holds the shared per-kind defaults. */
+export interface EconEventsFile {
+  schemaVersion?: number;
+  /** ISO date the dataset was last regenerated (build-econ-events.mjs). */
+  updated?: string;
+  /** Inclusive coverage window of the rows below. */
+  range?: { from: string; to: string };
+  /** Per-kind defaults, keyed by the row `t`. */
+  types?: Record<string, EconEventType>;
+  /** The event rows (unsorted-tolerant; the loader sorts by date). */
+  events?: EconEventRow[];
+}
+
 /** A broker's per-side commission tiers. */
 export interface Broker {
   name: string;

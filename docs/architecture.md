@@ -149,8 +149,11 @@ CSV text
 **App** (`data-mode="app"`) uses the real IndexedDB `Store`; **Demo** (`data-mode="demo"`)
 uses the in-memory `DemoStore` and never persists; **Staging** (`data-mode="staging"`)
 uses an isolated IndexedDB and seeds the sample dataset. The store is chosen by `PAGE_MODE`
-and handed to the app via a `context('bb:store')` seam (A4/A31), so the UI is
-source-agnostic and the demo's no-persist invariant holds by construction.
+in `App.svelte` and **prop-drilled** into the rune-module factories (`createDashboard`/
+`createDashTabs`) and down through screens/parts (A4/A31; a dead `context('bb:store')`
+registration with no consumers was removed in A224), so the UI is source-agnostic — every
+consumer depends on the `StoreLike` interface, not on how the instance reaches it — and the
+demo's no-persist invariant holds by construction.
 
 The **pure-logic core is reused verbatim** (A29, JS→TS per A61) — `core.ts` (compute + costModel + the
 event bus), `adapters.ts`, `store.ts` / `demostore.ts`, `curveseries.ts`, `report.ts`,
@@ -413,7 +416,7 @@ or a Svelte component bumps **both** (it ships to all surfaces).
 
 1. **Build it in `src/app/`** — a screen/part (or extend one), reusing the pure-logic
    core (`core.ts`/`adapters.ts`/`store.ts`/…) verbatim. Read/write data only through the `Store`
-   handed in via `context('bb:store')`, never `indexedDB` directly.
+   prop-drilled down from `App.svelte`, never `indexedDB` directly.
 2. **Gate per surface in the component** — e.g. `{#if isStaging}` for staging-env-only chrome.
    Most features need no gate; they ship everywhere.
 3. **Preserve demo restrictions (never skip).** Every data-mutating control needs `disabled` when

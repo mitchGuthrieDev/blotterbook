@@ -75,6 +75,7 @@
       oninput={e => onFilterInput(e.currentTarget.value)}
       onkeydown={e => onKey(e, close)}
       placeholder="Filter or type a new root…"
+      aria-label="Filter symbol"
       class="h-8"
     />
     <div class="mt-1.5 max-h-56 overflow-y-auto" data-testid="symbolselect-list">

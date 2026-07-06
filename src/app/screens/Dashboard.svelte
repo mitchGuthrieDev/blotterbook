@@ -111,7 +111,7 @@
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import IconTip from '$lib/components/IconTip.svelte';
   import { ChevronUp, ChevronDown, EyeOff } from '@lucide/svelte';
-  import { X, Trash2 } from '@lucide/svelte';
+  import { X, Trash2, CalendarClock } from '@lucide/svelte';
   import * as Dialog from '$lib/components/ui/dialog';
   import { flip } from 'svelte/animate';
   import { fade, slide } from 'svelte/transition';
@@ -141,7 +141,7 @@
   } from '../../lib/core/core.ts';
   import * as Table from '$lib/components/ui/table';
   import type { DailyPoint } from '../../lib/core/curveseries.ts';
-  import type { AppSetup } from '../../lib/core/types.ts';
+  import type { AppSetup, EconEvent } from '../../lib/core/types.ts';
   import CostSetup from '../parts/CostSetup.svelte';
   import StatCardRow, { type StatItem, type StatDetail } from '../parts/StatCardRow.svelte';
   import ActivityTerminal from '../parts/ActivityTerminal.svelte';
@@ -201,6 +201,13 @@
       remove: (name: string) => void;
       revert: () => void;
     };
+    /** Econ-event overlay (R14b): filtered resolved events for the cursor month, keyed by
+     *  `YYYY-MM-DD`. Empty when the overlay is off or the dataset hasn't loaded — the module just
+     *  shows no marks. The toggle lives on the full Calendar screen; the module honors the same
+     *  persisted preference. */
+    econMonth?: Map<string, EconEvent[]>;
+    /** Maps a day-of-month number to its `YYYY-MM-DD` (to key into econMonth). */
+    econDay?: (day: number) => string;
   }
   let {
     stats,
@@ -231,7 +238,12 @@
     recentTrades = [],
     moduleData,
     layouts,
+    econMonth,
+    econDay,
   }: Props = $props();
+
+  // Econ overlay (R14b): per-cell resolved events (already impact-filtered upstream).
+  const econForDay = (day: number): EconEvent[] => (econDay && econMonth ? (econMonth.get(econDay(day)) ?? []) : []);
 
   function doSaveLayout() {
     const name = typeof prompt === 'function' ? prompt('Save current layout as…') : null;
@@ -479,6 +491,7 @@
     note = selectedDay ? getNote(selectedDay) : '';
   });
   const selTrades = $derived(selectedDay ? dayTrades(selectedDay) : []);
+  const selEcon = $derived(selectedDay ? econForDay(selectedDay) : []); // R14b — selected day's econ events
   const pickDay = (day: number) => (selectedDay = selectedDay === day ? null : day);
   const monthWord = $derived(monthLabel.split(' ')[0]);
 
@@ -1027,22 +1040,42 @@
         {:else}
           {@const t = dayPnl[day]}
           {@const up = t && t.pnl >= 0}
+          {@const evs = econForDay(day)}
           <button
             type="button"
             data-testid="cal-day"
-            onclick={() => t && pickDay(day)}
-            disabled={!t}
+            onclick={() => (t || evs.length) && pickDay(day)}
+            disabled={!t && !evs.length}
             class={[
               // A232: the cells grow on desktop so the month grid fills the module's vertical room
               // instead of squishing (A182's bounded mobile cells are unchanged below sm).
-              'aspect-square min-w-0 overflow-hidden rounded-md border p-1 text-left transition-colors sm:aspect-auto sm:min-h-16 sm:p-1.5 lg:min-h-[5.5rem] xl:min-h-24',
-              t ? (up ? 'border-chart-2/30 bg-chart-2/10' : 'border-destructive/30 bg-destructive/10') : 'cursor-default border-border',
+              'relative aspect-square min-w-0 overflow-hidden rounded-md border p-1 text-left transition-colors sm:aspect-auto sm:min-h-16 sm:p-1.5 lg:min-h-[5.5rem] xl:min-h-24',
+              t
+                ? up
+                  ? 'border-chart-2/30 bg-chart-2/10'
+                  : 'border-destructive/30 bg-destructive/10'
+                : evs.length
+                  ? 'border-border'
+                  : 'cursor-default border-border',
               selectedDay === day && 'ring-2 ring-primary',
             ]}
           >
             <span class="flex items-center gap-1 text-[11px] text-muted-foreground">
               {day}{#if getNote(day)}<span class="size-1.5 rounded-full bg-primary" title="Has a note"></span>{/if}
             </span>
+            <!-- Econ marks (R14b): bottom-left, chart-4 for high / muted for medium; max 2 + a +n. -->
+            {#if evs.length}
+              <span
+                data-testid="econ-mark"
+                class="absolute bottom-1 left-1 flex items-center gap-0.5"
+                title={`Economic events: ${evs.map(e => `${e.et} ${e.label}`).join(' · ')}`}
+              >
+                {#each evs.slice(0, 2) as e (e.type + e.et)}
+                  <span class={['size-1.5 rounded-full', e.impact === 'high' ? 'bg-chart-4' : 'bg-muted-foreground']}></span>
+                {/each}
+                {#if evs.length > 2}<span class="text-[9px] leading-none text-muted-foreground">+{evs.length - 2}</span>{/if}
+              </span>
+            {/if}
             {#if t}
               <div
                 class={[
@@ -1059,16 +1092,19 @@
       {/each}
     </div>
 
-    <!-- Selected-day detail: the day's trades + its journal note (parity with app/demo). -->
-    {#if selectedDay && dayPnl[selectedDay]}
+    <!-- Selected-day detail: the day's trades + its journal note (parity with app/demo). Now also
+         opens for an econ-only day (R14b) — a day with a release but no trades. -->
+    {#if selectedDay && (dayPnl[selectedDay] || selEcon.length)}
       {@const t = dayPnl[selectedDay]}
       <div class="mt-4 rounded-md border border-border bg-background p-4" transition:slide={{ duration: dur(150) }}>
         <div class="mb-3 flex items-center justify-between">
           <span class="text-sm font-semibold text-foreground">
             {monthWord}
             {selectedDay}
-            <span class={['ml-2 tabular-nums', t.pnl >= 0 ? 'text-chart-2' : 'text-destructive']}>{usdWhole(t.pnl)}</span>
-            <span class="ml-2 text-xs font-normal text-muted-foreground">{t.tr} {t.tr === 1 ? 'trade' : 'trades'}</span>
+            {#if t}
+              <span class={['ml-2 tabular-nums', t.pnl >= 0 ? 'text-chart-2' : 'text-destructive']}>{usdWhole(t.pnl)}</span>
+              <span class="ml-2 text-xs font-normal text-muted-foreground">{t.tr} {t.tr === 1 ? 'trade' : 'trades'}</span>
+            {/if}
           </span>
           <button
             type="button"
@@ -1079,6 +1115,27 @@
             <X class="size-4" />
           </button>
         </div>
+        <!-- Economic events (R14b): time ET · label · impact. -->
+        {#if selEcon.length}
+          <div class="mb-4">
+            <div class="mb-1 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              <CalendarClock class="size-3" /> Economic events
+            </div>
+            <div class="overflow-hidden rounded-md border border-border">
+              {#each selEcon as e, i (e.type + e.et)}
+                <div class={['flex items-center gap-2 px-2.5 py-1.5 text-xs', i > 0 && 'border-t border-border']}>
+                  <span class="tabular-nums text-muted-foreground">{e.et}</span>
+                  <span class="min-w-0 flex-1 truncate font-medium">{e.label}</span>
+                  <Badge
+                    variant="outline"
+                    class={e.impact === 'high' ? 'border-chart-4/40 text-chart-4' : 'border-border text-muted-foreground'}
+                    >{e.impact === 'high' ? 'High' : 'Med'}</Badge
+                  >
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
         <div class="grid gap-4 lg:grid-cols-2">
           <div class="overflow-hidden rounded-md border border-border">
             {#each selTrades as tr, i (i)}
@@ -1112,6 +1169,7 @@
               {/if}
             {/if}
             <textarea
+              aria-label="Journal note"
               class="h-24 w-full resize-none rounded-md border border-border bg-card p-2 text-xs leading-relaxed text-foreground outline-none focus-visible:border-ring"
               bind:value={note}
             ></textarea>

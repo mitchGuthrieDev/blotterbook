@@ -36,6 +36,7 @@
 <Input
   bind:value
   {placeholder}
+  aria-label="Add tag"
   {disabled}
   class={className}
   autocomplete="off"
