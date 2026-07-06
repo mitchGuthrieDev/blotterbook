@@ -88,21 +88,15 @@ test('demo: write controls are disabled — cost model + data management + CSV i
   await expect(brokerTrigger).toBeVisible();
   await expect(brokerTrigger).toBeDisabled();
 
-  // Trade Editor: a staged cell edit cannot be saved — "Save all" is disabled on demo.
-  // F49: the Symbol cell opens a filterable Popover list (portaled to <body>) instead of a bare
-  // inline input, so the filter input is queried at the page level, not scoped under the <td>.
+  // Trade Editor: demo cannot edit trades at all — core cells render read-only (no trigger button)
+  // and "Save all" is disabled (owner decision 2026-07-06; F49's pickers are exercised on staging).
   await gotoScreen(page, 'Trade Editor');
   await expect(page.locator('table tbody tr').first()).toBeVisible();
-  const cell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
-  await cell.click();
-  const symbolFilter = page.getByPlaceholder('Filter or type a new root…');
-  await symbolFilter.fill('ZZDEMO');
-  await symbolFilter.press('Enter');
-  // A161: assert the control EXISTS before asserting disabled — the old `if (count())` guard
-  // vacuously passed if "Save all" was ever renamed/removed, silencing the demo write-guard.
-  const saveAll = page.getByRole('button', { name: 'Save all' });
-  await expect(saveAll).toHaveCount(1);
-  await expect(saveAll).toBeDisabled();
+  await expect(page.locator('table tbody tr').first().locator('td').nth(3).locator('button')).toHaveCount(0);
+  // A161 (non-vacuous): the explicit read-only note EXISTS; the Save-all dirty bar can never appear
+  // because nothing can be staged on demo.
+  await expect(page.getByTestId('editor-readonly-note')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save all' })).toHaveCount(0);
 
   // CSV Library: the data-management controls (backup / restore / erase) are disabled on demo, and so
   // is the upload dropzone itself — importing is not allowed at all on demo (A134), not merely
@@ -116,24 +110,19 @@ test('demo: write controls are disabled — cost model + data management + CSV i
   await expect(page.getByRole('button', { name: /Import \d+ trade/ })).toHaveCount(0);
 });
 
-test('demo: Trade Editor stages edits in-memory but persists nothing across reload', async ({ page }) => {
+test('demo: Trade Editor is read-only — no cell editing, Add trade + Save all disabled', async ({ page }) => {
   test.setTimeout(60_000);
   await bootDashboard(page);
   await gotoScreen(page, 'Trade Editor');
   await expect(page.locator('table tbody tr').first()).toBeVisible();
 
-  // Edit the first row's Symbol cell → ZZDEMO (an in-memory draft edit). On demo the Save-all control
-  // is DISABLED (isDemo), so the staged edit can never be persisted. F49: the Symbol cell's filter
-  // input lives in a portaled Popover, not inside the <td> — query it at the page level.
-  const symCell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
-  await symCell.click();
-  const symbolFilter = page.getByPlaceholder('Filter or type a new root…');
-  await symbolFilter.fill('ZZDEMO');
-  await symbolFilter.press('Enter');
-  const saveAll = page.getByRole('button', { name: 'Save all' });
-  await expect(saveAll).toHaveCount(1); // A161: no vacuous pass if the control is renamed
-  await expect(saveAll).toBeDisabled();
-  await page.waitForTimeout(300);
+  // Demo cannot edit trades AT ALL (owner decision 2026-07-06): core cells render read-only (no
+  // trigger button), Add trade + Save all are disabled. F49's picker cells are covered on staging.
+  const symTd = page.locator('table tbody tr').first().locator('td').nth(3);
+  await expect(symTd).toBeVisible();
+  await expect(symTd.locator('button')).toHaveCount(0); // no editable-cell trigger on demo
+  await expect(page.getByTestId('editor-readonly-note')).toBeVisible(); // exists (A161, non-vacuous)
+  await expect(page.getByRole('button', { name: 'Save all' })).toHaveCount(0); // no staged edits possible
 
   // Nothing was persisted (demo never touches IndexedDB), so a reload re-seeds the pristine dataset.
   const dbs = await page.evaluate(async () => (indexedDB.databases ? (await indexedDB.databases()).map(d => d.name || '') : []));
@@ -142,100 +131,6 @@ test('demo: Trade Editor stages edits in-memory but persists nothing across relo
   await page.reload({ waitUntil: 'networkidle' });
   await gotoScreen(page, 'Trade Editor');
   await expect(page.locator('table tbody tr').first()).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText('ZZDEMO')).toHaveCount(0); // the edit did not survive
-});
-
-test('demo: Trade Editor Date cell opens a calendar popover and picking a day updates the draft (F49)', async ({ page }) => {
-  await bootDashboard(page);
-  await gotoScreen(page, 'Trade Editor');
-  await expect(page.locator('table tbody tr').first()).toBeVisible();
-
-  // Clicking the Date cell (col 1) opens a month-grid calendar, not a bare text input.
-  const dateCell = page.locator('table tbody tr').first().locator('td').nth(1).locator('button');
-  await dateCell.click();
-  const days = page.getByTestId('datepicker-day');
-  await expect(days.first()).toBeVisible();
-  const dayCount = await days.count();
-  expect(dayCount).toBeGreaterThan(0);
-
-  // Mouse path: pick a day → the popover closes and the cell's staged value is exactly that ISO date.
-  const targetIdx = Math.min(9, dayCount - 1);
-  const target = days.nth(targetIdx);
-  const pickedDate = await target.getAttribute('aria-label'); // rendered as the 'YYYY-MM-DD' itself
-  await target.click();
-  await expect(page.getByTestId('datepicker-day')).toHaveCount(0, { timeout: 10_000 }); // popover closed after picking
-  await expect(dateCell).toHaveText(pickedDate);
-
-  // Keyboard path: reopen, arrow off a focused day, then Enter picks whatever is now focused (the
-  // grid handles ArrowLeft/Right/Up/Down + an explicit Enter handler — see onGridKey in
-  // DatePickerPopover.svelte). Locator.press() (not a bare page.keyboard.press) focuses + waits for
-  // actionability on each element itself, so this isn't racing the popover's open-time re-render.
-  await dateCell.click();
-  const days2 = page.getByTestId('datepicker-day');
-  await expect(days2.first()).toBeVisible();
-  // Flake guard: right after open, bits-ui's own open auto-focus can land AFTER our press and steal
-  // focus from the day (load-dependent interleaving). Retry the arrow press until the roving focus
-  // demonstrably holds on a day.
-  const focusedDay = page.locator('[data-testid="datepicker-day"]:focus');
-  await expect(async () => {
-    const midIdx = Math.min(5, (await days2.count()) - 2);
-    await days2.nth(midIdx).press('ArrowRight');
-    await expect(focusedDay).toHaveCount(1, { timeout: 500 });
-  }).toPass({ timeout: 10_000 });
-  const focusedLabel = await focusedDay.getAttribute('aria-label');
-  expect(focusedLabel).toBeTruthy();
-  await focusedDay.press('Enter'); // actionability-checked press on the focused day itself
-  await expect(page.getByTestId('datepicker-day')).toHaveCount(0, { timeout: 10_000 });
-  await expect(dateCell).toHaveText(focusedLabel);
-
-  // Escape closes without staging a pick.
-  const beforeEscape = await dateCell.textContent();
-  await dateCell.click();
-  await expect(page.getByTestId('datepicker-day').first()).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('datepicker-day')).toHaveCount(0, { timeout: 10_000 });
-  await expect(dateCell).toHaveText(beforeEscape ?? '');
-});
-
-test('demo: Trade Editor Symbol cell opens a filterable list; filtering, picking, and a custom root all work (F49)', async ({ page }) => {
-  await bootDashboard(page);
-  await gotoScreen(page, 'Trade Editor');
-  await expect(page.locator('table tbody tr').first()).toBeVisible();
-
-  const symCell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
-  await symCell.click();
-  const filterInput = page.getByPlaceholder('Filter or type a new root…');
-  await expect(filterInput).toBeFocused(); // opens with the filter already focused (keyboard path)
-
-  // The unfiltered list holds every known root (dataset symbols + EXCH/MICRO/NOT_MICRO fee roots).
-  const options = page.getByTestId('symbolselect-option');
-  const totalCount = await options.count();
-  expect(totalCount).toBeGreaterThan(0);
-
-  // Type-to-filter narrows the list to matches, case-insensitively.
-  await filterInput.fill('es');
-  await expect(options.first()).toBeVisible();
-  const filteredTexts = await options.allTextContents();
-  expect(filteredTexts.length).toBeGreaterThan(0);
-  expect(filteredTexts.length).toBeLessThanOrEqual(totalCount);
-  for (const t of filteredTexts) expect(t.toUpperCase()).toContain('ES');
-
-  // Picking an existing option sets the cell's value and closes the popover.
-  const pickedOption = (await options.first().textContent())?.trim();
-  await options.first().click();
-  await expect(page.getByTestId('symbolselect-list')).toHaveCount(0);
-  await expect(symCell).toHaveText(pickedOption ?? '');
-
-  // Custom-root path: typing an unlisted root surfaces a free-text 'Use "…"' row at the top of the
-  // list, and picking it sets the cell to exactly the typed (canonicalized) root.
-  await symCell.click();
-  await filterInput.fill('zzcustom');
-  const custom = page.getByTestId('symbolselect-custom');
-  await expect(custom).toBeVisible();
-  await expect(custom).toHaveText('Use "ZZCUSTOM"');
-  await custom.click();
-  await expect(page.getByTestId('symbolselect-list')).toHaveCount(0);
-  await expect(symCell).toHaveText('ZZCUSTOM');
 });
 
 test('demo: feedback dialog builds a mailto draft from ONLY the typed text (A105)', async ({ page }) => {

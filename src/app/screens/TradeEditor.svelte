@@ -68,7 +68,8 @@
   }
   let { rows: rowsProp, coreEditable = true, editableFields, onsave, ondelete, dataDisabled = false, tagVocab = [] }: Props = $props();
   // A field is editable if it's in editableFields (when provided) or coreEditable covers everything.
-  const canEdit = (field: string) => (editableFields ? editableFields.includes(field) : coreEditable);
+  // On demo (dataDisabled) trade editing is off entirely — cells render read-only, not as staged drafts.
+  const canEdit = (field: string) => !dataDisabled && (editableFields ? editableFields.includes(field) : coreEditable);
   const anyCoreEditable = $derived(coreEditable || !!editableFields?.length);
 
   const clone = (r: EditorRow): EditorRow => structuredClone($state.snapshot(r));
@@ -314,7 +315,11 @@
 <div class="flex flex-col gap-4">
   <!-- Toolbar -->
   <div class="flex flex-wrap items-center gap-3">
-    {#if coreEditable}
+    {#if dataDisabled}
+      <span class="text-xs text-muted-foreground" data-testid="editor-readonly-note"
+        >Demo is read-only — trades can't be edited here. Import your own CSV in the real app to use the editor.</span
+      >
+    {:else if coreEditable}
       <Button size="sm" onclick={addTrade}><Plus class="size-4" /> Add trade</Button>
       <span class="text-xs text-muted-foreground">Click any cell to edit. Changes are staged until you save.</span>
     {:else if anyCoreEditable}

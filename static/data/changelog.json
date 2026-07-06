@@ -15,7 +15,8 @@
         "A quick branded splash now covers the first moments of boot, vanishing the instant your dashboard is ready.",
         "Activity Terminal joined the customizable module grid and pairs half-width with Advanced Stats on desktop.",
         "Long broker/feed names now truncate cleanly in dropdowns, and font weights follow one documented scale across the app and site.",
-        "Homepage refreshed to match reality: Tradovate/NinjaTrader, Quantower, and ATAS X all listed as verified platforms, with batch and .xlsx import called out."
+        "Homepage refreshed to match reality: Tradovate/NinjaTrader, Quantower, and ATAS X all listed as verified platforms, with batch and .xlsx import called out.",
+        "The demo's Trade Editor is now fully read-only — trade editing (and the new pickers) live in the real app and on staging, keeping the demo true to its look-don't-touch promise."
       ]
     },
     {

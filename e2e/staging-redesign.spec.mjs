@@ -787,3 +787,99 @@ test('staging redesign: F56 bb:flags override arms the gate (both buttons); demo
   await expect(page.getByTestId('launch-gate')).toHaveCount(0);
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
 });
+
+// ── F49: editable-cell pickers (moved from the demo spec — demo is read-only for trades) ────────
+test('staging redesign: Trade Editor Date cell opens a calendar popover and picking a day updates the draft (F49)', async ({ page }) => {
+  await bootDashboard(page);
+  await gotoScreen(page, 'Trade Editor');
+  await expect(page.locator('table tbody tr').first()).toBeVisible();
+
+  // Clicking the Date cell (col 1) opens a month-grid calendar, not a bare text input.
+  const dateCell = page.locator('table tbody tr').first().locator('td').nth(1).locator('button');
+  await dateCell.click();
+  const days = page.getByTestId('datepicker-day');
+  await expect(days.first()).toBeVisible();
+  const dayCount = await days.count();
+  expect(dayCount).toBeGreaterThan(0);
+
+  // Mouse path: pick a day → the popover closes and the cell's staged value is exactly that ISO date.
+  const targetIdx = Math.min(9, dayCount - 1);
+  const target = days.nth(targetIdx);
+  const pickedDate = await target.getAttribute('aria-label'); // rendered as the 'YYYY-MM-DD' itself
+  await target.click();
+  await expect(page.getByTestId('datepicker-day')).toHaveCount(0, { timeout: 10_000 }); // popover closed after picking
+  await expect(dateCell).toHaveText(pickedDate);
+
+  // Keyboard path: reopen, arrow off a focused day, then Enter picks whatever is now focused (the
+  // grid handles ArrowLeft/Right/Up/Down + an explicit Enter handler — see onGridKey in
+  // DatePickerPopover.svelte). Locator.press() (not a bare page.keyboard.press) focuses + waits for
+  // actionability on each element itself, so this isn't racing the popover's open-time re-render.
+  await dateCell.click();
+  const days2 = page.getByTestId('datepicker-day');
+  await expect(days2.first()).toBeVisible();
+  // Flake guard: right after open, bits-ui's own open auto-focus can land AFTER our press and steal
+  // focus from the day (load-dependent interleaving). Retry the arrow press until the roving focus
+  // demonstrably holds on a day.
+  const focusedDay = page.locator('[data-testid="datepicker-day"]:focus');
+  await expect(async () => {
+    const midIdx = Math.min(5, (await days2.count()) - 2);
+    await days2.nth(midIdx).press('ArrowRight');
+    await expect(focusedDay).toHaveCount(1, { timeout: 500 });
+  }).toPass({ timeout: 10_000 });
+  const focusedLabel = await focusedDay.getAttribute('aria-label');
+  expect(focusedLabel).toBeTruthy();
+  await focusedDay.press('Enter'); // actionability-checked press on the focused day itself
+  await expect(page.getByTestId('datepicker-day')).toHaveCount(0, { timeout: 10_000 });
+  await expect(dateCell).toHaveText(focusedLabel);
+
+  // Escape closes without staging a pick.
+  const beforeEscape = await dateCell.textContent();
+  await dateCell.click();
+  await expect(page.getByTestId('datepicker-day').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('datepicker-day')).toHaveCount(0, { timeout: 10_000 });
+  await expect(dateCell).toHaveText(beforeEscape ?? '');
+});
+
+test('staging redesign: Trade Editor Symbol cell opens a filterable list; filtering, picking, and a custom root all work (F49)', async ({
+  page,
+}) => {
+  await bootDashboard(page);
+  await gotoScreen(page, 'Trade Editor');
+  await expect(page.locator('table tbody tr').first()).toBeVisible();
+
+  const symCell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
+  await symCell.click();
+  const filterInput = page.getByPlaceholder('Filter or type a new root…');
+  await expect(filterInput).toBeFocused(); // opens with the filter already focused (keyboard path)
+
+  // The unfiltered list holds every known root (dataset symbols + EXCH/MICRO/NOT_MICRO fee roots).
+  const options = page.getByTestId('symbolselect-option');
+  const totalCount = await options.count();
+  expect(totalCount).toBeGreaterThan(0);
+
+  // Type-to-filter narrows the list to matches, case-insensitively.
+  await filterInput.fill('es');
+  await expect(options.first()).toBeVisible();
+  const filteredTexts = await options.allTextContents();
+  expect(filteredTexts.length).toBeGreaterThan(0);
+  expect(filteredTexts.length).toBeLessThanOrEqual(totalCount);
+  for (const t of filteredTexts) expect(t.toUpperCase()).toContain('ES');
+
+  // Picking an existing option sets the cell's value and closes the popover.
+  const pickedOption = (await options.first().textContent())?.trim();
+  await options.first().click();
+  await expect(page.getByTestId('symbolselect-list')).toHaveCount(0);
+  await expect(symCell).toHaveText(pickedOption ?? '');
+
+  // Custom-root path: typing an unlisted root surfaces a free-text 'Use "…"' row at the top of the
+  // list, and picking it sets the cell to exactly the typed (canonicalized) root.
+  await symCell.click();
+  await filterInput.fill('zzcustom');
+  const custom = page.getByTestId('symbolselect-custom');
+  await expect(custom).toBeVisible();
+  await expect(custom).toHaveText('Use "ZZCUSTOM"');
+  await custom.click();
+  await expect(page.getByTestId('symbolselect-list')).toHaveCount(0);
+  await expect(symCell).toHaveText('ZZCUSTOM');
+});
