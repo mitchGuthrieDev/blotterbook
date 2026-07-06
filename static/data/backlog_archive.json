@@ -4517,6 +4517,28 @@
       "completedDate": "2026-07-06",
       "partial": false,
       "doneNote": "MeResponse.tier/cloudSync marked contract-only; resolveFromFiles(t, files, pick) helper extracted in dashboard.svelte.ts (3 call sites: platform labels, broker override, reconcile family); motion.ts reduced-motion check now live per dur() call; api<T> shape-check + family() move consciously skipped (commented)."
+    },
+    {
+      "id": "F18",
+      "title": "Pre-monetization legal pack: ToS, Privacy Policy, Donations/Refund policy",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": true,
+      "doneNote": "Legal pack published in src/site/components/Legal.svelte with a prominent 'draft pending counsel review' callout: Terms of Service (Delaware governing law/venue), standalone Privacy Policy (local-only IndexedDB trades; coarse /api/geo tax prefill; the live accounts data — passkey public keys, recovery email, hashed-secret session cookie, Cloudflare D1 identity+entitlements only per S25, Resend transactional email; Stripe donation processing; GDPR/CCPA deletion posture), and a NON-REFUNDABLE Donations/Refund policy. Seller identity = Blotterbook, individual sole proprietor; contact privacy@blotterbook.com. Footer operator line + a donation-card 'see donation terms' link added. LANGUAGE IS PLACEHOLDER — needs attorney review before relied upon; live-mode Stripe still gated on that review."
+    },
+    {
+      "id": "A202",
+      "title": "Add an arbitration clause to the legal terms",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Binding-arbitration + class-action-waiver section added to the ToS in Legal.svelte (#arbitration): agreement to arbitrate, AAA Commercial Rules (placeholder), Delaware seat/governing law, class-action waiver with severance, 30-day opt-out to privacy@blotterbook.com. Flagged as placeholder pending counsel, consistent with the F18 entity naming."
     }
   ]
 }

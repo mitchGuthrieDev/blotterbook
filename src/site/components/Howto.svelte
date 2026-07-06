@@ -135,8 +135,9 @@
       <section id="gs-firstrun" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
         <h2 class="mt-0">First run</h2>
         <p>
-          Blotterbook runs entirely in your browser — there's no sign-up and your trade data never leaves the page. Open the app and you'll
-          land on the setup screen. The whole flow is four steps:
+          Blotterbook runs entirely in your browser — your trade data never leaves the page. Launching the app takes a free account (a
+          passkey, no password); the <a href="/app/demo.html">demo</a> needs no sign-up. Open the app and you'll land on the setup screen. The
+          whole flow is four steps:
         </p>
         <ol class="steps">
           <li><b>Pick your broker, data feed, and state</b> — these drive the cost &amp; tax model.</li>

@@ -20,8 +20,8 @@
         <a class="text-[13px] text-muted-foreground no-underline hover:underline" href="legal.html">Legal</a>
       </div>
       <p class="mt-1.5 mb-0 w-full text-[11.5px] leading-[1.6] text-muted-foreground">Internal admin page — not for public use.</p>
-      <!-- CH22: brand-only until the operating entity is decided (R7) — then name it here + on Legal. -->
-      <p class="mb-0 w-full text-[11.5px] text-muted-foreground">© 2026 Blotterbook. All rights reserved.</p>
+      <!-- F18: operating entity named (Blotterbook, individual sole proprietor); consistent with Legal. -->
+      <p class="mb-0 w-full text-[11.5px] text-muted-foreground">© 2026 Blotterbook. Operated by an individual sole proprietor.</p>
     {:else}
       <div class="flex flex-wrap gap-4">
         <a class="text-[13px] text-muted-foreground no-underline hover:underline" href="index.html">Home</a>
@@ -36,10 +36,10 @@
       </div>
       <p class="mt-1.5 mb-0 w-full text-[11.5px] leading-[1.6] text-muted-foreground">
         Blotterbook is a trading journal and estimation tool — <b>not a broker</b>, and not financial, investment, or tax advice. All
-        figures are estimates. Trading involves risk of loss.
+        figures are estimates. Trading involves risk of loss. See <a class="underline hover:no-underline" href="legal.html">Legal</a>.
       </p>
-      <!-- CH22: brand-only until the operating entity is decided (R7) — then name it here + on Legal. -->
-      <p class="mb-0 w-full text-[11.5px] text-muted-foreground">© 2026 Blotterbook. All rights reserved.</p>
+      <!-- F18: operating entity named (Blotterbook, individual sole proprietor); consistent with Legal. -->
+      <p class="mb-0 w-full text-[11.5px] text-muted-foreground">© 2026 Blotterbook. Operated by an individual sole proprietor.</p>
     {/if}
   </div>
 </footer>

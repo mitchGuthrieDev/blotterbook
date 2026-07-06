@@ -81,18 +81,6 @@
       "doneNote": null
     },
     {
-      "id": "F18",
-      "title": "Pre-monetization legal pack: ToS, Privacy Policy, Donations/Refund policy",
-      "category": "FEATURES",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From R7 — prerequisite for R15 (Stripe). Before taking money, expand the legal content (legal.html / new sections or pages): (1) a real Terms of Service distinct from the current disclaimer bullets, with a governing-law/venue clause set to DELAWARE; (2) a standalone full Privacy Policy (today it's a summary) covering local-only storage, the coarse-region tax lookup, and any Stripe data once payments land; (3) a Donations/Refund policy stating the $25/$50 tiers are voluntary NON-REFUNDABLE donations with no goods/services exchanged; (4) name the operating entity / seller identity (BLOCKED on the owner's entity decision from R7). Keep the existing not-a-broker/not-advice disclaimers. Link the new docs from the footer and from the donation/checkout flow. Done when: ToS (Delaware), Privacy Policy, and the non-refundable Donations/Refund policy are published and linked, and the seller identity is shown. — UPDATE 2026-07-02 (backlog review): A181 (2026-07-02) audited the current legal/privacy copy against the app's real behavior and fixed the drift (outbound-call inventory, storage disclosure) — build the formal pack on that corrected baseline; its doneNote lists the accounts-era GDPR/CCPA preconditions.",
-      "doneNote": null
-    },
-    {
       "id": "A15",
       "title": "(infra guardrail) Rate-data scraper must stay within the 50-subrequest free-tier cap",
       "category": "ARCHITECTURE / DUPLICATION",
@@ -234,18 +222,6 @@
       "completedDate": null,
       "partial": false,
       "prompt": "UNBLOCKED 2026-07-01 — A138 landed (docs/vault-storage-assessment.md): the workspace selector should read Local (this browser) / Vault (folder — future, Chromium-only per the assessment) / Remote (stub), with the vault Phase-1 export/import as the first implementable slice. On the staging surface (gated behind isStaging/PAGE_MODE==='staging', demo stays non-mutating), add a Local/Remote workspace toggle in the UI plus the scaffolding for future synced workspaces: a settings/toggle control, a persisted preference (via the Store seam, not direct storage), and a stubbed 'remote' path that no-ops or shows 'coming soon' until the cloud tier exists. Do NOT implement real sync or any trade-data egress — the moat holds (compute stays local). Reuse the existing StoreLike seam (context('bb:store')) so a future CloudStore drops in unchanged. Done when: the toggle renders + persists on staging, the remote path is safely stubbed, and demo/prod are unaffected. — TABLED by the owner 2026-07-01: revisit together with remote-sync planning (the toggle and the vault Phase-1 slice ride along when that thread opens). Not a candidate for near-term scheduling.",
-      "doneNote": null
-    },
-    {
-      "id": "A202",
-      "title": "Add an arbitration clause to the legal terms",
-      "category": "FEATURES",
-      "priority": "P2",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Add a binding-arbitration / dispute-resolution clause to the terms in src/site/components/Legal.svelte (legal.html; prerendered by scripts/vite-ssg.mjs). Cover the usual: agreement to arbitrate disputes, the governing arbitration body/rules, venue/governing law, a class-action waiver, and any opt-out window — sized to a client-side, no-data-leaves-the-browser trading journal. This ties into F18 (pre-monetization legal pack: ToS/Privacy/Disclaimer) and CH22 (footer operator/entity line) — keep entity naming consistent with whatever's decided there. NOTE: exact legal wording is an owner/counsel decision — draft reasonable placeholder language and flag it as needing legal review before ship, don't present it as final legal advice. Done when: the terms include a clearly-sectioned arbitration clause (with class-action waiver + opt-out), consistent with the rest of the legal pack, flagged for owner/legal sign-off.",
       "doneNote": null
     },
     {
