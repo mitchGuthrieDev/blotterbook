@@ -56,7 +56,10 @@
   import StatusBanner from './parts/StatusBanner.svelte';
   import DashTabs from './parts/DashTabs.svelte';
   import FeedbackDialog from './parts/FeedbackDialog.svelte';
-  import { loadFlags, APP_FLAGS, type AppFlags } from './lib/flags.ts';
+  import BootSplash from './parts/BootSplash.svelte';
+  import LaunchGate from './parts/LaunchGate.svelte';
+  import { account, refreshSession } from './lib/account.svelte.ts';
+  import { loadFlags, APP_FLAGS, accountGateEnabled, type AppFlags } from './lib/flags.ts';
   import { pickFlavor } from './lib/flavor.ts';
   import { Adapters } from '../lib/core/adapters.ts';
   import { checkCsvFile, checkXlsxFile, isXlsxFile } from '../lib/core/intake.ts';
@@ -782,6 +785,20 @@
   $effect(() => {
     if (freshApp) onboardingActive = true;
   });
+
+  // F56: login-gated launch (staging-only). Armed by the ACCOUNT_GATE constant or a bb:flags override;
+  // prod/demo are NEVER gated (the isStaging guard here). When armed, App probes /api/me at boot
+  // (refreshSession, below) and holds the whole app behind LaunchGate until a user is signed in —
+  // `!account.user` covers both the in-flight probe (gate shows its own skeleton) and the logged-out
+  // state. On login/register `account.user` flips and the gate unmounts, so the normal flow (staging
+  // is seeded → dashboard; on prod after a CH16 promotion this composes BEFORE F48's onboarding).
+  const gateArmed = isStaging && accountGateEnabled();
+  const gateBlocking = $derived(gateArmed && !account.user);
+
+  // F45: a quick branded splash over the boot sequence (staging only until CH16 promotes it). Purely
+  // visual — mounted alongside boot, removed the instant the shell is ready (dash.loaded) or on
+  // BootSplash's own 3s safety timeout; never blocks or delays boot.
+  let bootSplash = $state(isStaging);
   // F47: batch intake — every file runs gates → parse → import; recognized non-trade exports are
   // NAMED (Cash History, Account Balance History, …) instead of getting the generic A178 refusal.
   // Sequential on purpose: imports hit the same Store and A219 reconciliation applies in order.
@@ -934,6 +951,9 @@
       console.error('app boot failed', e);
       dash.error = e instanceof Error ? e.message : String(e);
     });
+    // F56: only when the gate is armed (staging + flag) do we probe /api/me — prod/demo issue no
+    // account traffic at all. refreshSession never throws; account.loaded flips when it settles.
+    if (gateArmed) void refreshSession();
     fetch('/api/status', { headers: { Accept: 'application/json' } })
       .then(r => (r.ok ? (r.json() as Promise<{ mode?: string; label?: string }>) : null))
       .then(v => (statusRec = v))
@@ -975,7 +995,18 @@
   </div>
 {/snippet}
 
-<AppShell {sections} {active} onnavigate={navigate} title={active === 'account' ? 'Account' : navLabel(active)} hideNav={needsOnboarding}>
+<!-- F45: branded boot splash (staging only) — fixed overlay above the A206 skeletons; unmounts on ready. -->
+{#if bootSplash}
+  <BootSplash ready={dash.loaded} ondismiss={() => (bootSplash = false)} />
+{/if}
+
+<AppShell
+  {sections}
+  {active}
+  onnavigate={navigate}
+  title={active === 'account' ? 'Account' : navLabel(active)}
+  hideNav={needsOnboarding || gateBlocking}
+>
   {#snippet actions()}
     <div class="flex min-w-0 flex-1 items-center gap-2">
       <!-- A179/A225: rotating flavor text — one phrase per page load; hidden on narrow viewports.
@@ -1016,6 +1047,17 @@
 
   <StatusBanner maintenance={flags.maintenanceBanner} {importWarning} />
 
+  {#if gateBlocking}
+    <!-- F56: hold the whole app behind the login gate (staging + flag). LaunchGate is self-contained
+         over account.svelte.ts; on login/register account.user flips and this branch falls through to
+         the normal flow (onboarding or dashboard). -->
+    <LaunchGate />
+  {:else}
+    {@render appBody()}
+  {/if}
+</AppShell>
+
+{#snippet appBody()}
   <!-- A235: every imported file is toggled off — say so instead of bouncing to onboarding. -->
   {#if dash.loaded && !needsOnboarding && !dash.allTrades.length && dash.csvFiles.length}
     <div class="mb-4 rounded-md border border-chart-4/40 bg-chart-4/10 px-3 py-2 text-xs text-chart-4" role="status">
@@ -1239,4 +1281,4 @@
       {/if}
     </div>
   {/key}
-</AppShell>
+{/snippet}

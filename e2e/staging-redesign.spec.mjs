@@ -726,3 +726,64 @@ test('staging redesign: Commission Compare module adds via the picker and ranks 
   await expect(rows.first().getByText('Cheapest')).toBeVisible();
   await expect(mod.getByText(/exchange\/clearing\/NFA \$\d/)).toBeVisible();
 });
+
+// ── F45: branded boot splash (staging-gated) ────────────────────────────────────────────────────
+
+test('staging redesign: F45 boot splash shows during boot, then unmounts once the Dashboard renders', async ({ page }) => {
+  // Hold a boot data request so dash.loaded stays false long enough to observe the splash reliably
+  // (the splash removes itself the instant the shell is ready, so without the hold the assertion races).
+  await page.route('**/data/manifest.json', async route => {
+    await new Promise(r => setTimeout(r, 800));
+    await route.continue();
+  });
+  await page.goto(STAGING);
+  const splash = page.getByTestId('boot-splash');
+  await expect(splash).toBeVisible();
+  await expect(splash).toContainText('Blotterbook');
+
+  // Once boot completes (real KPIs render), the splash fades out and unmounts entirely.
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 8000 });
+  await expect(splash).toHaveCount(0);
+});
+
+test('staging redesign: F45 boot splash NEVER shows on demo or app (staging-only)', async ({ page }) => {
+  // Demo is seeded, so the Dashboard renders — and the splash is never even mounted (isStaging gate).
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+  await expect(page.getByTestId('boot-splash')).toHaveCount(0);
+
+  // App (prod surface): boot settles (networkidle) with no splash mounted.
+  await page.goto('/app/app.html', { waitUntil: 'networkidle' });
+  await expect(page.getByTestId('boot-splash')).toHaveCount(0);
+});
+
+// ── F56: login-gated launch module (flag + staging gated) ───────────────────────────────────────
+
+test('staging redesign: F56 gate is OFF by default — staging boots straight into the app', async ({ page }) => {
+  await bootDashboard(page);
+  await expect(page.getByTestId('launch-gate')).toHaveCount(0);
+});
+
+test('staging redesign: F56 bb:flags override arms the gate (both buttons); demo is never gated', async ({ page }) => {
+  // The bb:flags localStorage override forces ACCOUNT_GATE on without a rebuild (staging-only path).
+  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: true })));
+
+  await page.goto(STAGING, { waitUntil: 'networkidle' });
+  const gate = page.getByTestId('launch-gate');
+  await expect(gate).toBeVisible({ timeout: 8000 });
+  await expect(gate).toContainText('Sign in to launch Blotterbook');
+  await expect(gate.getByRole('button', { name: 'Log in', exact: true })).toBeVisible();
+  await expect(gate.getByRole('button', { name: 'Create account', exact: true })).toBeVisible();
+  // The app is held behind the gate — the real Dashboard KPIs are NOT rendered.
+  await expect(page.getByText('Net P&L', { exact: true })).toHaveCount(0);
+
+  // Create account expands the email + passkey-register form in place.
+  await gate.getByRole('button', { name: 'Create account', exact: true }).click();
+  await expect(gate.getByPlaceholder('you@example.com')).toBeVisible();
+  await expect(gate.getByRole('button', { name: /Create account with a passkey/ })).toBeVisible();
+
+  // Demo is NEVER gated, even with the override set (same origin, so the override is present).
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.getByTestId('launch-gate')).toHaveCount(0);
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+});
