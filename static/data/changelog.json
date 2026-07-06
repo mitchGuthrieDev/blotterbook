@@ -4,6 +4,21 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.57.0",
+      "date": "2026-07-06",
+      "title": "Accounts arrive everywhere, smarter trade editing, and a fresh coat of polish",
+      "summary": "Passkey accounts graduate from staging to every surface, donations and account recovery are wired end-to-end behind the scenes, the Trade Editor gains real date and symbol pickers, and a site-wide type/consistency pass tightens the whole app.",
+      "highlights": [
+        "Account screen now available in the app (and browsable read-only in the demo): passkey sign-in, add a second passkey, and donation status.",
+        "Account recovery: verify a recovery email and re-enroll with a magic link if you ever lose your passkey — plus a nudge to add a backup passkey.",
+        "Trade Editor: date cells open a proper calendar picker and symbol cells a filterable list of your traded roots (custom roots still welcome).",
+        "A quick branded splash now covers the first moments of boot, vanishing the instant your dashboard is ready.",
+        "Activity Terminal joined the customizable module grid and pairs half-width with Advanced Stats on desktop.",
+        "Long broker/feed names now truncate cleanly in dropdowns, and font weights follow one documented scale across the app and site.",
+        "Homepage refreshed to match reality: Tradovate/NinjaTrader, Quantower, and ATAS X all listed as verified platforms, with batch and .xlsx import called out."
+      ]
+    },
+    {
       "version": "0.56.0",
       "date": "2026-07-05",
       "title": "Batch imports that explain themselves, ATAS X support, and a beefier Blotter",

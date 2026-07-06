@@ -261,18 +261,6 @@
       "doneNote": null
     },
     {
-      "id": "F38",
-      "title": "Stripe donations MVP — Payment Links on the homepage pricing card",
-      "category": "FEATURES",
-      "priority": "P2",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From R15 (docs/stripe-assessment-r15.md — follow its MVP plan). Wire the homepage 'Back the project' card (src/site/components/Home.svelte) to two Stripe PAYMENT LINKS ($25 one-time, $50 tier) opened in a new tab — hosted full-redirect, NO Stripe.js on our pages, so CSP/_headers need zero changes and no server code or secrets are involved (donations grant no entitlement; /api/webhook stays inert behind the S11 signature verify). Steps: owner creates the two Payment Links in the Stripe dashboard (test mode first), drop the URLs in, replace the 'Donations open soon' copy, keep the not-a-purchase/non-refundable framing consistent with the (pending) F18 donations policy. OWNER-GATED: needs the Stripe account + the F18/A202 legal pack and entity decision before LIVE-mode links ship (test-mode build can proceed). Open question from R15 to settle: is '$50/yr' truly recurring? A recurring tier is a Stripe SUBSCRIPTION (Checkout Session + customer), not a Payment Link donation — if so, only the $25 one-time link ships in this item. Done when: the pricing card opens working Stripe payment pages (test mode acceptable until legal lands) with no CSP or bundle change.",
-      "doneNote": null
-    },
-    {
       "id": "A220",
       "title": "CI security workflow: Semgrep CE + osv-scanner",
       "category": "SECURITY",
@@ -405,30 +393,6 @@
       "doneNote": null
     },
     {
-      "id": "CH37",
-      "title": "Review font weighting across the app + site",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Polish pass from the owner. The UI is mono-forward (Geist Mono serves both --font-sans and --font-mono), so WEIGHT — not family — carries the visual hierarchy. Audit the weights in use across src/app + src/site (grep font-medium/font-semibold/font-bold): KPI values vs labels, card/module headers, table headers vs cells, nav items, buttons, badge text; verify the self-hosted variable woff2 actually covers the weights used (no browser faux-bold synthesis), and that small text (10–11px) isn't too heavy or too light to read. Normalize to a small documented scale (e.g. 400 body / 500 labels / 600 emphasis / 700 numerals), fix outliers, and record the scale in the /dev styleguide. Done when: a consistent weight scale is applied (or explicitly confirmed) across app + site with no faux-bold, and the styleguide documents it.",
-      "doneNote": null
-    },
-    {
-      "id": "R23",
-      "title": "Documentation + comment accuracy audit, with a /docs archive sweep",
-      "category": "REVIEW / AUDIT",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the owner. Audit ALL documentation and code comments for accuracy after the 2026-07-04/05 feature run (F37/A208/A211/A219 data layer; A197 interactivity; A198/A200/A201/A203/A205/A206 batch; the Wave-3 eval docs): README.md, CLAUDE.md, docs/*.md (architecture, data-flow, ui-redesign, the ADRs, the assessment/eval docs), functions/README.md, and the load-bearing file-header comments in src/ (App.svelte, dashboard.svelte.ts, core modules). Fix drift: stale module lists, retired flags, wrong paths, outdated numbers (bundle sizes, version examples, item counts). ADDITIONALLY sweep /docs for files that can move to docs/archive/ — superseded assessments and one-shot audit reports already fully actioned. NOTE (owner decision 2026-07-05): docs/csv-examples/ is a PERMANENT reference — do NOT archive or remove it. Done when: every doc/comment is checked or fixed, the archive sweep is done, and a short written summary lists what moved and what changed. — RENUMBERED 2026-07-05 (backlog audit): filed as R22, which collided with an already-archived R22; ids must be unique across backlog.json + backlog_archive.json (the admin panel merges both).",
-      "doneNote": null
-    },
-    {
       "id": "F45",
       "title": "(staging) Loading splash + animation on initial page load",
       "category": "FEATURES",
@@ -439,54 +403,6 @@
       "partial": false,
       "prompt": "(STAGING) Visual flair from the owner: a quick branded loading splash + animation on the app's initial page load — a brief moment (logo mark + subtle motion) over the boot sequence, before/above the A206 skeletons resolve into data. Constraints: staging-gated (isStaging) until promoted via CH16; purely decorative — never blocks or delays boot, and disappears the instant the shell is ready (target <400ms perceived); reduced-motion collapses it (A146 dur()); CSP style-src 'self' (Svelte transitions / tw-animate classes, no inline style); no new deps (the ~22 KiB budget headroom is tight); demo/prod unaffected until promotion. Coordinate with F41 (static first-paint skeleton in the HTML shell) so they compose — the splash overlays the skeleton, it doesn't replace it. Done when: staging shows the splash on load, it vanishes on ready, gates stay green, and CH16 can promote it later.",
       "doneNote": null
-    },
-    {
-      "id": "F49",
-      "title": "Trade Editor: calendar date-picker and symbol-select cell editors",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "From the owner. In the Trade Editor, editable DATE cells should open a calendar picker on click (not a bare text field), and editable SYMBOL cells should open a selectable list of symbols (the roots/symbols already present in the dataset + the known fee roots) instead of free text. Implement in src/app/screens/TradeEditor.svelte's cell-editing layer: a popover calendar (vendor the shadcn-svelte calendar/date-picker primitives by hand — the CLI registry is egress-blocked — or a minimal month grid reusing the app's own calendar rendering) and a Select/combobox for symbols (allow typing-to-filter; still permit a new custom root for manual rows). Keep the staged-draft editing model + validation intact; keyboard accessibility (the current cells are keyboard-editable — pickers must be too); CSP-clean. NOTE core cells only edit on manual/new rows today (imported trades are immutable) — this targets those editable cases. Done when: date cells open a picker, symbol cells open a filterable list, manual-row entry still works end-to-end, and e2e stays green."
-    },
-    {
-      "id": "F54",
-      "title": "Accounts Phase 2: donation→account provisioning via the verified Stripe webhook",
-      "category": "FEATURES",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "From R24 + R15/F38. After S11 signature verification ONLY: the webhook provisions/updates the donor flag keyed by Stripe event id (dedupe on retries), linking to an account by verified email at claim time (never trusting the checkout email blindly — the doc's claiming flow); /api/checkout passes client_reference_id for a logged-in donor; the post-donation page prompts account creation for anonymous donors ('claim your donation'). Depends on F53 (accounts exist) + F38 (donations MVP). Done when a donation reliably sets has-donated on the right account with replay-safe dedupe, covered by webhook unit fixtures."
-    },
-    {
-      "id": "F55",
-      "title": "Accounts: recovery email + magic-link re-enrollment + second-passkey nudge",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "From R24. Passkey loss must not brick an account: require a recovery email at signup (verified via a magic link), offer magic-link re-enrollment (a fresh passkey ceremony gated by the emailed single-use token, TTL'd + rate-limited but never SECURED by the fail-open limiter — S22/S25), and nudge users to add a second passkey from the Account screen. Pick the transactional email vendor together with F44 (the changelog-email item chose Resend — reuse it). Depends on F53. Done when a user who lost their only passkey can re-enroll via their recovery email, fixtures cover the token lifecycle."
-    },
-    {
-      "id": "F56",
-      "title": "Accounts Phase 3: login-gated launch module + Create account flow (flagged, staging)",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "From R24 + the owner's spec: once accounts are functional, the app's initial state shows a login module requiring a valid login before launch, with a 'Create account' button beside 'Log in' leading to the account-creation flow. Ship behind a config flag + isStaging (CH16 promotes when the owner turns the key) — NOTE R24's open question 1: this gate conflicts with the current no-signup marketing copy; the owner resolves that before promotion. Compose with F48's Launch step (the review step becomes post-login). Depends on F53. Demo remains ungated. Done when staging boots to the login/create-account module with the flag on, prod/demo unchanged."
     },
     {
       "id": "A236",
@@ -523,18 +439,6 @@
       "partial": false,
       "doneNote": null,
       "prompt": "From the owner. A new 'Symbols' screen/dashboard showing an info card for every symbol the user has traded (derived from imported data). Each card: the symbol root, full contract name, current price (updates realtime — NOTE: requires a market-data source; the app is local-only with no egress for trade data, so a public quote API needs an ADR-level decision — evaluate free delayed-quote options and flag the privacy/CSP implications before wiring), the exchange it trades on (CME/CBOT/NYMEX/COMEX from exchange-fees.json), which platforms the user traded it on (file provenance via platformOf), the user's total PnL for that symbol, and which contract months were traded rendered in month-letter format (F/G/H/J/K/M/N/Q/U/V/X/Z — build on F40's expiry parse helper). Clicking a card expands a full-horizontal-width detail module with a per-symbol equity/PnL graph and expanded stats (win rate, trade count, avg win/loss, hold time if fills data). Reuse core compute + curveseries; new screen in src/app/screens/ + nav entry. Done when the screen renders cards for every traded root with accurate stats and the expanded view works on all surfaces (demo included, read-only)."
-    },
-    {
-      "id": "A237",
-      "title": "Bug: data-feed selection overflows its dropdown boundaries — truncate",
-      "category": "APP",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "Bug from the owner. In the cost setup's market-data feed selector, a long selected feed label overflows the select/dropdown trigger's boundaries instead of truncating. Find the feed Select (src/app/parts/CostSetup.svelte / wherever feeds.json options render) and constrain the trigger's value text: min-w-0 + truncate on the value span, keep the full label visible inside the open list (and/or a title attr). Check the other selects (broker, state) for the same overflow while there. Done when a long feed name truncates with ellipsis in the closed trigger on desktop + mobile and e2e stays green."
     },
     {
       "id": "A238",
@@ -595,42 +499,6 @@
       "partial": false,
       "doneNote": null,
       "prompt": "From the owner. The Definitions module (src/app/parts/Definitions.svelte) needs to go as a standalone module: its definitions + caveats text should be distributed as contextual additional information on the modules they relate to, rather than living in one catch-all module. Map each definition/caveat to its home (expectancy/win-rate → the stats modules' A205-style info tooltips or the Dashboard stat-detail popovers; cost-model caveats → Break-Even & Cost module; tax notes → the tax module/Reports) and surface them there via IconTip/popover 'What is this?' affordances. Then remove the Definitions module from MODULES, the picker, and saved layouts (migrate stored layouts that reference it — drop the key harmlessly). Done when every definition is reachable in context, the module is gone, stored layouts don't break, and e2e is updated."
-    },
-    {
-      "id": "A243",
-      "title": "Web view: Advanced Stats + Activity Terminal side-by-side (like cal/cost pairing)",
-      "category": "APP",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "From the owner. On web view the Advanced Stats and Activity Terminal dashboard modules should not each span the full horizontal width — pair them side-by-side on lg+ exactly like the Trading Calendar + Break-Even & Cost pairing (A228). In src/app/screens/Dashboard.svelte's module grid, extend the A228 col-span logic so 'adv' and 'term' also render lg:col-span-1 when both are visible (and gracefully full-width when only one of the pair is in the layout). Keep mobile stacking unchanged. Done when web view shows adv+term as a half-width pair, single-module layouts still fill the row, and e2e passes."
-    },
-    {
-      "id": "R25",
-      "title": "Account auth review: passkeys-only risks — do we need phone/email MFA?",
-      "category": "RESEARCH",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "From the owner. We currently support ONLY passkeys for account auth (F53, per R24/docs/accounts-architecture.md). Write a focused review of what issues passkeys-only may cause: device/ecosystem lock-in and loss scenarios (mitigated how far by F55 recovery email + second-passkey nudge?), enterprise/managed devices where passkeys are blocked, older browsers/OS coverage gaps, shared/public computers, and user unfamiliarity/abandonment at the create-account step. Then answer: should we ALSO support phone/email MFA — noting that email magic-link (F55) already effectively provides an email-based auth path, that SMS OTP adds cost (Twilio), phishability, and phone-number PII we otherwise never collect, and that R24 explicitly chose passkeys-only + email recovery. Deliver a short recommendation section in docs/accounts-architecture.md (or a companion doc) + any new backlog items it spawns. Done when the owner has a clear written answer with a recommendation."
-    },
-    {
-      "id": "A244",
-      "title": "Audit homepage info for accuracy/currency",
-      "category": "SITE",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "From the owner. Audit the homepage (src/site/components/Home.svelte) copy against the CURRENT product: supported platforms list (TradingView, Tradovate/NinjaTrader orders+performance+fills, Quantower, ATAS X xlsx — the beta set beyond), feature claims (batch import, detection status, capability relay, accounts/passkeys status, blotter/analytics capabilities), pricing/donation copy vs F38 status, the privacy/no-egress claims (still true — trade data never leaves the browser; accounts hold identity only per S25), and any numbers/screenshots that drifted. Fix drift in place; keep marketing tone. Cross-check howto.html platform guides mention the same platforms. Done when every homepage claim is verifiably current."
     }
   ],
   "howToDrive": [
