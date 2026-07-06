@@ -779,12 +779,13 @@
   });
 
   // F56: login-gated launch (staging-only). Armed by the ACCOUNT_GATE constant or a bb:flags override;
-  // prod/demo are NEVER gated (the isStaging guard here). When armed, App probes /api/me at boot
-  // (refreshSession, below) and holds the whole app behind LaunchGate until a user is signed in —
-  // `!account.user` covers both the in-flight probe (gate shows its own skeleton) and the logged-out
-  // state. On login/register `account.user` flips and the gate unmounts, so the normal flow (staging
-  // is seeded → dashboard; on prod after a CH16 promotion this composes BEFORE F48's onboarding).
-  const gateArmed = isStaging && accountGateEnabled();
+  // CH16 (2026-07-06): the login gate is promoted to PROD — armed on app + staging when
+  // accountGateEnabled(), DEMO is never gated (isDemo excluded; demo is the public, no-signup try-it
+  // surface). When armed, App probes /api/me at boot (refreshSession, below) and holds the whole app
+  // behind LaunchGate until a user is signed in — `!account.user` covers both the in-flight probe
+  // (gate shows its own skeleton) and the logged-out state. On login/register `account.user` flips and
+  // the gate unmounts, so the normal flow proceeds (dashboard, or first-run onboarding composed after).
+  const gateArmed = !isDemo && accountGateEnabled();
   const gateBlocking = $derived(gateArmed && !account.user);
 
   // F45/CH16: a quick branded splash over the boot sequence, on every surface. Purely visual —
@@ -1040,9 +1041,9 @@
   <StatusBanner maintenance={flags.maintenanceBanner} {importWarning} />
 
   {#if gateBlocking}
-    <!-- F56: hold the whole app behind the login gate (staging + flag). LaunchGate is self-contained
-         over account.svelte.ts; on login/register account.user flips and this branch falls through to
-         the normal flow (onboarding or dashboard). -->
+    <!-- F56/CH16: hold the whole app behind the login gate (app + staging; demo is never gated).
+         LaunchGate is self-contained over account.svelte.ts; on login/register account.user flips and
+         this branch falls through to the normal flow (onboarding or dashboard). -->
     <LaunchGate />
   {:else}
     {@render appBody()}

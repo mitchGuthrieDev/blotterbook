@@ -11,6 +11,11 @@ const surfaces = [
     // never depends on residual data from a prior test.
     name: 'app',
     path: '/app/app.html',
+    // F56/CH16: the login gate is now armed on prod too — bypass it via the bb:flags override so this
+    // boot-health check reaches the first-run onboarding (the gate has its own specs).
+    init: async page => {
+      await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
+    },
     check: async page => {
       await page.evaluate(() => indexedDB.deleteDatabase('blotterbook'));
       await page.reload({ waitUntil: 'networkidle' });
@@ -104,6 +109,8 @@ for (const s of surfaces) {
 // only drag-and-drop worked. This clicks the real button and drives a file through the picker.)
 test('app: onboarding CSV CTA opens the picker and imports', async ({ page }) => {
   const errors = watchErrors(page);
+  // F56/CH16: bypass the now-prod-armed login gate so onboarding renders (gate has its own specs).
+  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
   await page.goto('/app/app.html', { waitUntil: 'networkidle' });
   await page.evaluate(() => indexedDB.deleteDatabase('blotterbook'));
   await page.reload({ waitUntil: 'networkidle' });
