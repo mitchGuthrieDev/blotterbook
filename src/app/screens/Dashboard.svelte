@@ -41,16 +41,10 @@
     deleteView?: (id: string) => void;
     renameView?: (id: string, name: string) => void;
   };
-  // Per-card drill-in content (parity with app/demo's stat-card modal), built from metrics/cost.
-  export type StatBar = { label: string; value: string; pct: number; tone: 'pos' | 'neg' | 'muted' };
-  export type StatDetail = {
-    title: string;
-    value: string;
-    tone?: 'pos' | 'neg';
-    desc: string;
-    rows: { label: string; value: string; tone?: 'pos' | 'neg' }[];
-    bars?: StatBar[];
-  };
+  // A238: the per-card drill-in content types now live with the shared StatCardRow part (adopted by
+  // Dashboard + Analytics). Re-export them so the app's statDetail builder keeps importing them from
+  // the Dashboard entry point.
+  export type { StatBar, StatDetail } from '../parts/StatCardRow.svelte';
   // F39/A142 batch-1 module data (Today · Drawdown Status · Streak Monitor). Built app-side from the
   // scope-active Metrics (App wires `moduleData={dash.dashModuleData}` for full per-trade fidelity),
   // and DERIVED here from the `series`+`recentTrades` props as a self-contained fallback so the
@@ -119,7 +113,6 @@
   import { ChevronUp, ChevronDown, EyeOff } from '@lucide/svelte';
   import { X } from '@lucide/svelte';
   import * as Dialog from '$lib/components/ui/dialog';
-  import { styleProps } from '../lib/actions.ts';
   import { flip } from 'svelte/animate';
   import { fade, slide } from 'svelte/transition';
   import { MediaQuery } from 'svelte/reactivity';
@@ -150,7 +143,7 @@
   import type { DailyPoint } from '../../lib/core/curveseries.ts';
   import type { AppSetup } from '../../lib/core/types.ts';
   import CostSetup from '../parts/CostSetup.svelte';
-  import ModuleCarousel from '../parts/ModuleCarousel.svelte';
+  import StatCardRow, { type StatItem, type StatDetail } from '../parts/StatCardRow.svelte';
   import ActivityTerminal from '../parts/ActivityTerminal.svelte';
   import InfoTip from '../parts/InfoTip.svelte';
   import SegmentedControl from '../parts/SegmentedControl.svelte';
@@ -331,9 +324,23 @@
     k === 'win' ? 'pos' : k === 'loss' ? 'neg' : undefined;
   const runVerb = (k: 'win' | 'loss' | 'flat' | 'none') => (k === 'win' ? 'winning' : k === 'loss' ? 'losing' : 'scratch');
 
-  // A200: below Tailwind's sm breakpoint the stat cards render as a one-at-a-time carousel.
-  // Conditional RENDER (not CSS hiding) so the cards never exist twice in the DOM/a11y tree.
+  // A200/A241: the perf chart still reads this to trim its gutters below Tailwind's sm breakpoint.
   const isNarrow = new MediaQuery('(max-width: 639px)');
+
+  // A238: the KPI cards — their mobile carousel + click-through drill-in — now live in the shared
+  // StatCardRow part (adopted by Analytics too). Map the app's DashStat shape onto the part's StatItem
+  // (`up` → the value/badge tone; every seeded stat carries a key).
+  const dashStats = $derived<StatItem[]>(
+    stats.map(s => ({
+      key: s.key ?? s.label,
+      label: s.label,
+      value: s.value,
+      tone: s.up === undefined ? undefined : s.up ? 'pos' : 'neg',
+      badge: s.badge,
+      badgeUp: s.up,
+      note: s.note,
+    }))
+  );
 
   // ── Module layout (hide / reorder / re-add — parity with app/demo, persisted to Store.local) ────
   const MODULES: { key: string; label: string }[] = [
@@ -455,19 +462,6 @@
     const name = typeof prompt === 'function' ? prompt('Rename filter', current) : null;
     if (name && name.trim()) filterModel.renameView?.(id, name.trim());
   }
-
-  // ── KPI card drill-in ────────────────────────────────────────────────────────────────────────
-  let openStatKey = $state<string | null>(null);
-  let statOpen = $state(false); // bits-ui owns the Dialog open state (bind:open, per L11)
-  $effect(() => {
-    if (!statOpen) openStatKey = null;
-  });
-  const openStat = (key?: string) => {
-    if (!key) return;
-    openStatKey = key;
-    statOpen = true;
-  };
-  const detail = $derived(openStatKey ? statDetail(openStatKey) : null);
 
   let scope = $state<'all' | 'month'>('all');
   const setScope = (s: 'all' | 'month') => {
@@ -883,33 +877,6 @@
   </div>
 
   <!-- KPI stat cards — click a card to drill into its breakdown (parity with app/demo). -->
-  {#snippet statCard(s: DashStat)}
-    <button
-      type="button"
-      onclick={() => openStat(s.key)}
-      disabled={!s.key}
-      class="w-full rounded-md border border-border bg-card p-4 text-left transition-colors enabled:cursor-pointer enabled:hover:border-ring enabled:hover:bg-accent/30"
-    >
-      <div class="flex items-start justify-between gap-2">
-        <span class="text-xs text-muted-foreground">{s.label}</span>
-        {#if s.badge}
-          <Badge variant="outline" class={s.up ? 'border-chart-2/40 text-chart-2' : 'border-destructive/40 text-destructive'}
-            >{s.badge}</Badge
-          >
-        {/if}
-      </div>
-      <div
-        class={[
-          // CH37: the hero KPI numeral tier (700) — the one place a standalone number IS the module.
-          'mt-2 text-xl font-bold tracking-tight tabular-nums',
-          s.up === undefined ? 'text-foreground' : s.up ? 'text-chart-2' : 'text-destructive',
-        ]}
-      >
-        {s.value}
-      </div>
-      <div class="mt-1 text-[11px] text-muted-foreground">{s.note}</div>
-    </button>
-  {/snippet}
   <!-- A242: the parsing caveats that used to live in the standalone Definitions module now sit as
        contextual "what is this?" popovers next to the numbers they qualify — click a KPI to drill
        in, or these for how the figures are read. -->
@@ -929,22 +896,9 @@
       daily-P&amp;L dispersion and is not annualized; small per-weekday samples are noisy.
     </InfoTip>
   </div>
-  <!-- A200: on phones the stat cards stack behind a one-at-a-time swipeable carousel; the grid
-       returns at sm+ (desktop unchanged). Conditionally RENDERED (MediaQuery) so the cards exist
-       once in the DOM — CSS-hiding the other variant would double every stat for locators/AT. -->
-  {#if isNarrow.current}
-    <ModuleCarousel count={stats.length} label="Key stats">
-      {#snippet slide(i)}
-        {@render statCard(stats[i])}
-      {/snippet}
-    </ModuleCarousel>
-  {:else}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-      {#each stats as s (s.label)}
-        {@render statCard(s)}
-      {/each}
-    </div>
-  {/if}
+  <!-- A238/A200: the shared StatCardRow owns the card grid, the narrow-viewport carousel, and the
+       click-through stat-detail Dialog (Analytics adopts the same part). -->
+  <StatCardRow stats={dashStats} label="Key stats" detail={statDetail} />
 
   {#snippet perfBody()}
     <div class="mb-3 flex w-fit items-center gap-0.5 rounded-md border border-border p-0.5">
@@ -1619,62 +1573,3 @@
      caveats inside the Break-even & Cost module (see costBody). Stored layouts that named a stray
      module key were already dropped harmlessly by validKeys(); Definitions was a fixed card, never a
      MODULES entry, so there is no picker thumbnail or layout key to migrate. -->
-
-<!-- KPI card drill-in dialog -->
-<Dialog.Root bind:open={statOpen}>
-  <Dialog.Content class="sm:max-w-md">
-    {#if detail}
-      <Dialog.Header>
-        <Dialog.Title class="flex items-baseline justify-between gap-3 pr-6">
-          <span>{detail.title}</span>
-          <span
-            class={[
-              'text-lg tabular-nums',
-              detail.tone === 'pos' ? 'text-chart-2' : detail.tone === 'neg' ? 'text-destructive' : 'text-foreground',
-            ]}>{detail.value}</span
-          >
-        </Dialog.Title>
-        {#if detail.desc}<Dialog.Description>{detail.desc}</Dialog.Description>{/if}
-      </Dialog.Header>
-      <div class="space-y-4">
-        {#if detail.bars?.length}
-          <div class="space-y-1.5">
-            {#each detail.bars as bar, i (i)}
-              <div class="flex items-center gap-2 text-xs">
-                <span class="w-24 shrink-0 text-muted-foreground">{bar.label}</span>
-                <div class="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
-                  <div
-                    class={[
-                      'h-full rounded-full',
-                      bar.tone === 'pos' ? 'bg-chart-2' : bar.tone === 'neg' ? 'bg-destructive' : 'bg-muted-foreground',
-                    ]}
-                    use:styleProps={{ width: `${Math.max(2, Math.min(100, bar.pct))}%` }}
-                  ></div>
-                </div>
-                <span
-                  class={[
-                    'w-20 shrink-0 text-right font-medium tabular-nums',
-                    bar.tone === 'pos' ? 'text-chart-2' : bar.tone === 'neg' ? 'text-destructive' : 'text-foreground',
-                  ]}>{bar.value}</span
-                >
-              </div>
-            {/each}
-          </div>
-        {/if}
-        {#if detail.rows.length}
-          <div class="overflow-hidden rounded-md border border-border">
-            {#each detail.rows as r, i (i)}
-              <div class={['flex items-center justify-between px-3 py-2 text-sm', i > 0 && 'border-t border-border']}>
-                <span class="text-muted-foreground">{r.label}</span>
-                <span
-                  class={['tabular-nums', r.tone === 'pos' ? 'text-chart-2' : r.tone === 'neg' ? 'text-destructive' : 'text-foreground']}
-                  >{r.value}</span
-                >
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    {/if}
-  </Dialog.Content>
-</Dialog.Root>

@@ -28,8 +28,9 @@
     expiryCode,
   } from '../lib/core/core.ts';
   import { isBetaPhase } from '../lib/core/format.ts';
-  import { Badge } from '$lib/components/ui/badge';
+  import { Badge, badgeVariants } from '$lib/components/ui/badge';
   import { Skeleton } from '$lib/components/ui/skeleton';
+  import * as Popover from '$lib/components/ui/popover';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import { createDashboard, resolveFromFiles } from './lib/dashboard.svelte.ts';
   import { dailySeries } from '../lib/core/curveseries.ts';
@@ -955,6 +956,17 @@
     if (statusRec.mode === 'offline') return { text: statusRec.label || 'Offline', tone: 'down' as const };
     return { text: statusRec.label || 'Online', tone: 'up' as const }; // live/auto
   });
+  // A239: plain-language popover body per status tone — the pill itself only ever carries the short
+  // admin label, so the "what does this mean" explanation lives here instead.
+  const statusExplainer = $derived(
+    !statusPill
+      ? ''
+      : statusPill.tone === 'up'
+        ? 'All systems normal.'
+        : statusPill.tone === 'warn'
+          ? 'Some functionality may be degraded. See the status detail link below for specifics.'
+          : 'Local data is still fully usable — nothing ever leaves your browser, online or offline.'
+  );
 
   onMount(() => {
     dash.boot().catch((e: unknown) => {
@@ -1027,25 +1039,58 @@
         data-testid="flavor-text"
         title={flavor}>{flavor}</span
       >
-      <!-- A234: online/status pill — admin-set /api/status + navigator.onLine -->
+      <!-- A234/A239: online/status pill — admin-set /api/status + navigator.onLine. Clickable: opens a
+           popover explaining the current status. Below sm it renders dot-only (the aria-label still
+           carries the full text for a11y); the popover always has the full label + explanation. -->
       {#if statusPill}
-        <Badge
-          variant="outline"
-          data-testid="status-pill"
-          class={statusPill.tone === 'up'
-            ? 'border-chart-2/40 text-chart-2'
-            : statusPill.tone === 'warn'
-              ? 'border-chart-4/40 text-chart-4'
-              : 'border-destructive/40 text-destructive'}
-        >
-          <span
-            class={[
-              'size-1.5 rounded-full',
-              statusPill.tone === 'up' ? 'bg-chart-2' : statusPill.tone === 'warn' ? 'bg-chart-4' : 'bg-destructive',
-            ]}
-          ></span>
-          {statusPill.text}
-        </Badge>
+        <Popover.Root>
+          <Popover.Trigger>
+            {#snippet child({ props })}
+              <button
+                {...props}
+                type="button"
+                data-testid="status-pill"
+                aria-label={`Status: ${statusPill.text}`}
+                class={[
+                  badgeVariants({ variant: 'outline' }),
+                  'cursor-pointer hover:bg-accent',
+                  statusPill.tone === 'up'
+                    ? 'border-chart-2/40 text-chart-2'
+                    : statusPill.tone === 'warn'
+                      ? 'border-chart-4/40 text-chart-4'
+                      : 'border-destructive/40 text-destructive',
+                ]}
+              >
+                <span
+                  aria-hidden="true"
+                  class={[
+                    'size-1.5 rounded-full',
+                    statusPill.tone === 'up' ? 'bg-chart-2' : statusPill.tone === 'warn' ? 'bg-chart-4' : 'bg-destructive',
+                  ]}
+                ></span>
+                <span class="hidden sm:inline" data-testid="status-pill-label">{statusPill.text}</span>
+              </button>
+            {/snippet}
+          </Popover.Trigger>
+          <Popover.Content align="end" class="w-64 space-y-1.5">
+            <div class="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+              <span
+                aria-hidden="true"
+                class={[
+                  'size-1.5 rounded-full',
+                  statusPill.tone === 'up' ? 'bg-chart-2' : statusPill.tone === 'warn' ? 'bg-chart-4' : 'bg-destructive',
+                ]}
+              ></span>
+              {statusPill.text}
+            </div>
+            <p class="text-xs leading-relaxed text-muted-foreground">
+              {statusExplainer}
+              {#if statusPill.tone === 'warn'}
+                <a href="/api/status" target="_blank" rel="noopener" class="underline hover:no-underline">Status detail</a>
+              {/if}
+            </p>
+          </Popover.Content>
+        </Popover.Root>
       {/if}
       {#if isBeta}<Badge variant="outline" class="border-chart-4/40 text-chart-4">Beta</Badge>{/if}
       {#if envLabel}<Badge variant="secondary">{envLabel}</Badge>{/if}
@@ -1173,6 +1218,7 @@
           {@render screenSkeleton()}
         {:then Analytics}
           <Analytics.default
+            curveDates={['', ...dash.metricsActive.trades.map(t => t.date)]}
             kpis={analytics.kpis}
             dist={analytics.dist}
             wins={analytics.wins}

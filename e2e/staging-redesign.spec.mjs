@@ -350,6 +350,46 @@ test('staging redesign: the Break-even/Cost + Advanced Statistics modules render
   await expect(adv.getByText(/Payoff ratio/)).toBeVisible();
 });
 
+test('staging redesign: Analytics top KPIs drill in + the drawdown module is interactive (A238/A240)', async ({ page }) => {
+  const errors = watchErrors(page);
+  await bootDashboard(page);
+  await gotoScreen(page, 'Analytics');
+
+  // A238: the 6 top KPI cards adopt the Dashboard's click-through — selecting one opens the shared
+  // stat-detail dialog with a plain-language explainer + a breakdown sourced from on-screen figures.
+  await page
+    .getByRole('button', { name: /Net P&L/ })
+    .first()
+    .click();
+  const dlg = page.getByRole('dialog');
+  await expect(dlg).toBeVisible();
+  await expect(dlg.getByText('Winning trades')).toBeVisible();
+  await expect(dlg.getByText('Losing trades')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dlg).toHaveCount(0);
+
+  // A240: the drawdown module — explainer popover, a dated max-DD callout, and a hover/keyboard readout.
+  await expect(page.getByText('Drawdown (underwater)')).toBeVisible();
+  await expect(page.getByText('Max drawdown')).toBeVisible();
+  // The explainer popover opens on tap (reachable on touch — not a hover-only tooltip).
+  await page.getByRole('button', { name: 'What is this?' }).click();
+  await expect(page.getByText(/underwater chart/i)).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // The curve is a real, focusable SVG; keyboard (←/→) moves the readout cursor deterministically.
+  const dd = page.getByRole('img', { name: /Drawdown-from-peak curve/ });
+  await expect(dd).toBeVisible();
+  await dd.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByText(/below peak/)).toBeVisible();
+  // Hover reads a point too (pointer path), CSP-safe crosshair (SVG geometry).
+  const box = await dd.boundingBox();
+  await dd.hover({ position: { x: box.width * 0.6, y: box.height * 0.5 } });
+  await expect(page.getByText(/below peak/)).toBeVisible();
+
+  expect(errors, errors.join('\n')).toHaveLength(0);
+});
+
 test('staging redesign: clicking the Performance chart jumps the Dashboard calendar to that day', async ({ page }) => {
   await bootDashboard(page);
   const svg = page.locator('svg[aria-label*="P&L curve"]');

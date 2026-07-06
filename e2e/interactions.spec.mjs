@@ -233,6 +233,30 @@ test('demo (mobile): top stat cards render as a one-at-a-time carousel with arro
   await expect(page.getByText('Win rate', { exact: true })).toBeVisible();
 });
 
+test('demo (mobile): Analytics top KPI cards adopt the same one-at-a-time carousel (A238)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 360, height: 780 });
+  await bootDashboard(page);
+
+  // Reach Analytics through the mobile nav drawer.
+  await page.getByRole('button', { name: 'Open navigation' }).click();
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Analytics', exact: true }).click();
+  await expect(page.locator('header h1')).toHaveText('Analytics');
+
+  // The shared StatCardRow renders the KPIs as the A200 carousel here too (distinct group label so it
+  // never collides with the Dashboard's "Key stats"). One card at a time; arrows advance.
+  const carousel = page.getByRole('group', { name: 'Analytics stats' });
+  await expect(carousel).toBeVisible();
+  await expect(carousel.getByText('Net P&L', { exact: true })).toBeVisible();
+  await expect(carousel.getByText('Expectancy / trade', { exact: true })).toHaveCount(0);
+  await carousel.getByRole('button', { name: 'Next card' }).click();
+  await expect(carousel.getByText('Expectancy / trade', { exact: true })).toBeVisible();
+
+  // A238 click-through works on mobile too: tapping the card opens the stat-detail dialog.
+  await carousel.getByText('Expectancy / trade', { exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+});
+
 test('demo (mobile): no screen scrolls horizontally at 360px (A183) and both calendars fit (A182)', async ({ page }) => {
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 360, height: 780 });

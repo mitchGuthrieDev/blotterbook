@@ -9,6 +9,12 @@ import App from './App.svelte';
 
 const target = document.getElementById('app')!; // the mount point exists in every app/*.html shell
 
+// A207/F41: each shell now paints a static boot skeleton (Tailwind utilities only, zero JS) directly
+// inside #app so first paint happens after the ~73 KiB CSS instead of waiting on the full boot JS to
+// parse/execute. Svelte's mount() APPENDS to the target, so clear the static markup first — otherwise
+// it would linger behind (or beside) the real app.
+target.replaceChildren();
+
 // CH16 cutover: the redesigned sidebar-shell App is THE app on ALL surfaces. It is mode-aware
 // internally (PAGE_MODE → real Store / seeded DemoStore / isolated staging DB), so a single mount
 // covers app/demo/staging. (The pre-cutover vanilla App.svelte + src/app/components/* were deleted.)
