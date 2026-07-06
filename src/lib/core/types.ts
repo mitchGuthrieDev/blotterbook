@@ -52,6 +52,10 @@ export interface Trade {
    *  in two overlapping exports carries both). Absent = imported pre-F37 (always included).
    *  NOT part of tradeId. */
   fileIds?: string[];
+  /** Epoch ms of the last local write (F58) — the record-level LWW clock for the future sync layer.
+   *  Stamped by Store on every insert/enrich; absent on trades from a store predating F58.
+   *  NOT part of tradeId (identity must not change, or re-imports would stop deduping). */
+  updated?: number;
   /** Stable dedupe id once persisted (Store.tradeId). */
   id?: string;
 }
@@ -467,6 +471,22 @@ export interface CsvFileRec {
    *  files ("this file is my Schwab era") and costModel prices those trades at that broker's
    *  rates. Absent (the norm) = the global setup broker. */
   broker?: string;
+  /** Epoch ms of the last local write (F58) — the record-level LWW clock for the future sync layer.
+   *  Stamped by Store on addFile/updateFile; absent on records predating F58. */
+  updated?: number;
+}
+
+/** A delete-log entry (F58). Every removal path in the Store records one, keyed by the removed
+ *  record's id, so a delete is distinguishable from "not synced yet": addTrades consults them to
+ *  suppress resurrection of a user-deleted trade on re-import, and they are the delete half of
+ *  record-level last-writer-wins for the future sync layer (F62/F63). */
+export type TombstoneType = 'trade' | 'journal' | 'trademeta' | 'file';
+export interface Tombstone {
+  /** The removed record's key — trade/trademeta id, journal date (YYYY-MM-DD), or file id. */
+  id: string;
+  type: TombstoneType;
+  /** Epoch ms of the deletion. */
+  updated: number;
 }
 
 export interface StoreLike {
@@ -497,11 +517,14 @@ export interface StoreLike {
   journalDates(): Promise<Set<string>>;
   getAllJournal(): Promise<StoredJournal[]>;
   deleteJournal(date: string): Promise<unknown>;
-  getAllMeta(): Promise<Array<{ key: string; value: unknown }>>;
+  getAllMeta(): Promise<Array<{ key: string; value: unknown; updated?: number }>>;
   getTradeMeta(id: string): Promise<StoredTradeMeta>;
   saveTradeMeta(id: string, m: TradeMeta): Promise<unknown>;
   deleteTradeMeta(id: string): Promise<unknown>;
   allTradeMeta(): Promise<StoredTradeMeta[]>;
+  /** All delete-log tombstones (F58) — read by the future sync layer (F62/F63) to propagate deletes;
+   *  writes are internal (every removal path records one). */
+  getTombstones(): Promise<Tombstone[]>;
   exportAll(): Promise<Record<string, unknown>>;
   importAll(data: Record<string, unknown>): Promise<{ added: number; dup: number }>;
   setMeta(key: string, value: unknown): Promise<unknown>;

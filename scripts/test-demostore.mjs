@@ -46,6 +46,7 @@ for (const m of [
   'purge',
   'tradeId',
   'validShot',
+  'getTombstones',
 ]) {
   ok('implements ' + m, typeof s[m] === 'function');
 }
@@ -202,6 +203,102 @@ ok('local.get fallback', s.local.get('missing', 'fb') === 'fb');
   // Demo restore stays a no-op (never persists) even for a v3 envelope.
   const imp3 = await s3.importAll(dump);
   ok('A236: demo importAll ignores a v3 backup (never persists)', imp3.added === 0);
+}
+
+// ── F58: delete tombstones + `updated` audit (suppress re-import resurrection) ──
+{
+  // (a) delete a trade → re-addTrades the same trade → it stays deleted (not resurrected).
+  const sf = createDemoStore();
+  await sf.addTrades([t('2026-05-01 10:00:00', 40)]);
+  const id = sf.tradeId(t('2026-05-01 10:00:00', 40));
+  await sf.deleteTrade(id);
+  ok(
+    'F58: deleteTrade records a trade tombstone',
+    (await sf.getTombstones()).some(tb => tb.id === id && tb.type === 'trade')
+  );
+  const re = await sf.addTrades([t('2026-05-01 10:00:00', 40)]); // re-import the identical trade
+  ok('F58: a deleted trade is NOT resurrected by re-import', re.added === 0 && (await sf.tradeCount()) === 0);
+}
+{
+  // (b) a tombstone is recorded on each delete path.
+  const sf = createDemoStore();
+  await sf.saveJournal('2026-05-02', { text: 'x' });
+  await sf.deleteJournal('2026-05-02');
+  ok(
+    'F58: deleteJournal tombstones the date',
+    (await sf.getTombstones()).some(tb => tb.id === '2026-05-02' && tb.type === 'journal')
+  );
+  await sf.saveTradeMeta('bbbb2222', { note: 'n' });
+  await sf.deleteTradeMeta('bbbb2222');
+  ok(
+    'F58: deleteTradeMeta tombstones the id',
+    (await sf.getTombstones()).some(tb => tb.id === 'bbbb2222' && tb.type === 'trademeta')
+  );
+  // updateTrade tombstones the OLD id and re-adds under the NEW id (an explicit re-add, not an import).
+  await sf.addTrades([t('2026-05-03 10:00:00', 12)]);
+  const oldId = sf.tradeId(t('2026-05-03 10:00:00', 12));
+  const upd = await sf.updateTrade(oldId, t('2026-05-03 10:00:00', 99), {});
+  ok(
+    'F58: updateTrade tombstones the OLD id',
+    (await sf.getTombstones()).some(tb => tb.id === oldId && tb.type === 'trade')
+  );
+  ok('F58: updateTrade re-adds under the new id', upd.id !== oldId && (await sf.tradeCount()) === 1);
+  // deleteFile tombstones each trade it removes, and that trade can't be re-imported afterward.
+  const sd = createDemoStore();
+  await sd.addTrades([{ ...t('2026-05-04 10:00:00', 5), fileIds: ['fA'] }]);
+  const tid = sd.tradeId(t('2026-05-04 10:00:00', 5));
+  const del = await sd.deleteFile('fA');
+  ok(
+    'F58: deleteFile tombstones the removed trade',
+    del.removedTrades === 1 && (await sd.getTombstones()).some(tb => tb.id === tid && tb.type === 'trade')
+  );
+  const reF = await sd.addTrades([{ ...t('2026-05-04 10:00:00', 5), fileIds: ['fB'] }]);
+  ok('F58: a trade removed via deleteFile is not resurrected by re-import', reF.added === 0 && (await sd.tradeCount()) === 0);
+}
+{
+  // (c) `updated` is present on every written record type (the record-level LWW clock).
+  const sf = createDemoStore();
+  await sf.addTrades([t('2026-05-05 10:00:00', 7)]);
+  ok('F58: written trade carries an updated clock', typeof (await sf.getAllTrades())[0].updated === 'number');
+  await sf.saveJournal('2026-05-05', { text: 'j' });
+  ok('F58: journal record carries updated', typeof (await sf.getAllJournal())[0].updated === 'number');
+  await sf.saveTradeMeta('cccc3333', { note: 'n' });
+  ok('F58: trademeta record carries updated', typeof (await sf.allTradeMeta())[0].updated === 'number');
+  await sf.addFile(
+    {
+      id: 'dddd4444',
+      name: 'f.csv',
+      platform: 'x',
+      platformLabel: 'X',
+      size: 1,
+      rows: 1,
+      tradeCount: 1,
+      overlap: 0,
+      from: '2026-05-05',
+      to: '2026-05-05',
+      imported: '2026-05-05T00:00:00Z',
+      included: true,
+    },
+    'raw'
+  );
+  ok('F58: file record carries updated', typeof (await sf.getFiles())[0].updated === 'number');
+  await sf.setMeta('k', { a: 1 });
+  ok('F58: meta record carries updated', typeof (await sf.getAllMeta())[0].updated === 'number');
+  ok(
+    'F58: `updated` does not enter tradeId (identity unchanged)',
+    sf.tradeId(t('2026-05-05 10:00:00', 7)) === (await sf.getAllTrades())[0].id
+  );
+}
+{
+  // (d) purge clears tombstones — a clean slate, so a later re-import is NOT suppressed.
+  const sf = createDemoStore();
+  await sf.addTrades([t('2026-05-06 10:00:00', 3)]);
+  await sf.deleteTrade(sf.tradeId(t('2026-05-06 10:00:00', 3)));
+  ok('F58: tombstone present before purge', (await sf.getTombstones()).length === 1);
+  await sf.purge();
+  ok('F58: purge clears tombstones', (await sf.getTombstones()).length === 0);
+  const re = await sf.addTrades([t('2026-05-06 10:00:00', 3)]);
+  ok('F58: purge clears suppression (a fresh re-import adds again)', re.added === 1 && (await sf.tradeCount()) === 1);
 }
 
 // purge clears everything

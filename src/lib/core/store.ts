@@ -1,7 +1,7 @@
 'use strict';
 import { Adapters } from './adapters.ts';
 import { checkCsvText } from './intake.ts';
-import type { Trade, Annotation, StoredJournal, StoredTradeMeta, StoreLike, CsvFileRec } from './types.ts';
+import type { Trade, Annotation, StoredJournal, StoredTradeMeta, StoreLike, CsvFileRec, Tombstone } from './types.ts';
 /* ============================================================
    Local persistence — IndexedDB
 
@@ -31,7 +31,7 @@ import type { Trade, Annotation, StoredJournal, StoredTradeMeta, StoreLike, CsvF
 // The staging sandbox uses an isolated database so it never touches real data.
 const DB_NAME =
   typeof document !== 'undefined' && document.body && document.body.dataset.mode === 'staging' ? 'blotterbookStaging' : 'blotterbook';
-const DB_VERSION = 3; // v3 (F37): + files / filetext stores for per-file CSV provenance
+const DB_VERSION = 4; // v4 (F58): + tombstones store (delete-log); v3 (F37): + files / filetext
 const TRADES = 'trades';
 const JOURNAL = 'journal';
 const META = 'meta';
@@ -39,6 +39,8 @@ const TRADEMETA = 'trademeta'; // per-trade tags / note / screenshots, keyed by 
 const FILES = 'files'; // imported-CSV metadata records (F37), keyed by content-hash id
 const FILETEXT = 'filetext'; // raw CSV text per file, keyed by the same id — split from the
 // metadata row so listing the library never loads megabytes of text
+const TOMBSTONES = 'tombstones'; // F58 delete-log: { id, type, updated } keyed by the removed
+// record's id — makes a delete distinguishable from "not synced yet" and blocks re-import resurrection
 
 // Screenshots are inlined data: URIs rendered straight into an <img src>. Only well-formed base64
 // image data URIs are allowed — this drops any `javascript:`/`data:text/html`/SVG payload before it
@@ -79,6 +81,9 @@ function open() {
       if (!db.objectStoreNames.contains(TRADEMETA)) db.createObjectStore(TRADEMETA, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(FILES)) db.createObjectStore(FILES, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(FILETEXT)) db.createObjectStore(FILETEXT, { keyPath: 'id' });
+      // F58 (v4): the delete-log. A pre-v4 DB upgrades cleanly — no tombstones present means nothing
+      // is suppressed, i.e. exactly today's behavior, until the user's next delete records one.
+      if (!db.objectStoreNames.contains(TOMBSTONES)) db.createObjectStore(TOMBSTONES, { keyPath: 'id' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -102,6 +107,14 @@ function reqP<T = unknown>(r: IDBRequest<T>): Promise<T> {
     r.onerror = () => reject(r.error);
   });
 }
+// F58: drop a tombstone by id (own tx). Used by updateTrade — an editor re-add is an explicit
+// user action, not an import, so it must not be suppressed by the delete it just logged.
+function clearTombstone(id: string): Promise<void> {
+  return tx(TOMBSTONES, 'readwrite').then(store => {
+    store.delete(id);
+    return done(store);
+  });
+}
 
 /* Stable, order-independent dedupe key for a trade. Two CSV exports
    that overlap will produce identical ids for the shared rows, so a
@@ -120,9 +133,19 @@ export function tradeId(t: Trade): string {
   // Append the within-file ordinal ONLY for 2nd+ identical occurrences (A114), so unique trades keep
   // the exact pre-A114 key (no re-dedupe churn for existing local data) while genuinely-distinct
   // same-second/symbol/side/pnl trades — which used to collide and silently drop — stay apart.
-  // NOTE fileIds/commission (F37/A208) are deliberately NOT hashed — provenance and real costs
-  // must never change a trade's identity, or re-imports would stop deduping.
+  // NOTE fileIds/commission (F37/A208) and `updated` (F58) are deliberately NOT hashed — provenance,
+  // real costs, and the LWW clock must never change a trade's identity, or re-imports would stop
+  // deduping.
   return fnv(`${t.time}|${t.symbol}|${t.side}|${t.pnl}` + (t.dup ? `|${t.dup}` : ''));
+}
+
+// F58: does an existing tombstone suppress re-inserting an incoming trade in addTrades? The ONE
+// isolated place the import-resurrection policy lives. Current policy: a tombstone wins — a deleted
+// trade stays deleted even if a later CSV re-imports it. The alternative is timestamp-LWW —
+// `return !!tomb && tomb.updated >= (incoming.updated ?? 0)` (a newer re-import resurrects) — a
+// one-line swap; the product decision is still open, so keep this trivial to flip.
+export function suppressedByTombstone(tomb: Tombstone | undefined, incoming: Trade): boolean {
+  return !!tomb;
 }
 
 /** Content-hash id for an imported CSV (F37) — a re-upload of the byte-identical file dedupes. */
@@ -227,45 +250,61 @@ export const Store: StoreLike = {
     // fields the stored record LACKS — identity fields (time/symbol/side/pnl, the id inputs) are
     // never touched and existing values never overwritten, so import order doesn't matter.
     const ENRICH = ['qty', 'entryTime', 'exitTime', 'holdMs', 'commission', 'entryPrice', 'exitPrice'] as const;
-    const store = await tx(TRADES, 'readwrite');
+    // F58: widen the tx to include TOMBSTONES so the dedupe read, the tombstone read, and ALL the
+    // puts happen in ONE readwrite tx (B34). Both getAll()s are issued (the tombstone read nested
+    // inside so the tx never idles), then every put is issued synchronously in the inner onsuccess —
+    // NO await between the reads and the puts (B6), so the tx stays live to completion.
+    const db = await open();
+    const dbtx = db.transaction([TRADES, TOMBSTONES], 'readwrite');
+    const store = dbtx.objectStore(TRADES);
+    const tombStore = dbtx.objectStore(TOMBSTONES);
     let added = 0,
       duplicate = 0;
     await new Promise<void>((resolve, reject) => {
-      const kr = store.getAll();
-      kr.onerror = () => reject(kr.error);
-      kr.onsuccess = () => {
-        const existing = new Map<string, Trade>((kr.result as Trade[]).map(r => [r.id as string, r]));
-        for (const t of trades) {
-          const id = tradeId(t);
-          const prev = existing.get(id);
-          if (prev) {
-            duplicate++;
-            let next: Trade | null = null;
-            if (t.fileIds?.length) {
-              const merged = [...new Set([...(prev.fileIds || []), ...t.fileIds])];
-              if (merged.length !== (prev.fileIds || []).length) next = { ...prev, fileIds: merged };
-            }
-            for (const k of ENRICH)
-              if (prev[k] == null && t[k] != null) {
-                next = next ?? { ...prev };
-                setField(next, k, t[k]);
+      const tr = tombStore.getAll();
+      tr.onerror = () => reject(tr.error);
+      tr.onsuccess = () => {
+        const tombs = new Map<string, Tombstone>((tr.result as Tombstone[]).map(r => [r.id, r]));
+        const kr = store.getAll();
+        kr.onerror = () => reject(kr.error);
+        kr.onsuccess = () => {
+          const existing = new Map<string, Trade>((kr.result as Trade[]).map(r => [r.id as string, r]));
+          for (const t of trades) {
+            const id = tradeId(t);
+            const prev = existing.get(id);
+            if (prev) {
+              duplicate++;
+              let next: Trade | null = null;
+              if (t.fileIds?.length) {
+                const merged = [...new Set([...(prev.fileIds || []), ...t.fileIds])];
+                if (merged.length !== (prev.fileIds || []).length) next = { ...prev, fileIds: merged };
               }
-            if (next) {
-              existing.set(id, next);
-              store.put(next);
+              for (const k of ENRICH)
+                if (prev[k] == null && t[k] != null) {
+                  next = next ?? { ...prev };
+                  setField(next, k, t[k]);
+                }
+              if (next) {
+                next.updated = Date.now(); // F58: LWW clock on the enrichment write
+                existing.set(id, next);
+                store.put(next);
+              }
+              continue;
             }
-            continue;
+            // F58: a fresh insert is the only place resurrection can happen — an import re-adding a
+            // trade the user deleted. Consult the delete-log via the single isolated predicate.
+            if (suppressedByTombstone(tombs.get(id), t)) continue;
+            // A154: computed id LAST so a crafted input object carrying its own `id` key (e.g. a
+            // tampered backup) can never override the content hash the dedupe/meta paths rely on.
+            // fileIds is copied to a plain array — a Svelte $state proxy would throw in the
+            // structured clone (same rule as saveTradeMeta's .filter). F58: stamp the LWW clock.
+            const rec = t.fileIds ? { ...t, fileIds: [...t.fileIds], id, updated: Date.now() } : { ...t, id, updated: Date.now() };
+            existing.set(id, rec);
+            store.put(rec);
+            added++;
           }
-          // A154: computed id LAST so a crafted input object carrying its own `id` key (e.g. a
-          // tampered backup) can never override the content hash the dedupe/meta paths rely on.
-          // fileIds is copied to a plain array — a Svelte $state proxy would throw in the
-          // structured clone (same rule as saveTradeMeta's .filter).
-          const rec = t.fileIds ? { ...t, fileIds: [...t.fileIds], id } : { ...t, id };
-          existing.set(id, rec);
-          store.put(rec);
-          added++;
-        }
-        resolve();
+          resolve();
+        };
       };
     });
     await done(store);
@@ -312,9 +351,13 @@ export const Store: StoreLike = {
   },
 
   async deleteTrade(id) {
-    const store = await tx(TRADES, 'readwrite');
-    store.delete(id);
-    return done(store);
+    // F58: delete + record a tombstone in ONE tx so the removal and its delete-log entry can't
+    // diverge. The tombstone is what keeps a later re-import from resurrecting this trade.
+    const db = await open();
+    const t = db.transaction([TRADES, TOMBSTONES], 'readwrite');
+    t.objectStore(TRADES).delete(id);
+    t.objectStore(TOMBSTONES).put({ id, type: 'trade', updated: Date.now() });
+    return done(t.objectStore(TRADES));
   },
 
   // Edit a trade's CORE fields. The id is a content hash (tradeId), so an edit is a delete-old +
@@ -324,10 +367,14 @@ export const Store: StoreLike = {
   // collide with an existing trade merges into it rather than duplicating.
   async updateTrade(oldId, next, meta) {
     const old = await this.getTradeMeta(oldId);
-    await this.deleteTrade(oldId);
+    await this.deleteTrade(oldId); // F58: tombstones the OLD id (a re-import of the pre-edit row stays deleted)
     await this.deleteTradeMeta(oldId);
-    await this.addTrades([next]);
     const id = tradeId(next);
+    // F58: an editor re-add is an EXPLICIT user action, not an import — clear any tombstone for the
+    // new id so addTrades doesn't suppress it. Covers the identity-preserving edit (only tags/note
+    // changed → tradeId(next) === oldId, which deleteTrade just tombstoned).
+    await clearTombstone(id);
+    await this.addTrades([next]);
     await this.saveTradeMeta(id, { tags: meta?.tags ?? old.tags, note: meta?.note ?? old.note, shots: meta?.shots ?? old.shots });
     return { id };
   },
@@ -340,9 +387,12 @@ export const Store: StoreLike = {
   },
 
   async deleteJournal(date) {
-    const store = await tx(JOURNAL, 'readwrite');
-    store.delete(date);
-    return done(store);
+    // F58: delete + tombstone (keyed by the journal date) in one tx — the delete half of journal LWW.
+    const db = await open();
+    const t = db.transaction([JOURNAL, TOMBSTONES], 'readwrite');
+    t.objectStore(JOURNAL).delete(date);
+    t.objectStore(TOMBSTONES).put({ id: date, type: 'journal', updated: Date.now() });
+    return done(t.objectStore(JOURNAL));
   },
 
   async getAllMeta() {
@@ -368,13 +418,22 @@ export const Store: StoreLike = {
     return done(store);
   },
   async deleteTradeMeta(id) {
-    const store = await tx(TRADEMETA, 'readwrite');
-    store.delete(id);
-    return done(store);
+    // F58: delete + tombstone in one tx — the delete half of per-trade-meta LWW.
+    const db = await open();
+    const t = db.transaction([TRADEMETA, TOMBSTONES], 'readwrite');
+    t.objectStore(TRADEMETA).delete(id);
+    t.objectStore(TOMBSTONES).put({ id, type: 'trademeta', updated: Date.now() });
+    return done(t.objectStore(TRADEMETA));
   },
   async allTradeMeta() {
     const store = await tx(TRADEMETA, 'readonly');
     return reqP<StoredTradeMeta[]>(store.getAll());
+  },
+
+  /* ---- F58 delete-log: every removal path records a tombstone; the sync layer reads these ---- */
+  async getTombstones() {
+    const store = await tx(TOMBSTONES, 'readonly');
+    return reqP<Tombstone[]>(store.getAll());
   },
 
   /* ---- F37 per-file CSV provenance: metadata in FILES, raw text in FILETEXT ---- */
@@ -388,7 +447,7 @@ export const Store: StoreLike = {
     // One tx over both stores so a metadata row can never exist without its text (or vice versa).
     const db = await open();
     const t = db.transaction([FILES, FILETEXT], 'readwrite');
-    t.objectStore(FILES).put({ ...rec, id: rec.id });
+    t.objectStore(FILES).put({ ...rec, id: rec.id, updated: Date.now() }); // F58: LWW clock
     t.objectStore(FILETEXT).put({ id: rec.id, text });
     return new Promise<void>((resolve, reject) => {
       t.oncomplete = () => resolve();
@@ -402,8 +461,8 @@ export const Store: StoreLike = {
       const r = store.get(id);
       r.onerror = () => reject(r.error);
       r.onsuccess = () => {
-        // id stays the content hash — a patch can't re-key the record.
-        if (r.result) store.put({ ...r.result, ...patch, id });
+        // id stays the content hash — a patch can't re-key the record. F58: refresh the LWW clock.
+        if (r.result) store.put({ ...r.result, ...patch, id, updated: Date.now() });
         resolve();
       };
     });
@@ -417,12 +476,16 @@ export const Store: StoreLike = {
     // meta (tags/note/screenshots — base64 can be large) goes with it instead of orphaning in
     // IndexedDB. All puts/deletes are issued synchronously inside getAll().onsuccess (B6 — no
     // await mid-tx).
+    // F58: TOMBSTONES joins the tx so each trade this cascade removes records a delete-log entry
+    // (same tx, all puts/deletes synchronous inside getAll().onsuccess — B6). A trade that merely
+    // loses one file id (survives via another) is a survivor, not a delete, so it gets no tombstone.
     const db = await open();
-    const t = db.transaction([FILES, FILETEXT, TRADES, TRADEMETA], 'readwrite');
+    const t = db.transaction([FILES, FILETEXT, TRADES, TRADEMETA, TOMBSTONES], 'readwrite');
     t.objectStore(FILES).delete(id);
     t.objectStore(FILETEXT).delete(id);
     const tradeStore = t.objectStore(TRADES);
     const metaStore = t.objectStore(TRADEMETA);
+    const tombStore = t.objectStore(TOMBSTONES);
     let removedTrades = 0;
     await new Promise<void>((resolve, reject) => {
       const r = tradeStore.getAll();
@@ -431,10 +494,11 @@ export const Store: StoreLike = {
         for (const rec of r.result as Trade[]) {
           if (!rec.fileIds || !rec.fileIds.includes(id)) continue;
           const rest = rec.fileIds.filter(f => f !== id);
-          if (rest.length) tradeStore.put({ ...rec, fileIds: rest });
+          if (rest.length) tradeStore.put({ ...rec, fileIds: rest, updated: Date.now() });
           else {
             tradeStore.delete(rec.id as string);
             metaStore.delete(rec.id as string);
+            tombStore.put({ id: rec.id as string, type: 'trade', updated: Date.now() });
             removedTrades++;
           }
         }
@@ -703,7 +767,7 @@ export const Store: StoreLike = {
 
   async setMeta(key, value) {
     const store = await tx(META, 'readwrite');
-    store.put({ key, value });
+    store.put({ key, value, updated: Date.now() }); // F58: LWW clock on meta writes
     return done(store);
   },
 
@@ -714,9 +778,12 @@ export const Store: StoreLike = {
   },
 
   async purge() {
+    // F58: TOMBSTONES is cleared too. A purge is a clean slate (full local reset), NOT a set of
+    // deletions to propagate — so we drop the delete-log rather than leaving tombstones that would
+    // suppress a fresh re-import.
     const db = await open();
     await Promise.all(
-      [TRADES, JOURNAL, META, TRADEMETA, FILES, FILETEXT].map(name => {
+      [TRADES, JOURNAL, META, TRADEMETA, FILES, FILETEXT, TOMBSTONES].map(name => {
         const store = db.transaction(name, 'readwrite').objectStore(name);
         store.clear();
         return done(store);
