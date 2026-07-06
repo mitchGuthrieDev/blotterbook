@@ -37,7 +37,7 @@ flowchart TD
     APP ==>|"imports verbatim"| CORE
     SITE -->|"format only (badge, esc, platformLabel)"| FMT
 
-    STR -. "StoreLike seam · context('bb:store')" .-> APP
+    STR -. "StoreLike seam · prop-drilled from App.svelte" .-> APP
     DMO -. "StoreLike seam (demo)" .-> APP
     ENT -. "future CloudStore implements StoreLike" .-> STR
 ```
@@ -47,7 +47,8 @@ flowchart TD
 - **One core, three consumers.** The app drives the full pipeline; the info site pulls only
   `format.ts` (shared version badge + escaping). The core is native TS (A61) and node-tested by the
   standalone suites (`scripts/test-*.mjs`) with **no DOM/framework**.
-- **The `Store` seam is the extension point.** The app only ever talks to a `StoreLike` object via
-  `context('bb:store')` — real IndexedDB (`store.ts`), in-memory (`demostore.ts`), or a future
+- **The `Store` seam is the extension point.** The app only ever talks to a `StoreLike` object that
+  `App.svelte` resolves and prop-drills (into `createDashboard`/`createDashTabs` and down through the
+  screens/parts — no `context()` call) — real IndexedDB (`store.ts`), in-memory (`demostore.ts`), or a future
   server-backed `CloudStore` (the subscription tier sketched in `entitlements.ts` / `functions/`).
   Swapping the backend changes no screen code.
