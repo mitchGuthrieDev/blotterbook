@@ -9,9 +9,12 @@
   // Inside, every day is a real <button> — Tab reaches the grid, arrow keys move focus day-to-day
   // (onGridKey below), Enter/Space picks the focused day (native button activation), and Escape closes
   // the popover (bits-ui's built-in dismiss behavior — no extra wiring needed here).
+  //
+  // A246: the trigger + open/reset-on-open/close-on-select shell is the shared EditableCellPopover —
+  // this component owns only the month-grid content.
   import { ChevronLeft, ChevronRight } from '@lucide/svelte';
   import { cn } from '$lib/utils';
-  import * as Popover from '$lib/components/ui/popover';
+  import EditableCellPopover from './EditableCellPopover.svelte';
   import { fmtDate, pad2, monthCells, DOW_LABEL, MONTH_NAMES } from '../../lib/core/core.ts';
 
   interface Props {
@@ -23,7 +26,6 @@
   }
   let { value, onchange, class: className = '' }: Props = $props();
 
-  let open = $state(false);
   const today = new Date();
   const todayKey = fmtDate(today);
 
@@ -37,13 +39,11 @@
 
   // Reseed the visible month to the cell's current date (or today, for an unset row) each time the
   // popover opens, so re-opening always starts on the relevant month rather than wherever it was left.
-  $effect(() => {
-    if (open) {
-      const base = parsed ?? today;
-      viewYear = base.getFullYear();
-      viewMonth = base.getMonth();
-    }
-  });
+  function onOpen() {
+    const base = parsed ?? today;
+    viewYear = base.getFullYear();
+    viewMonth = base.getMonth();
+  }
 
   const daysInMonth = $derived(new Date(viewYear, viewMonth + 1, 0).getDate());
   const firstDow = $derived(new Date(viewYear, viewMonth, 1).getDay());
@@ -63,18 +63,18 @@
       viewYear += 1;
     } else viewMonth += 1;
   }
-  function pick(day: number) {
+  function pick(day: number, close: () => void) {
     onchange(keyOf(day));
-    open = false;
+    close();
   }
   // Arrow-key grid navigation: move focus by 1 day (left/right) or 7 (up/down) within the same month
   // grid. Crossing a month boundary isn't handled here — Tab still reaches the prev/next buttons.
   // Enter is handled explicitly (not left to native <button> activation) so the pick is deterministic
   // across browsers rather than relying on Enter-triggers-click behavior for a bare type="button".
-  function onGridKey(e: KeyboardEvent, index: number, day: number) {
+  function onGridKey(e: KeyboardEvent, index: number, day: number, close: () => void) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      pick(day);
+      pick(day, close);
       return;
     }
     const deltas: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
@@ -86,15 +86,8 @@
   }
 </script>
 
-<Popover.Root bind:open>
-  <Popover.Trigger>
-    {#snippet child({ props })}
-      <button {...props} type="button" class={cn('block w-full rounded px-1.5 py-1 text-sm hover:bg-accent', className)}>
-        {value || '—'}
-      </button>
-    {/snippet}
-  </Popover.Trigger>
-  <Popover.Content class="w-64" align="start">
+<EditableCellPopover label={value || '—'} class={className} contentClass="w-64" onopen={onOpen}>
+  {#snippet content({ close })}
     <div class="flex items-center justify-between pb-2">
       <button type="button" class="grid size-6 place-items-center rounded hover:bg-accent" aria-label="Previous month" onclick={prevMonth}>
         <ChevronLeft class="size-3.5" />
@@ -116,8 +109,8 @@
             aria-label={key}
             aria-current={key === todayKey ? 'date' : undefined}
             aria-pressed={key === value}
-            onclick={() => pick(day)}
-            onkeydown={e => onGridKey(e, i, day)}
+            onclick={() => pick(day, close)}
+            onkeydown={e => onGridKey(e, i, day, close)}
             class={cn(
               'grid aspect-square place-items-center rounded text-xs hover:bg-accent',
               key === value && 'bg-primary text-primary-foreground hover:bg-primary/90',
@@ -131,5 +124,5 @@
         {/if}
       {/each}
     </div>
-  </Popover.Content>
-</Popover.Root>
+  {/snippet}
+</EditableCellPopover>

@@ -14,6 +14,7 @@
   import { Badge } from '$lib/components/ui/badge';
   import { Separator } from '$lib/components/ui/separator';
   import { Skeleton } from '$lib/components/ui/skeleton';
+  import { usdCents } from '../../lib/core/core.ts';
   import {
     account,
     refreshSession,
@@ -50,8 +51,6 @@
 
   const fmtDate = (ms: number | null) =>
     ms == null ? '—' : new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  const fmtMoney = (cents: number) =>
-    (cents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
   async function onCreateAccount(e: SubmitEvent) {
     e.preventDefault();
@@ -205,7 +204,7 @@
           {#if account.user.donated}
             <Badge variant="outline" class="border-chart-2/40 text-chart-2">Supporter since {fmtDate(account.user.donatedAt)}</Badge>
             {#if account.user.donationTotalCents > 0}
-              <span class="text-xs text-muted-foreground">{fmtMoney(account.user.donationTotalCents)} contributed — thank you.</span>
+              <span class="text-xs text-muted-foreground">{usdCents(account.user.donationTotalCents)} contributed — thank you.</span>
             {/if}
           {:else}
             <Badge variant="outline" class="text-muted-foreground">No donations yet</Badge>

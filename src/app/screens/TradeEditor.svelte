@@ -38,6 +38,7 @@
   import TagInput from '../parts/TagInput.svelte';
   import DatePickerPopover from '../parts/DatePickerPopover.svelte';
   import SymbolSelect from '../parts/SymbolSelect.svelte';
+  import { CELL_TRIGGER_CLASS } from '../parts/EditableCellPopover.svelte';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Checkbox } from '$lib/components/ui/checkbox';
@@ -262,11 +263,7 @@
       class={cn('h-7 w-full rounded border border-ring bg-background px-1.5 text-sm outline-none', align)}
     />
   {:else if canEdit(field)}
-    <button
-      type="button"
-      onclick={() => startEdit(row.id, field)}
-      class={cn('block w-full rounded px-1.5 py-1 text-sm hover:bg-accent', align)}
-    >
+    <button type="button" onclick={() => startEdit(row.id, field)} class={cn(CELL_TRIGGER_CLASS, align)}>
       {value || '—'}
     </button>
   {:else}

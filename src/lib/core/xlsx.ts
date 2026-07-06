@@ -1,4 +1,5 @@
 'use strict';
+import { csvCell } from './core.ts';
 /* ============================================================
    Minimal xlsx reader — ATAS-SCOPED (F52), not a general library
    ------------------------------------------------------------

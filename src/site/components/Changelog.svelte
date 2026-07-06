@@ -6,6 +6,7 @@
   // page-specific (scoped); shared chrome/typography come from SiteShell.
   import { onMount } from 'svelte';
   import SiteShell from '../lib/SiteShell.svelte';
+  import { MONTH_ABBR } from '../../lib/core/core.ts';
 
   interface Release {
     version: string;
@@ -40,12 +41,12 @@
   let live = $state(false);
 
   /* Render an ISO date (YYYY-MM-DD) as "Jun 26, 2026" without pulling in a tz/locale surprise —
-     parse the parts directly so it reads the same everywhere. */
-  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+     parse the parts directly so it reads the same everywhere. A247: MONTH_ABBR is the core's single
+     source (also used by report/analytics) — this used to be a verbatim local copy. */
   function fmtDate(s: string): string {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
     if (!m) return String(s || '');
-    return MONTHS[+m[2] - 1] + ' ' + +m[3] + ', ' + m[1];
+    return MONTH_ABBR[+m[2] - 1] + ' ' + +m[3] + ', ' + m[1];
   }
 
   onMount(() => {

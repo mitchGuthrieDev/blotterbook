@@ -399,7 +399,18 @@ export const usdWhole = (v: number) => {
   const r = Math.round(v);
   return (r < 0 ? '-' : '+') + '$' + Math.abs(r).toLocaleString('en-US');
 };
+// Whole-dollar USD from a CENTS integer (accounts donation totals, F54) — unsigned (a donation total
+// is never negative), Intl-formatted so it stays locale-stable like usd()/usdWhole() (A247; was a
+// verbatim local `fmtMoney` in Account.svelte).
+export const usdCents = (cents: number) =>
+  (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 export const cls = (v: number) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
+// Quote/escape ONE CSV cell (quote-wrap + double embedded quotes when the value contains a comma,
+// quote, or newline) — the shared quoting half of xlsx.ts's ATAS-journal-sheet-to-CSV conversion and
+// App.svelte's trade export (A247). Pure RFC4180-ish quoting only, no spreadsheet-formula
+// neutralization — a caller writing a CSV meant to be OPENED in a spreadsheet app (App.svelte's
+// export) layers the A154 formula-prefix neutralization on top of this.
+export const csvCell = (c: string) => (/[",\n\r]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c);
 // Ratio/number formatters shared by the Svelte overview / advanced-stats / stat-card modal so the
 // "∞ / —" handling can't drift between them.
 export const ratio = (v: number) => (v === Infinity ? '∞' : Number.isFinite(v) ? v.toFixed(2) : '—');
