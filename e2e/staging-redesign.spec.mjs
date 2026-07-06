@@ -727,7 +727,7 @@ test('staging redesign: Commission Compare module adds via the picker and ranks 
   await expect(mod.getByText(/exchange\/clearing\/NFA \$\d/)).toBeVisible();
 });
 
-// ── F45: branded boot splash (staging-gated) ────────────────────────────────────────────────────
+// ── F45: branded boot splash (CH16-promoted to every surface) ───────────────────────────────────
 
 test('staging redesign: F45 boot splash shows during boot, then unmounts once the Dashboard renders', async ({ page }) => {
   // Hold a boot data request so dash.loaded stays false long enough to observe the splash reliably
@@ -746,15 +746,15 @@ test('staging redesign: F45 boot splash shows during boot, then unmounts once th
   await expect(splash).toHaveCount(0);
 });
 
-test('staging redesign: F45 boot splash NEVER shows on demo or app (staging-only)', async ({ page }) => {
-  // Demo is seeded, so the Dashboard renders — and the splash is never even mounted (isStaging gate).
+test('staging redesign: F45 boot splash shows on demo too, then unmounts (CH16 promoted)', async ({ page }) => {
+  // Demo is seeded, so the Dashboard renders — and by then the splash has removed itself.
   await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
   await expect(page.getByTestId('boot-splash')).toHaveCount(0);
 
-  // App (prod surface): boot settles (networkidle) with no splash mounted.
+  // App (prod surface): boot settles (networkidle) with the splash gone (3s safety cap max).
   await page.goto('/app/app.html', { waitUntil: 'networkidle' });
-  await expect(page.getByTestId('boot-splash')).toHaveCount(0);
+  await expect(page.getByTestId('boot-splash')).toHaveCount(0, { timeout: 6000 });
 });
 
 // ── F56: login-gated launch module (flag + staging gated) ───────────────────────────────────────

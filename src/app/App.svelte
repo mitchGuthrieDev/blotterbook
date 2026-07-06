@@ -90,11 +90,8 @@
     account: () => import('./screens/Account.svelte'), // F53 — staging-gated route below
   };
 
-  // F53: the Account item is STAGING-gated until CH16 promotes it (the accounts backend needs the
-  // ACCOUNTS_DB binding; the gate is a UX switch, not a security boundary — A111 model).
-  const sections = isStaging
-    ? [...navSections, { label: 'Account', items: [{ key: 'account', label: 'Account', icon: UserRound }] }]
-    : navSections;
+  // F53/CH16: passkey accounts, promoted to every surface (demo renders it read-only via isDemo).
+  const sections = [...navSections, { label: 'Account', items: [{ key: 'account', label: 'Account', icon: UserRound }] }];
   const allNavKeys = $derived(new Set(sections.flatMap(s => s.items.map(i => i.key))));
 
   const fromHash = (): string => {
@@ -795,10 +792,10 @@
   const gateArmed = isStaging && accountGateEnabled();
   const gateBlocking = $derived(gateArmed && !account.user);
 
-  // F45: a quick branded splash over the boot sequence (staging only until CH16 promotes it). Purely
-  // visual — mounted alongside boot, removed the instant the shell is ready (dash.loaded) or on
-  // BootSplash's own 3s safety timeout; never blocks or delays boot.
-  let bootSplash = $state(isStaging);
+  // F45/CH16: a quick branded splash over the boot sequence, on every surface. Purely visual —
+  // mounted alongside boot, removed the instant the shell is ready (dash.loaded) or on BootSplash's
+  // own 3s safety timeout; never blocks or delays boot.
+  let bootSplash = $state(true);
   // F47: batch intake — every file runs gates → parse → import; recognized non-trade exports are
   // NAMED (Cash History, Account Balance History, …) instead of getting the generic A178 refusal.
   // Sequential on purpose: imports hit the same Store and A219 reconciliation applies in order.
@@ -1262,8 +1259,8 @@
             coverage={coverageLines}
           />
         {/await}
-      {:else if active === 'account' && isStaging}
-        <!-- F53 (staging): passkey accounts phase 1 — promote via CH16 once the D1 binding is live. -->
+      {:else if active === 'account'}
+        <!-- F53: passkey accounts (CH16-promoted; demo is read-only via isDemo). -->
         {#await SCREEN_LOADERS.account()}
           {@render screenSkeleton()}
         {:then Account}

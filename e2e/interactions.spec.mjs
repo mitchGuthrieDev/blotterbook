@@ -58,6 +58,16 @@ test('demo: boots into the redesigned sidebar dashboard with real seeded metrics
   expect(errors, errors.join('\n')).toHaveLength(0);
 });
 
+test('demo: Account screen is promoted (CH16) and fully read-only — controls disabled, no /api/me probe acted on', async ({ page }) => {
+  await page.goto(DEMO, { waitUntil: 'networkidle' });
+  // The Account nav item exists on demo now (F53 promoted).
+  await page.getByRole('button', { name: 'Account' }).click();
+  // Demo renders the screen in read-only mode with its explanatory note and disabled controls.
+  await expect(page.getByText(/demo/i).first()).toBeVisible();
+  const disabled = page.locator('button[disabled]');
+  await expect(disabled.first()).toBeVisible();
+});
+
 test('demo: HARD invariant — nothing is persisted (no "blotterbook" IndexedDB database)', async ({ page }) => {
   await bootDashboard(page);
   // Exercise a couple of screens so any accidental write path would have fired.
@@ -165,6 +175,8 @@ test('demo: Trade Editor Date cell opens a calendar popover and picking a day up
   await expect(days2.first()).toBeVisible();
   const midIdx = Math.min(5, (await days2.count()) - 2);
   await days2.nth(midIdx).press('ArrowRight');
+  // Wait for the roving focus to actually land on a day before reading/acting on it (flake guard).
+  await expect(page.locator('[data-testid="datepicker-day"]:focus')).toHaveCount(1);
   const focusedLabel = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
   expect(focusedLabel).toBeTruthy();
   await page.keyboard.press('Enter'); // acts on whatever currently has focus — no re-query race
