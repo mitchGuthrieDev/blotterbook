@@ -20,6 +20,9 @@
     session: 'RTH' | 'ETH';
     /** F50: provenance platform(s) from the trade's contributing file records ('' = legacy/manual). */
     platform: string;
+    /** F40: derived futures contract expiry code (e.g. "M25"); undefined for continuous/spread/bare
+     *  symbols (TradingView users) → rendered as "—". */
+    expiry?: string;
   };
 </script>
 
@@ -77,7 +80,7 @@
   let groupBy = $state('none');
   let sortKey = $state<'time' | 'sym' | 'qty' | 'pnl'>('time');
   let sortDir = $state<'asc' | 'desc'>('asc');
-  let cols = $state({ prices: true, costs: true, context: true });
+  let cols = $state({ prices: true, costs: true, context: true, contract: false }); // F40: contract default off
   let selected = $state<Set<string>>(new Set());
   let openId = $state<string | null>(null);
 
@@ -96,7 +99,7 @@
     platform: 'Group by platform', // F50
   };
 
-  const colCount = $derived(1 + 5 + (cols.prices ? 3 : 0) + (cols.costs ? 2 : 0) + (cols.context ? 3 : 0)); // F50: context = Tags/Session/Platform
+  const colCount = $derived(1 + 5 + (cols.prices ? 3 : 0) + (cols.costs ? 2 : 0) + (cols.context ? 3 : 0) + (cols.contract ? 1 : 0)); // F50: context = Tags/Session/Platform; F40: optional Contract
 
   const filtered = $derived(
     rows.filter(t => {
@@ -258,6 +261,7 @@
               <label class="flex items-center gap-2"><Checkbox bind:checked={cols.prices} /> Prices &amp; hold</label>
               <label class="flex items-center gap-2"><Checkbox bind:checked={cols.costs} /> Costs</label>
               <label class="flex items-center gap-2"><Checkbox bind:checked={cols.context} /> Context</label>
+              <label class="flex items-center gap-2"><Checkbox bind:checked={cols.contract} /> Contract</label>
             </div>
           </Popover.Content>
         </Popover.Root>
@@ -394,6 +398,9 @@
               <Table.Head class="w-16">Session</Table.Head>
               <Table.Head class="w-24">Platform</Table.Head>
             {/if}
+            {#if cols.contract}
+              <Table.Head class="w-16">Contract</Table.Head>
+            {/if}
           </Table.Row>
         </Table.Header>
         <Table.Body>
@@ -452,6 +459,10 @@
                   <Table.Cell><span class="text-xs text-muted-foreground">{t.session}</span></Table.Cell>
                   <!-- F50: provenance platform (family-adapter type suffixes already stripped upstream) -->
                   <Table.Cell><span class="whitespace-nowrap text-xs text-muted-foreground">{t.platform || '—'}</span></Table.Cell>
+                {/if}
+                {#if cols.contract}
+                  <!-- F40: derived contract expiry code (muted; '—' for continuous/TradingView symbols) -->
+                  <Table.Cell><span class="tabular-nums text-xs text-muted-foreground">{t.expiry ?? '—'}</span></Table.Cell>
                 {/if}
               </Table.Row>
             {/each}
@@ -517,6 +528,8 @@
           {@render field('Hold', openTrade.holdMin != null ? `${openTrade.holdMin}m` : '—')}
           {@render field('Fees', openTrade.fees != null ? money(-openTrade.fees) : '—', 'neg')}
           {@render field('Session', openTrade.session)}
+          <!-- F40: derived contract expiry ('—' for continuous/TradingView symbols) -->
+          {@render field('Contract', openTrade.expiry ?? '—')}
         </div>
         <div>
           <div class="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Tags</div>

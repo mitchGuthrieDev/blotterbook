@@ -10,7 +10,7 @@
    The dedupe key (tradeId) and the screenshot allow-list (validShot) are imported VERBATIM from
    store.js (A29) so they can never drift from the real backend. Backup restore (importAll) is a
    no-op in demo (restore is disabled), avoiding any duplication of store.js's sanitization. */
-import { tradeId, validShot, cleanTags, setField } from './store.ts';
+import { tradeId, validShot, cleanTags, setField, LOCAL_BACKUP_RE, sha256Hex } from './store.ts';
 import type { Annotation, Trade, StoredJournal, StoredTradeMeta, StoreLike, CsvFileRec } from './types.ts';
 
 export function createDemoStore(): StoreLike {
@@ -50,7 +50,7 @@ export function createDemoStore(): StoreLike {
             const merged = [...new Set([...(prev.fileIds || []), ...t.fileIds])];
             if (merged.length !== (prev.fileIds || []).length) next = { ...prev, fileIds: merged };
           }
-          for (const k of ['qty', 'entryTime', 'exitTime', 'holdMs', 'commission'] as const)
+          for (const k of ['qty', 'entryTime', 'exitTime', 'holdMs', 'commission', 'entryPrice', 'exitPrice'] as const)
             if (prev[k] == null && t[k] != null) {
               next = next ?? { ...prev };
               setField(next, k, t[k]);
@@ -171,9 +171,13 @@ export function createDemoStore(): StoreLike {
     },
 
     async exportAll() {
-      return {
+      // A236 parity: export v3 with the Store.local layout keys + a payload checksum, from the
+      // in-memory `mem` seam (demo persists nothing, so these live only for the session).
+      const local: Record<string, unknown> = {};
+      for (const [k, v] of mem) if (LOCAL_BACKUP_RE.test(k)) local[k] = v;
+      const payload = {
         app: 'blotterbook',
-        version: 2,
+        version: 3,
         exportedAt: new Date().toISOString(),
         trades: await this.getAllTrades(),
         journal: await this.getAllJournal(),
@@ -181,7 +185,10 @@ export function createDemoStore(): StoreLike {
         trademeta: await this.allTradeMeta(),
         files: await this.getFiles(),
         filetexts: [...filetexts.entries()].map(([id, text]) => ({ id, text })),
+        local,
       };
+      const checksum = await sha256Hex(JSON.stringify(payload));
+      return { ...payload, checksum };
     },
     // Restore is disabled on the demo surface; no-op (avoids duplicating store.js's sanitization).
     async importAll() {

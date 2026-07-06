@@ -377,6 +377,14 @@ function pairFills(fills: Fill[]): Trade[] {
           exitTime: f.time,
           holdMs: Math.max(0, tms(f.time) - tms(p.lot.time)),
         };
+        // F42: carry the executed prices through (they were previously consumed into pnl and
+        // dropped). Each emitted round trip pairs ONE entry lot (p.lot) with ONE closing fill (f),
+        // so entryPrice/exitPrice are those exact prices — the broker's avg fill price already being
+        // the VWAP of any sub-partials, and a scaled position being split into one trade per entry
+        // lot means no cross-lot averaging is ever needed here. Kept OUT of tradeId (like commission)
+        // and enriched on re-import by the F37 duplicate-merge.
+        if (Number.isFinite(p.lot.price)) t.entryPrice = p.lot.price;
+        if (Number.isFinite(f.price)) t.exitPrice = f.price;
         // A208: real round-turn commission = entry share + exit share, when the export provides
         // either side (a missing side counts 0 — still real data, just one-sided).
         if (p.lot.commPerQty != null || exitCommPerQty != null)
@@ -539,6 +547,8 @@ const motivewave: Adapter = {
     const cSym = ix('instrument') >= 0 ? ix('instrument') : ix('symbol');
     const cEntryT = ix('entry time') >= 0 ? ix('entry time') : ix('entry date');
     const cExitT = ix('exit time') >= 0 ? ix('exit time') : ix('exit date');
+    const cEntryP = ix('entry price'); // F42 — previously unparsed
+    const cExitP = ix('exit price');
     const cP = ix('p/l') >= 0 ? ix('p/l') : ix('pnl') >= 0 ? ix('pnl') : ix('profit');
     const cSide = ix('side') >= 0 ? ix('side') : ix('position');
     const cQty = ix('quantity') >= 0 ? ix('quantity') : ix('qty');
@@ -553,6 +563,8 @@ const motivewave: Adapter = {
       const exit = normTime(row[cExitT]);
       const entry = cEntryT >= 0 ? normTime(row[cEntryT]) : '';
       const sd = cSide >= 0 ? sideWord(row[cSide]) : '';
+      const entryPx = cEntryP >= 0 ? num(row[cEntryP]) : NaN; // F42
+      const exitPx = cExitP >= 0 ? num(row[cExitP]) : NaN;
       out.push({
         time: exit,
         date: exit.slice(0, 10),
@@ -564,6 +576,8 @@ const motivewave: Adapter = {
         entryTime: entry || undefined,
         exitTime: exit,
         holdMs: entry ? Math.max(0, tms(exit) - tms(entry)) : undefined,
+        entryPrice: Number.isFinite(entryPx) ? entryPx : undefined,
+        exitPrice: Number.isFinite(exitPx) ? exitPx : undefined,
       });
     }
     return out;

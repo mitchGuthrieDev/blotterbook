@@ -133,6 +133,36 @@ test('demo: Trade Editor is read-only — no cell editing, Add trade + Save all 
   await expect(page.locator('table tbody tr').first()).toBeVisible({ timeout: 10_000 });
 });
 
+test('demo: Blotter surfaces the F40 contract-expiry column (opt-in) + detail row from seeded month codes', async ({ page }) => {
+  const errors = watchErrors(page);
+  await bootDashboard(page);
+  await gotoScreen(page, 'Blotter');
+  await expect(page.locator('table tbody tr').first()).toBeVisible();
+
+  // F40: the Contract column is OFF by default — enable it via the Columns picker.
+  await page.getByRole('button', { name: 'Columns' }).click();
+  const popover = page.locator('[data-slot="popover-content"]');
+  await popover.getByText('Contract', { exact: true }).click();
+  await page.keyboard.press('Escape'); // close the popover
+
+  // The column header renders, and the seeded symbols (MESM2025 / MNQM2025 / MCLN2025) derive their
+  // compact codes (M25 / N25) — proof the helper runs end-to-end on real data, not just in fixtures.
+  await expect(page.getByRole('columnheader', { name: 'Contract' })).toBeVisible();
+  await expect(
+    page
+      .locator('table tbody')
+      .getByText(/^[MN]25$/)
+      .first()
+  ).toBeVisible();
+
+  // The detail drawer (the trade-detail surface) shows the same Contract row.
+  await page.locator('table tbody tr').first().click();
+  const sheet = page.locator('[data-slot="sheet-content"]');
+  await expect(sheet.getByText('Contract', { exact: true })).toBeVisible();
+
+  expect(errors, errors.join('\n')).toHaveLength(0);
+});
+
 test('demo: feedback dialog builds a mailto draft from ONLY the typed text (A105)', async ({ page }) => {
   const errors = watchErrors(page);
   await bootDashboard(page);

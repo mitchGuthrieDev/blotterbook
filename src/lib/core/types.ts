@@ -32,6 +32,13 @@ export interface Trade {
   exitTime?: string;
   /** Hold time in ms (fills exports). */
   holdMs?: number;
+  /** Round-trip entry price (F42) — the executed/average entry price when the export carries per-fill
+   *  prices (all fills exports + MotiveWave). Each round trip pairs one entry lot with one close fill,
+   *  so this is the exact executed price (the broker's avg-fill price is already the VWAP of any
+   *  sub-partials). Absent for balance-history exports (no per-execution price). NOT part of tradeId. */
+  entryPrice?: number;
+  /** Round-trip exit price (F42). See entryPrice. NOT part of tradeId. */
+  exitPrice?: number;
   /** Within-file ordinal (2nd+ occurrence of an identical time|symbol|side|pnl) so genuinely
    *  distinct same-second trades aren't collapsed by the dedupe key (A114). Unset ⇒ 0 (first/unique). */
   dup?: number;
@@ -102,6 +109,17 @@ export interface Adapter {
   upgradeHint?: string;
   sniff(text: string, rows: Row[]): number;
   toTrades(text: string, rows: Row[]): Trade[];
+}
+
+/** A parsed futures contract expiry (F40 / A137) — derived on READ from Trade.symbol by
+ *  core.ts's expiryOf(), never persisted. `code` is the CME month letter (F–Z). */
+export interface ContractExpiry {
+  /** CME month code letter (F=Jan … Z=Dec). */
+  code: string;
+  /** Month number 1–12. */
+  month: number;
+  /** 4-digit expiry year. */
+  year: number;
 }
 
 /** A detected-platform summary (Adapters.detect). */

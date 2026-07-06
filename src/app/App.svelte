@@ -24,6 +24,8 @@
     tone,
     MONTH_NAMES,
     csvCell,
+    expiryOf,
+    expiryCode,
   } from '../lib/core/core.ts';
   import { isBetaPhase } from '../lib/core/format.ts';
   import { Badge } from '$lib/components/ui/badge';
@@ -530,8 +532,9 @@
 
   // ── Blotter / Trade Editor rows ──────────────────────────────────────────────────────────────
   // ONE per-trade row base for both tables (A157 — the two mappers had drifted into near-identical
-  // copies): id/qty/meta, display date/time/side, and fees from the broker rate via the shared
-  // core roundTurn. Entry/exit prices aren't in the trade model (P&L events, not bars).
+  // copies): id/qty/meta, display date/time/side, fees from the broker rate via the shared core
+  // roundTurn, F42 entry/exit prices (when the export carried them; else undefined → '—'), and the
+  // F40 contract expiry code derived from the RAW symbol (t.symbol, not the stripped root).
   const rowBase = (t: Trade) => {
     const id = dash.tradeId(t);
     const qty = t.qty ?? 1;
@@ -539,6 +542,7 @@
     // F30: dated rate; A211: at the trade's own broker when its source file carries an override.
     const rowBroker = dash.costInputs.brokerFor?.(t) ?? dash.setup.broker;
     const r = rowBroker ? rateFor(rowBroker, t.root, t.date) : null;
+    const exp = expiryOf(t.symbol, t.date); // F40 — null for continuous/spread/bare symbols
     return {
       id,
       qty,
@@ -547,6 +551,11 @@
       time: (t.time || '').slice(11, 16),
       side: t.side === 'short' ? ('Short' as const) : ('Long' as const),
       pnl: t.pnl,
+      // F42: per-fill entry/exit prices when the source export carried them.
+      entryPrice: Number.isFinite(t.entryPrice) ? (t.entryPrice as number) : undefined,
+      exitPrice: Number.isFinite(t.exitPrice) ? (t.exitPrice as number) : undefined,
+      // F40: compact contract code ("M25"); undefined when the symbol has no month code.
+      expiry: exp ? expiryCode(exp) : undefined,
       // A208: a trade carrying its ACTUAL CSV commission shows that figure; the modeled rate
       // only covers the rest (same rule as costModel).
       fees:
@@ -563,6 +572,9 @@
       return {
         ...b,
         sym: t.root,
+        entry: b.entryPrice, // F42
+        exit: b.exitPrice,
+        expiry: b.expiry, // F40
         holdMin: t.holdMs != null ? Math.round(t.holdMs / 60000) : undefined,
         tags: b.meta?.tags ?? [],
         note: !!b.meta?.note,
@@ -591,8 +603,9 @@
       return {
         ...b,
         symbol: t.root,
-        entry: NaN,
-        exit: NaN,
+        // F42: real prices when the export carried them (else NaN → '—' in the read-only cell).
+        entry: b.entryPrice ?? NaN,
+        exit: b.exitPrice ?? NaN,
         fees: b.fees ?? NaN,
         platform: platformOf(t),
         tags: b.meta?.tags ?? [],
@@ -883,8 +896,12 @@
       const data = JSON.parse(await file.text()) as Record<string, unknown>;
       const res = await dash.importBackup(data);
       restoreMsg = `Restored ${res.added} trade${res.added === 1 ? '' : 's'} (${res.dup} duplicate).`;
-    } catch {
-      restoreMsg = 'That backup file could not be read.';
+    } catch (e) {
+      // A236: a v3 checksum mismatch throws a corruption-specific message; surface it, else the
+      // generic parse-failure copy.
+      restoreMsg = /checksum|corrupt/i.test((e as Error)?.message || '')
+        ? 'That backup is corrupted or was modified — nothing was restored.'
+        : 'That backup file could not be read.';
     }
   }
   function doErase() {

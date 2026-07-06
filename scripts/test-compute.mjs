@@ -21,6 +21,7 @@ globalThis.fetch = async url => {
 
 const core = await import('../src/lib/core/core.ts');
 const { compute, costModel, loadRefData, sessionOf, dowBuckets, usd, money, usdWhole, axMoney, ratio, num, fmtDur, tone } = core;
+const { currentDrawdown, currentStreak, streakRecords } = core;
 await loadRefData();
 
 // ── child mode (A169): print the prior-period Trades KPI under the spawning TZ ──
@@ -123,6 +124,70 @@ const t = (time, pnl, side = 'long', root = 'MES', qty = 1) => ({ time, date: ti
   ok('streaks: mcl counts the 3-loss run', m.mcl === 3);
   ok('streaks: largest winning streak by DOLLARS (10+25)', m.maxWinStk === 35, m.maxWinStk);
   ok('streaks: largest losing streak by DOLLARS', m.maxLossStk === -18, m.maxLossStk);
+}
+
+// ── F39/A142: currentDrawdown / currentStreak / streakRecords — the batch-1 module helpers ──
+{
+  // Shares the hand-worked def set's curve [0,100,50,250,250,150,200]: peak 250, now 200 → 50 under,
+  // 20% of peak, 2 curve-steps since the (last) peak, not at a new high.
+  const cd = currentDrawdown([0, 100, 50, 250, 250, 150, 200]);
+  ok('currentDrawdown: below-peak $ + %', cd.dd === 50 && approx(cd.ddPct, 20, 1e-9), `${cd.dd}/${cd.ddPct}`);
+  ok('currentDrawdown: sincePeak counts from the LATEST high (ci4, held)', cd.sincePeak === 2 && cd.atHigh === false, cd.sincePeak);
+  const hi = currentDrawdown([0, 10, 30]);
+  ok('currentDrawdown: at a new high → dd 0, 0%, sincePeak 0, atHigh', hi.dd === 0 && hi.ddPct === 0 && hi.sincePeak === 0 && hi.atHigh);
+  const incept = currentDrawdown([0, -60, -100]);
+  ok('currentDrawdown: inception (no positive peak) → ddPct null (like maxDDpct)', incept.dd === 100 && incept.ddPct === null);
+  ok(
+    'currentDrawdown: empty curve is safe',
+    (() => {
+      const e = currentDrawdown([]);
+      return e.dd === 0 && e.atHigh && e.sincePeak === 0;
+    })()
+  );
+
+  // currentStreak walks the tail while the sign holds (scratch breaks a run, is its own 'flat').
+  ok(
+    'currentStreak: tail losing run of 3 with running $',
+    (() => {
+      const s = currentStreak([10, 25, 0, 30, -5, -6, -7]);
+      return s.kind === 'loss' && s.len === 3 && s.sum === -18;
+    })()
+  );
+  ok(
+    'currentStreak: tail winning run',
+    (() => {
+      const s = currentStreak([-5, 10, 20]);
+      return s.kind === 'win' && s.len === 2 && s.sum === 30;
+    })()
+  );
+  ok(
+    'currentStreak: trailing scratch is a flat run of 1',
+    (() => {
+      const s = currentStreak([10, 0]);
+      return s.kind === 'flat' && s.len === 1 && s.sum === 0;
+    })()
+  );
+  ok(
+    'currentStreak: empty → none',
+    (() => {
+      const s = currentStreak([]);
+      return s.kind === 'none' && s.len === 0;
+    })()
+  );
+
+  // streakRecords mirrors compute()'s mcw/mcl/maxWinStk/maxLossStk — pin them together so they can't drift.
+  const seq = [10, 25, 0, 30, -5, -6, -7, 1];
+  const rec = streakRecords(seq);
+  const cm = compute(seq.map((p, i) => t(`2026-01-0${(i % 9) + 1} 10:0${i}:00`, p)));
+  ok(
+    'streakRecords: agrees with compute() records',
+    rec.maxWin === cm.mcw && rec.maxLoss === cm.mcl && rec.maxWinSum === cm.maxWinStk && rec.maxLossSum === cm.maxLossStk,
+    JSON.stringify(rec)
+  );
+  ok(
+    'streakRecords: the pinned values (mcw2/mcl3/+35/−18)',
+    rec.maxWin === 2 && rec.maxLoss === 3 && rec.maxWinSum === 35 && rec.maxLossSum === -18
+  );
 }
 
 // ── degenerate sets: empty / one-trade / all-scratch / float-dust (A170 conventions) ──
@@ -372,6 +437,49 @@ const t = (time, pnl, side = 'long', root = 'MES', qty = 1) => ({ time, date: ti
     'dowPnlRows: out-of-range dow ignored',
     dowPnlRows([{ dow: 9, pnl: 5 }]).every(r => r.pnl === 0)
   );
+}
+
+// ── F40 / A137: expiryOf — futures contract expiry parsed from the raw export symbol ──
+{
+  const { expiryOf, expiryCode, expiryLabel } = core;
+  const code = (sym, date) => {
+    const x = expiryOf(sym, date);
+    return x ? expiryCode(x) : null;
+  };
+  // 4-digit year (motivewave / tradovate / rithmic / tradestation family).
+  {
+    const x = expiryOf('MESM2025');
+    ok('expiry: MESM2025 → M/Jun/2025', x && x.code === 'M' && x.month === 6 && x.year === 2025, JSON.stringify(x));
+    ok('expiry: label helpers (M25 / Jun 2025)', x && expiryCode(x) === 'M25' && expiryLabel(x) === 'Jun 2025');
+  }
+  // 2-digit year + thinkorswim `/` prefix (schwab /MESM25); service/venue/exchange prefixes.
+  ok('expiry: /MESM25 (2-digit, slash prefix) → M25', code('/MESM25') === 'M25');
+  ok('expiry: F.US.MESM25 (CQG/Sierra service prefix) → M25', code('F.US.MESM25') === 'M25');
+  ok('expiry: MESM25.CME (venue suffix) → M25', code('MESM25.CME') === 'M25');
+  ok('expiry: CME_MINI:ESM2025 (exchange prefix) → M25', code('CME_MINI:ESM2025') === 'M25');
+  // ATAS `@venue` suffix + 1-digit year resolved near the trade date.
+  {
+    const x = expiryOf('MESU6@CME_Ind', '2026-06-18');
+    ok('expiry: MESU6@CME_Ind → Sep 2026 (ATAS venue + 1-digit near date)', x && x.month === 9 && x.year === 2026, JSON.stringify(x));
+  }
+  ok('expiry: MCLN2025 (Sierra) → Jul 2025', code('MCLN2025') === 'N25');
+  // 1-digit decade resolution — nearest the trade year (ties → future).
+  ok('expiry: ESZ4 near 2026 → Dec 2024', code('ESZ4', '2026-01-10') === 'Z24');
+  ok('expiry: ESZ4 near 2024 → Dec 2024', code('ESZ4', '2024-11-01') === 'Z24');
+  ok('expiry: MESU5 near 2025 → Sep 2025', code('MESU5', '2025-06-01') === 'U25');
+  // Digit-ended roots must not false-positive on the trailing digit (anchor is the month code).
+  ok('expiry: M2KZ2025 (digit root) → Dec 2025', code('M2KZ2025') === 'Z25');
+  ok('expiry: SR3M2025 (digit root) → Jun 2025', code('SR3M2025') === 'M25');
+  ok(
+    'expiry: bare digit roots return null (M2K / SR3 / 6E)',
+    expiryOf('M2K') === null && expiryOf('SR3') === null && expiryOf('6E') === null
+  );
+  // TradingView continuous, spreads, equities, bare roots, empty → null (must degrade to '—').
+  ok('expiry: TradingView continuous CME_MINI:MES1! → null', expiryOf('CME_MINI:MES1!') === null);
+  ok('expiry: continuous ES1! → null', expiryOf('ES1!') === null);
+  ok('expiry: calendar spread (leg separator) → null', expiryOf('ESM2025-ESU2025') === null);
+  ok('expiry: bare root MES / equity AAPL → null', expiryOf('MES') === null && expiryOf('AAPL') === null);
+  ok('expiry: empty symbol → null', expiryOf('') === null);
 }
 
 // ── A194: pickFlavor — header flavor text ──
