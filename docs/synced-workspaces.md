@@ -216,7 +216,10 @@ exists.** Steps 4–6 concentrate the E2E work.
 - **Trust boundary:** every pulled record decrypts then flows through the existing `importAll`-class
   sanitizers (S15/S17/S20/A154) — same gate as a backup restore.
 - **CSP / functions posture:** `/api/sync/*` fails closed without bindings, session + Origin gated,
-  constant-time where it compares secrets — identical to F53–F55.
+  constant-time where it compares secrets — identical to F53–F55. **One CSP change (owner-approved
+  2026-07-06):** `script-src` gains **`'wasm-unsafe-eval'`** so the Argon2id **wasm** can compile —
+  this is wasm-specific and does **not** re-enable inline/eval JavaScript (`'unsafe-inline'`/
+  `'unsafe-eval'` stay absent). `style-src 'self'` and the rest of the hardened header are unchanged.
 - **Demo:** `DemoStore` (in-memory) is never a `cloud` store and never syncs — demo persistence stays
   impossible by construction.
 
