@@ -4539,6 +4539,28 @@
       "completedDate": "2026-07-06",
       "partial": false,
       "doneNote": "Binding-arbitration + class-action-waiver section added to the ToS in Legal.svelte (#arbitration): agreement to arbitrate, AAA Commercial Rules (placeholder), Delaware seat/governing law, class-action waiver with severance, 30-day opt-out to privacy@blotterbook.com. Flagged as placeholder pending counsel, consistent with the F18 entity naming."
+    },
+    {
+      "id": "CH22",
+      "title": "Add a copyright + operator line to the site footer",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Footer operator line “© 2026 Blotterbook. Operated by an individual sole proprietor.” added to both Footer.svelte variants, and the entity named in Legal.svelte, as part of the F18 legal pack (2026-07-06). Entity decision resolved: Blotterbook, individual sole proprietor."
+    },
+    {
+      "id": "F45",
+      "title": "(staging) Loading splash + animation on initial page load",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "BootSplash.svelte — a brief branded splash over the boot sequence (mono wordmark + pulsing cursor), reduced-motion aware (dur()), 3s safety cap, removed the instant dash.loaded. Shipped staging-gated (PR #112) then CH16-promoted to all surfaces (app/demo/staging); the “(staging)” scope is obsolete. e2e covers present-during-boot → unmounts."
     }
   ]
 }
