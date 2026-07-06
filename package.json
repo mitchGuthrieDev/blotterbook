@@ -6,7 +6,7 @@
   "description": "Blotterbook tooling + build (ADR-001 / A26; ADR-002 shadcn-svelte). Vite builds the static site + the /app/ surface into dist/ (the Cloudflare Pages output dir); dependencies are exact-pinned + lockfiled, and compute stays local (no telemetry/egress). Dev-only tooling (ESLint/Prettier/Playwright) came in R19 Tier A.",
   "scripts": {
     "test": "npm run lint && npm run typecheck && npm run format:check && npm run test:unit",
-    "test:unit": "node scripts/test-adapters.mjs && node scripts/test-auth.mjs && node scripts/test-version.mjs && node scripts/test-flags.mjs && node scripts/test-tax.mjs && node scripts/test-demostore.mjs && node scripts/test-workspaces.mjs && node scripts/test-curveandreport.mjs && node scripts/test-compute.mjs && node scripts/test-accounts.mjs && node scripts/test-email.mjs && node scripts/test-econ.mjs && node scripts/test-crypto.mjs",
+    "test:unit": "node scripts/test-adapters.mjs && node scripts/test-auth.mjs && node scripts/test-version.mjs && node scripts/test-flags.mjs && node scripts/test-tax.mjs && node scripts/test-demostore.mjs && node scripts/test-workspaces.mjs && node scripts/test-curveandreport.mjs && node scripts/test-compute.mjs && node scripts/test-accounts.mjs && node scripts/test-email.mjs && node scripts/test-econ.mjs && node scripts/test-crypto.mjs && node scripts/test-sync.mjs",
     "test:e2e": "playwright test",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.functions.json && svelte-check --tsconfig ./tsconfig.svelte.json",

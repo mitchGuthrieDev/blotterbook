@@ -8,6 +8,12 @@ export interface Env {
    *  Unbound → every /api/account/* endpoint fails closed with a 503 JSON body (never a crash).
    *  Guardrail S25: identity + entitlements only — no trade data is ever stored here. */
   ACCOUNTS_DB?: D1Database;
+  /** R2 bucket for the synced-workspaces encrypted-record ciphertext blobs (F62). Holds ONLY opaque
+   *  AES-GCM ciphertext (F61a EncryptedRecord) keyed by workspace_id + blinded_id — never a symbol,
+   *  P&L, note, tag, screenshot, or workspace name (guardrail S25). Unbound → every /api/sync/*
+   *  endpoint fails closed with a 503 JSON body (never a crash). D1's change-index rows point at
+   *  these objects via ciphertext_ref. */
+  SYNC_BUCKET?: R2Bucket;
   /** Optional WebAuthn relying-party overrides — default to the request URL's hostname/origin.
    *  Set RP_ID to the apex domain (e.g. `blotterbook.com`) if passkeys must span subdomains. */
   RP_ID?: string;

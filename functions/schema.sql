@@ -155,3 +155,58 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   type TEXT,                                  -- the event type processed
   created_at INTEGER NOT NULL                 -- ms epoch (when the webhook processed it)
 );
+
+-- ── Synced workspaces — the DUMB encrypted-blob transport (F62; docs/synced-workspaces.md) ─────────
+-- Guardrail S25: these tables + the SYNC_BUCKET R2 objects hold ONLY ciphertext, blinded ids, wrapped
+-- (un-unwrappable) key blobs, and timestamps/sizes/seq cursors. The server holds no key and never
+-- decrypts — it can NEVER read a symbol, P&L, note, tag, screenshot, or workspace name. Every
+-- /api/sync/* route is session-gated, Origin-checked on mutations, and fails closed (503) without
+-- ACCOUNTS_DB / SYNC_BUCKET. Every workspace access is authorized to its owner_user_id.
+
+-- The workspace's server identity + ownership. workspace_id is the client's F59 UUID; the NAME lives
+-- ENCRYPTED as a sync_records row (type 'workspace-name'), never in plaintext here.
+CREATE TABLE IF NOT EXISTS sync_workspaces (
+  workspace_id TEXT PRIMARY KEY,             -- client-generated F59 UUID
+  owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL                 -- ms epoch
+);
+CREATE INDEX IF NOT EXISTS idx_sync_workspaces_owner ON sync_workspaces (owner_user_id);
+
+-- The per-workspace DEK wrapped (AES-KW) under the account IK (F61a WrappedDek JSON). Opaque ciphertext
+-- of a key the server cannot unwrap — the client unwraps it in memory to en/decrypt that workspace's records.
+CREATE TABLE IF NOT EXISTS sync_workspace_keys (
+  workspace_id TEXT PRIMARY KEY REFERENCES sync_workspaces(workspace_id) ON DELETE CASCADE,
+  owner_user_id TEXT NOT NULL,               -- denormalized for a fast owner check
+  wrapped_dek TEXT NOT NULL,                 -- F61a WrappedDek JSON (AES-KW under the account IK)
+  updated INTEGER NOT NULL                    -- ms epoch of the last write
+);
+
+-- The account IDENTITY KEY (IK) wrapped once per UNLOCK METHOD (F61a WrappedIK JSON). method is
+-- 'passkey' | 'passphrase' | 'recovery' (opaque to the server); key_id selects the credential/derivation.
+-- Opaque ciphertext of a key the server cannot unwrap.
+CREATE TABLE IF NOT EXISTS sync_wrapped_ik (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  method TEXT NOT NULL,                       -- passkey | passphrase | recovery
+  key_id TEXT NOT NULL,                       -- which credential / derivation this blob is for
+  wrapped_ik TEXT NOT NULL,                   -- F61a WrappedIK JSON (AES-KW under the per-method KEK)
+  updated INTEGER NOT NULL,
+  PRIMARY KEY (user_id, method, key_id)
+);
+CREATE INDEX IF NOT EXISTS idx_sync_wrapped_ik_user ON sync_wrapped_ik (user_id);
+
+-- The change-index: one row per encrypted record (trade/journal/meta/…/workspace-name). blinded_id =
+-- HMAC(workspaceKey, tradeId) — NEVER the raw content hash (exposing it would let the store confirm a
+-- guessed trade). seq is a monotonic per-workspace cursor for incremental pull. The ciphertext blob
+-- itself lives in R2 (SYNC_BUCKET) at ciphertext_ref — large records (encrypted screenshots) never sit
+-- in a D1 row. deleted flags a tombstone (the delete half of LWW). Upsert is LWW by `updated`.
+CREATE TABLE IF NOT EXISTS sync_records (
+  workspace_id TEXT NOT NULL,                 -- REFERENCES sync_workspaces(workspace_id) — authorized per request
+  blinded_id TEXT NOT NULL,                   -- HMAC(workspaceKey, tradeId), never the raw hash (S25)
+  seq INTEGER NOT NULL,                       -- monotonic per-workspace sequence (pull cursor)
+  type TEXT NOT NULL,                         -- opaque record-kind label (never inspected)
+  ciphertext_ref TEXT NOT NULL,              -- R2 object key holding the AES-GCM EncryptedRecord blob
+  updated INTEGER NOT NULL,                   -- LWW clock (writing client's wall clock, ms)
+  deleted INTEGER NOT NULL DEFAULT 0,         -- 1 = tombstone
+  PRIMARY KEY (workspace_id, blinded_id)      -- idempotent upsert/dedup per record
+);
+CREATE INDEX IF NOT EXISTS idx_sync_records_seq ON sync_records (workspace_id, seq);

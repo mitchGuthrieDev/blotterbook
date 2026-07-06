@@ -81,6 +81,32 @@ Recovery/verify tokens are stored **hash-only** (`SHA-256(secret)`), single-use 
 consume), and TTL'd (~15 min) — same posture as sessions (S25). Security never depends on the
 fail-open rate limiter (S22/S25).
 
+## Synced workspaces — the dumb encrypted-blob transport (F62)
+
+Step 5 of synced workspaces (design: [`docs/synced-workspaces.md`](../docs/synced-workspaces.md)). The
+server is a **deliberately dumb encrypted-blob store**: it holds no key and never decrypts, so it can
+**never read a symbol, P&L, note, tag, screenshot, or workspace name** (guardrail **S25**, strengthened).
+D1 (`ACCOUNTS_DB`) holds the change-index + wrapped-key blobs; R2 (`SYNC_BUCKET`) holds the record
+ciphertext. Shared helpers live in [`functions/_lib/sync.ts`](_lib/sync.ts). Every route is
+**session-gated** (opaque `__Host-` cookie), **Origin-checked** on mutations, **fails closed (503)**
+without `ACCOUNTS_DB` / `SYNC_BUCKET`, and authorizes each workspace to its `owner_user_id` (a
+cross-user or nonexistent workspace answers **404**, so existence never leaks across accounts).
+
+- `POST /api/sync/workspaces` — register (idempotent, owned-by-caller upsert) a workspace + its wrapped
+  DEK (F61a `WrappedDek`) + optional encrypted workspace-name record. `GET` lists the caller's
+  workspaces (ids + wrapped DEKs + `created_at`).
+- `PUT /api/sync/wrapped-ik` — add/rotate one method's wrapped-IK blob (upsert by `method` + `key_id`).
+  `GET` returns every wrapped-IK blob for the caller (unlock on a fresh device).
+- `POST /api/sync/push` — `{ workspace_id, records: [{ blinded_id, type, ciphertext, updated, deleted? }] }`.
+  Stores each ciphertext in R2, upserts the D1 index row under a **monotonic per-workspace `seq`**, and
+  honors **LWW** (a stale `updated` never clobbers a fresher row). Batches over 15 records → **413** (A15
+  subrequest cap; the client chunks).
+- `GET /api/sync/pull?workspace_id=&since=<seq>` — returns records with `seq > since` (≤ 25 per page) with
+  their ciphertext, plus a `nextSince` cursor + `more` flag for incremental paging.
+
+Every response exposes only `{ workspace_id, blinded_id, seq, type, updated, deleted, ciphertext,
+created_at }` + wrapped-key blobs — never a trade field or a plaintext name.
+
 ## Public endpoints (shipped)
 
 Live today; no auth required:
@@ -190,9 +216,16 @@ audMatches:true, expired:false`.
 ## Bindings to add when implementing
 
 - **D1** (`ACCOUNTS_DB`) for accounts + entitlements + donations + recovery tokens + the F44 changelog
-  list — schema in [`functions/schema.sql`](schema.sql). **After ANY change to `schema.sql`** (F54
-  added `donations`, F55 added `recovery_tokens`, F44 added `subscribers` + `changelog_sends`) the
-  owner must **re-run** the idempotent apply command so the new tables exist in prod:
+  list + the F62 synced-workspaces change-index / wrapped keys — schema in
+  [`functions/schema.sql`](schema.sql). **After ANY change to `schema.sql`** (F54 added `donations`,
+  F55 added `recovery_tokens`, F44 added `subscribers` + `changelog_sends`, **F62 added
+  `sync_workspaces` + `sync_workspace_keys` + `sync_wrapped_ik` + `sync_records`**) the owner must
+  **re-run** the idempotent apply command so the new tables exist in prod:
   `npx wrangler d1 execute blotterbook-accounts --remote --file=functions/schema.sql`.
-- **R2** for the subscription tier's stored trade blobs (optionally encrypted
-  client-side to preserve the "your data stays yours" guarantee).
+- **R2** (`SYNC_BUCKET`) for the synced-workspaces encrypted-record ciphertext blobs (F62). Holds ONLY
+  opaque AES-GCM ciphertext (F61a `EncryptedRecord`), keyed `records/<workspace_id>/<blinded_id>` — never
+  a symbol, P&L, note, tag, screenshot, or workspace name (guardrail S25); D1's `sync_records` rows point
+  at these objects via `ciphertext_ref`. **Every `/api/sync/*` endpoint fails closed with a 503 JSON body
+  when `SYNC_BUCKET` (or `ACCOUNTS_DB`) is unbound.** Create + bind the bucket:
+  `npx wrangler r2 bucket create blotterbook-sync`, then Pages dashboard → Settings → Functions → R2
+  bucket bindings → variable name `SYNC_BUCKET`.
