@@ -67,11 +67,17 @@
         aria-label="Previous card"
         onclick={() => go(-1)}><ChevronLeft class="size-4" /></button
       >
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 pointer-coarse:gap-3">
         {#each Array(count) as _, i (i)}
           <button
             type="button"
-            class={cn('size-2 rounded-full', i === idx ? 'bg-foreground' : 'bg-muted-foreground/40 hover:bg-muted-foreground')}
+            class={cn(
+              // A222: the dot stays 8px (decorative-scale, matches the arrows' primary role); on
+              // coarse pointers an invisible ::before hit-slop + a wider row gap keep adjacent
+              // dots' tap zones from swallowing each other.
+              "relative size-2 rounded-full pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']",
+              i === idx ? 'bg-foreground' : 'bg-muted-foreground/40 hover:bg-muted-foreground'
+            )}
             aria-label="Go to card {i + 1} of {count}"
             aria-current={i === idx}
             onclick={() => {

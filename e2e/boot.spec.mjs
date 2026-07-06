@@ -166,3 +166,73 @@ test('app: onboarding CSV CTA opens the picker and imports', async ({ page }) =>
   await page.evaluate(() => indexedDB.deleteDatabase('blotterbook')); // leave the surface clean
   expect(errors, errors.join('\n')).toHaveLength(0);
 });
+
+// ── A207/F41: static boot skeleton + preload hints ─────────────────────────────────────────────
+// The skeleton/preload markup is hand-authored directly into the three shells (no drift gate covers
+// them — they're marker-free mount points), so assert against the SERVED bytes rather than racing the
+// live DOM (the real app can mount before a test even gets a chance to look).
+
+for (const path of ['/app/app.html', '/app/demo.html', '/app/staging.html']) {
+  test(`${path}: served HTML carries the static boot skeleton + preload hints, no style="" (F41)`, async ({ page }) => {
+    const html = await (await page.request.get(path)).text();
+    expect(html).toContain('data-testid="boot-skeleton"');
+    expect(html).toContain('<meta name="color-scheme" content="dark" />');
+    expect(html).toMatch(/<link rel="preload" as="font" type="font\/woff2" crossorigin href="[^"]+\.woff2" \/>/);
+    expect(html).toContain('<link rel="preload" as="fetch" crossorigin href="/data/versions.json" />');
+    expect(html).toContain('<link rel="preload" as="fetch" crossorigin href="/api/config" />');
+    // CSP (style-src 'self', no 'unsafe-inline'): never a literal style="" attribute.
+    expect(html).not.toMatch(/\sstyle="/);
+  });
+}
+
+test('demo: the static boot skeleton is cleared once the real app mounts (F41)', async ({ page }) => {
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+  // main.ts's target.replaceChildren() removed the static skeleton before mount() appended the app.
+  await expect(page.getByTestId('boot-skeleton')).toHaveCount(0);
+});
+
+// ── A239: status pill — clickable popover + dot-only on mobile ─────────────────────────────────
+// /api/status isn't served by the plain python static server e2e boots against, so the pill is
+// mocked here to exercise the popover deterministically (it otherwise renders null on a fetch miss —
+// intentional per A234, "convenience only").
+
+test('demo: status pill opens a popover explaining the current status (A239)', async ({ page }) => {
+  await page.route('**/api/status', route =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ mode: 'maintenance', label: 'Partial outage' }) })
+  );
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+
+  const pill = page.getByTestId('status-pill');
+  await expect(pill).toBeVisible();
+  await expect(pill).toHaveAttribute('aria-label', 'Status: Partial outage');
+  await expect(page.getByTestId('status-pill-label')).toBeVisible(); // sm+ viewport: label shown too
+
+  await pill.click();
+  const pop = page.locator('[data-slot="popover-content"]');
+  await expect(pop).toBeVisible();
+  await expect(pop).toContainText('Partial outage');
+  await expect(pop).toContainText(/degraded/i);
+  await expect(pop.getByRole('link', { name: 'Status detail' })).toHaveAttribute('href', '/api/status');
+});
+
+test('demo (360px): status pill is dot-only on mobile, but still opens the popover on tap (A239)', async ({ page }) => {
+  await page.route('**/api/status', route =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ mode: 'live', label: 'Online' }) })
+  );
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+
+  const pill = page.getByTestId('status-pill');
+  await expect(pill).toBeVisible();
+  await expect(pill).toHaveAttribute('aria-label', 'Status: Online'); // a11y name survives the hidden label
+  await expect(page.getByTestId('status-pill-label')).toBeHidden(); // dot-only below sm
+
+  await pill.click(); // popover works on tap even though the label is visually hidden
+  const pop = page.locator('[data-slot="popover-content"]');
+  await expect(pop).toBeVisible();
+  await expect(pop).toContainText('Online');
+  await expect(pop).toContainText('All systems normal.');
+});

@@ -6,6 +6,15 @@ name: CI
 # (build-manifest committed) still proves the build-time tooling didn't leave the committed sources
 # stale; dist/ itself is gitignored. (A69 retired the build-includes half — the nav/footer partials
 # became Nav.svelte/Footer.svelte, so there is no longer any committed HTML generated from partials.)
+#
+# CH38: split into two independent jobs that run in PARALLEL. `lint-typecheck-format` is the cheap,
+# fast-feedback gate; `build-test-e2e` is the long pole (unit tests, the Vite build, and the
+# Playwright boot). Splitting them cuts wall-clock time to red/green on the fast gate without
+# waiting on the build+e2e job. `npm run ci` (package.json) chains the same checks (test → build →
+# size-budget → check-deploy → test:e2e) as a single local command so a dev can reproduce the gist
+# of this workflow before pushing — CI keeps its own named steps below (not a call to `npm run ci`)
+# so failures stay isolated per step in the Actions UI, and so the fast job doesn't redundantly
+# re-run lint/typecheck/format inside `npm test` a second time.
 on:
   push:
     branches: [main]
@@ -24,14 +33,15 @@ permissions:
   contents: read
 
 jobs:
-  build-and-test:
+  lint-typecheck-format:
+    name: Lint + typecheck + format (fast gate)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v5
         with:
-          node-version-file: .node-version   # single source of truth (also read by Cloudflare Pages)
+          node-version-file: .node-version # single source of truth (also read by Cloudflare Pages)
           cache: npm
 
       - name: Install dev dependencies
@@ -45,6 +55,20 @@ jobs:
 
       - name: Format check (Prettier)
         run: npm run format:check
+
+  build-test-e2e:
+    name: Unit tests + build + e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version # single source of truth (also read by Cloudflare Pages)
+          cache: npm
+
+      - name: Install dev dependencies
+        run: npm ci
 
       - name: Unit + logic tests (adapters / auth / version / flags / tax / demostore / curveandreport / compute / accounts)
         run: npm run test:unit
@@ -78,7 +102,7 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: Validate Mermaid diagrams (docs drift gate)
-        run: npm run check-mermaid   # parses every ```mermaid block under docs/ (reuses the Playwright chromium)
+        run: npm run check-mermaid # parses every ```mermaid block under docs/ (reuses the Playwright chromium)
 
       - name: Render / e2e tests (boot every surface, zero console errors)
         run: npm run test:e2e

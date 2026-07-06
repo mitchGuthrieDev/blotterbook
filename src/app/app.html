@@ -10,11 +10,62 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- A207/F41: paints the pre-CSS canvas dark so there's no white flash before the skeleton below. -->
+    <meta name="color-scheme" content="dark" />
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <!-- A207/F41: boot preload hints — the Geist Mono woff2 (else the static skeleton's text nodes
+         would first paint in a fallback face) + the two boot-time fetches (versions.json, the flags
+         endpoint) so their RTT starts before the boot JS parses/executes. -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/geist-mono-latin.woff2" />
+    <link rel="preload" as="fetch" crossorigin href="/data/versions.json" />
+    <link rel="preload" as="fetch" crossorigin href="/api/config" />
     <title>Blotterbook</title>
   </head>
   <body data-mode="app">
-    <div id="app"></div>
+    <div id="app">
+      <!-- A207/F41: static boot skeleton — existing Tailwind utility classes only (CSP-clean, zero JS
+           cost), shape-matched to AppShell (sidebar + topbar) and the A206 screenSkeleton (two cards,
+           the first with a chart placeholder) so the swap to the real app is invisible. main.ts clears
+           this via target.replaceChildren() before mount(). -->
+      <div class="flex h-dvh overflow-hidden" role="status" aria-label="Loading" data-testid="boot-skeleton">
+        <div class="hidden w-60 shrink-0 border-r border-border bg-card md:block" aria-hidden="true">
+          <div class="flex h-12 items-center border-b border-border px-4">
+            <div class="h-4 w-24 animate-pulse rounded-md bg-accent motion-reduce:animate-none"></div>
+          </div>
+          <div class="space-y-1 p-2">
+            <div class="h-8 w-full animate-pulse rounded-md bg-accent motion-reduce:animate-none"></div>
+            <div class="h-8 w-full animate-pulse rounded-md bg-accent motion-reduce:animate-none"></div>
+            <div class="h-8 w-full animate-pulse rounded-md bg-accent motion-reduce:animate-none"></div>
+          </div>
+        </div>
+        <div class="flex min-w-0 flex-1 flex-col">
+          <div class="flex h-12 shrink-0 items-center border-b border-border px-3 sm:px-4" aria-hidden="true">
+            <div class="h-4 w-28 animate-pulse rounded-md bg-accent motion-reduce:animate-none"></div>
+          </div>
+          <div class="min-w-0 flex-1 space-y-4 overflow-hidden p-4 sm:p-6" aria-hidden="true">
+            <div class="rounded-md border border-border bg-card">
+              <div class="border-b border-border px-4 py-2.5">
+                <div class="h-4 w-40 animate-pulse rounded-md bg-accent motion-reduce:animate-none"></div>
+              </div>
+              <div class="space-y-3 p-4">
+                <div class="h-4 w-full animate-pulse rounded-md bg-accent motion-reduce:animate-none"></div>
+                <div class="h-4 w-2/3 animate-pulse rounded-md bg-accent motion-reduce:animate-none"></div>
+                <div class="h-40 w-full animate-pulse rounded-md bg-accent motion-reduce:animate-none"></div>
+              </div>
+            </div>
+            <div class="rounded-md border border-border bg-card">
+              <div class="border-b border-border px-4 py-2.5">
+                <div class="h-4 w-40 animate-pulse rounded-md bg-accent motion-reduce:animate-none"></div>
+              </div>
+              <div class="space-y-3 p-4">
+                <div class="h-4 w-full animate-pulse rounded-md bg-accent motion-reduce:animate-none"></div>
+                <div class="h-4 w-2/3 animate-pulse rounded-md bg-accent motion-reduce:animate-none"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

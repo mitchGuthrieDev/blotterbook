@@ -460,7 +460,7 @@
                         <Badge variant="secondary" class="gap-1"
                           >{tag}<button
                             type="button"
-                            class="text-muted-foreground hover:text-foreground"
+                            class="relative text-muted-foreground hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
                             onclick={() => removeTag(row.id, tag)}
                             aria-label="Remove tag">×</button
                           ></Badge
@@ -521,7 +521,7 @@
                           </button>
                           <button
                             type="button"
-                            class="absolute -right-1.5 -top-1.5 grid size-[18px] place-items-center rounded-full bg-destructive text-white"
+                            class="absolute -right-1.5 -top-1.5 grid size-[18px] place-items-center rounded-full bg-destructive text-white pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
                             aria-label="Remove screenshot"
                             onclick={() => removeShot(row.id, i)}><X class="size-3" /></button
                           >

@@ -40,6 +40,40 @@
   let releases = $state<Release[]>(FALLBACK);
   let live = $state(false);
 
+  /* F44 — changelog-email signup (double opt-in). The form POSTs same-origin to /api/subscribe
+     (CSP form-action/connect-src 'self' hold). The endpoint is enumeration-safe, so we show one
+     generic success regardless of whether the address was new. `flash` surfaces the confirm /
+     unsubscribe outcomes the /api/confirm + /api/unsubscribe redirects carry back as query flags. */
+  let email = $state('');
+  let signupState = $state<'idle' | 'sending' | 'ok' | 'error'>('idle');
+  let signupMessage = $state('');
+  let flash = $state<{ kind: 'ok' | 'error'; text: string } | null>(null);
+
+  async function subscribe(e: SubmitEvent) {
+    e.preventDefault();
+    if (signupState === 'sending' || !email.trim()) return;
+    signupState = 'sending';
+    try {
+      const r = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const d = (await r.json().catch(() => ({}))) as { message?: string; error?: string };
+      if (r.ok) {
+        signupState = 'ok';
+        signupMessage = d.message || 'Check your inbox for a confirmation link.';
+        email = '';
+      } else {
+        signupState = 'error';
+        signupMessage = d.error || 'Something went wrong — please try again.';
+      }
+    } catch (_) {
+      signupState = 'error';
+      signupMessage = 'Network error — please try again.';
+    }
+  }
+
   /* Render an ISO date (YYYY-MM-DD) as "Jun 26, 2026" without pulling in a tz/locale surprise —
      parse the parts directly so it reads the same everywhere. A247: MONTH_ABBR is the core's single
      source (also used by report/analytics) — this used to be a verbatim local copy. */
@@ -50,6 +84,14 @@
   }
 
   onMount(() => {
+    // Surface the confirm / unsubscribe outcome the Function redirects carry back as query flags (F44).
+    const p = new URLSearchParams(location.search);
+    if (p.get('subscribed'))
+      flash = { kind: 'ok', text: 'Subscription confirmed — you are on the list. New releases will land in your inbox.' };
+    else if (p.get('unsubscribed')) flash = { kind: 'ok', text: 'You have been unsubscribed. No more release emails will be sent.' };
+    else if (p.get('subscribe') === 'error')
+      flash = { kind: 'error', text: 'That confirmation link has expired or was already used. Sign up again below.' };
+
     // Curated release notes — a static, hash-cache-busted data file (no GitHub API).
     fetch('/data/changelog.json', { headers: { Accept: 'application/json' } })
       .then(r => {
@@ -77,6 +119,53 @@
   <p class="font-mono text-[11.5px] text-muted-foreground mt-0 mb-1.5">
     {live ? 'Release notes · prod track' : 'Showing the last saved snapshot'}
   </p>
+
+  {#if flash}
+    <div
+      class="mt-4 rounded-md border px-3.5 py-2.5 text-sm {flash.kind === 'ok'
+        ? 'border-chart-2/40 bg-chart-2/12 text-foreground'
+        : 'border-destructive/40 bg-destructive/12 text-foreground'}"
+      role="status"
+    >
+      {flash.text}
+    </div>
+  {/if}
+
+  <!-- F44: changelog-email signup (double opt-in). Get release notes by email — nothing else is sent. -->
+  <section id="subscribe" class="mt-6 rounded-lg border border-border bg-card px-5 py-[18px]">
+    <h2 class="text-[15px] font-semibold m-0 tracking-[-0.01em]">Get release notes by email</h2>
+    <p class="text-muted-foreground text-[13.5px] leading-[1.55] mt-1.5 mb-3 max-w-[560px]">
+      One short email when a new version ships — release notes only, no marketing, and no trade data ever leaves your browser. Double
+      opt-in; unsubscribe in one click anytime.
+    </p>
+    {#if signupState === 'ok'}
+      <p class="text-chart-2 text-sm font-medium m-0">{signupMessage}</p>
+    {:else}
+      <form class="flex flex-wrap items-center gap-2.5" onsubmit={subscribe}>
+        <label class="sr-only" for="subscribe-email">Email address</label>
+        <input
+          id="subscribe-email"
+          type="email"
+          required
+          autocomplete="email"
+          placeholder="you@example.com"
+          bind:value={email}
+          disabled={signupState === 'sending'}
+          class="min-w-[240px] flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+        />
+        <button
+          type="submit"
+          disabled={signupState === 'sending'}
+          class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+        >
+          {signupState === 'sending' ? 'Subscribing…' : 'Subscribe'}
+        </button>
+      </form>
+      {#if signupState === 'error'}
+        <p class="text-destructive text-[13px] mt-2 mb-0">{signupMessage}</p>
+      {/if}
+    {/if}
+  </section>
 
   <div class="log relative mt-9 pl-[26px]" id="log">
     {#each releases as r, i (r.version + r.date)}

@@ -22,8 +22,10 @@
   import { decimateMinMax } from '../../lib/core/curveseries.ts';
   import { X, ChevronUp, ArrowUpDown } from '@lucide/svelte';
   import * as Card from '$lib/components/ui/card';
+  import StatCardRow, { type StatItem } from '../parts/StatCardRow.svelte';
+  import InfoTip from '../parts/InfoTip.svelte';
   import type { Kpi, DistBar, SignedBar, SymbolRow, TagRow, StatRow } from '../lib/analytics.ts';
-  import type { FilterModel } from './Dashboard.svelte';
+  import type { FilterModel, StatDetail } from './Dashboard.svelte';
 
   interface Props {
     kpis: Kpi[];
@@ -36,6 +38,10 @@
     maxDD: number;
     /** Null when the drawdown has no positive prior peak (inception drawdown — A170). */
     maxDDpct: number | null;
+    /** A240: optional per-curve-point date labels — curveDates[k] aligns with curve[k] (curveDates[0]
+     *  is the pre-trade origin, ''). When present the drawdown readout + max-DD callout show real
+     *  dates; absent, they degrade to the trade index. Wire from App as `['', ...trades.map(t => t.date)]`. */
+    curveDates?: string[];
     long: { pnl: number; n: number };
     short: { pnl: number; n: number };
     /** Trades excluded from the long/short split for lack of side info (A170). */
@@ -64,6 +70,7 @@
     curve,
     maxDD,
     maxDDpct,
+    curveDates,
     long,
     short,
     unknownSide,
@@ -170,29 +177,139 @@
     return out;
   });
 
-  // Underwater (drawdown) series from the equity curve: depth = running peak − equity, normalized.
-  // Uses a loop (not Math.max(...curve)) so a large fills export can't overflow the call stack.
-  // A223: the per-trade path is min/max-decimated to ~1.5k points — a 50k-fill import used to emit
-  // a 50k-segment SVG path; extremes and endpoints survive the decimation by construction.
-  const ddPath = $derived.by(() => {
-    if (curve.length < 2) return { area: '', line: '' };
+  // ── A238: the top KPI strip adopts the Dashboard's shared StatCardRow — same card grid, the
+  // narrow-viewport swipe carousel, and the click-through drill-in. The 6 KPIs map to StatItem
+  // (keyed by label), and a self-contained statDetail() explains each stat with figures already on
+  // screen (the advanced-stats grid + the wins/losses/maxDD props) — no extra app wiring. ──
+  const kpiStats = $derived<StatItem[]>(kpis.map(k => ({ key: k.label, label: k.label, value: k.value, tone: k.tone })));
+  /** Look up an advanced-stats row's formatted value by its label (reuse of on-screen figures). */
+  const statVal = (k: string): string => statRows.find(r => r.k === k)?.v ?? '—';
+  function statDetail(key: string): StatDetail | null {
+    const k = kpis.find(x => x.label === key);
+    if (!k) return null;
+    const head = { title: k.label, value: k.value, tone: k.tone };
+    const netVal = () => kpis.find(x => x.label === 'Net P&L')?.value ?? usd(0);
+    switch (key) {
+      case 'Net P&L':
+        return {
+          ...head,
+          desc: 'Total realized P&L across the filtered working set — the sum of every closed trade after the platform’s own commissions, before Blotterbook’s modeled costs.',
+          rows: [
+            { label: 'Winning trades', value: `${wins}`, tone: 'pos' },
+            { label: 'Losing trades', value: `${losses}`, tone: 'neg' },
+            { label: 'Scratch ($0)', value: `${scratch}` },
+          ],
+        };
+      case 'Expectancy / trade':
+        return {
+          ...head,
+          desc: 'The average P&L you can expect per trade — net P&L divided by the trade count. Positive means each trade adds edge on average.',
+          rows: [
+            { label: 'Average win', value: statVal('Average win'), tone: 'pos' },
+            { label: 'Average loss', value: statVal('Average loss'), tone: 'neg' },
+          ],
+        };
+      case 'Profit factor':
+        return {
+          ...head,
+          desc: 'Gross profit divided by gross loss. Above 1.0 is net-profitable; 2.0 means you earn twice what you lose.',
+          rows: [
+            { label: 'Gross profit', value: statVal('Gross profit'), tone: 'pos' },
+            { label: 'Gross loss', value: statVal('Gross loss'), tone: 'neg' },
+          ],
+        };
+      case 'Payoff ratio':
+        return {
+          ...head,
+          desc: 'Average winning trade divided by the average loser — how much bigger your wins are than your losses, independent of how often you win.',
+          rows: [
+            { label: 'Average win', value: statVal('Average win'), tone: 'pos' },
+            { label: 'Average loss', value: statVal('Average loss'), tone: 'neg' },
+          ],
+        };
+      case 'Sharpe (daily)':
+        return {
+          ...head,
+          desc: 'Risk-adjusted return: mean daily P&L over its standard deviation. Computed on daily-P&L dispersion and NOT annualized; small samples are noisy.',
+          rows: [
+            { label: 'Per-trade std dev', value: statVal('Per-trade std dev') },
+            { label: 'Sortino (daily)', value: statVal('Sortino (daily)') },
+          ],
+        };
+      case 'Recovery factor':
+        return {
+          ...head,
+          desc: 'Net P&L divided by the max drawdown — how many times over your worst peak-to-trough loss you’ve earned back.',
+          rows: [
+            { label: 'Max drawdown', value: maxDD > 0 ? `−${usdWhole(maxDD)}` : '$0', tone: 'neg' },
+            { label: 'Net P&L', value: netVal() },
+          ],
+        };
+      default:
+        return { ...head, desc: '', rows: [] };
+    }
+  }
+
+  // ── A240: interactive underwater (drawdown) module. Depth = running peak − equity at each closed
+  // trade; the whole series is walked in a loop (not Math.max(...curve) — a large fills export would
+  // overflow the call stack) and the SVG path is min/max-decimated to ~1.5k points (A223: extremes +
+  // endpoints survive by construction). The walk also captures the max-drawdown span (peak→trough
+  // curve indices) so the module can shade it and label its date range. ──
+  const DD_W = 100,
+    DD_H = 50;
+  const ddMoney = (d: number): string => (d > 0 ? `−${usdWhole(d)}` : '$0');
+  const ddDate = (i: number): string => curveDates?.[i] ?? '';
+  const dd = $derived.by(() => {
+    if (curve.length < 2) return null;
     let peak = curve[0],
-      maxd = 0;
-    const depth = curve.map(v => {
-      if (v > peak) peak = v;
+      maxd = 0,
+      peakIdx = 0,
+      troughIdx = 0,
+      runPeakIdx = 0;
+    const depth = curve.map((v, i) => {
+      if (v > peak) {
+        peak = v;
+        runPeakIdx = i;
+      }
       const d = peak - v;
-      if (d > maxd) maxd = d;
+      if (d > maxd) {
+        maxd = d;
+        peakIdx = runPeakIdx;
+        troughIdx = i;
+      }
       return d;
     });
     const span = maxd || 1;
-    const W = 100,
-      H = 50;
-    const X = (i: number) => (i / (curve.length - 1)) * W;
-    const Y = (d: number) => 1 + (d / span) * (H - 3);
+    const X = (i: number) => (i / (curve.length - 1)) * DD_W;
+    const Y = (d: number) => 1 + (d / span) * (DD_H - 3);
     const pts = decimateMinMax(depth);
     const line = pts.map(([i, d], k) => `${k === 0 ? 'M' : 'L'}${X(i).toFixed(2)} ${Y(d).toFixed(2)}`).join(' ');
-    return { line, area: `M0 0 ${line.replace(/^M/, 'L')} L${W} 0 Z` };
+    return { depth, maxd, span, peakIdx, troughIdx, X, Y, line, area: `M0 0 ${line.replace(/^M/, 'L')} L${DD_W} 0 Z`, len: curve.length };
   });
+
+  // Hover/tap/keyboard readout: a curve index → the drawdown depth (+ date) at that point. CSP-safe —
+  // the crosshair is SVG geometry attributes (not CSS), the readout is plain reactive text.
+  let ddCursor = $state<number | null>(null);
+  $effect(() => {
+    if (dd && ddCursor != null && ddCursor > dd.len - 1) ddCursor = null;
+  });
+  function ddIdxFromX(e: PointerEvent): number | null {
+    const d = dd;
+    if (!d) return null;
+    const rect = (e.currentTarget as Element).getBoundingClientRect();
+    const frac = rect.width ? (e.clientX - rect.left) / rect.width : 0;
+    return Math.max(0, Math.min(d.len - 1, Math.round(frac * (d.len - 1))));
+  }
+  const moveDdCursor = (e: PointerEvent) => (ddCursor = ddIdxFromX(e));
+  function ddKey(e: KeyboardEvent) {
+    if (!dd || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+    e.preventDefault();
+    const base = ddCursor ?? dd.troughIdx;
+    ddCursor = Math.max(0, Math.min(dd.len - 1, base + (e.key === 'ArrowRight' ? 1 : -1)));
+  }
+  const ddReadout = $derived(dd && ddCursor != null ? { depth: dd.depth[ddCursor], date: ddDate(ddCursor), idx: ddCursor } : null);
+  const ddPeakDate = $derived(dd ? ddDate(dd.peakIdx) : '');
+  const ddTroughDate = $derived(dd ? ddDate(dd.troughIdx) : '');
 </script>
 
 {#snippet head(title: string)}
@@ -346,22 +463,9 @@
     </div>
   {/if}
 
-  <!-- KPI highlights -->
-  <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-    {#each kpis as k (k.label)}
-      <Card.Root class="p-4">
-        <div class="text-xs text-muted-foreground">{k.label}</div>
-        <div
-          class={cn(
-            'mt-1 text-xl font-semibold tabular-nums',
-            k.tone === 'pos' ? 'text-chart-2' : k.tone === 'neg' ? 'text-destructive' : 'text-foreground'
-          )}
-        >
-          {k.value}
-        </div>
-      </Card.Root>
-    {/each}
-  </div>
+  <!-- KPI highlights — A238: the shared StatCardRow (mobile swipe carousel + click-through drill-in,
+       parity with the Dashboard). Distinct carousel label so locators don't collide with Dashboard's. -->
+  <StatCardRow stats={kpiStats} label="Analytics stats" gridClass="grid gap-4 sm:grid-cols-3 lg:grid-cols-6" detail={statDetail} />
 
   <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
     <!-- Distribution -->
@@ -378,7 +482,7 @@
               </span>
               <button
                 type="button"
-                class="grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                class="relative grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
                 aria-label="Close bucket detail"
                 onclick={() => (bucketSel = null)}><X class="size-3" /></button
               >
@@ -427,19 +531,128 @@
       </Card.Content>
     </Card.Root>
 
-    <!-- Drawdown -->
+    <!-- Drawdown — A240: interactive underwater chart. Explainer popover, hover/tap/keyboard readout
+         (CSP-safe SVG-geometry crosshair), a shaded max-drawdown span, its dated callout, and axes. -->
     <Card.Root>
-      {@render head('Drawdown (underwater)')}
+      <div class="flex items-center justify-between border-b border-border pr-2 pl-4">
+        <span class="py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Drawdown (underwater)</span>
+        <InfoTip title="Reading this chart" align="end">
+          This is an underwater chart: it plots how far your equity sits <strong>below its highest prior peak</strong>, in dollars, at each
+          closed trade. The top line (0) means you’re at a new high; the curve dips as losses pull you under that peak and climbs back as
+          you recover. Computed on the filtered working set, so it narrows with your active filters. The shaded band marks the deepest
+          peak-to-trough stretch — your max drawdown.
+        </InfoTip>
+      </div>
       <Card.Content>
-        <svg viewBox="0 0 100 50" class="h-32 w-full" preserveAspectRatio="none" aria-hidden="true">
-          <line x1="0" y1="0.5" x2="100" y2="0.5" class="stroke-border" stroke-width="0.5" />
-          <path d={ddPath.area} class="fill-destructive/20" />
-          <path d={ddPath.line} fill="none" class="stroke-destructive" stroke-width="0.7" />
-        </svg>
-        <div class="mt-2 flex justify-between text-[11px] text-muted-foreground">
-          <span>Max drawdown <span class="text-destructive">{maxDD > 0 ? `-${usdWhole(maxDD).slice(1)}` : '$0'}</span></span>
-          <span>{maxDDpct != null ? `${maxDDpct.toFixed(1)}% of peak` : 'from inception (no prior peak)'}</span>
-        </div>
+        {#if dd}
+          <div class="flex gap-2">
+            <!-- y-axis: 0 (at peak) at top → the deepest drawdown at the bottom -->
+            <div class="flex w-14 shrink-0 flex-col justify-between py-0.5 text-right text-[9px] tabular-nums text-muted-foreground">
+              <span>$0</span>
+              <span class="text-destructive">{ddMoney(dd.maxd)}</span>
+            </div>
+            <div class="min-w-0 flex-1">
+              <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+              <svg
+                viewBox="0 0 100 50"
+                class="h-32 w-full cursor-crosshair touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                preserveAspectRatio="none"
+                role="img"
+                aria-label="Drawdown-from-peak curve — hover, tap, or use arrow keys to read the drawdown at any point"
+                tabindex="0"
+                onpointerdown={moveDdCursor}
+                onpointermove={moveDdCursor}
+                onpointerleave={() => (ddCursor = null)}
+                onkeydown={ddKey}
+              >
+                <!-- gridlines: the 0/peak line (solid) + a dashed mid reference -->
+                <line x1="0" y1="0.5" x2="100" y2="0.5" class="stroke-border" stroke-width="0.5" vector-effect="non-scaling-stroke" />
+                <line
+                  x1="0"
+                  y1="25"
+                  x2="100"
+                  y2="25"
+                  class="stroke-border"
+                  stroke-width="0.5"
+                  stroke-dasharray="1.5 1.5"
+                  vector-effect="non-scaling-stroke"
+                />
+                <!-- max-drawdown peak→trough span shading -->
+                {#if dd.troughIdx > dd.peakIdx}
+                  <rect x={dd.X(dd.peakIdx)} y="0" width={dd.X(dd.troughIdx) - dd.X(dd.peakIdx)} height="50" class="fill-destructive/10" />
+                {/if}
+                <path d={dd.area} class="fill-destructive/20" />
+                <path d={dd.line} fill="none" class="stroke-destructive" stroke-width="0.7" vector-effect="non-scaling-stroke" />
+                <!-- trough marker (deepest point) -->
+                <line
+                  x1={dd.X(dd.troughIdx)}
+                  y1="0"
+                  x2={dd.X(dd.troughIdx)}
+                  y2="50"
+                  class="stroke-destructive"
+                  stroke-width="0.5"
+                  stroke-dasharray="1.5 1.5"
+                  vector-effect="non-scaling-stroke"
+                />
+                <!-- hover/tap/keyboard crosshair (SVG geometry — CSP-safe, no CSS) -->
+                {#if ddCursor != null}
+                  <line
+                    x1={dd.X(ddCursor)}
+                    y1="0"
+                    x2={dd.X(ddCursor)}
+                    y2="50"
+                    class="stroke-foreground"
+                    stroke-width="0.6"
+                    vector-effect="non-scaling-stroke"
+                  />
+                  <rect x={dd.X(ddCursor) - 0.7} y={dd.Y(dd.depth[ddCursor]) - 1} width="1.4" height="2" class="fill-foreground" />
+                {/if}
+              </svg>
+              <!-- x-axis: first → last point (dates when wired, else generic) -->
+              <div class="mt-1 flex justify-between text-[9px] text-muted-foreground tabular-nums">
+                <span>{ddDate(1) || 'start'}</span>
+                <span>{ddDate(dd.len - 1) || 'latest'}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Nearest-point readout -->
+          {#if ddReadout}
+            <div class="mt-2 text-xs tabular-nums">
+              <span class="text-muted-foreground">At {ddReadout.date || `trade ${ddReadout.idx}`}:</span>
+              <span class="ml-1 font-semibold text-destructive">{ddMoney(ddReadout.depth)}</span>
+              <span class="text-muted-foreground">below peak</span>
+            </div>
+          {:else}
+            <p class="mt-2 text-[11px] text-muted-foreground">Hover, tap, or press ←/→ on the chart to read the drawdown at any point.</p>
+          {/if}
+
+          <!-- Max-drawdown callout with its date/trade range -->
+          <div class="mt-3 rounded-md border border-border bg-background p-2.5 text-xs">
+            <div class="flex items-center justify-between">
+              <span class="text-muted-foreground">Max drawdown</span>
+              <span class="font-semibold tabular-nums text-destructive">
+                {ddMoney(dd.maxd)}{maxDDpct != null ? ` · ${maxDDpct.toFixed(1)}% of peak` : ''}
+              </span>
+            </div>
+            <div class="mt-1 text-[11px] text-muted-foreground">
+              {#if ddPeakDate && ddTroughDate}
+                Peak {ddPeakDate} → trough {ddTroughDate}{dd.troughIdx > dd.peakIdx
+                  ? ` · ${dd.troughIdx - dd.peakIdx} trade${dd.troughIdx - dd.peakIdx === 1 ? '' : 's'}`
+                  : ''}
+              {:else if dd.troughIdx > dd.peakIdx}
+                Over {dd.troughIdx - dd.peakIdx} trade{dd.troughIdx - dd.peakIdx === 1 ? '' : 's'} from the prior equity peak to the trough{maxDDpct ==
+                null
+                  ? ' (no positive prior peak)'
+                  : ''}
+              {:else}
+                No drawdown yet — equity is at its high.
+              {/if}
+            </div>
+          </div>
+        {:else}
+          <p class="text-xs text-muted-foreground">Not enough trades to chart a drawdown yet.</p>
+        {/if}
       </Card.Content>
     </Card.Root>
 

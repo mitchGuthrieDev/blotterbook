@@ -17,6 +17,7 @@ import type {
   BrokersFile,
   FeedsFile,
   StateTaxFile,
+  ContractExpiry,
 } from './types.ts';
 
 export const pad2 = (n: number | string) => String(n).padStart(2, '0');
@@ -333,6 +334,95 @@ export function compute(tr: Trade[]) {
 /** The full metrics object compute() returns — derived from its implementation so the two can't drift. */
 export type Metrics = ReturnType<typeof compute>;
 
+// ── Dashboard batch-1 module helpers (F39/A142) — pure, coordinate-free tail/record walks over an
+// equity curve or a P&L sequence. Kept next to compute() so the Today/Drawdown/Streak modules reuse
+// the SAME conventions compute() already pins (scratch breaks a run; maxDD% is null with no positive
+// peak). Node-tested in scripts/test-compute.mjs; the caller decides whether the input is per-trade
+// or per-day, so these say nothing about units. ──
+
+/**
+ * Current (tail) drawdown off an equity curve — compute()'s `curve` (leading 0 included) or any
+ * cumulative series. Tracks the high-water mark (its LAST occurrence, so a curve sitting at a new
+ * high reports `sincePeak: 0`) and returns the distance from it to the final point, the peak-relative
+ * %, how many curve steps since that high, and whether the curve is at a new high. `ddPct` follows
+ * compute()'s maxDDpct convention: 0 when flat-at-peak, null when underwater with no positive peak.
+ */
+export function currentDrawdown(curve: number[]): { dd: number; ddPct: number | null; sincePeak: number; atHigh: boolean } {
+  if (!curve.length) return { dd: 0, ddPct: null, sincePeak: 0, atHigh: true };
+  let peak = curve[0],
+    peakIdx = 0;
+  for (let i = 1; i < curve.length; i++) {
+    if (curve[i] >= peak) {
+      peak = curve[i];
+      peakIdx = i; // '>=' keeps the LATEST high, so a repeated/held peak reports sincePeak from its last touch
+    }
+  }
+  const last = curve[curve.length - 1];
+  const dd = Math.max(0, peak - last);
+  const ddPct = dd === 0 ? 0 : peak > 0 ? (dd / peak) * 100 : null;
+  return { dd, ddPct, sincePeak: curve.length - 1 - peakIdx, atHigh: dd === 0 };
+}
+
+/**
+ * The current (tail) win/loss run in a P&L sequence — walks from the end while the sign holds. A
+ * scratch (0) is its own 'flat' run and breaks a win/loss run, matching compute()'s streak
+ * convention. Returns the run kind, its length, and its running P&L sum.
+ */
+export function currentStreak(pnls: number[]): { kind: 'win' | 'loss' | 'flat' | 'none'; len: number; sum: number } {
+  if (!pnls.length) return { kind: 'none', len: 0, sum: 0 };
+  const last = pnls[pnls.length - 1];
+  const kind = last > 0 ? 'win' : last < 0 ? 'loss' : 'flat';
+  const inRun = (p: number) => (kind === 'win' ? p > 0 : kind === 'loss' ? p < 0 : p === 0);
+  let len = 0,
+    sum = 0;
+  for (let i = pnls.length - 1; i >= 0 && inRun(pnls[i]); i--) {
+    len++;
+    sum += pnls[i];
+  }
+  return { kind, len, sum };
+}
+
+/**
+ * Record win/loss streaks over a P&L sequence — the longest consecutive winning / losing runs by
+ * COUNT (`maxWin`/`maxLoss`) and by DOLLARS (`maxWinSum`/`maxLossSum`), scratch breaking both. This
+ * is compute()'s inline `mcw`/`mcl`/`maxWinStk`/`maxLossStk` accumulation extracted verbatim so the
+ * Streak Monitor can report the same records off ANY sequence (e.g. per-day P&L) without the two
+ * drifting; test-compute.mjs pins it against compute()'s fields on a shared fixture.
+ */
+export function streakRecords(pnls: number[]): { maxWin: number; maxLoss: number; maxWinSum: number; maxLossSum: number } {
+  let mcw = 0,
+    mcl = 0,
+    cw = 0,
+    cl = 0,
+    cws = 0,
+    cls = 0,
+    maxWinSum = 0,
+    maxLossSum = 0;
+  for (const p of pnls) {
+    if (p > 0) {
+      cw++;
+      cl = 0;
+      cws += p;
+      cls = 0;
+    } else if (p < 0) {
+      cl++;
+      cw = 0;
+      cls += p;
+      cws = 0;
+    } else {
+      cw = 0;
+      cl = 0;
+      cws = 0;
+      cls = 0;
+    }
+    mcw = Math.max(mcw, cw);
+    mcl = Math.max(mcl, cl);
+    maxWinSum = Math.max(maxWinSum, cws);
+    maxLossSum = Math.min(maxLossSum, cls);
+  }
+  return { maxWin: mcw, maxLoss: mcl, maxWinSum, maxLossSum };
+}
+
 export const DOW_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // Per-tag P&L/win/count buckets over an externally-supplied tag lookup — tags live in trademeta,
@@ -488,6 +578,58 @@ export function monthCells(firstDow: number, daysInMonth: number): (number | nul
   while (cells.length % 7 !== 0) cells.push(null);
   return cells;
 }
+
+/* ============================================================
+   Contract expiry (F40 / A137) — recovered on READ from the raw export symbol. No adapter or
+   Trade-shape change: Trade.symbol keeps the code verbatim (rootSym strips it into Trade.root), and
+   this is the inverse strip. Works retroactively on any historical trade whose platform exported a
+   month code — TradingView (continuous `…1!`) returns null, so any expiry UI degrades to '—'.
+   ============================================================ */
+const MONTH_CODE: Record<string, number> = { F: 1, G: 2, H: 3, J: 4, K: 5, M: 6, N: 7, Q: 8, U: 9, V: 10, X: 11, Z: 12 };
+
+/**
+ * Parse the futures contract month/year from a raw export symbol. Mirrors rootSym()'s normalization
+ * (exchange prefix, thinkorswim `/`, CQG/Sierra `F.US.` service prefix, ATAS `@venue` + `-CME`/`.CME`
+ * venue suffixes), then matches a trailing month-letter (F–Z) + a 1/2/4-digit year. A single-digit
+ * year is decade-ambiguous and resolves to the candidate nearest `tradeDate` (ties → the future);
+ * without a date it prefers the current decade. Returns null for continuous contracts (`…1!`), spreads
+ * (a `-` leg separator), bare roots and non-futures tickers. Digit-ended roots (M2K/SR3/6E) don't
+ * false-positive because the match anchors on the trailing month-code, exactly like rootSym.
+ */
+export function expiryOf(symbol: string, tradeDate?: string): ContractExpiry | null {
+  if (!symbol) return null;
+  let s = symbol.toUpperCase().trim().replace(/^.*:/, '').replace(/^\//, '');
+  s = s.replace(/^F\.[A-Z]{2}\./, ''); // CQG/Sierra service prefix (F.US.MESM25)
+  s = s.replace(/@[A-Z0-9_]+$/, ''); // ATAS venue suffix (MESU6@CME_Ind)
+  s = s.replace(/[-.](CME|CBOT|CBT|NYMEX|NYM|COMEX|CMX|GLOBEX|CEC|FUT)$/, ''); // venue suffixes
+  if (/\d*!$/.test(s)) return null; // continuous (ES1!, MES1!)
+  if (s.includes('-')) return null; // calendar spread / leg separator
+  const m = /([FGHJKMNQUVXZ])(\d{1,4})$/.exec(s);
+  if (!m) return null;
+  const digits = m[2];
+  if (digits.length === 3) return null; // a 3-digit year never occurs — refuse rather than guess
+  const month = MONTH_CODE[m[1]];
+  let year: number;
+  if (digits.length === 4) year = +digits;
+  else if (digits.length === 2) year = 2000 + +digits;
+  else {
+    // single digit — decade-ambiguous; pick the candidate year nearest the trade year (ties → future).
+    const base = /^\d{4}/.test(tradeDate || '') ? +(tradeDate as string).slice(0, 4) : new Date().getFullYear();
+    const d = +digits,
+      decade = Math.floor(base / 10) * 10;
+    year = [decade + d - 10, decade + d, decade + d + 10].reduce((best, c) => {
+      const dc = Math.abs(c - base),
+        dbest = Math.abs(best - base);
+      return dc < dbest || (dc === dbest && c > best) ? c : best;
+    });
+  }
+  return { code: m[1], month, year };
+}
+
+/** Compact trader-facing expiry label — month letter + 2-digit year, e.g. `M25` (F40). */
+export const expiryCode = (e: ContractExpiry) => `${e.code}${pad2(e.year % 100)}`;
+/** Human expiry label — `Jun 2025` (F40). */
+export const expiryLabel = (e: ContractExpiry) => `${MONTH_ABBR[e.month - 1]} ${e.year}`;
 
 /* ============================================================
    Broker / commission / cost model

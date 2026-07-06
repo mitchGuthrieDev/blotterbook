@@ -24,10 +24,13 @@
     tone,
     MONTH_NAMES,
     csvCell,
+    expiryOf,
+    expiryCode,
   } from '../lib/core/core.ts';
   import { isBetaPhase } from '../lib/core/format.ts';
-  import { Badge } from '$lib/components/ui/badge';
+  import { Badge, badgeVariants } from '$lib/components/ui/badge';
   import { Skeleton } from '$lib/components/ui/skeleton';
+  import * as Popover from '$lib/components/ui/popover';
   import AppShell from '$lib/components/shell/AppShell.svelte';
   import { createDashboard, resolveFromFiles } from './lib/dashboard.svelte.ts';
   import { dailySeries } from '../lib/core/curveseries.ts';
@@ -530,8 +533,9 @@
 
   // ── Blotter / Trade Editor rows ──────────────────────────────────────────────────────────────
   // ONE per-trade row base for both tables (A157 — the two mappers had drifted into near-identical
-  // copies): id/qty/meta, display date/time/side, and fees from the broker rate via the shared
-  // core roundTurn. Entry/exit prices aren't in the trade model (P&L events, not bars).
+  // copies): id/qty/meta, display date/time/side, fees from the broker rate via the shared core
+  // roundTurn, F42 entry/exit prices (when the export carried them; else undefined → '—'), and the
+  // F40 contract expiry code derived from the RAW symbol (t.symbol, not the stripped root).
   const rowBase = (t: Trade) => {
     const id = dash.tradeId(t);
     const qty = t.qty ?? 1;
@@ -539,6 +543,7 @@
     // F30: dated rate; A211: at the trade's own broker when its source file carries an override.
     const rowBroker = dash.costInputs.brokerFor?.(t) ?? dash.setup.broker;
     const r = rowBroker ? rateFor(rowBroker, t.root, t.date) : null;
+    const exp = expiryOf(t.symbol, t.date); // F40 — null for continuous/spread/bare symbols
     return {
       id,
       qty,
@@ -547,6 +552,11 @@
       time: (t.time || '').slice(11, 16),
       side: t.side === 'short' ? ('Short' as const) : ('Long' as const),
       pnl: t.pnl,
+      // F42: per-fill entry/exit prices when the source export carried them.
+      entryPrice: Number.isFinite(t.entryPrice) ? (t.entryPrice as number) : undefined,
+      exitPrice: Number.isFinite(t.exitPrice) ? (t.exitPrice as number) : undefined,
+      // F40: compact contract code ("M25"); undefined when the symbol has no month code.
+      expiry: exp ? expiryCode(exp) : undefined,
       // A208: a trade carrying its ACTUAL CSV commission shows that figure; the modeled rate
       // only covers the rest (same rule as costModel).
       fees:
@@ -563,6 +573,9 @@
       return {
         ...b,
         sym: t.root,
+        entry: b.entryPrice, // F42
+        exit: b.exitPrice,
+        expiry: b.expiry, // F40
         holdMin: t.holdMs != null ? Math.round(t.holdMs / 60000) : undefined,
         tags: b.meta?.tags ?? [],
         note: !!b.meta?.note,
@@ -591,8 +604,9 @@
       return {
         ...b,
         symbol: t.root,
-        entry: NaN,
-        exit: NaN,
+        // F42: real prices when the export carried them (else NaN → '—' in the read-only cell).
+        entry: b.entryPrice ?? NaN,
+        exit: b.exitPrice ?? NaN,
         fees: b.fees ?? NaN,
         platform: platformOf(t),
         tags: b.meta?.tags ?? [],
@@ -883,8 +897,12 @@
       const data = JSON.parse(await file.text()) as Record<string, unknown>;
       const res = await dash.importBackup(data);
       restoreMsg = `Restored ${res.added} trade${res.added === 1 ? '' : 's'} (${res.dup} duplicate).`;
-    } catch {
-      restoreMsg = 'That backup file could not be read.';
+    } catch (e) {
+      // A236: a v3 checksum mismatch throws a corruption-specific message; surface it, else the
+      // generic parse-failure copy.
+      restoreMsg = /checksum|corrupt/i.test((e as Error)?.message || '')
+        ? 'That backup is corrupted or was modified — nothing was restored.'
+        : 'That backup file could not be read.';
     }
   }
   function doErase() {
@@ -938,6 +956,17 @@
     if (statusRec.mode === 'offline') return { text: statusRec.label || 'Offline', tone: 'down' as const };
     return { text: statusRec.label || 'Online', tone: 'up' as const }; // live/auto
   });
+  // A239: plain-language popover body per status tone — the pill itself only ever carries the short
+  // admin label, so the "what does this mean" explanation lives here instead.
+  const statusExplainer = $derived(
+    !statusPill
+      ? ''
+      : statusPill.tone === 'up'
+        ? 'All systems normal.'
+        : statusPill.tone === 'warn'
+          ? 'Some functionality may be degraded. See the status detail link below for specifics.'
+          : 'Local data is still fully usable — nothing ever leaves your browser, online or offline.'
+  );
 
   onMount(() => {
     dash.boot().catch((e: unknown) => {
@@ -1010,25 +1039,61 @@
         data-testid="flavor-text"
         title={flavor}>{flavor}</span
       >
-      <!-- A234: online/status pill — admin-set /api/status + navigator.onLine -->
+      <!-- A234/A239: online/status pill — admin-set /api/status + navigator.onLine. Clickable: opens a
+           popover explaining the current status. Below sm it renders dot-only (the aria-label still
+           carries the full text for a11y); the popover always has the full label + explanation. -->
       {#if statusPill}
-        <Badge
-          variant="outline"
-          data-testid="status-pill"
-          class={statusPill.tone === 'up'
-            ? 'border-chart-2/40 text-chart-2'
-            : statusPill.tone === 'warn'
-              ? 'border-chart-4/40 text-chart-4'
-              : 'border-destructive/40 text-destructive'}
-        >
-          <span
-            class={[
-              'size-1.5 rounded-full',
-              statusPill.tone === 'up' ? 'bg-chart-2' : statusPill.tone === 'warn' ? 'bg-chart-4' : 'bg-destructive',
-            ]}
-          ></span>
-          {statusPill.text}
-        </Badge>
+        <Popover.Root>
+          <Popover.Trigger>
+            {#snippet child({ props })}
+              <button
+                {...props}
+                type="button"
+                data-testid="status-pill"
+                aria-label={`Status: ${statusPill.text}`}
+                class={[
+                  badgeVariants({ variant: 'outline' }),
+                  'relative cursor-pointer hover:bg-accent',
+                  // A222: coarse-pointer hit-slop — below `sm` this pill renders dot-only (~20px
+                  // visual box), so touch users need an invisible enlarged tap area.
+                  "pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']",
+                  statusPill.tone === 'up'
+                    ? 'border-chart-2/40 text-chart-2'
+                    : statusPill.tone === 'warn'
+                      ? 'border-chart-4/40 text-chart-4'
+                      : 'border-destructive/40 text-destructive',
+                ]}
+              >
+                <span
+                  aria-hidden="true"
+                  class={[
+                    'size-1.5 rounded-full',
+                    statusPill.tone === 'up' ? 'bg-chart-2' : statusPill.tone === 'warn' ? 'bg-chart-4' : 'bg-destructive',
+                  ]}
+                ></span>
+                <span class="hidden sm:inline" data-testid="status-pill-label">{statusPill.text}</span>
+              </button>
+            {/snippet}
+          </Popover.Trigger>
+          <Popover.Content align="end" class="w-64 space-y-1.5">
+            <div class="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+              <span
+                aria-hidden="true"
+                class={[
+                  'size-1.5 rounded-full',
+                  statusPill.tone === 'up' ? 'bg-chart-2' : statusPill.tone === 'warn' ? 'bg-chart-4' : 'bg-destructive',
+                ]}
+              ></span>
+              {statusPill.text}
+            </div>
+            <p class="text-xs leading-relaxed text-muted-foreground">
+              {statusExplainer}
+              {#if statusPill.tone === 'warn'}
+                <a href="/api/status" target="_blank" rel="noopener" class="underline hover:no-underline">Status detail</a>
+              {/if}
+            </p>
+          </Popover.Content>
+        </Popover.Root>
       {/if}
       {#if isBeta}<Badge variant="outline" class="border-chart-4/40 text-chart-4">Beta</Badge>{/if}
       {#if envLabel}<Badge variant="secondary">{envLabel}</Badge>{/if}
@@ -1092,6 +1157,7 @@
           />
         </div>
         <Dashboard
+          moduleData={dash.dashModuleData}
           stats={dStats}
           series={dashSeries}
           dateRange={dash.dateRange}
@@ -1155,6 +1221,7 @@
           {@render screenSkeleton()}
         {:then Analytics}
           <Analytics.default
+            curveDates={['', ...dash.metricsActive.trades.map(t => t.date)]}
             kpis={analytics.kpis}
             dist={analytics.dist}
             wins={analytics.wins}

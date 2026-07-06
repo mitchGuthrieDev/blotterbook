@@ -52,7 +52,7 @@
       "status": "guardrail",
       "completedDate": null,
       "partial": false,
-      "prompt": "Guardrail for the payments scaffold: never provision an account/entitlement in `functions/api/webhook.ts` before verifying the Stripe signature — HMAC-SHA256 over the RAW request body with `STRIPE_WEBHOOK_SECRET`, constant-time compare, and a timestamp/replay window. The endpoint is an inert 501 stub today; reject any future change that wires up provisioning without signature verification first.",
+      "prompt": "Guardrail for the payments webhook. As of F54 (2026-07-06) functions/api/webhook.ts is LIVE and provisions the donor flag — but ONLY after verifying the Stripe signature (HMAC-SHA256 over the RAW request body with STRIPE_WEBHOOK_SECRET, constant-time compare, timestamp/replay window) and deduping by event id. This guardrail now protects that code: reject any change that provisions/credits an account or entitlement before the signature verification passes, and never let provisioning depend on the fail-open rate limiter (S22).",
       "doneNote": null
     },
     {
@@ -66,18 +66,6 @@
       "partial": false,
       "recurring": true,
       "prompt": "REPEATABLE — leave this item OPEN; never mark it done, set completedDate, or strip this prompt. Run to promote staging-only feature(s) onto prod + demo. Since the A33 cutover all three surfaces (app/demo/staging) are ONE Svelte SPA under src/app/ — there is no separate staging codebase to copy. Staging-only behavior lives behind `isStaging` / `PAGE_MODE === 'staging'` runtime guards INSIDE the shared components (the old STAGING_PAGE export is retired); promotion = removing those guards so the feature ships on every surface.\n\nSCOPE: promote the feature(s) named in the request; if none are named, promote the full staging delta (staging is a proving ground — every feature is destined for prod + demo). Inventory with `grep -rn \"isStaging\\|PAGE_MODE === 'staging'\" src/app src/lib` and CLASSIFY each hit: FEATURE gate (promote) vs ENVIRONMENT infra (leave) — the environment set (isolated IndexedDB + seed via SEEDED, the per-surface storage key namespacing MOD_KEY/TABS_KEY/WS_KEY, backup filename, env pill/version track, the onboarding gate, the key-gate in functions/_middleware.ts) stays put. List each feature + its gate(s) before editing.\n\nPER FEATURE: (1) flip the gate to unconditional — e.g. `isStaging ? a : b` -> `a`, `{#if isStaging}` -> unconditional, `class:staging={isStaging}` + `.overlay.staging` CSS -> `.overlay`; remove the now-unused STAGING_PAGE import. (2) DEMO 1:1 — the feature must work on demo, but keep demo NON-MUTATING: any TRADE-writing control stays `disabled` under `isDemo` and guarded (`if (isDemo) return;`), and the in-memory DemoStore means UI/layout prefs (saved layouts, hidden modules) simply don't persist — that's correct, not a bug. (3) keep it CSP-clean (no inline style=\"\" — A55) and a11y-intact.\n\nTHEN: `npm test` (lint+typecheck+format+unit) + `npm run test:e2e` (boots all surfaces). UPDATE e2e: any spec asserting demo/prod LACKS the feature (e.g. 'demo … no menu', 'demo … not paginated') must flip to assert it now HAS it. Verify in a browser (build -> serve dist/ -> Playwright) that the demo + app surfaces show the feature. Title the PR `feat:` (or `fix:`) so CH12 bumps prod by the right level — do NOT hand-edit data/versions.json (staging keeps its lead). Add a data/changelog.json (F13) entry at the top of `releases`, keyed to the NEW prod version, describing what shipped for users. The bump-version STAGING_ONLY set is just `src/app/staging.html` (the env page) — features were never in it, so no change there.\n\nEach run done when: the in-scope features are live on prod + demo at 1:1 (demo non-mutating), all surfaces verified, npm test + e2e green, a changelog entry added, committed/pushed (PR only if asked). Leave this item OPEN (repeatable).\n\n— UPDATED 2026-07-01 (UI-redesign Phase 3 cutover): the promotion model above (flip STAGING_PAGE guards inside the shared App.svelte components) describes the PRE-redesign world and now applies ONLY to the small set of legacy staging features still gated that way (grep `STAGING_PAGE src/` — Overview/TradeBlotter/AdvancedStats). The DOMINANT staging delta is now the WHOLE redesigned sidebar-shell app: `src/app/main.ts` dynamically mounts `src/app/StagingApp.svelte` (+ `src/app/screens/*`, `src/app/lib/dashboard.svelte.ts`, `src/lib/components/shell/*`) for `PAGE_MODE==='staging'` ONLY, while app/demo still mount the legacy `src/app/App.svelte`. So the big promotion is a CUTOVER — point app/demo at the redesigned root too (drop the `PAGE_MODE==='staging'` branch in main.ts and retire App.svelte + its now-unreachable STAGING_PAGE branches) — NOT a per-gate flip. That cutover is a large, owner-gated milestone; scope it explicitly and confirm demo stays non-mutating (DemoStore) before running it. The env infra (isolated IndexedDB, seed, LS namespacing, _middleware key-gate) still keys off PAGE_MODE and stays put.\n\n— UPDATED 2026-07-01 (the big cutover ran): this run promoted the ENTIRE redesigned sidebar-shell app to prod + demo. The legacy `src/app/App.svelte` + its whole `src/app/components/*` view layer (19 components) and the `src/app/lib/modules.ts` A108 module registry were RETIRED (deleted); the redesigned `src/app/StagingApp.svelte` was RENAMED to `src/app/App.svelte` and is now THE single mode-aware app root; `src/app/main.ts` mounts it on ALL surfaces (no more staging-only dynamic-import branch), mode-aware via PAGE_MODE (app → real IndexedDB, no seed, empty → first-run onboarding; demo → seeded in-memory DemoStore, every write isDemo-guarded so demo never persists; staging → isolated seeded DB). The `STAGING_PAGE` export was removed from core.ts (the app derives an `isStaging` local from PAGE_MODE). Full prod parity was built on the redesigned screens/parts: editable cost setup, first-run onboarding, saved views, workspace layouts, per-trade screenshots, day-note tags, backup/restore/erase, activity terminal, definitions, and status banners — with demo kept non-mutating throughout. Docs synced (ui-redesign.md/CLAUDE.md/architecture.md). Remaining recurring scope for future runs: promote any genuinely staging-only feature added AFTER this cutover. — INVENTORY 2026-07-01: the current staging-only feature awaiting promotion is A135 (tabbed dashboards, gated behind isStaging in App.svelte + DashTabs.svelte). Promote once proven on staging. — INVENTORY 2026-07-05 (backlog review): A135 was promoted 2026-07-02 (PR #95, 'dashboard tabs everywhere'). A fresh grep of src/ finds NO staging-only feature gates remaining — every isStaging/PAGE_MODE==='staging' hit is environment infra (isolated DB/seed, storage-key namespacing, env pill, middleware key-gate). Nothing currently awaits promotion; run again when the next staging-gated feature lands. — GATING MODEL (A111 decision, docs/staging-gating-recommendation.md): runtime PAGE_MODE/isStaging gating IS the staging model (one bundle, promotion = deleting the gate). Staging gates are UX switches, NOT security boundaries — anything genuinely private belongs behind the server-side middleware. When a staging-only feature exceeds ~10 KiB minified or pulls a new dependency, load it behind {#if isStaging}{#await import(...)} so it stays out of the prod boot payload. — INVENTORY 2026-07-05 (post-F53): ONE staging-gated feature awaits promotion — the F53 Account sidebar item + screen (gated on isStaging in App.svelte's sections/route). Promote ONLY after the owner completes the D1 setup (wrangler d1 create blotterbook-accounts + schema.sql + the ACCOUNTS_DB Pages binding) and phase 1 is proven on staging.",
-      "doneNote": null
-    },
-    {
-      "id": "CH22",
-      "title": "Add a copyright + operator line to the site footer",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": true,
-      "prompt": "From R7. The shared site footer (src/site/lib/Footer.svelte — partials/footer.html was retired by A69) has no copyright line and never names the operating entity. Add a '© 2026 <name>' line (and, on legal.html / src/site/components/Legal.svelte, a 'Blotterbook is operated by <entity>' note). The exact entity display name is a pending owner decision (TBD as of R7 — 'Scaline Audio' per LICENSE); ship brand-only '© 2026 Blotterbook' now if undecided and swap in the entity once chosen. Since A69 the footer is a Svelte component prerendered by scripts/vite-ssg.mjs, so `npm run build` regenerates every page's footer automatically (no build-includes step). Done when: every page footer shows a copyright line and the operator is named once the entity is decided. — PARTIAL 2026-07-05 (owner chose brand-only for now): '© 2026 Blotterbook. All rights reserved.' ships in both footer variants (full + admin). REMAINING: swap in the entity + add the 'operated by' note on Legal once the owner decides the entity (ties to F18/A202).",
       "doneNote": null
     },
     {
@@ -173,7 +161,7 @@
       "status": "open",
       "completedDate": null,
       "partial": false,
-      "prompt": "Spun off from the R1 audit (2026-06-29). Only the TradingView adapter is verified; the other adapters in src/lib/core/adapters.ts (Tradovate, Rithmic, SierraChart, TradeStation, MotiveWave, Webull, IBKR, Schwab) are marked beta. Validate each against a REAL export from that platform — symbol/root, side, qty, PnL, date/time, and (for fills exports) the FIFO round-trip pairing + holdMs — and add a representative fixture to scripts/test-adapters.mjs for each verified format. Drop the beta flag per adapter only once validated, and note it in data/changelog.json. Needs real statements (external dependency); ship incrementally, one adapter per pass. Done when: at least one more adapter is verified end-to-end with a fixture and its beta flag cleared. — UPDATE 2026-07-04: owner will supply TradingView's ADDITIONAL export types first (only Balance History verified today — feeds A106), then Quantower and Tradovate/NinjaTrader exports soon after. NOTE Quantower and NinjaTrader are NOT yet supported platforms — new-adapter work is filed as A209; this item stays the verification pass for the existing nine. — UPDATE 2026-07-04: TradingView is now verified against REAL exports for BOTH its types (balance history + the new A106 order-history adapter, cross-validated against each other to the cent). The nine-platform verification list is unchanged; Quantower/Tradovate/NinjaTrader exports are the owner's next supply (A209). — UPDATE 2026-07-05: Tradovate is VERIFIED against real exports (docs/csv-examples/tradovate/): the Orders-export adapter reconciles to the cent with the platform's own Performance.csv ground truth (9 round trips, net -$13.75; sides/qty/entry-exit/holdMs correct), and NinjaTrader's identical-format exports reconcile too (2 trades, +$325.00). Clear the Tradovate beta flag as part of the A209 family work. Still unverified: Rithmic, SierraChart, TradeStation, MotiveWave, Webull, IBKR, Schwab. — BETA CLEARED 2026-07-05: Tradovate/NinjaTrader (orders) ships non-beta after the real-export verification; the two new family adapters shipped non-beta. Remaining beta: Rithmic, SierraChart, TradeStation, MotiveWave, Webull, IBKR, Schwab.",
+      "prompt": "Spun off from the R1 audit (2026-06-29); refreshed 2026-07-06. VERIFIED against real exports (beta:false): tradingview, tradingview-orders, tradovate + tradovate-perf + tradovate-fills (Tradovate/NinjaTrader family, incl. the platform's own Performance ground truth), quantower, and atas (ATAS X .xlsx). STILL BETA — need a real export each: motivewave, rithmic, sierrachart, tradestation, webull, ibkr, schwab. For each remaining beta adapter validate symbol/root, side, qty, PnL, date/time, and (for fills exports) the FIFO round-trip pairing + holdMs against a REAL statement, add a representative fixture to scripts/test-adapters.mjs, drop the beta flag, and note it in data/changelog.json. Needs real statements (external dependency); ship one adapter per pass. Done when the remaining beta set is validated (or the item is re-scoped as adapters are dropped).",
       "doneNote": null
     },
     {
@@ -201,18 +189,6 @@
       "doneNote": null
     },
     {
-      "id": "CH38",
-      "title": "CI optimization: parallel lint/typecheck job + npm run ci lockstep",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "OPTIONAL optimization from the 2026-07-01 R1 audit (CI is already correct + de-duped per A96). Two low-risk wins: (1) split the cheap gates (lint + typecheck + format:check) into a separate GitHub Actions job that runs in PARALLEL with the build+e2e job, to cut wall-clock feedback time (the e2e build is the long pole). Keep the npm/Playwright caches. (2) Add a single top-level `npm run ci` script that chains `test` + `build` + `size-budget` + `check-deploy` + `test:e2e` so CI and local stay in lockstep (CI currently open-codes the sequence). Neither is a correctness bug; ship only if the CI latency/lockstep is worth it. Done when: applied (or explicitly declined with a note). — RENUMBERED 2026-07-05 (backlog audit): filed as CH35, which collided with an already-archived CH35; ids must be unique across backlog.json + backlog_archive.json (the admin panel merges both).",
-      "doneNote": null
-    },
-    {
       "id": "A132",
       "title": "(staging) Local/remote toggle + scaffolding for synced workspaces",
       "category": "FEATURES",
@@ -233,43 +209,7 @@
       "status": "open",
       "completedDate": null,
       "partial": false,
-      "prompt": "Follow-up from F30 (see docs/rates-data-assessment.md — Follow-ups). (1) CME published a 2026-02-01 fee schedule AND announced further transaction-fee changes effective 2026-04-01; our current composites in static/data/exchange-fees.json are a 'mid-2026 snapshot' (A171, 2026-07-02) that SHOULD include both — spot-check the equity/energy/metals/micro groups against cmegroup.com's current schedule (clearing-fees page); if anything moved, bump the current values and push the prior values into a new history entry ('until': '2026-03-31' or '2026-01-31' as documented), then run build-manifest.mjs. (2) Backfill deeper (pre-2024) exchange-fee history from cmegroup.com/company/clearing-fees/historical-fees.html only if users import multi-year-old data. (3) Add broker rateHistory entries ONLY with a citable source (broker announcement or a Wayback capture of their pricing page) — never fabricate. Schema needs no changes for any of this. Done when: the 2026 spot-check is recorded (values confirmed or corrected+dated) and any added history entries carry citations.",
-      "doneNote": null
-    },
-    {
-      "id": "A220",
-      "title": "CI security workflow: Semgrep CE + osv-scanner",
-      "category": "SECURITY",
-      "priority": "P2",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From A112 (docs/sast-eval-a112.md — follow its wiring plan). Add a separate .github/workflows/security.yml (PR + weekly cron; NOT new ci.yml steps): (1) osv-scanner against package-lock.json — FAILS the build on known-vulnerable pinned deps (the current gap: nothing in CI scans dependencies today); (2) Semgrep CE with a small custom rule pack that mechanically enforces the no-egress invariant (flag fetch/XHR/sendBeacon/WebSocket to non-relative URLs outside the allowlisted call sites: loadRefData, /api/*, the version/flags fetches) plus obvious sinks ({@html}, eval, innerHTML) — custom rules FAIL, registry rulesets (p/typescript, p/javascript) report-only until tuned. Keep runtimes small (target <2 min). CodeQL/Socket/SARIF-upload are explicitly out (paid on private repos — see the doc). Done when: security.yml runs on PRs + weekly, osv-scanner and the custom Semgrep rules gate merges, and a seeded violation (a test fetch to an external host) is caught.",
-      "doneNote": null
-    },
-    {
-      "id": "A221",
-      "title": "Mobile: Blotter card list below sm (replace the 13-column squeeze)",
-      "category": "LAYOUT (web vs mobile)",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From A199 (docs/mobile-architecture-assessment.md — the one 'papering-over' finding worth a real fix). The Blotter's 13-column table (and the Trade Editor's 14-column one) horizontally scrolls at phone widths — usable but hostile. Below sm, render the Blotter as a CARD LIST instead: one card per trade (symbol + side + qty on line 1, P&L prominent + date/time line 2, tags line 3; tap opens the existing row drawer for detail/actions), using the A200 pattern — a MediaQuery conditional render (no CSS-hidden duplicate DOM), desktop table unchanged. Keep selection/bulk actions available (long-press or a select mode is acceptable; or defer bulk-ops to desktop and say so). Sorting/filtering reuse the existing controls. Trade Editor may stay a scroll table (editing is desktop-first) — note the decision. e2e: extend the 360px sweep to assert cards render and the drawer opens. Done when: the Blotter reads naturally on a phone with no horizontal scroll, desktop unchanged, gates green.",
-      "doneNote": null
-    },
-    {
-      "id": "A222",
-      "title": "Mobile: coarse-pointer touch-target pass + touch affordance for tooltips",
-      "category": "LAYOUT (web vs mobile)",
-      "priority": "P2",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From A199 (docs/mobile-architecture-assessment.md). Two gaps: (1) TOUCH TARGETS — several controls are under the ~24px minimum (the calendar target stepper size-5 buttons, the 8px carousel dots, tab close ✕, size-6 row actions); add a pointer-coarse bump (Tailwind supports pointer-coarse: variants) or padding-extends-hit-area so touch users get ≥24px targets without changing the desktop look. Note width is currently the ONLY mobile signal in the codebase — this introduces the pointer:coarse dimension where it matters. (2) TOOLTIPS ON TOUCH (A205 follow-through) — IconTip is hover/focus-only; on coarse pointers either rely on the existing aria-labels (acceptable) plus ensure no control is EXPLAINED ONLY by a tooltip, or add a long-press affordance. Sweep the A199 doc’s inventory, fix, and note the chosen tooltip policy in the doc. Optional if cheap: sticky first column or edge-fade hint on the remaining scroll tables. Done when: all interactive controls hit ≥24px on coarse pointers and no control depends on hover to be understood.",
+      "prompt": "Follow-up from F30 (see docs/rates-data-assessment.md — Follow-ups). (1) CME published a 2026-02-01 fee schedule AND announced further transaction-fee changes effective 2026-04-01; our current composites in static/data/exchange-fees.json are a 'mid-2026 snapshot' (A171, 2026-07-02) that SHOULD include both — spot-check the equity/energy/metals/micro groups against cmegroup.com's current schedule (clearing-fees page); if anything moved, bump the current values and push the prior values into a new history entry ('until': '2026-03-31' or '2026-01-31' as documented), then run build-manifest.mjs. (2) Backfill deeper (pre-2024) exchange-fee history from cmegroup.com/company/clearing-fees/historical-fees.html only if users import multi-year-old data. (3) Add broker rateHistory entries ONLY with a citable source (broker announcement or a Wayback capture of their pricing page) — never fabricate. Schema needs no changes for any of this. Done when: the 2026 spot-check is recorded (values confirmed or corrected+dated) and any added history entries carry citations. PROGRESS (2026-07-06): verification attempted but the sandbox egress policy blocked cmegroup.com/broker pages (WebFetch/curl 403 on all hosts); via search snippets: Schwab/IBKR/Tradovate/Optimus/TradeStation commissions confirmed unchanged, no evidence of a 2026 retail base-fee hike (CME's Apr-2026 changes are member volume-incentive programs), EdgeClear std + AMP tier unverifiable. No data edited. Re-run with direct web access targeting cmegroup.com's 2026-02-01/04-01 PDFs + AMP's 2026 notice.",
       "doneNote": null
     },
     {
@@ -281,67 +221,7 @@
       "status": "open",
       "completedDate": null,
       "partial": false,
-      "prompt": "The adopted A65/A80 survey follow-ups (docs/svelte-adoption-survey.md). (1) The setContext('bb:store') seam has ZERO getContext consumers — either consume it where the store is currently prop-drilled or delete the setContext call and update CLAUDE.md's description of the seam (decide deliberately; the context seam is documented architecture). (2) Extract App.svelte's ~145-line dashboard-tabs state block (dashTabs/activeDashTab/dirtyTabs/draftLayouts + the CRUD fns) into a src/app/lib/dashtabs.svelte.ts rune module mirroring the createDashboard factory — pure refactor, e2e must stay green. (3) Make reduced-motion LIVE: src/app/lib/motion.ts reads prefers-reduced-motion once at module init — switch to svelte/reactivity MediaQuery so dur() reacts to OS changes without reload. (4) Opportunistic: replace the 8 hardcoded form ids with $props.id() when those components are next touched (list in the doc). Done when: 1-3 land with gates green; 4 is a standing convention noted in the doc.",
-      "doneNote": null
-    },
-    {
-      "id": "F39",
-      "title": "Dashboard modules batch 1: Today/Last Session, Drawdown Status, Streak Monitor",
-      "category": "FEATURES",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "The adopted A142 top-3 (docs/dashboard-module-ideas-a142.md — follow its per-module specs; all three are S-effort grid modules using EXISTING metrics, no new computation beyond cheap tails). (1) TODAY / LAST SESSION: the daily check-in card — last trading day's net/trades/win-rate from the tail of m.days, framed against avgDaily/avgTrades. (2) DRAWDOWN STATUS: live distance from the high-water mark off m.curve, framed by maxDD/maxDDpct ('$X below peak — max was $Y'). (3) STREAK MONITOR: current consecutive win/loss run vs the mcw/mcl and maxWinStk/maxLossStk records. Each: a MODULES entry + snippet in src/app/screens/Dashboard.svelte + an A189 picker thumbnail (follow the 'compare' A203 pattern), picker-addable (not default layout), chart tokens only (green/red only in P&L data), demo-safe (read-only), an e2e picker-add assertion each. Done when: all three add via the picker and render real metrics on every surface, gates green.",
-      "doneNote": null
-    },
-    {
-      "id": "F40",
-      "title": "Contract expiry: core parse helper + TradeEditor/Blotter surfacing",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "The adopted A137 recommendation (docs/contract-expiry-a137.md — follow its parser spec). (1) Pure core helper expiryOf(symbol) in src/lib/core/core.ts: the inverse of rootSym()'s strip — month letters F-Z, 1/2/4-digit years (single digit resolved nearest to the trade date), returns null for continuous symbols (…1!), spreads, and bare roots; digit-ended roots (M2K/SR3/6E) must not false-positive. Node fixtures per format family from the real adapter fixtures (7/10 formats carry codes; TradingView does NOT — must return null). NO Trade-shape or adapter changes — derive on read from the persisted Trade.symbol. (2) Surface it: a 'Contract' detail row in the TradeEditor drawer + a muted optional Blotter column (in the Columns picker, default off), rendering '—' when null. Rollover analytics stay deferred (the doc's A137c scope) until beta adapters are verified against real exports. Done when: the helper is fixture-tested, the two surfaces show expiry for code-bearing symbols and '—' for TradingView data, gates green.",
-      "doneNote": null
-    },
-    {
-      "id": "CH39",
-      "title": "Author the add-adapter + backlog-upkeep Claude Code skills",
-      "category": "CHORE / REFACTOR",
-      "priority": "P2",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "The adopted A196 top-2 (docs/skills-shortlist-a196.md — follow its per-skill outlines; match the existing .claude/skills/{promote-staging,repo-audit}/SKILL.md structure). (1) add-adapter: the full new-platform-CSV ritual — the adapters.ts object (sniff with A174 word-boundary matching + A178 minScore, toTrades/pairFills, beta flag), the test-adapters.mjs fixture + the no-misfire-on-other-fixtures assertion, plus the docs tail (Howto import guide, homepage platform list) and the A103 verification pathway. Author BEFORE the owner's Quantower/NinjaTrader exports arrive (A209 runs this twice). (2) backlog-upkeep: the every-session backlog ritual — donePolicy (strip prompt on done, move to backlog_archive.json, never touch recurring items), filing new items in the exact schema with next-free ids per prefix, the `updated` field bump, prettier pass, and the admin-panel merge invariant. Done when: both SKILL.md files exist, invoke cleanly, and a dry run of each produces correct output. — RENUMBERED 2026-07-05 (backlog audit): filed as CH36, which collided with an already-archived CH36; ids must be unique across backlog.json + backlog_archive.json (the admin panel merges both).",
-      "doneNote": null
-    },
-    {
-      "id": "F41",
-      "title": "App first paint: static skeleton in the HTML shells + preload hints",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "The adopted A207 recommendation (docs/app-first-paint-a207.md — follow its plan). (1) Put static skeleton markup — shape-matched to the A206 screenSkeleton, existing Tailwind utility classes only (they ship in the linked CSS; CSP-clean, zero JS-budget cost) — inside <div id='app'> in app/app.html, demo.html, staging.html; main.ts clears it via target.replaceChildren() before mount. First paint then happens after the ~73 KiB CSS instead of the ~427 KiB boot JS. (2) Preload hints: the Geist Mono woff2 + /data/versions.json. (3) Drop the redundant ?t=Date.now() on the manifest fetch in loadRefData (it already sends cache:'no-cache') so /data/manifest.json becomes preloadable too — verify the cache-busting semantics are unchanged (the no-cache header does the work). Keep all three shells identical except data-mode. NOT in scope: SSG-prerendering the AppShell chrome (the doc's phase 2 — a data-free sibling component, own item if wanted) and service workers. Done when: a cold load paints the skeleton before JS executes (verify via CDP/throttled trace), e2e green, no size-budget change.",
-      "doneNote": null
-    },
-    {
-      "id": "F42",
-      "title": "Persist entry/exit prices from fills exports (Trade Replay phase 0)",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From R11 (docs/trade-replay-r11.md phase 0 — useful on its own regardless of whether replay proceeds). 8/10 adapter formats carry per-execution prices but pairFills() discards them: add optional entryPrice/exitPrice to Fill + Trade (src/lib/core/types.ts), populate them in pairFills() (VWAP the partials when a round trip spans several fills at different prices — document the rule) and in the fills-bearing adapters that expose price columns (MotiveWave and TradingView order-history export prices that are currently unparsed — start there), keep them OUT of the tradeId content hash (the F37/A208 precedent), and let the F37 duplicate-merge ENRICH missing prices like other fields. Surface: entry/exit price rows in the TradeEditor detail drawer; blotter column optional. Node fixtures: a multi-fill round trip asserts the VWAP; a balance-history import asserts undefined. Done when: fills imports carry real prices end-to-end, dedupe/merge semantics hold, node suites + e2e green. Replay phases 1-3 stay pending owner direction (see the doc's open questions).",
+      "prompt": "The adopted A65/A80 survey follow-ups (docs/svelte-adoption-survey.md). (1) The setContext('bb:store') seam has ZERO getContext consumers (confirmed 2026-07-06) — either consume it where the store is currently prop-drilled or delete the setContext call and update CLAUDE.md's description of the seam (decide deliberately; the context seam is documented architecture). (2) Extract App.svelte's ~145-line dashboard-tabs state block (dashTabs/activeDashTab/dirtyTabs/draftLayouts + the CRUD fns) into a src/app/lib/dashtabs.svelte.ts rune module mirroring the createDashboard factory — pure refactor, e2e must stay green. (3) DONE (A249, 2026-07-06): motion.ts reduced-motion is now read LIVE via reducedMotion()/dur(), not frozen at module init. (4) Form-id sweep: ensure inputs/labels have stable associated ids for a11y. Remaining: parts (1), (2), (4).",
       "doneNote": null
     },
     {
@@ -355,42 +235,6 @@
       "partial": false,
       "prompt": "The adopted R14 recommendation (docs/econ-calendar-r14.md — follow its event set, schema and render plan). (1) Build static/data/econ-events.json (schemaVersion + the manifest pattern; run build-manifest.mjs) from US-government primary sources — FOMC meeting dates (Fed), BLS CPI/NFP release schedules, EIA crude inventories, BEA GDP — ~5 years back plus the published forward schedule; tens of KB gzipped. License-clean (public domain), pre-scheduled (no scraping). (2) Load via loadRefData alongside the other ref data. (3) Render: a small marker in the existing calendar day cells (don't crowd the P&L/note/tag chrome — see the doc's cell-layout notes) + event names in the day drill-in; works on the Calendar screen and the dashboard cal module. (4) A calendar-screen toggle persisted via Store.local (per-surface namespaced; demo in-memory = fine). (5) Maintenance: a quarterly/annual refresh note in the doc (automation later under the A15 subrequest guardrail). Done when: events render behind the toggle on real dates, the dataset carries citations, and gates (incl. manifest drift) are green.",
       "doneNote": null
-    },
-    {
-      "id": "F44",
-      "title": "Changelog email signup — D1 list + Resend + double opt-in + send-on-release workflow",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "The adopted A141 recommendation (docs/changelog-email-a141.md — follow its design end-to-end). Build first-party: (1) a Pages Function signup endpoint writing to a D1 subscriber table (email + status + tokens; hard-delete on unsubscribe), Turnstile + a D1 cooldown for abuse (defense-in-depth only — S22); (2) double opt-in via a Resend confirmation email; (3) one-click unsubscribe + List-Unsubscribe(-Post) headers on every send; (4) the send trigger: a NEW paths-filtered GitHub Actions workflow on static/data/changelog.json pushes to main (not version-bump.yml — the curated entry lands in a separate commit) that diffs for a new prod entry and fan-outs sends under the A15 50-subrequest cap; (5) a small signup affordance on the Blotterlog page (src/site/components/Changelog.svelte). HARD constraint: email + changelog content only — never trade data. OWNER-GATED: needs the Resend account (free to ~100 subs; ~$20/mo toward 1k) + D1 binding; KV is rejected per A17. Done when: the full loop works in a test list (signup → confirm → release email → unsubscribe) with the privacy posture from the doc.",
-      "doneNote": null
-    },
-    {
-      "id": "F45",
-      "title": "(staging) Loading splash + animation on initial page load",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "(STAGING) Visual flair from the owner: a quick branded loading splash + animation on the app's initial page load — a brief moment (logo mark + subtle motion) over the boot sequence, before/above the A206 skeletons resolve into data. Constraints: staging-gated (isStaging) until promoted via CH16; purely decorative — never blocks or delays boot, and disappears the instant the shell is ready (target <400ms perceived); reduced-motion collapses it (A146 dur()); CSP style-src 'self' (Svelte transitions / tw-animate classes, no inline style); no new deps (the ~22 KiB budget headroom is tight); demo/prod unaffected until promotion. Coordinate with F41 (static first-paint skeleton in the HTML shell) so they compose — the splash overlays the skeleton, it doesn't replace it. Done when: staging shows the splash on load, it vanishes on ready, gates stay green, and CH16 can promote it later.",
-      "doneNote": null
-    },
-    {
-      "id": "A236",
-      "title": "Export v3: include store.local layouts/tabs/workspaces in backups + payload checksum",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "From R24 (and the owner's backup question). Store.exportAll() captures IndexedDB (trades/journal/meta/trademeta/files/filetexts) but NOT the Store.local seam — dashboard module layouts, tabs, workspace templates are silently absent from backups. Add export v3: fold the bb:*-namespaced store.local keys into the envelope (restore applies them; demo still never persists), bump the version with backward-compatible import (v2 restores fine), and add a plain SHA-256 checksum over the payload for corruption detection — explicitly NOT an account-hash lock (R24 verdict: backups stay restorable logged-out). Sanitize on restore like importAll does. Fixtures in the demostore/store suite cover v2+v3 round-trips. Done when a backup/restore round-trips layouts and the checksum flags corruption."
     },
     {
       "id": "S25",
@@ -415,66 +259,6 @@
       "partial": false,
       "doneNote": null,
       "prompt": "From the owner. A new 'Symbols' screen/dashboard showing an info card for every symbol the user has traded (derived from imported data). Each card: the symbol root, full contract name, current price (updates realtime — NOTE: requires a market-data source; the app is local-only with no egress for trade data, so a public quote API needs an ADR-level decision — evaluate free delayed-quote options and flag the privacy/CSP implications before wiring), the exchange it trades on (CME/CBOT/NYMEX/COMEX from exchange-fees.json), which platforms the user traded it on (file provenance via platformOf), the user's total PnL for that symbol, and which contract months were traded rendered in month-letter format (F/G/H/J/K/M/N/Q/U/V/X/Z — build on F40's expiry parse helper). Clicking a card expands a full-horizontal-width detail module with a per-symbol equity/PnL graph and expanded stats (win rate, trade count, avg win/loss, hold time if fills data). Reuse core compute + curveseries; new screen in src/app/screens/ + nav entry. Done when the screen renders cards for every traded root with accurate stats and the expanded view works on all surfaces (demo included, read-only)."
-    },
-    {
-      "id": "A238",
-      "title": "Analytics: top mini-modules adopt Dashboard module behavior (mobile carousel + click-through info)",
-      "category": "APP",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "From the owner. The 6 mini stat modules at the top of the Analytics screen should behave like the main Dashboard's 6 stat modules: on mobile they display as the swipeable card carousel (A200's MediaQuery pattern — reuse/extract the Dashboard's carousel rather than duplicating), and clicking one opens the mini menu/popover with additional info about that stat (the Dashboard's stat-detail pattern). Implement in src/app/screens/Analytics.svelte, extracting any shared carousel/stat-card pieces into src/app/parts/ so Dashboard + Analytics share one implementation. Done when Analytics' top stats swipe on narrow viewports, click-through detail works on both screens, and e2e covers the Analytics variant."
-    },
-    {
-      "id": "A239",
-      "title": "Status pill: clickable info popover + dot-only on mobile",
-      "category": "APP",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "From the owner. The online/maintenance/status pill (A234, header actions in src/app/App.svelte) needs two upgrades: (1) clickable — clicking opens a small popover explaining the current status (online: all systems normal; maintenance: what's degraded + link to /api/status detail; offline: local data still fully usable, nothing leaves the browser) using the shadcn-svelte Popover primitive; (2) on mobile (< sm) render only the colored dot (no text label) to save header space — the popover still opens on tap and shows the full label + explanation there. Keep the aria-label carrying the status for a11y when the text is hidden. Done when the pill is interactive on all surfaces, mobile shows dot-only, and e2e asserts the popover content."
-    },
-    {
-      "id": "A240",
-      "title": "Analytics: drawdown module — make it interactive and clearer about what it shows",
-      "category": "APP",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "From the owner. Review the Analytics drawdown module (src/app/screens/Analytics.svelte, ddPath/decimateMinMax series): it needs to be interactive and clearer about what it's displaying. Add: a plain-language explainer (what drawdown-from-peak means, units, that it's computed on the filtered working set), hover/tap on the curve to read the drawdown value + date at a point (crosshair or nearest-point readout — CSP-safe, CSSOM only), max-drawdown callout with its date range highlighted, and axis labels/gridlines if missing. Consider a peak-to-valley shading treatment. Reuse the A197 interactivity patterns already in the file. Done when a user can tell at a glance what the curve means and can inspect any point, with e2e coverage for the readout."
-    },
-    {
-      "id": "A241",
-      "title": "Mobile: performance-graph module audit — text size + use the module's full space",
-      "category": "APP",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "From the owner. Audit the main Dashboard's performance graph (equity curve module) on mobile: the axis/label text renders too small and the chart doesn't use the module's available space fully. In src/app/screens/Dashboard.svelte's curve module: scale axis tick font-size up on narrow viewports (or reduce tick count via niceTicks so fewer, larger labels fit), trim internal padding/margins so the plot area fills the card, and verify the SVG viewBox/preserveAspectRatio lets the curve stretch to the card width. Check the legend/summary row wraps cleanly. Done when the mobile curve is legible (≥10px effective label size) and the plot fills the module with no dead margins."
-    },
-    {
-      "id": "A242",
-      "title": "Retire the Definitions module — distribute its content as contextual info on related modules",
-      "category": "APP",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "doneNote": null,
-      "prompt": "From the owner. The Definitions module (src/app/parts/Definitions.svelte) needs to go as a standalone module: its definitions + caveats text should be distributed as contextual additional information on the modules they relate to, rather than living in one catch-all module. Map each definition/caveat to its home (expectancy/win-rate → the stats modules' A205-style info tooltips or the Dashboard stat-detail popovers; cost-model caveats → Break-Even & Cost module; tax notes → the tax module/Reports) and surface them there via IconTip/popover 'What is this?' affordances. Then remove the Definitions module from MODULES, the picker, and saved layouts (migrate stored layouts that reference it — drop the key harmlessly). Done when every definition is reachable in context, the module is gone, stored layouts don't break, and e2e is updated."
     }
   ],
   "howToDrive": [

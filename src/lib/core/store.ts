@@ -137,6 +137,19 @@ export function setField<K extends keyof Trade>(obj: Trade, key: K, val: Trade[K
   obj[key] = val;
 }
 
+/* A236: export v3 folds the Store.local seam (dashboard tab/module layouts + workspace templates)
+   into the backup so a restore rebuilds them. Only the `bb:…dash…` layout keys travel — `bb:flags`
+   (a dev/test override) is deliberately excluded so a backup can't flip app behavior on restore.
+   Shared with DemoStore's exportAll so the two envelopes can't drift. */
+export const LOCAL_BACKUP_RE = /^bb:(staging:)?dash[A-Za-z0-9:_-]*$/;
+/* A236: plain SHA-256 hex over the payload for corruption detection (R24 — NOT an account-hash lock;
+   backups stay restorable logged-out). Web Crypto is present in browsers (secure context: the app is
+   https/localhost) and in Node ≥19, so this runs in the app and the node suites alike. */
+export async function sha256Hex(s: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 /* A153: one-shot canonicalization of tags persisted BEFORE A130 made cleanTags the single write
    form. Older live saves stored raw case/markup ('Scalp'), which no longer matches new writes,
    the lowercase tag filter/chips, or a saved filter's tag — so on first boot after the change we
@@ -213,7 +226,7 @@ export const Store: StoreLike = {
     // qty/hold; its order history adds qty/entry/exit/holdMs/commission), so a duplicate fills in
     // fields the stored record LACKS — identity fields (time/symbol/side/pnl, the id inputs) are
     // never touched and existing values never overwritten, so import order doesn't matter.
-    const ENRICH = ['qty', 'entryTime', 'exitTime', 'holdMs', 'commission'] as const;
+    const ENRICH = ['qty', 'entryTime', 'exitTime', 'holdMs', 'commission', 'entryPrice', 'exitPrice'] as const;
     const store = await tx(TRADES, 'readwrite');
     let added = 0,
       duplicate = 0;
@@ -461,13 +474,52 @@ export const Store: StoreLike = {
       const text = await this.getFileText(f.id);
       if (text != null) filetexts.push({ id: f.id, text });
     }
-    return { app: 'blotterbook', version: 2, exportedAt: new Date().toISOString(), trades, journal, meta, trademeta, files, filetexts };
+    // A236: fold the Store.local layout keys (bb:…dash…) into the envelope so a restore rebuilds
+    // dashboard tabs/modules/workspaces — previously silently absent from backups.
+    const local: Record<string, unknown> = {};
+    if (typeof localStorage !== 'undefined') {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !LOCAL_BACKUP_RE.test(k)) continue;
+        try {
+          local[k] = JSON.parse(localStorage.getItem(k) as string);
+        } catch {
+          /* skip a non-JSON value */
+        }
+      }
+    }
+    // A236: version 3 (adds `local` + `checksum`). The checksum covers the whole payload MINUS
+    // itself; on import we recompute over the received envelope with `checksum` removed (it is added
+    // last, so the key order matches), and a mismatch flags corruption. v2 backups (no checksum)
+    // still import.
+    const payload = {
+      app: 'blotterbook',
+      version: 3,
+      exportedAt: new Date().toISOString(),
+      trades,
+      journal,
+      meta,
+      trademeta,
+      files,
+      filetexts,
+      local,
+    };
+    const checksum = await sha256Hex(JSON.stringify(payload));
+    return { ...payload, checksum };
   },
 
   /* Merge a backup back in: trades de-dupe, notes & meta upsert. */
   async importAll(data) {
     let added = 0,
       dup = 0;
+    // A236: v3 payload checksum — when present, verify SHA-256 over the envelope MINUS the checksum
+    // field and REFUSE a corrupted/tampered file (surfaced to the user as a restore error). A v2
+    // backup carries no checksum and imports unchanged.
+    if (typeof data.checksum === 'string') {
+      const { checksum, ...rest } = data;
+      const calc = await sha256Hex(JSON.stringify(rest));
+      if (calc !== checksum) throw new Error('Backup checksum mismatch — the file is corrupted or was modified.');
+    }
     // Sanitize at the trust boundary: a backup file is untrusted input (unlike CSV
     // import, which routes symbols through rootSym()). Force `root` to the safe
     // charset and strip markup-significant chars from tags, so restored data can't
@@ -511,6 +563,13 @@ export const Store: StoreLike = {
         const cm = Number(c.commission);
         if (c.commission == null || !Number.isFinite(cm) || cm < 0) delete c.commission;
         else c.commission = cm;
+        // F42/A236: pin per-fill prices to finite numbers (else drop) — like commission, they're
+        // additive detail outside tradeId, so a crafted backup can't smuggle a non-number here.
+        for (const k of ['entryPrice', 'exitPrice'] as const) {
+          const v = Number(c[k]);
+          if (c[k] == null || !Number.isFinite(v)) delete c[k];
+          else c[k] = v;
+        }
         clean.push(c);
       }
       const r = await this.addTrades(clean);
@@ -621,6 +680,22 @@ export const Store: StoreLike = {
           ...(typeof f.broker === 'string' && /^[A-Z0-9_]{1,32}$/.test(f.broker) ? { broker: f.broker } : {}),
         };
         await this.addFile(rec, text);
+      }
+    }
+    // A236: restore the Store.local layout payload (dashboard tabs/modules/workspaces). Untrusted
+    // boundary — only bb:…dash… keys, only plain object/array values (the layout shapes), and a
+    // size cap; values are re-serialized from the parsed JSON so no markup executes at this seam
+    // (tab labels render through Svelte's auto-escaping when read back). Demo never reaches here —
+    // DemoStore.importAll is a no-op — so this can't persist on the demo surface.
+    if (data.local && typeof data.local === 'object' && !Array.isArray(data.local) && typeof localStorage !== 'undefined') {
+      for (const [k, v] of Object.entries(data.local as Record<string, unknown>)) {
+        if (!LOCAL_BACKUP_RE.test(k) || v == null || typeof v !== 'object') continue;
+        try {
+          const s = JSON.stringify(v);
+          if (s.length <= 256 * 1024) localStorage.setItem(k, s);
+        } catch {
+          /* skip an unserializable value */
+        }
       }
     }
     return { added, dup };

@@ -4539,6 +4539,204 @@
       "completedDate": "2026-07-06",
       "partial": false,
       "doneNote": "Binding-arbitration + class-action-waiver section added to the ToS in Legal.svelte (#arbitration): agreement to arbitrate, AAA Commercial Rules (placeholder), Delaware seat/governing law, class-action waiver with severance, 30-day opt-out to privacy@blotterbook.com. Flagged as placeholder pending counsel, consistent with the F18 entity naming."
+    },
+    {
+      "id": "CH22",
+      "title": "Add a copyright + operator line to the site footer",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Footer operator line “© 2026 Blotterbook. Operated by an individual sole proprietor.” added to both Footer.svelte variants, and the entity named in Legal.svelte, as part of the F18 legal pack (2026-07-06). Entity decision resolved: Blotterbook, individual sole proprietor."
+    },
+    {
+      "id": "F45",
+      "title": "(staging) Loading splash + animation on initial page load",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "BootSplash.svelte — a brief branded splash over the boot sequence (mono wordmark + pulsing cursor), reduced-motion aware (dur()), 3s safety cap, removed the instant dash.loaded. Shipped staging-gated (PR #112) then CH16-promoted to all surfaces (app/demo/staging); the “(staging)” scope is obsolete. e2e covers present-during-boot → unmounts."
+    },
+    {
+      "id": "CH38",
+      "title": "CI optimization: parallel lint/typecheck job + npm run ci lockstep",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "CI split into a fast parallel lint-typecheck-format job + the build-test-e2e job (unit/build/size-budget/check-deploy/e2e/drift), cutting time-to-signal on the cheap gate. Added a local `npm run ci` chaining test→build→size-budget→check-deploy→test:e2e for pre-push parity; CI keeps granular steps to avoid double-running the fast gate."
+    },
+    {
+      "id": "A220",
+      "title": "CI security workflow: Semgrep CE + osv-scanner",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": ".github/workflows/security.yml added: Semgrep CE with a 7-rule custom pack enforcing the repo invariants (no egress, Store-seam-only indexedDB/localStorage, no inline style) as BLOCKING + registry rulesets report-only; osv-scanner (Google's reusable workflows, pinned) on the lockfile — PR-diff + weekly full scan, fail-on-vuln. Verified locally: 0 findings on the repo, 5/5 seeded violations caught. Rules are embedded in the workflow (a committed .semgrep/ dir was outside the pass's file scope — trivial follow-up if wanted)."
+    },
+    {
+      "id": "A221",
+      "title": "Mobile: Blotter card list below sm (replace the 13-column squeeze)",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Blotter renders a one-card-per-trade list below sm (symbol/side/qty, colored P&L + date/time, tags) via the A200 MediaQuery conditional-render pattern — no duplicate DOM. Per-card checkboxes keep the shared selection/bulk tag/delete toolbar fully usable on mobile; card tap opens the same detail Sheet. New e2e/mobile-blotter.spec.mjs (3 tests)."
+    },
+    {
+      "id": "A222",
+      "title": "Mobile: coarse-pointer touch-target pass + touch affordance for tooltips",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "WCAG 2.2 AA coarse-pointer pass: sub-24px controls (calendar stepper, chip-remove ✕s, DashTabs/Dashboard icon buttons, shared Checkbox/Switch primitives, dot-only status pill) raised via pointer-coarse: hit-slop or size bumps, verified with real hasTouch Playwright taps (4 new tests). Tooltip-on-touch resolved by aria-labels + fixing the X-vs-Trash2 destructive-icon ambiguity (bits-ui Tooltip confirmed never firing on touch)."
+    },
+    {
+      "id": "F39",
+      "title": "Dashboard modules batch 1: Today/Last Session, Drawdown Status, Streak Monitor",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Today/Last-Session, Drawdown Status, and Streak Monitor shipped as picker-addable half-width Dashboard modules on three node-tested core helpers (currentDrawdown/currentStreak/streakRecords, cross-checked against compute()'s streak fields). They render real data from existing props with an optional dash.dashModuleData wire (wired) for per-trade fidelity."
+    },
+    {
+      "id": "F40",
+      "title": "Contract expiry: core parse helper + TradeEditor/Blotter surfacing",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "expiryOf()/expiryCode()/expiryLabel() in the core recover {month letter, year} from raw symbols (MESM2025 → M25), refusing continuous/spread/bare-root/digit-ended symbols; 1-digit years resolve nearest the trade date. Surfaced as an opt-in muted Blotter 'Contract' column + detail-drawer row ('—' for TradingView). 19 fixtures; demo e2e proves it end-to-end on seeded data."
+    },
+    {
+      "id": "CH39",
+      "title": "Author the add-adapter + backlog-upkeep Claude Code skills",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Authored .claude/skills/add-adapter/SKILL.md (Adapter shape, A174 word-boundary sniffs, A178 minScore, no-misfire fixture loop, docs tail, beta policy) and .claude/skills/backlog-upkeep/SKILL.md (donePolicy verbatim, id-uniqueness-across-both-files, archive ritual, recurring carve-outs) mirroring the existing skills' structure. First real invocation will validate the dry run."
+    },
+    {
+      "id": "F41",
+      "title": "App first paint: static skeleton in the HTML shells + preload hints",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Static first-paint skeleton painted directly in the three HTML shells + modulepreload hints per docs/app-first-paint-a207.md, handing off to the F45 splash/A206 skeletons without flash. Shells stay hand-authored, marker-free mount points."
+    },
+    {
+      "id": "F42",
+      "title": "Persist entry/exit prices from fills exports (Trade Replay phase 0)",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Fills exports (8 adapters via pairFills) + MotiveWave now persist exact per-round-trip entryPrice/exitPrice (per-lot pairing — no cross-lot averaging), outside tradeId so re-imports enrich. Surfaced read-only in the Trade Editor Entry/Exit columns + Blotter. Balance-history imports leave them undefined. ~6 new adapter fixtures (193 total)."
+    },
+    {
+      "id": "F44",
+      "title": "Changelog email signup — D1 list + Resend + double opt-in + send-on-release workflow",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "First-party changelog email shipped per A141: D1 subscribers/changelog_sends tables, subscribe/confirm/unsubscribe/notify-changelog Pages Functions (double opt-in, enumeration-safe, one-click List-Unsubscribe hard-delete, confirmed-only idempotent broadcast via Resend batch under the A15 subrequest cap, hash-only tokens), signup form + flash banners on the Blotterlog page, footer link, paths-filtered changelog-email.yml send trigger, 61-test scripts/test-email.mjs. Fails closed until the owner applies the schema + sets CHANGELOG_NOTIFY_SECRET (+ repo secrets CHANGELOG_NOTIFY_URL/SECRET; Turnstile optional)."
+    },
+    {
+      "id": "A236",
+      "title": "Export v3: include store.local layouts/tabs/workspaces in backups + payload checksum",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Backups are v3: Store.local dashboard layouts/tabs/workspaces (bb:…dash… keys; bb:flags excluded) fold into the export with a plain SHA-256 payload checksum — NOT an account lock, restorable logged-out per R24. Restore verifies the checksum (corruption-specific error), restores sanitized keys, imports v2 unchanged; demo importAll stays a no-op. 9 fixtures."
+    },
+    {
+      "id": "A238",
+      "title": "Analytics: top mini-modules adopt Dashboard module behavior (mobile carousel + click-through info)",
+      "category": "APP",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Extracted the Dashboard KPI stat-card row (grid + A200 mobile carousel + click-through stat-detail Dialog) into the shared parts/StatCardRow.svelte; Analytics' top-6 KPIs now swipe on mobile and drill into a detail dialog with plain-language explainers + breakdowns. e2e covers desktop drill-in + 360px carousel."
+    },
+    {
+      "id": "A239",
+      "title": "Status pill: clickable info popover + dot-only on mobile",
+      "category": "APP",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Status pill is now a Popover trigger explaining each state (online/maintenance/offline — local data always usable); below sm it renders dot-only (aria-label keeps the status) and the popover opens on tap."
+    },
+    {
+      "id": "A240",
+      "title": "Analytics: drawdown module — make it interactive and clearer about what it shows",
+      "category": "APP",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Analytics drawdown module rebuilt: underwater-chart explainer popover, hover/tap/keyboard nearest-point readout (CSP-safe SVG geometry), shaded peak→trough max-DD span with a dated callout (curveDates wired from metricsActive.trades), y/x axis labels + gridlines."
+    },
+    {
+      "id": "A241",
+      "title": "Mobile: performance-graph module audit — text size + use the module's full space",
+      "category": "APP",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Mobile perf graph fixed: viewBox width now tracks the measured card width (the 560px floor letterboxed labels to ~6px), gutters trimmed and tick counts reduced below sm — labels now ≥10px effective and the plot fills the module."
+    },
+    {
+      "id": "A242",
+      "title": "Retire the Definitions module — distribute its content as contextual info on related modules",
+      "category": "APP",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-06",
+      "partial": false,
+      "doneNote": "Definitions module retired (component deleted); its caveats redistributed as contextual tap-friendly InfoTip popovers on the KPI row (parsing/dates) and Break-Even & Cost (cost-model/tax). It was a fixed card — no stored-layout migration needed; validKeys() drops strays."
     }
   ]
 }

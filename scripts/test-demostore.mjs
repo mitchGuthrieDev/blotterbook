@@ -163,6 +163,47 @@ s.local.set('k', { v: 1 });
 ok('local.get reads back', s.local.get('k').v === 1);
 ok('local.get fallback', s.local.get('missing', 'fb') === 'fb');
 
+// ── A236: export v3 — Store.local layouts folded in + a payload checksum ──
+{
+  const { sha256Hex, LOCAL_BACKUP_RE } = await import('../src/lib/core/store.ts');
+  // The key filter selects the dashboard layout keys and excludes bb:flags / foreign keys.
+  ok(
+    'A236: LOCAL_BACKUP_RE matches dash layout keys',
+    LOCAL_BACKUP_RE.test('bb:dashTabs') &&
+      LOCAL_BACKUP_RE.test('bb:dashModules') &&
+      LOCAL_BACKUP_RE.test('bb:dashModules:main') &&
+      LOCAL_BACKUP_RE.test('bb:dashLayouts') &&
+      LOCAL_BACKUP_RE.test('bb:staging:dashModules')
+  );
+  ok(
+    'A236: LOCAL_BACKUP_RE excludes bb:flags and foreign keys',
+    !LOCAL_BACKUP_RE.test('bb:flags') && !LOCAL_BACKUP_RE.test('theme') && !LOCAL_BACKUP_RE.test('bb:store')
+  );
+
+  const s3 = createDemoStore();
+  await s3.addTrades([t('2026-01-02 10:00:00', 100)]);
+  s3.local.set('bb:dashTabs', { tabs: [{ id: 'main', name: 'Main' }], active: 'main' });
+  s3.local.set('bb:dashModules', ['pnl', 'winrate']);
+  s3.local.set('bb:flags', { ACCOUNT_GATE: false }); // must NOT travel into the backup
+  const dump = await s3.exportAll();
+  ok('A236: exportAll is version 3', dump.version === 3);
+  ok(
+    'A236: exportAll folds the dash layout keys into local',
+    dump.local && dump.local['bb:dashTabs'] && Array.isArray(dump.local['bb:dashModules']) && dump.local['bb:dashModules'][0] === 'pnl'
+  );
+  ok('A236: exportAll excludes bb:flags from the backup', !('bb:flags' in (dump.local || {})));
+  ok('A236: exportAll carries a 64-hex SHA-256 checksum', typeof dump.checksum === 'string' && /^[0-9a-f]{64}$/.test(dump.checksum));
+  // The checksum covers the payload MINUS itself (added last), and validates on recompute — the same
+  // check Store.importAll runs. A v2 envelope carries no checksum, so import skips verification.
+  const { checksum, ...rest } = dump;
+  ok('A236: checksum verifies over the payload', (await sha256Hex(JSON.stringify(rest))) === checksum);
+  const tampered = { ...rest, trades: [...rest.trades, t('2020-01-01 00:00:00', -999)] };
+  ok('A236: a modified payload fails the checksum (corruption detected)', (await sha256Hex(JSON.stringify(tampered))) !== checksum);
+  // Demo restore stays a no-op (never persists) even for a v3 envelope.
+  const imp3 = await s3.importAll(dump);
+  ok('A236: demo importAll ignores a v3 backup (never persists)', imp3.added === 0);
+}
+
 // purge clears everything
 await s.purge();
 ok('purge empties the store', (await s.tradeCount()) === 0 && (await s.allTradeMeta()).length === 0 && (await s.getFiles()).length === 0);

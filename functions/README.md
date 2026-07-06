@@ -93,6 +93,32 @@ Live today; no auth required:
   is admin-only (see below).
 - `GET /api/config` — feature flags the app reads at boot (no secrets). The **POST** is admin-only.
 
+## Changelog email subscriptions (F44)
+
+First-party changelog (Blotterlog) release-note emails — D1 list + Resend + double opt-in
+(design: [`docs/changelog-email-a141.md`](../docs/changelog-email-a141.md)). Uses the same
+`ACCOUNTS_DB` D1 binding (single-purpose `subscribers` + `changelog_sends` tables in
+[`schema.sql`](schema.sql)) and the existing `RESEND_API_KEY`/`EMAIL_FROM` email seam. **Guardrail
+S25/A141: email address + changelog content ONLY — never any trade data.** Every endpoint fails
+closed (503) when `ACCOUNTS_DB` / `RESEND_API_KEY` is unbound.
+
+- `POST /api/subscribe` — same-origin signup from the Blotterlog page. Writes a `pending` row +
+  emails a confirm link (double opt-in). **Enumeration-safe:** one generic 200 for new / already-
+  pending / already-confirmed. Turnstile + a per-address D1 cooldown are defense-in-depth only (S22).
+- `GET|POST /api/confirm?token=…` — consumes the single-use confirm link (`pending → confirmed`).
+  GET redirects to `/changelog.html?subscribed=1`; POST returns `{ ok }`. Only `confirmed` rows are
+  ever mailed.
+- `GET|POST /api/unsubscribe?token=…` — one-click, no login. HARD-DELETES the row (the link IS the
+  erasure request). Idempotent + enumeration-safe. Sent as the footer link **and** in
+  `List-Unsubscribe(-Post)` headers on every broadcast.
+- `POST /api/notify-changelog` — the send trigger. Auth = the `CHANGELOG_NOTIFY_SECRET` shared secret
+  (constant-time compare — a real control, S22). Reads `/data/changelog.json`, takes the top prod
+  release, dedupes via `changelog_sends`, and batch-sends (Resend `/emails/batch`, ≤100/call → under
+  the A15 50-subrequest cap) to confirmed subscribers with per-recipient unsubscribe links. Called by
+  [`.github/workflows/changelog-email.yml`](../.github/workflows/changelog-email.yml) (paths-filtered
+  on `static/data/changelog.json`; set the `CHANGELOG_NOTIFY_URL` + `CHANGELOG_NOTIFY_SECRET` repo
+  secrets — unset ⇒ the workflow no-ops).
+
 ## Admin auth (shipped)
 
 `/api/admin-key`, `/api/status`, `/api/config`, and the staging gate
@@ -151,14 +177,22 @@ audMatches:true, expired:false`.
   Setup for the owner: create a Resend account, verify the sending domain, mint an API key, and set
   it (plus `EMAIL_FROM`) in the Pages dashboard.
 - `EMAIL_FROM` — optional From address for F55 emails (e.g. `Blotterbook <no-reply@blotterbook.com>`);
-  defaults to that when unset.
+  defaults to that when unset. Also used by the F44 changelog emails.
+- `CHANGELOG_NOTIFY_SECRET` — **(F44)** shared secret the changelog-email send trigger presents to
+  `POST /api/notify-changelog` (constant-time compared). **Unbound → the endpoint is disabled (503)**
+  so no one can trigger a broadcast on a deploy that isn't wired for it. Also set the matching
+  `CHANGELOG_NOTIFY_URL` (deployed origin) + `CHANGELOG_NOTIFY_SECRET` **repo secrets** for the
+  workflow.
+- `TURNSTILE_SECRET` — **(F44, optional)** Cloudflare Turnstile secret for the changelog signup form.
+  **Unbound → Turnstile is skipped** (defense-in-depth only, S22 — never the security boundary; the
+  double opt-in + confirmed-only send are the real invariants). Fails open when the service is down.
 
 ## Bindings to add when implementing
 
-- **D1** (`ACCOUNTS_DB`) for accounts + entitlements + donations + recovery tokens — schema in
-  [`functions/schema.sql`](schema.sql). **After ANY change to `schema.sql`** (F54 added `donations`,
-  F55 added `recovery_tokens`) the owner must **re-run** the idempotent apply command so the new
-  tables exist in prod:
+- **D1** (`ACCOUNTS_DB`) for accounts + entitlements + donations + recovery tokens + the F44 changelog
+  list — schema in [`functions/schema.sql`](schema.sql). **After ANY change to `schema.sql`** (F54
+  added `donations`, F55 added `recovery_tokens`, F44 added `subscribers` + `changelog_sends`) the
+  owner must **re-run** the idempotent apply command so the new tables exist in prod:
   `npx wrangler d1 execute blotterbook-accounts --remote --file=functions/schema.sql`.
 - **R2** for the subscription tier's stored trade blobs (optionally encrypted
   client-side to preserve the "your data stays yours" guarantee).

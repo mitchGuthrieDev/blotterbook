@@ -447,6 +447,57 @@ ok('ibkr without a commission column leaves trades unmarked', rc.ok && rc.trades
 rc = A.parse(C.tradovate);
 ok('fills adapter without commission support leaves trades unmarked', rc.ok && rc.trades.every(t => t.commission == null));
 
+/* ---------- F42: per-fill entry/exit prices (Trade Replay phase 0) ---------- */
+console.log('\nF42 entry/exit price capture:');
+{
+  // MotiveWave (closed) — the Entry Price / Exit Price columns were previously unparsed/dropped.
+  const rmw = A.parse(C.motivewave);
+  ok(
+    'motivewave carries entry/exit prices from its price columns',
+    rmw.ok &&
+      rmw.trades.length === 2 &&
+      approx(rmw.trades[0].entryPrice, 5300) &&
+      approx(rmw.trades[0].exitPrice, 5310) &&
+      approx(rmw.trades[1].entryPrice, 18010) &&
+      approx(rmw.trades[1].exitPrice, 18000),
+    JSON.stringify((rmw.trades || []).map(t => [t.entryPrice, t.exitPrice]))
+  );
+  // Fills — pairFills now carries the executed fill prices onto the closed round trip.
+  const rtv = A.parse(C.tradovate);
+  ok(
+    'fills round trip carries entry (5300) + exit (5310) prices',
+    rtv.ok && approx(rtv.trades[0].entryPrice, 5300) && approx(rtv.trades[0].exitPrice, 5310),
+    JSON.stringify(rtv.trades)
+  );
+  // Multi-lot: one SELL of qty 2 closes longs opened at 100 & 110 → two trades, each with its OWN
+  // entry price (the broker's avg-fill price is already the VWAP of any sub-partials — no cross-lot
+  // averaging), sharing the exit price 120.
+  const rml = A.parse(multiLot);
+  const byEntry = (rml.trades || []).slice().sort((a, b) => a.entryPrice - b.entryPrice);
+  ok(
+    'multi-lot round trips carry per-lot entry prices (100 / 110) at the shared exit (120)',
+    rml.ok &&
+      byEntry.length === 2 &&
+      approx(byEntry[0].entryPrice, 100) &&
+      approx(byEntry[1].entryPrice, 110) &&
+      byEntry.every(t => approx(t.exitPrice, 120)),
+    JSON.stringify(byEntry.map(t => [t.entryPrice, t.exitPrice]))
+  );
+  // Balance-history (TradingView closed, no per-execution price) → prices stay undefined.
+  const rbal = A.parse(C.tradingview);
+  ok(
+    'balance-history import leaves entry/exit prices undefined',
+    rbal.ok && rbal.trades.every(t => t.entryPrice === undefined && t.exitPrice === undefined),
+    JSON.stringify(rbal.trades.map(t => [t.entryPrice, t.exitPrice]))
+  );
+  // Prices are additive detail — NOT part of the dedupe identity (like commission/fileIds).
+  ok(
+    'entry/exit prices are outside tradeId (identity unchanged)',
+    tradeId({ time: '2026-06-02 09:45:00', symbol: 'MESM2025', side: 'long', pnl: 50 }) ===
+      tradeId({ time: '2026-06-02 09:45:00', symbol: 'MESM2025', side: 'long', pnl: 50, entryPrice: 5300, exitPrice: 5310 })
+  );
+}
+
 /* ---------- Cross-export reconciliation (TV calc audit 2026-07-04) ---------- */
 console.log('\nCross-export reconciliation (reconcileImport):');
 {

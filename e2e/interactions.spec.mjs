@@ -133,6 +133,38 @@ test('demo: Trade Editor is read-only — no cell editing, Add trade + Save all 
   await expect(page.locator('table tbody tr').first()).toBeVisible({ timeout: 10_000 });
 });
 
+test('demo: Blotter surfaces the F40 contract-expiry column (opt-in) + detail row from seeded month codes', async ({ page }) => {
+  const errors = watchErrors(page);
+  await bootDashboard(page);
+  await gotoScreen(page, 'Blotter');
+  await expect(page.locator('table tbody tr').first()).toBeVisible();
+
+  // F40: the Contract column is OFF by default — enable it via the Columns picker.
+  await page.getByRole('button', { name: 'Columns' }).click();
+  const popover = page.locator('[data-slot="popover-content"]');
+  // The shadcn Checkbox is a bits-ui button — a wrapping <label> doesn't forward clicks to it, so
+  // click the checkbox control itself.
+  await popover.locator('label', { hasText: 'Contract' }).locator('[data-slot="checkbox"]').click();
+  await page.keyboard.press('Escape'); // close the popover
+
+  // The column header renders, and the seeded symbols (MESM2025 / MNQM2025 / MCLN2025) derive their
+  // compact codes (M25 / N25) — proof the helper runs end-to-end on real data, not just in fixtures.
+  await expect(page.locator('thead').getByText('Contract', { exact: true })).toBeVisible();
+  await expect(
+    page
+      .locator('table tbody')
+      .getByText(/^[MN]25$/)
+      .first()
+  ).toBeVisible();
+
+  // The detail drawer (the trade-detail surface) shows the same Contract row.
+  await page.locator('table tbody tr').first().click();
+  const sheet = page.locator('[data-slot="sheet-content"]');
+  await expect(sheet.getByText('Contract', { exact: true })).toBeVisible();
+
+  expect(errors, errors.join('\n')).toHaveLength(0);
+});
+
 test('demo: feedback dialog builds a mailto draft from ONLY the typed text (A105)', async ({ page }) => {
   const errors = watchErrors(page);
   await bootDashboard(page);
@@ -199,6 +231,30 @@ test('demo (mobile): top stat cards render as a one-at-a-time carousel with arro
   await page.setViewportSize({ width: 1280, height: 780 });
   await expect(page.getByRole('group', { name: 'Key stats' })).not.toBeVisible();
   await expect(page.getByText('Win rate', { exact: true })).toBeVisible();
+});
+
+test('demo (mobile): Analytics top KPI cards adopt the same one-at-a-time carousel (A238)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 360, height: 780 });
+  await bootDashboard(page);
+
+  // Reach Analytics through the mobile nav drawer.
+  await page.getByRole('button', { name: 'Open navigation' }).click();
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('button', { name: 'Analytics', exact: true }).click();
+  await expect(page.locator('header h1')).toHaveText('Analytics');
+
+  // The shared StatCardRow renders the KPIs as the A200 carousel here too (distinct group label so it
+  // never collides with the Dashboard's "Key stats"). One card at a time; arrows advance.
+  const carousel = page.getByRole('group', { name: 'Analytics stats' });
+  await expect(carousel).toBeVisible();
+  await expect(carousel.getByText('Net P&L', { exact: true })).toBeVisible();
+  await expect(carousel.getByText('Expectancy / trade', { exact: true })).toHaveCount(0);
+  await carousel.getByRole('button', { name: 'Next card' }).click();
+  await expect(carousel.getByText('Expectancy / trade', { exact: true })).toBeVisible();
+
+  // A238 click-through works on mobile too: tapping the card opens the stat-detail dialog.
+  await carousel.getByText('Expectancy / trade', { exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
 });
 
 test('demo (mobile): no screen scrolls horizontally at 360px (A183) and both calendars fit (A182)', async ({ page }) => {

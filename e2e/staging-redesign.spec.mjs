@@ -350,6 +350,46 @@ test('staging redesign: the Break-even/Cost + Advanced Statistics modules render
   await expect(adv.getByText(/Payoff ratio/)).toBeVisible();
 });
 
+test('staging redesign: Analytics top KPIs drill in + the drawdown module is interactive (A238/A240)', async ({ page }) => {
+  const errors = watchErrors(page);
+  await bootDashboard(page);
+  await gotoScreen(page, 'Analytics');
+
+  // A238: the 6 top KPI cards adopt the Dashboard's click-through — selecting one opens the shared
+  // stat-detail dialog with a plain-language explainer + a breakdown sourced from on-screen figures.
+  await page
+    .getByRole('button', { name: /Net P&L/ })
+    .first()
+    .click();
+  const dlg = page.getByRole('dialog');
+  await expect(dlg).toBeVisible();
+  await expect(dlg.getByText('Winning trades')).toBeVisible();
+  await expect(dlg.getByText('Losing trades')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dlg).toHaveCount(0);
+
+  // A240: the drawdown module — explainer popover, a dated max-DD callout, and a hover/keyboard readout.
+  await expect(page.getByText('Drawdown (underwater)')).toBeVisible();
+  await expect(page.getByText('Max drawdown')).toBeVisible();
+  // The explainer popover opens on tap (reachable on touch — not a hover-only tooltip).
+  await page.getByRole('button', { name: 'What is this?' }).click();
+  await expect(page.getByText(/underwater chart/i)).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // The curve is a real, focusable SVG; keyboard (←/→) moves the readout cursor deterministically.
+  const dd = page.getByRole('img', { name: /Drawdown-from-peak curve/ });
+  await expect(dd).toBeVisible();
+  await dd.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByText(/below peak/)).toBeVisible();
+  // Hover reads a point too (pointer path), CSP-safe crosshair (SVG geometry).
+  const box = await dd.boundingBox();
+  await dd.hover({ position: { x: box.width * 0.6, y: box.height * 0.5 } });
+  await expect(page.getByText(/below peak/)).toBeVisible();
+
+  expect(errors, errors.join('\n')).toHaveLength(0);
+});
+
 test('staging redesign: clicking the Performance chart jumps the Dashboard calendar to that day', async ({ page }) => {
   await bootDashboard(page);
   const svg = page.locator('svg[aria-label*="P&L curve"]');
@@ -728,6 +768,58 @@ test('staging redesign: Commission Compare module adds via the picker and ranks 
   expect(await rows.count()).toBeGreaterThan(3);
   await expect(rows.first().getByText('Cheapest')).toBeVisible();
   await expect(mod.getByText(/exchange\/clearing\/NFA \$\d/)).toBeVisible();
+});
+
+// ── F39/A142: Dashboard batch-1 modules (Today / Drawdown Status / Streak Monitor) ──────────────
+
+test('staging redesign: F39 batch-1 modules add via the picker and render real metrics', async ({ page }) => {
+  test.setTimeout(60_000);
+  await bootDashboard(page);
+
+  // All three are picker-addable (not in the default layout) — add them in one pass.
+  await page.getByRole('button', { name: 'Add modules' }).click();
+  const dlg = page.getByRole('dialog');
+  for (const label of ['Today / Last Session', 'Drawdown Status', 'Streak Monitor']) {
+    await dlg.locator('label', { hasText: label }).locator('input[type=checkbox]').check();
+  }
+  await dlg.getByRole('button', { name: /Add module/ }).click();
+
+  // Today / Last Session: the latest active day, framed against the baseline + win-day rate.
+  const today = page.locator('#dashmod-today');
+  await expect(today).toBeVisible();
+  await expect(today.getByText(/Last session/)).toBeVisible();
+  await expect(today.getByText('Win-day rate')).toBeVisible();
+  await expect(today.getByText(/\$[\d,]/).first()).toBeVisible(); // a real money figure
+
+  // Drawdown Status: distance-from-high card with the max-DD record + recovery factor.
+  const dd = page.locator('#dashmod-ddstatus');
+  await expect(dd).toBeVisible();
+  await expect(dd.getByText('Distance from your equity high')).toBeVisible();
+  await expect(dd.getByText('Max drawdown')).toBeVisible();
+  await expect(dd.getByText('Recovery factor')).toBeVisible();
+
+  // Streak Monitor: current run vs the record streaks.
+  const streak = page.locator('#dashmod-streak');
+  await expect(streak).toBeVisible();
+  await expect(streak.getByText('Current run')).toBeVisible();
+  await expect(streak.getByText('Record win streak')).toBeVisible();
+  await expect(streak.getByText('Record loss streak')).toBeVisible();
+});
+
+// ── A242: the standalone Definitions module is retired → its caveats are contextual info popovers ─
+
+test('staging redesign: A242 — Definitions module gone, its caveats reachable via info popovers', async ({ page }) => {
+  await bootDashboard(page);
+  // The standalone Definitions & Caveats card no longer exists anywhere on the Dashboard.
+  await expect(page.getByText('Definitions & Caveats')).toHaveCount(0);
+
+  // The parsing caveat now lives behind a tap-friendly "what is this?" popover on the KPI stat row.
+  const info = page.getByRole('button', { name: 'What is this?' });
+  expect(await info.count()).toBeGreaterThan(0);
+  await info.first().click();
+  const pop = page.locator('[data-slot="popover-content"]');
+  await expect(pop).toBeVisible();
+  await expect(pop.getByText(/realized/)).toBeVisible(); // "one realized-P&L event"
 });
 
 // ── F45: branded boot splash (CH16-promoted to every surface) ───────────────────────────────────

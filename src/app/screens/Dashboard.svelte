@@ -41,15 +41,58 @@
     deleteView?: (id: string) => void;
     renameView?: (id: string, name: string) => void;
   };
-  // Per-card drill-in content (parity with app/demo's stat-card modal), built from metrics/cost.
-  export type StatBar = { label: string; value: string; pct: number; tone: 'pos' | 'neg' | 'muted' };
-  export type StatDetail = {
-    title: string;
-    value: string;
-    tone?: 'pos' | 'neg';
-    desc: string;
-    rows: { label: string; value: string; tone?: 'pos' | 'neg' }[];
-    bars?: StatBar[];
+  // A238: the per-card drill-in content types now live with the shared StatCardRow part (adopted by
+  // Dashboard + Analytics). Re-export them so the app's statDetail builder keeps importing them from
+  // the Dashboard entry point.
+  export type { StatBar, StatDetail } from '../parts/StatCardRow.svelte';
+  // F39/A142 batch-1 module data (Today · Drawdown Status · Streak Monitor). Built app-side from the
+  // scope-active Metrics (App wires `moduleData={dash.dashModuleData}` for full per-trade fidelity),
+  // and DERIVED here from the `series`+`recentTrades` props as a self-contained fallback so the
+  // modules render real numbers on every surface with no extra wiring. `unit`/`capped` flags say
+  // which granularity a field carries so the labels stay honest across both sources.
+  export type StreakRun = { kind: 'win' | 'loss' | 'flat' | 'none'; len: number; sum: number };
+  export type StreakRec = { maxWin: number; maxLoss: number; maxWinSum: number; maxLossSum: number };
+  export type DashModuleData = {
+    /** The most recent active day; null when there are no trades in scope. */
+    lastDay: {
+      date: string;
+      net: number;
+      trades: number;
+      wins: number;
+      winRate: number;
+      best: number;
+      worst: number;
+      /** The day's per-trade breakdown was read from a capped recent-trades window (may undercount). */
+      capped: boolean;
+    } | null;
+    avgDaily: number;
+    /** Baseline trades/day — null when unknown (the series-only fallback can't count total trades). */
+    avgTrades: number | null;
+    winDayPct: number;
+    activeDays: number;
+    dd: {
+      current: number;
+      currentPct: number | null;
+      sincePeak: number;
+      /** Whether `sincePeak`/`maxDDdur` count trades (App-wired) or days (fallback). */
+      unit: 'trade' | 'day';
+      maxDD: number;
+      maxDDpct: number | null;
+      maxDDdur: number;
+      recovery: number;
+      atHigh: boolean;
+    };
+    streak: {
+      /** Current per-trade run; `capped` when it filled the recent-trades window (fallback). */
+      trade: StreakRun & { capped: boolean };
+      /** Current per-day run. */
+      day: StreakRun;
+      /** Record runs the current `trade` run is measured against (per-trade when wired, per-day in fallback). */
+      rec: StreakRec;
+      recUnit: 'trade' | 'day';
+      /** Per-day record runs (always available). */
+      dayRec: StreakRec;
+    };
   };
 </script>
 
@@ -68,9 +111,8 @@
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import IconTip from '$lib/components/IconTip.svelte';
   import { ChevronUp, ChevronDown, EyeOff } from '@lucide/svelte';
-  import { X } from '@lucide/svelte';
+  import { X, Trash2 } from '@lucide/svelte';
   import * as Dialog from '$lib/components/ui/dialog';
-  import { styleProps } from '../lib/actions.ts';
   import { flip } from 'svelte/animate';
   import { fade, slide } from 'svelte/transition';
   import { MediaQuery } from 'svelte/reactivity';
@@ -78,6 +120,8 @@
   import {
     usd,
     usdWhole,
+    money,
+    num,
     axMoney,
     niceTicks,
     linePath,
@@ -91,14 +135,17 @@
     EXCH,
     BROKERS,
     BROKER_ORDER,
+    currentDrawdown,
+    currentStreak,
+    streakRecords,
   } from '../../lib/core/core.ts';
   import * as Table from '$lib/components/ui/table';
   import type { DailyPoint } from '../../lib/core/curveseries.ts';
   import type { AppSetup } from '../../lib/core/types.ts';
   import CostSetup from '../parts/CostSetup.svelte';
-  import ModuleCarousel from '../parts/ModuleCarousel.svelte';
+  import StatCardRow, { type StatItem, type StatDetail } from '../parts/StatCardRow.svelte';
   import ActivityTerminal from '../parts/ActivityTerminal.svelte';
-  import Definitions from '../parts/Definitions.svelte';
+  import InfoTip from '../parts/InfoTip.svelte';
   import SegmentedControl from '../parts/SegmentedControl.svelte';
   import { type DayTrade } from './Calendar.svelte';
 
@@ -141,6 +188,10 @@
     onmoduleschange?: (order: string[]) => void;
     /** F51: the compact Recent Trades module's rows (newest first, pre-capped by the app). */
     recentTrades?: { date: string; time: string; sym: string; side: 'Long' | 'Short'; qty: number; pnl: number; platform: string }[];
+    /** F39/A142: full-fidelity batch-1 module data (Today · Drawdown · Streak). Optional — when the
+     *  app doesn't wire it, the modules derive an equivalent day-level view-model from `series` +
+     *  `recentTrades`, so they always render real numbers. */
+    moduleData?: DashModuleData;
     /** Named workspace layout templates (R12 parity) — save/apply/delete/revert the module layout. */
     layouts?: {
       names: string[];
@@ -178,6 +229,7 @@
     modules,
     onmoduleschange,
     recentTrades = [],
+    moduleData,
     layouts,
   }: Props = $props();
 
@@ -186,9 +238,109 @@
     if (name && name.trim()) layouts?.save(name.trim());
   }
 
-  // A200: below Tailwind's sm breakpoint the stat cards render as a one-at-a-time carousel.
-  // Conditional RENDER (not CSS hiding) so the cards never exist twice in the DOM/a11y tree.
+  // ── F39/A142 batch-1 module data (Today · Drawdown Status · Streak Monitor) ──────────────────────
+  // Prefer the app-wired per-trade `moduleData`; otherwise derive an equivalent DAY-level view-model
+  // from the props we already have (`series` is the cumulative-gross equity curve = compute()'s
+  // curve; `recentTrades` is the newest-first tail). Same shape either way, so the module snippets
+  // don't care which source they got — the `unit`/`capped` flags keep the labels honest.
+  function moduleDataFromProps(): DashModuleData | null {
+    if (!series.length) return null;
+    const grossCurve = [0, ...series.map(p => p.gross)]; // leading 0, like compute().curve
+    const dayPnls = series.map((p, i) => p.gross - (i ? series[i - 1].gross : 0));
+    const cd = currentDrawdown(grossCurve);
+    // Record max drawdown over the SAME daily curve (so it reconciles with `cd`).
+    let peak = grossCurve[0],
+      maxDD = 0,
+      ddPeakVal = 0,
+      ddPeakI = 0,
+      ddTroughI = 0,
+      runPeakI = 0;
+    for (let i = 1; i < grossCurve.length; i++) {
+      if (grossCurve[i] > peak) {
+        peak = grossCurve[i];
+        runPeakI = i;
+      }
+      const dd = peak - grossCurve[i];
+      if (dd > maxDD) {
+        maxDD = dd;
+        ddPeakVal = peak;
+        ddPeakI = runPeakI;
+        ddTroughI = i;
+      }
+    }
+    const net = grossCurve[grossCurve.length - 1];
+    const winDays = dayPnls.filter(p => p > 0).length;
+    const last = series[series.length - 1];
+    // The last active day's per-trade breakdown from the (capped) recent-trades window.
+    const lastTrades = recentTrades.filter(t => t.date === last.date);
+    const wins = lastTrades.filter(t => t.pnl > 0).length;
+    const bw = lastTrades.reduce((a, t) => ({ best: Math.max(a.best, t.pnl), worst: Math.min(a.worst, t.pnl) }), {
+      best: -Infinity,
+      worst: Infinity,
+    });
+    // recentTrades is App-capped to 12 — flag a possible undercount only when the whole window is this day.
+    const capped = recentTrades.length >= 12 && lastTrades.length === recentTrades.length;
+    const dayRec = streakRecords(dayPnls);
+    const chrono = recentTrades.map(t => t.pnl).reverse(); // newest-first → chronological
+    const tradeRun = currentStreak(chrono);
+    return {
+      lastDay: {
+        date: last.date,
+        net: dayPnls[dayPnls.length - 1],
+        trades: lastTrades.length,
+        wins,
+        winRate: lastTrades.length ? (100 * wins) / lastTrades.length : 0,
+        best: lastTrades.length ? bw.best : 0,
+        worst: lastTrades.length ? bw.worst : 0,
+        capped,
+      },
+      avgDaily: net / series.length,
+      avgTrades: null, // the series window can't count total trades — hide the baseline
+      winDayPct: (100 * winDays) / series.length,
+      activeDays: series.length,
+      dd: {
+        current: cd.dd,
+        currentPct: cd.ddPct,
+        sincePeak: cd.sincePeak,
+        unit: 'day',
+        maxDD,
+        maxDDpct: ddPeakVal > 0 ? (maxDD / ddPeakVal) * 100 : maxDD > 0 ? null : 0,
+        maxDDdur: maxDD > 0 ? ddTroughI - ddPeakI : 0,
+        recovery: maxDD > 0 ? net / maxDD : net > 0 ? Infinity : NaN,
+        atHigh: cd.atHigh,
+      },
+      streak: {
+        trade: { ...tradeRun, capped: tradeRun.len === chrono.length && chrono.length >= 12 },
+        day: currentStreak(dayPnls),
+        rec: dayRec, // fallback yardstick is the per-day record (per-trade records need the app wire)
+        recUnit: 'day',
+        dayRec,
+      },
+    };
+  }
+  const md = $derived<DashModuleData | null>(moduleData ?? moduleDataFromProps());
+  // Streak run → tone (win green / loss red / flat|none muted) and plain-language verb, shared by the render.
+  const runTone = (k: 'win' | 'loss' | 'flat' | 'none'): 'pos' | 'neg' | undefined =>
+    k === 'win' ? 'pos' : k === 'loss' ? 'neg' : undefined;
+  const runVerb = (k: 'win' | 'loss' | 'flat' | 'none') => (k === 'win' ? 'winning' : k === 'loss' ? 'losing' : 'scratch');
+
+  // A200/A241: the perf chart still reads this to trim its gutters below Tailwind's sm breakpoint.
   const isNarrow = new MediaQuery('(max-width: 639px)');
+
+  // A238: the KPI cards — their mobile carousel + click-through drill-in — now live in the shared
+  // StatCardRow part (adopted by Analytics too). Map the app's DashStat shape onto the part's StatItem
+  // (`up` → the value/badge tone; every seeded stat carries a key).
+  const dashStats = $derived<StatItem[]>(
+    stats.map(s => ({
+      key: s.key ?? s.label,
+      label: s.label,
+      value: s.value,
+      tone: s.up === undefined ? undefined : s.up ? 'pos' : 'neg',
+      badge: s.badge,
+      badgeUp: s.up,
+      note: s.note,
+    }))
+  );
 
   // ── Module layout (hide / reorder / re-add — parity with app/demo, persisted to Store.local) ────
   const MODULES: { key: string; label: string }[] = [
@@ -199,10 +351,14 @@
     { key: 'term', label: 'Activity Terminal' }, // A243 — pairs with Advanced Statistics on lg+
     { key: 'compare', label: 'Commission Compare' }, // A203 — picker-addable, not in the default layout
     { key: 'blotter', label: 'Recent Trades' }, // F51 — compact blotter; picker-addable, not in the default layout
+    { key: 'today', label: 'Today / Last Session' }, // F39 — picker-addable, not in the default layout
+    { key: 'ddstatus', label: 'Drawdown Status' }, // F39
+    { key: 'streak', label: 'Streak Monitor' }, // F39
   ];
   // A228/A243: modules in this set render lg:col-span-1 (half-width, paired) instead of the default
   // full-width lg:col-span-2 — cal+cost was the original pairing, adv+term (A243) is the second.
-  const PAIRED_MODULE_KEYS = ['cal', 'cost', 'adv', 'term'];
+  // F39: the three compact batch-1 status cards are half-width too (they tile 2-up).
+  const PAIRED_MODULE_KEYS = ['cal', 'cost', 'adv', 'term', 'today', 'ddstatus', 'streak'];
   const validKeys = (ks?: string[]) => (ks ?? DEFAULT_MODULE_KEYS).filter(k => MODULES.some(m => m.key === k));
   // svelte-ignore state_referenced_locally — initial layout only; the app re-seeds via the prop below.
   let modOrder = $state<string[]>(validKeys(modules));
@@ -307,19 +463,6 @@
     if (name && name.trim()) filterModel.renameView?.(id, name.trim());
   }
 
-  // ── KPI card drill-in ────────────────────────────────────────────────────────────────────────
-  let openStatKey = $state<string | null>(null);
-  let statOpen = $state(false); // bits-ui owns the Dialog open state (bind:open, per L11)
-  $effect(() => {
-    if (!statOpen) openStatKey = null;
-  });
-  const openStat = (key?: string) => {
-    if (!key) return;
-    openStatKey = key;
-    statOpen = true;
-  };
-  const detail = $derived(openStatKey ? statDetail(openStatKey) : null);
-
   let scope = $state<'all' | 'month'>('all');
   const setScope = (s: 'all' | 'month') => {
     scope = s;
@@ -360,16 +503,21 @@
   }
   let cursor = $state<number | null>(null);
   let cw = $state(0); // measured plot width (px) → viewBox width, so labels/dots aren't stretched
-  const VH = 256;
-  const PAD = { l: 48, r: 72, t: 12, b: 22 };
-  const W = $derived(Math.max(560, cw || 900));
+  const VH = 256; // = the SVG's CSS height (h-64 = 16rem = 256px)
+  // A241: below sm, trim the axis gutters so the plot fills the card, and match the viewBox width to
+  // the measured CSS width (W = cw) so the viewBox aspect === the box aspect — no 'meet' letterbox
+  // (the old 560px floor letterboxed the curve on phones, shrinking every label with it), and axis
+  // text renders ~1:1 instead of scaled down to ~6px. Fewer, larger ticks fit the narrow plot.
+  const PAD = $derived(isNarrow.current ? { l: 38, r: 44, t: 10, b: 20 } : { l: 48, r: 72, t: 12, b: 22 });
+  const W = $derived(cw > 0 ? cw : isNarrow.current ? 340 : 900);
 
   const view = $derived.by(() => {
     if (!series.length) return null;
+    const narrow = isNarrow.current;
     const on = enabledList.length ? enabledList : [SERIES[0]];
     const pts: DailyPoint[] = [{ date: '', gross: 0, net: 0, take: 0 }, ...series];
     let { lo, hi } = minMax(on.flatMap(s => pts.map(p => p[s.key])));
-    const ticks = niceTicks(lo, hi, 4);
+    const ticks = niceTicks(lo, hi, narrow ? 3 : 4);
     lo = Math.min(lo, ticks[0]);
     hi = Math.max(hi, ticks[ticks.length - 1]);
     const span = hi - lo || 1;
@@ -389,8 +537,9 @@
     const yticks = ticks.map(v => ({ y: y(v), label: axMoney(v) }));
     const xticks: { x: number; label: string }[] = [];
     const seen = new Set<string>();
-    for (let k = 0; k <= 4; k++) {
-      const i = Math.min(pts.length - 1, 1 + Math.round(((pts.length - 2) * k) / 4));
+    const xtN = narrow ? 2 : 4; // fewer date labels on a phone so they don't collide
+    for (let k = 0; k <= xtN; k++) {
+      const i = Math.min(pts.length - 1, 1 + Math.round(((pts.length - 2) * k) / xtN));
       const dt = pts[i]?.date;
       if (dt && !seen.has(dt)) {
         seen.add(dt);
@@ -638,7 +787,7 @@
                         {...tip}
                         type="button"
                         aria-label="Rename filter"
-                        class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                        class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:size-8"
                         onclick={() => doRenameView(v.id, v.name)}
                       >
                         <Pencil class="size-3.5" />
@@ -651,10 +800,13 @@
                         {...tip}
                         type="button"
                         aria-label="Delete filter"
-                        class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-destructive"
+                        class="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-destructive pointer-coarse:size-8"
                         onclick={() => filterModel.deleteView?.(v.id)}
                       >
-                        <X class="size-3.5" />
+                        <!-- A222: Trash2 (not X) — the close-tab/dismiss family uses X, so a
+                             destructive delete needs its own icon on touch where the tooltip never
+                             fires (bits-ui Tooltip ignores pointerType === 'touch'). -->
+                        <Trash2 class="size-3.5" />
                       </button>
                     {/snippet}
                   </IconTip>
@@ -702,13 +854,13 @@
                         {...tip}
                         type="button"
                         aria-label="Delete layout"
-                        class="mr-1 grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-destructive"
+                        class="mr-1 grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-destructive pointer-coarse:size-8"
                         onclick={e => {
                           e.stopPropagation();
                           layouts.remove(name);
                         }}
                       >
-                        <X class="size-3.5" />
+                        <Trash2 class="size-3.5" />
                       </button>
                     {/snippet}
                   </IconTip>
@@ -728,49 +880,28 @@
   </div>
 
   <!-- KPI stat cards — click a card to drill into its breakdown (parity with app/demo). -->
-  {#snippet statCard(s: DashStat)}
-    <button
-      type="button"
-      onclick={() => openStat(s.key)}
-      disabled={!s.key}
-      class="w-full rounded-md border border-border bg-card p-4 text-left transition-colors enabled:cursor-pointer enabled:hover:border-ring enabled:hover:bg-accent/30"
-    >
-      <div class="flex items-start justify-between gap-2">
-        <span class="text-xs text-muted-foreground">{s.label}</span>
-        {#if s.badge}
-          <Badge variant="outline" class={s.up ? 'border-chart-2/40 text-chart-2' : 'border-destructive/40 text-destructive'}
-            >{s.badge}</Badge
-          >
-        {/if}
-      </div>
-      <div
-        class={[
-          // CH37: the hero KPI numeral tier (700) — the one place a standalone number IS the module.
-          'mt-2 text-xl font-bold tracking-tight tabular-nums',
-          s.up === undefined ? 'text-foreground' : s.up ? 'text-chart-2' : 'text-destructive',
-        ]}
-      >
-        {s.value}
-      </div>
-      <div class="mt-1 text-[11px] text-muted-foreground">{s.note}</div>
-    </button>
-  {/snippet}
-  <!-- A200: on phones the stat cards stack behind a one-at-a-time swipeable carousel; the grid
-       returns at sm+ (desktop unchanged). Conditionally RENDERED (MediaQuery) so the cards exist
-       once in the DOM — CSS-hiding the other variant would double every stat for locators/AT. -->
-  {#if isNarrow.current}
-    <ModuleCarousel count={stats.length} label="Key stats">
-      {#snippet slide(i)}
-        {@render statCard(stats[i])}
-      {/snippet}
-    </ModuleCarousel>
-  {:else}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-      {#each stats as s (s.label)}
-        {@render statCard(s)}
-      {/each}
-    </div>
-  {/if}
+  <!-- A242: the parsing caveats that used to live in the standalone Definitions module now sit as
+       contextual "what is this?" popovers next to the numbers they qualify — click a KPI to drill
+       in, or these for how the figures are read. -->
+  <div class="-mb-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+    <span class="uppercase tracking-wider">Key stats</span>
+    <InfoTip title="How a trade is counted" align="start">
+      Each trade is one realized-P&amp;L event. Depending on the platform Blotterbook auto-detects, that's either one row per closed
+      position (close-event exports like TradingView) or entry/exit fills paired into round-trips by a FIFO matcher (which also recovers
+      hold time). A fill that closes lots opened at different times books one trade per matched lot, so the trade count can exceed your
+      platform's order count; positions still open at the end of a fills export aren't imported. TradingView is verified; the other adapters
+      are beta — verify the parsed numbers against your statement.
+    </InfoTip>
+    <InfoTip title="Dates &amp; time zones" align="start">
+      Timestamps are read as written, in the export's own clock — no timezone conversion. Dates parse as US M/D/Y; an unambiguous day &gt;
+      12 (e.g. 25/06) is auto-detected as D/M/Y, but ambiguous non-US dates can land on the wrong day. Session (RTH/ETH) classification
+      assumes US Eastern time. Export in a US/ET format, or verify the parsed dates before trusting day/week/month grouping. Sharpe uses
+      daily-P&amp;L dispersion and is not annualized; small per-weekday samples are noisy.
+    </InfoTip>
+  </div>
+  <!-- A238/A200: the shared StatCardRow owns the card grid, the narrow-viewport carousel, and the
+       click-through stat-detail Dialog (Analytics adopts the same part). -->
+  <StatCardRow stats={dashStats} label="Key stats" detail={statDetail} />
 
   {#snippet perfBody()}
     <div class="mb-3 flex w-fit items-center gap-0.5 rounded-md border border-border p-0.5">
@@ -828,7 +959,13 @@
             />
           {/if}
           {#each view.xticks as t, i (i)}
-            <text x={t.x} y={VH - 6} text-anchor="middle" class="fill-muted-foreground text-[10px] tabular-nums">{t.label}</text>
+            <!-- A241: 11px on phones (viewBox is now 1:1 with the box, so px map through directly) -->
+            <text
+              x={t.x}
+              y={VH - 6}
+              text-anchor="middle"
+              class={['fill-muted-foreground tabular-nums', isNarrow.current ? 'text-[11px]' : 'text-[10px]']}>{t.label}</text
+            >
           {/each}
           {#each view.lines as ln (ln.key)}
             <path d={ln.area} fill="url(#{ln.grad})" />
@@ -1015,7 +1152,23 @@
     {#if actualCommNote}
       <p class="mt-2 text-[11px] text-muted-foreground">{actualCommNote}</p>
     {/if}
-    <p class="mt-2 text-[11px] text-muted-foreground">Costs from your broker/feed/platform setup; tax is an estimate — not advice.</p>
+    <!-- A242: the cost-model + tax caveats retired from the Definitions module now surface here, in
+         context, as "what is this?" popovers beside the estimate disclaimer. -->
+    <div class="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <span>Costs from your broker/feed/platform setup; tax is an estimate — not advice.</span>
+      <InfoTip title="How costs are estimated" align="end" side="bottom">
+        Commissions apply your selected broker's per-side rate plus the CME exchange/clearing/NFA fee for each contract root, charged per
+        round-turn contract (2 sides × qty). Platform + data-feed subscriptions accrue over every calendar month spanned by your trades
+        (inclusive), not just the months you traded. All figures are editable snapshot estimates — confirm against your broker's live
+        schedule.
+      </InfoTip>
+      <InfoTip title="Tax figures are not tax advice" align="end" side="bottom">
+        Take-home applies a simplified Section 1256 blended federal rate (60/40 long/short-term) plus your selected state's top marginal
+        rate to net-of-cost profit; losses are not carried and tax on a losing period is zero. Note the base is net of subscriptions as a
+        simplification — subscriptions don't actually reduce a §1256 gain for a non-trader-tax-status filer, so the estimate can understate
+        tax slightly. This is a rough planning estimate, not tax advice — consult a professional for your actual liability.
+      </InfoTip>
+    </div>
   {/snippet}
 
   {#snippet advBody()}
@@ -1168,6 +1321,119 @@
     </div>
   {/snippet}
 
+  <!-- F39/A142 batch-1 modules (Today · Drawdown Status · Streak Monitor). Shared label/value row +
+       empty state; each reads the resolved `md` view-model (app-wired or series-derived). -->
+  {#snippet kv(label: string, value: string, t?: 'pos' | 'neg')}
+    <div class="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs last:border-b-0">
+      <span class="text-muted-foreground">{label}</span>
+      <span class={['font-medium tabular-nums', t === 'pos' ? 'text-chart-2' : t === 'neg' ? 'text-destructive' : 'text-foreground']}
+        >{value}</span
+      >
+    </div>
+  {/snippet}
+  {#snippet emptyModule()}
+    <p class="grid h-24 place-items-center text-sm text-muted-foreground">No trades in the selected range.</p>
+  {/snippet}
+
+  {#snippet todayBody()}
+    {#if md?.lastDay}
+      {@const d = md.lastDay}
+      {@const up = d.net >= 0}
+      {@const delta = d.net - md.avgDaily}
+      <div class="flex items-baseline justify-between gap-2">
+        <span class="text-xs text-muted-foreground">Last session · {d.date}</span>
+        <span class="text-[11px] tabular-nums text-muted-foreground">{d.winRate.toFixed(0)}% win</span>
+      </div>
+      <div class={['mt-1 text-xl font-bold tracking-tight tabular-nums', up ? 'text-chart-2' : 'text-destructive']}>{usd(d.net)}</div>
+      <div class="mt-0.5 text-[11px] text-muted-foreground">
+        {#if md.avgDaily}
+          <span class={delta >= 0 ? 'text-chart-2' : 'text-destructive'}>{delta >= 0 ? '+' : '−'}{money(Math.abs(delta))}</span> vs your average
+          day
+        {:else}
+          your latest trading day
+        {/if}
+      </div>
+      <div class="mt-3 overflow-hidden rounded-md border border-border">
+        {@render kv(
+          'Trades',
+          md.avgTrades != null ? `${d.trades}${d.capped ? '+' : ''} · avg ${md.avgTrades.toFixed(1)}` : `${d.trades}${d.capped ? '+' : ''}`
+        )}
+        {@render kv('Best trade', usd(d.best), d.best >= 0 ? 'pos' : 'neg')}
+        {@render kv('Worst trade', usd(d.worst), d.worst >= 0 ? 'pos' : 'neg')}
+        {@render kv('Win-day rate', `${md.winDayPct.toFixed(0)}% of ${md.activeDays} day${md.activeDays === 1 ? '' : 's'}`)}
+      </div>
+    {:else}
+      {@render emptyModule()}
+    {/if}
+  {/snippet}
+
+  {#snippet ddBody()}
+    {#if md}
+      {@const x = md.dd}
+      <div class="text-xs text-muted-foreground">Distance from your equity high</div>
+      {#if x.atHigh}
+        <div class="mt-1 text-xl font-bold tracking-tight tabular-nums text-chart-2">At a new high</div>
+        <div class="mt-0.5 text-[11px] text-muted-foreground">Equity is at its high-water mark — no open drawdown.</div>
+      {:else}
+        <div class="mt-1 text-xl font-bold tracking-tight tabular-nums text-destructive">-{money(x.current)}</div>
+        <div class="mt-0.5 text-[11px] text-muted-foreground">
+          {#if x.currentPct != null}{x.currentPct.toFixed(1)}% below the high-water mark{:else}below the high-water mark{/if} · {x.sincePeak}
+          {x.unit}{x.sincePeak === 1 ? '' : 's'} since the peak
+        </div>
+      {/if}
+      <div class="mt-3 overflow-hidden rounded-md border border-border">
+        {@render kv('To a new high', x.atHigh ? '$0' : money(x.current))}
+        {@render kv(
+          'Max drawdown',
+          x.maxDD > 0 ? `-${money(x.maxDD)}${x.maxDDpct != null ? ` · ${x.maxDDpct.toFixed(1)}%` : ''}` : '$0',
+          x.maxDD > 0 ? 'neg' : undefined
+        )}
+        {@render kv('Longest drawdown', x.maxDDdur > 0 ? `${x.maxDDdur} ${x.unit}${x.maxDDdur === 1 ? '' : 's'}` : '—')}
+        {@render kv('Recovery factor', num(x.recovery))}
+      </div>
+    {:else}
+      {@render emptyModule()}
+    {/if}
+  {/snippet}
+
+  {#snippet streakBody()}
+    {#if md}
+      {@const s = md.streak}
+      {@const t = s.trade}
+      <div class="text-xs text-muted-foreground">Current run</div>
+      <div
+        class={[
+          'mt-1 text-xl font-bold tracking-tight tabular-nums',
+          runTone(t.kind) === 'pos' ? 'text-chart-2' : runTone(t.kind) === 'neg' ? 'text-destructive' : 'text-foreground',
+        ]}
+      >
+        {t.len ? `${t.len}${t.capped ? '+' : ''}` : '—'}
+        <!-- The current run is per-trade in both sources (m.pnls / the recent-trades tail), so it's
+             always "trades" here — `recUnit` only qualifies the RECORD rows below. -->
+        <span class="text-sm font-medium text-muted-foreground"
+          >{t.len ? `${runVerb(t.kind)} trade${t.len === 1 ? '' : 's'}` : 'no active streak'}</span
+        >
+      </div>
+      <div class="mt-0.5 text-[11px] text-muted-foreground">
+        {t.len ? `${usd(t.sum)} on the run` : 'flat since the last flip'}
+      </div>
+      <div class="mt-3 overflow-hidden rounded-md border border-border">
+        {@render kv(
+          'Consecutive days',
+          s.day.len ? `${s.day.len} ${runVerb(s.day.kind)} day${s.day.len === 1 ? '' : 's'}` : '—',
+          runTone(s.day.kind)
+        )}
+        {@render kv(`Record win streak (${s.recUnit}s)`, `${s.rec.maxWin} · ${usd(s.rec.maxWinSum)}`, 'pos')}
+        {@render kv(`Record loss streak (${s.recUnit}s)`, `${s.rec.maxLoss} · ${usd(s.rec.maxLossSum)}`, 'neg')}
+        {#if s.recUnit === 'trade'}
+          {@render kv('Best / worst day run', `${s.dayRec.maxWin}W / ${s.dayRec.maxLoss}L days`)}
+        {/if}
+      </div>
+    {:else}
+      {@render emptyModule()}
+    {/if}
+  {/snippet}
+
   <!-- A189: tiny stylized per-module thumbnails for the picker — inline SVG in the chart tokens
        (geometry attrs + fill/stroke utilities only; CSP-clean). -->
   {#snippet moduleThumb(key: string)}
@@ -1202,6 +1468,20 @@
           <rect x="4" {y} width="24" height="3" rx="1" class="fill-secondary" />
           <rect x="31" {y} width="5" height="3" rx="1" class={i % 2 === 0 ? 'fill-chart-2/70' : 'fill-destructive/70'} />
         {/each}
+      {:else if key === 'today'}
+        <!-- F39: a big signed figure over a small 'vs avg' delta chip -->
+        <rect x="4" y="6" width="20" height="7" rx="1" class="fill-chart-2/70" />
+        <rect x="4" y="17" width="12" height="4" rx="1" class="fill-secondary" />
+      {:else if key === 'ddstatus'}
+        <!-- F39: an equity line with the peak flagged and a shaded gap down to 'now' -->
+        <polyline points="3,20 12,8 20,8 28,18 37,14" fill="none" class="stroke-chart-1" stroke-width="1.5" />
+        <rect x="20" y="8" width="8" height="10" class="fill-destructive/25" />
+        <circle cx="20" cy="8" r="1.6" class="fill-chart-4" />
+      {:else if key === 'streak'}
+        <!-- F39: a row of recent-trade squares, the current run highlighted -->
+        {#each [0, 1, 2, 3, 4, 5] as c (c)}
+          <rect x={4 + c * 6} y="11" width="5" height="6" rx="1" class={c >= 3 ? 'fill-destructive/70' : 'fill-chart-2/50'} />
+        {/each}
       {:else}
         {#each [0, 1] as r (r)}
           {#each [0, 1, 2] as c (c)}
@@ -1231,7 +1511,7 @@
           {@render moduleHeader(key)}
           <Card.Content>
             {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'term'}<ActivityTerminal
-              />{:else if key === 'compare'}{@render compareBody()}{:else if key === 'blotter'}{@render blotterBody()}{/if}
+              />{:else if key === 'compare'}{@render compareBody()}{:else if key === 'blotter'}{@render blotterBody()}{:else if key === 'today'}{@render todayBody()}{:else if key === 'ddstatus'}{@render ddBody()}{:else if key === 'streak'}{@render streakBody()}{/if}
           </Card.Content>
         </Card.Root>
       </div>
@@ -1289,72 +1569,10 @@
       </Dialog.Footer>
     </Dialog.Content>
   </Dialog.Root>
-
-  <!-- Chrome parity (R12/F27): the metric & cost definitions/caveats. (The boot/activity log moved
-       into the reorderable module grid above as 'term' — A243 — so it can pair with Advanced Stats.) -->
-  <Card.Root>
-    <Card.Header class="pb-2"
-      ><Card.Title class="text-xs uppercase tracking-wider text-muted-foreground">Definitions</Card.Title></Card.Header
-    >
-    <Card.Content><Definitions /></Card.Content>
-  </Card.Root>
 </div>
-
-<!-- KPI card drill-in dialog -->
-<Dialog.Root bind:open={statOpen}>
-  <Dialog.Content class="sm:max-w-md">
-    {#if detail}
-      <Dialog.Header>
-        <Dialog.Title class="flex items-baseline justify-between gap-3 pr-6">
-          <span>{detail.title}</span>
-          <span
-            class={[
-              'text-lg tabular-nums',
-              detail.tone === 'pos' ? 'text-chart-2' : detail.tone === 'neg' ? 'text-destructive' : 'text-foreground',
-            ]}>{detail.value}</span
-          >
-        </Dialog.Title>
-        {#if detail.desc}<Dialog.Description>{detail.desc}</Dialog.Description>{/if}
-      </Dialog.Header>
-      <div class="space-y-4">
-        {#if detail.bars?.length}
-          <div class="space-y-1.5">
-            {#each detail.bars as bar, i (i)}
-              <div class="flex items-center gap-2 text-xs">
-                <span class="w-24 shrink-0 text-muted-foreground">{bar.label}</span>
-                <div class="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
-                  <div
-                    class={[
-                      'h-full rounded-full',
-                      bar.tone === 'pos' ? 'bg-chart-2' : bar.tone === 'neg' ? 'bg-destructive' : 'bg-muted-foreground',
-                    ]}
-                    use:styleProps={{ width: `${Math.max(2, Math.min(100, bar.pct))}%` }}
-                  ></div>
-                </div>
-                <span
-                  class={[
-                    'w-20 shrink-0 text-right font-medium tabular-nums',
-                    bar.tone === 'pos' ? 'text-chart-2' : bar.tone === 'neg' ? 'text-destructive' : 'text-foreground',
-                  ]}>{bar.value}</span
-                >
-              </div>
-            {/each}
-          </div>
-        {/if}
-        {#if detail.rows.length}
-          <div class="overflow-hidden rounded-md border border-border">
-            {#each detail.rows as r, i (i)}
-              <div class={['flex items-center justify-between px-3 py-2 text-sm', i > 0 && 'border-t border-border']}>
-                <span class="text-muted-foreground">{r.label}</span>
-                <span
-                  class={['tabular-nums', r.tone === 'pos' ? 'text-chart-2' : r.tone === 'neg' ? 'text-destructive' : 'text-foreground']}
-                  >{r.value}</span
-                >
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    {/if}
-  </Dialog.Content>
-</Dialog.Root>
+<!-- A242: the standalone Definitions module is retired — its four definitions/caveats now live
+     contextually as InfoTip "what is this?" popovers on the modules they explain: the parsing
+     caveats (trade counting, date/timezone reading) on the KPI stat row, and the cost-model + tax
+     caveats inside the Break-even & Cost module (see costBody). Stored layouts that named a stray
+     module key were already dropped harmlessly by validKeys(); Definitions was a fixed card, never a
+     MODULES entry, so there is no picker thumbnail or layout key to migrate. -->
