@@ -311,7 +311,8 @@ test('staging redesign: Trade Editor edits a core field and it persists (updateT
   // Edit the first row's Symbol cell → ZZTEST, save.
   const symCell = page.locator('table tbody tr').first().locator('td').nth(3).locator('button');
   await symCell.click();
-  const input = page.locator('table tbody tr').first().locator('td').nth(3).locator('input');
+  // F49: the symbol editor is now a filterable popover portaled to <body>.
+  const input = page.getByPlaceholder('Filter or type a new root…');
   await input.fill('ZZTEST');
   await input.press('Enter');
   await expect(page.getByRole('button', { name: 'Save all' })).toBeVisible();
