@@ -1,0 +1,194 @@
+name: Security
+
+# A220 (docs/sast-eval-a112.md — the A112 evaluation's wiring plan). Deliberately a SEPARATE
+# workflow from ci.yml: these scans don't gate the build artifact the way lint/typecheck/build/e2e
+# do, and a registry-ruleset noise floor or a dependency going bad *without* a commit (weekly cron)
+# shouldn't block an unrelated PR the way a broken test does.
+#
+#   - semgrep: a small custom rule pack mechanically enforces Blotterbook's own hard invariants (no
+#     trade-data egress, the Store/indexedDB seam, no inline style="" — CLAUDE.md) and is BLOCKING
+#     (`--error`). The rules are written to an ephemeral, UNCOMMITTED directory at run time (this
+#     sprint's CI-tooling workstream is scoped to .github/workflows/* — no new top-level dir); if a
+#     rule needs iterating outside this file, promote it to a real `.semgrep/` directory then update
+#     the `--config` path below. The registry rulesets (p/default, p/typescript, p/security-audit)
+#     are report-only until their noise floor is known (A112), so a community-rule update never
+#     blocks a merge.
+#   - deps: osv-scanner against package-lock.json. PR-diff mode (only vulns newly introduced by the
+#     PR) on pull_request; a full scan on a weekly cron + on-demand via workflow_dispatch. Both FAIL
+#     on findings. SARIF upload to the Security tab needs GHAS, which isn't available on this
+#     private repo (A112) — `upload-sarif: false`, findings surface via job logs/annotations instead.
+#     (No osv-scanner.toml yet — nothing to accept-risk today; add one at the repo root, alongside
+#     package-lock.json, if/when a specific ID needs a documented exception — it's auto-discovered.)
+#
+# CodeQL/Socket.dev are explicitly out of scope (paid on private repos — see docs/sast-eval-a112.md).
+
+on:
+  pull_request:
+  schedule:
+    - cron: '17 6 * * 1' # weekly, Monday ~06:17 UTC — deps go stale without a commit to trigger a PR scan
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  semgrep:
+    name: Semgrep CE (custom invariants + registry rulesets)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:1.168.0 # pinned tag (A28-style); bump deliberately
+    steps:
+      - uses: actions/checkout@v5
+
+      # Custom rules encode CLAUDE.md's hard invariants: no trade-data egress (fetch/XHR.open/
+      # sendBeacon/WebSocket to an absolute http(s)/ws(s) literal in src/ — every legitimate call is
+      # a relative, same-origin path), the Store/indexedDB seam (indexedDB + localStorage/
+      # sessionStorage writes belong only in src/lib/core/store.ts), and no inline style="" (CSP
+      # style-src 'self'). Verified when authored (A220): 0 findings on this repo as-is, and each rule
+      # independently catches a seeded violation of its own invariant.
+      - name: Write custom invariant rules
+        run: |
+          mkdir -p .semgrep-ci
+          cat > .semgrep-ci/blotterbook-invariants.yaml <<'RULES'
+          rules:
+            - id: no-egress-absolute-url-ts
+              languages: [typescript, javascript]
+              severity: ERROR
+              message: >
+                No-egress invariant (CLAUDE.md: "No trade data ever leaves the browser"): this passes
+                an absolute http(s) URL literal to fetch()/XMLHttpRequest.open()/navigator.sendBeacon().
+                Every legitimate call in src/ uses a relative, same-origin path (loadRefData, /api/*,
+                the version/flags fetches). If this is genuinely intentional, it doesn't belong in
+                src/ — move it behind a Cloudflare Pages Function in functions/ instead.
+              paths:
+                include:
+                  - '**/src/**/*.ts'
+                exclude:
+                  - '**/src/**/*.test.ts'
+              patterns:
+                - pattern-either:
+                    - pattern: fetch("$URL", ...)
+                    - pattern: $XHR.open("$METHOD", "$URL", ...)
+                    - pattern: navigator.sendBeacon("$URL", ...)
+                - metavariable-regex:
+                    metavariable: $URL
+                    regex: ^https?://
+            - id: no-egress-websocket-ts
+              languages: [typescript, javascript]
+              severity: ERROR
+              message: >
+                No-egress invariant (CLAUDE.md): this opens a WebSocket to an absolute ws(s):// literal.
+                Blotterbook has no WebSocket usage today — trade data stays local to the browser and
+                IndexedDB.
+              paths:
+                include:
+                  - '**/src/**/*.ts'
+              patterns:
+                - pattern: new WebSocket("$URL", ...)
+                - metavariable-regex:
+                    metavariable: $URL
+                    regex: ^wss?://
+            - id: no-egress-absolute-url-svelte
+              languages: [generic]
+              severity: ERROR
+              message: >
+                No-egress invariant (CLAUDE.md): this passes an absolute http(s)/ws(s) URL literal to
+                fetch()/XHR/sendBeacon/WebSocket inside a Svelte component. Every legitimate call is a
+                relative, same-origin path. Generic-mode regex counterpart to no-egress-absolute-url-ts,
+                since Semgrep has no dedicated .svelte parser.
+              paths:
+                include:
+                  - '**/src/**/*.svelte'
+              patterns:
+                - pattern-regex: '(?:fetch|\.open|sendBeacon|new WebSocket)\s*\(\s*["''`](https?|wss?)://'
+            - id: no-indexeddb-outside-store
+              languages: [typescript, javascript]
+              severity: ERROR
+              message: >
+                Store seam invariant (CLAUDE.md: "edit persisted data only through the Store interface,
+                never indexedDB directly"): `indexedDB` must only be touched inside
+                src/lib/core/store.ts. Add a Store method instead of reaching for indexedDB from a
+                component or another core module.
+              paths:
+                include:
+                  - '**/src/**/*.ts'
+                exclude:
+                  - '**/src/lib/core/store.ts'
+              pattern: indexedDB
+            - id: no-indexeddb-outside-store-svelte
+              languages: [generic]
+              severity: ERROR
+              message: >
+                Store seam invariant (CLAUDE.md): `indexedDB` must only be touched inside
+                src/lib/core/store.ts, never from a component. Generic-mode counterpart for .svelte
+                files.
+              paths:
+                include:
+                  - '**/src/**/*.svelte'
+              pattern-regex: '\bindexedDB\b'
+            - id: no-localstorage-write-outside-seam
+              languages: [typescript, javascript]
+              severity: ERROR
+              message: >
+                Store seam invariant (CLAUDE.md): localStorage/sessionStorage WRITES must go through
+                src/lib/core/store.ts's Store.local seam, so the "demo never persists" guarantee holds
+                by construction. (Reads are fine outside the seam — e.g. src/app/lib/flags.ts's
+                `bb:flags` QA override — this only flags setItem/removeItem.)
+              paths:
+                include:
+                  - '**/src/**/*.ts'
+                exclude:
+                  - '**/src/lib/core/store.ts'
+              patterns:
+                - pattern-either:
+                    - pattern: localStorage.setItem(...)
+                    - pattern: localStorage.removeItem(...)
+                    - pattern: sessionStorage.setItem(...)
+                    - pattern: sessionStorage.removeItem(...)
+            - id: no-inline-style-attribute
+              languages: [generic]
+              severity: ERROR
+              message: >
+                CSP invariant (CLAUDE.md: "CSP style-src 'self' holds — no inline style=\"\"."): use
+                Tailwind utility classes or the `styleProps` action (src/app/lib/actions.ts) for dynamic
+                styling instead of a literal style="..." attribute.
+              paths:
+                include:
+                  - '**/src/**/*.svelte'
+                  - '**/src/**/*.html'
+              pattern-regex: 'style="[^"]+"'
+          RULES
+
+      - name: Custom invariant rules (no-egress / Store seam / no inline style=) — BLOCKING
+        run: semgrep scan --config .semgrep-ci/ --error src/
+
+      - name: Registry rulesets (p/default, p/typescript, p/security-audit) — report-only
+        run: semgrep scan --config p/default --config p/typescript --config p/security-audit src/ functions/ || true
+
+  osv-scanner-pr:
+    name: osv-scanner (PR diff — new vulns only)
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2.3.8
+    with:
+      scan-args: |-
+        --lockfile=package-lock.json
+      upload-sarif: false
+      fail-on-vuln: true
+
+  osv-scanner-full:
+    name: osv-scanner (full scan — weekly + manual)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8
+    with:
+      scan-args: |-
+        --lockfile=package-lock.json
+      upload-sarif: false
+      fail-on-vuln: true

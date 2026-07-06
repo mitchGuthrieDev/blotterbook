@@ -17,6 +17,7 @@
     "build": "node scripts/build-manifest.mjs && vite build",
     "size-budget": "node scripts/check-bundle-size.mjs",
     "check-deploy": "node scripts/check-deploy-contract.mjs",
+    "ci": "npm test && npm run build && npm run size-budget && npm run check-deploy && npm run test:e2e",
     "dev": "vite",
     "preview": "vite preview"
   },
