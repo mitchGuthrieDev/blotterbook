@@ -499,6 +499,78 @@
       "partial": false,
       "doneNote": null,
       "prompt": "From the owner. The Definitions module (src/app/parts/Definitions.svelte) needs to go as a standalone module: its definitions + caveats text should be distributed as contextual additional information on the modules they relate to, rather than living in one catch-all module. Map each definition/caveat to its home (expectancy/win-rate → the stats modules' A205-style info tooltips or the Dashboard stat-detail popovers; cost-model caveats → Break-Even & Cost module; tax notes → the tax module/Reports) and surface them there via IconTip/popover 'What is this?' affordances. Then remove the Definitions module from MODULES, the picker, and saved layouts (migrate stored layouts that reference it — drop the key harmlessly). Done when every definition is reachable in context, the module is gone, stored layouts don't break, and e2e is updated."
+    },
+    {
+      "id": "A245",
+      "title": "Dead admin control: showBetaAdapters flag gates nothing",
+      "category": "BUG",
+      "priority": "P2",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "R1 2026-07-06 (docs/repo-audit-2026-07-06.md). The admin toggle 'Show beta platform adapters in the upload picker' (Admin.svelte:71), APP_FLAGS.showBetaAdapters (flags.ts:23) and the Worker mirror (functions/api/config.ts:25) exist, but no app code reads the flag — beta adapters always auto-detect and the flags.ts comment is false (A147-class dead control). DECISION (session): RETIRE — the 'upload picker' it described predates auto-detection. Remove the APP_FLAGS key + Admin row + stale comment, update config.ts DEFAULTS.flags and the scripts/test-flags.mjs A14 mirror so the drift gate stays green; retire the equally-dead betaRibbon flag in the same stroke."
+    },
+    {
+      "id": "A246",
+      "title": "Extract a shared EditableCellPopover primitive (de-dup F49)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "R1 2026-07-06. DatePickerPopover.svelte and SymbolSelect.svelte hand-build the same Popover scaffold: byte-identical trigger button class string (also in TradeEditor.svelte:268) + the same open state / reset-on-open $effect / close-on-select shell. Extract a small EditableCellPopover owning the trigger + open/reset/close-on-select; callers supply content (grid vs filterable list) + onchange. CSP-clean, a11y intact (trigger stays a real button), typecheck/e2e green."
+    },
+    {
+      "id": "A247",
+      "title": "Consolidate duplicated formatters/constants into the core (A29)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "R1 2026-07-06. (1) Account.svelte fmtMoney re-implements USD formatting owned by usdWhole/usd (core.ts) — add/adapt a cents-aware core helper and reuse. (2) Changelog.svelte MONTHS duplicates MONTH_ABBR (core.ts) — import it. (3) xlsx.ts CSV-quote esc duplicates the quoting half of App.svelte's esc — extract a shared csvCell() (App.svelte keeps its A154 formula-prefix neutralization layered on top). Keep test:unit + typecheck green."
+    },
+    {
+      "id": "A248",
+      "title": "Refresh CLAUDE.md repo-layout for the current tree",
+      "category": "DOCS",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "R1 2026-07-06. CLAUDE.md's repo-layout drifted: parts/ lists 5 of 17 (missing BootSplash, DashTabs, DatePickerPopover, DetectionStatus, FeedbackDialog, LaunchGate, ModuleCarousel, PaginationControls, ScreenshotLightbox, SegmentedControl, SymbolSelect, TagInput); screens/ omits Account; app/lib/ omits account.svelte.ts/batch.ts/pagination.svelte.ts/flavor.ts/motion.ts; the core list omits xlsx.ts. Doc-only, keep concise."
+    },
+    {
+      "id": "S26",
+      "title": "Accounts posture hardening: enumeration note, verify-GET, donation guards",
+      "category": "SECURITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "R1 2026-07-06. (1) register-options 409 'account exists' leaks account existence at signup — DECISION: accept (standard passwordless-signup UX; recover-send stays enumeration-safe) and document with a code comment. (2) email-verify-confirm GET consumes the single-use token, so a mail-scanner prefetch burns it — acceptable since the GET still performs the verification; document, and make the burned-then-clicked case degrade gracefully. (3) Webhook credits donor status when amount_total is 0/absent and sums cents across currencies — guard amountCents>0 before stamping donated_at and accumulate only USD (record the event for dedupe regardless). Extend scripts/test-accounts.mjs; keep green."
+    },
+    {
+      "id": "A249",
+      "title": "Audit cleanup batch: dead flag comment, contract-only fields, small refactors",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "doneNote": null,
+      "prompt": "R1 2026-07-06 low-risk batch. (1) betaRibbon retirement rides with A245. (2) MeResponse.tier/cloudSync are never read — mark contract-only with a comment (or drop). (3) The index-csvFiles-then-scan-fileIds idiom appears 3x (App.svelte platform, dashboard.svelte.ts broker + reconcile family) — extract a resolveFromFiles(t, pick) helper. (4) motion.ts REDUCED_MOTION is frozen at module load — read prefers-reduced-motion live. (5) OPTIONAL (skip unless trivial): runtime shape-check at the account.svelte.ts api<T> boundary; move family() into adapters.ts. Keep all gates green."
     }
   ],
   "howToDrive": [
