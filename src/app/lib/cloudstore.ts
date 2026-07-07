@@ -121,10 +121,11 @@ export function createCloudStore(local: StoreLike, onWrite: () => void): StoreLi
       notify();
       return r;
     },
-    // A purge is a local clean slate (it clears tombstones too — nothing to propagate), so it fires
-    // NO push. A254: the controller subscribes to the `data:erased` bus event (emitted by
-    // dashboard.purgeAll right after this resolves) and there DISABLES sync + resets the workspace's
-    // cursor/pushed-watermark — so the next reconcile can't re-download the purged records.
+    // A purge is a local clean slate (it clears tombstones too — nothing to push). A254: the controller
+    // subscribes to the `data:erased` bus event (emitted by dashboard.purgeAll right after this
+    // resolves) and there DISABLES sync + resets the workspace's cursor/pushed-watermark so the next
+    // reconcile can't re-download the purged records, AND best-effort erases the server copy (records +
+    // ciphertext blobs) via POST /api/sync/delete so the cloud copy is cleared too.
     purge: () => local.purge(),
   };
 }

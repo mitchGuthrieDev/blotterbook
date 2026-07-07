@@ -513,6 +513,11 @@ export async function upsertSubscription(
   }
 }
 
+/** How long a processed webhook event stays in the dedupe ledger (A265). Dedupe only needs to cover
+ *  Stripe's replay/retry window (a few days), so anything older is dead weight — swept on the next
+ *  write below to bound the table's growth (Pages Functions can't run a Cron Trigger). */
+export const WEBHOOK_EVENT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 /** Replay-safe dedupe for subscription-lifecycle webhook events (donations dedupe via their own PK;
  *  these events have no such row, so they are logged here by Stripe event id). */
 export async function webhookEventSeen(db: AccountsDb, id: string): Promise<boolean> {
@@ -520,6 +525,12 @@ export async function webhookEventSeen(db: AccountsDb, id: string): Promise<bool
 }
 export async function markWebhookEvent(db: AccountsDb, id: string, type: string, now = Date.now()): Promise<void> {
   await db.prepare('INSERT INTO webhook_events (id, type, created_at) VALUES (?, ?, ?)').bind(id, type, now).run();
+  // A265: sweep-on-write — drop events past the dedupe window so the ledger stays bounded. One extra
+  // DELETE on a low-frequency path; never touches an event still inside Stripe's retry window.
+  await db
+    .prepare('DELETE FROM webhook_events WHERE created_at < ?')
+    .bind(now - WEBHOOK_EVENT_TTL_MS)
+    .run();
 }
 
 /* ---- recovery / verification tokens (Phase 3 — F55; single-use + TTL, S25) ------------------

@@ -24,6 +24,9 @@ import {
   donationById,
   userByEmail,
   setEmailVerified,
+  markWebhookEvent,
+  webhookEventSeen,
+  WEBHOOK_EVENT_TTL_MS,
 } from '../functions/_lib/accounts.ts';
 import { onRequestGet as meGet, SUBSCRIPTION_GRACE_MS } from '../functions/api/me.ts';
 import { onRequestPost as registerOptions } from '../functions/api/account/register-options.ts';
@@ -93,8 +96,9 @@ function mockDb() {
       if (row) cols.forEach((c, i) => (row[c] = args[i]));
       return [];
     }
-    if ((m = s.match(/^DELETE FROM (\w+) WHERE expires_at < \?$/i))) {
-      tables[m[1]] = tables[m[1]].filter(r => !(r.expires_at < args[0]));
+    if ((m = s.match(/^DELETE FROM (\w+) WHERE (\w+) < \?$/i))) {
+      // TTL sweeps: challenges/recovery by expires_at, webhook_events by created_at (A265).
+      tables[m[1]] = tables[m[1]].filter(r => !(r[m[2]] < args[0]));
       return [];
     }
     if ((m = s.match(/^DELETE FROM (\w+) WHERE (\w+) = \?$/i))) {
@@ -812,6 +816,22 @@ console.log('\nemail-verify-confirm — GET redirect + POST + fail modes:');
   ok(
     'email-verify-confirm 503 when ACCOUNTS_DB unbound',
     (await emailVerifyConfirm({ request: req('/api/account/email-verify-confirm', { body: { token } }), env: {} })).status === 503
+  );
+}
+
+console.log('\nwebhook_events dedupe ledger — sweep-on-write bounds growth (A265):');
+{
+  const db = mockDb();
+  const now = 2_000_000_000_000;
+  // A fresh event is recorded and deduped; an event older than the TTL is swept on the next insert.
+  await markWebhookEvent(db, 'evt_old', 'customer.subscription.updated', now - WEBHOOK_EVENT_TTL_MS - 1);
+  ok('recorded event is seen (dedupe hit)', await webhookEventSeen(db, 'evt_old'));
+  await markWebhookEvent(db, 'evt_new', 'customer.subscription.updated', now);
+  ok('the new event is retained', await webhookEventSeen(db, 'evt_new'));
+  ok('the stale event was swept on the next write (bounded ledger)', !(await webhookEventSeen(db, 'evt_old')));
+  ok(
+    'an in-window event is NOT swept',
+    db.tables.webhook_events.every(r => r.id !== 'evt_old') && db.tables.webhook_events.some(r => r.id === 'evt_new')
   );
 }
 

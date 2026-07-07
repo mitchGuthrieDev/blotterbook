@@ -134,7 +134,21 @@ const transport: SyncTransport = {
     if (!res.ok) throw new Error(`Pull failed (${res.status}).`);
     return (await res.json()) as PullPage;
   },
+  async deleteWorkspace(workspaceId) {
+    const res = await fetch('/api/sync/delete', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ workspace_id: workspaceId }),
+    });
+    if (!res.ok) throw new Error(`Could not erase the synced copy (${res.status}).`);
+    return (await res.json()) as { done: boolean };
+  },
 };
+
+/** A254: cap the server-erase paging loop. DELETE_PAGE is 500 server-side, so this covers a workspace
+ *  of up to 500·ERASE_MAX_PAGES records — far past MAX_RECORDS_PER_WORKSPACE — before giving up. */
+const ERASE_MAX_PAGES = 200;
 
 /* ── CloudStore wiring (called at App.svelte module init, staging only) ────────────────────────── */
 
@@ -175,9 +189,10 @@ export function configureCloudSync(opts: { localStore: StoreLike; dash: { reload
 }
 
 /** A254: after a local purge of the active workspace, stop it re-downloading on the next reconcile —
- *  DISABLE sync for it and reset its cursor + pushed-watermark. This is the safe client-side stop;
- *  propagating the erase to the server as record deletions (so OTHER devices also drop the data) is a
- *  filed follow-up, out of `src/` scope here. */
+ *  DISABLE sync for it and reset its cursor + pushed-watermark — AND propagate the erase to the server
+ *  so the cloud ciphertext is deleted too (else the orphaned E2E blobs linger server-side). The local
+ *  opt-out is the guaranteed stop for THIS device; the server erase is best-effort (it needs a live
+ *  session + network) and safely retries on the next purge if it can't reach the server now. */
 function onErased(): void {
   if (!localStore) return;
   syncGeneration++; // abort any in-flight run + neutralize a pending debounced push for this workspace
@@ -187,12 +202,28 @@ function onErased(): void {
   }
   dirtyDuringPush = false;
   const id = localStore.activeWorkspace().id;
+  const wasEnabled = isEnabled(id); // only a workspace that was actually syncing has a server copy
   localStore.local.set(enabledKey(id), false); // opt-out: no reconcile until the user re-enables
   localStore.local.remove(cursorKey(id));
   localStore.local.remove(pushedKey(id));
   sessions.delete(id);
   reconciled.delete(id);
   refreshSyncStatus();
+  if (wasEnabled) void eraseServerCopy(id);
+}
+
+/** A254: page through the server erase until the workspace's records + blobs are gone. Best-effort —
+ *  a failure (offline / lapsed session) leaves the cloud copy for the next purge attempt while the
+ *  local opt-out above already protects this device from re-downloading it. */
+async function eraseServerCopy(id: string): Promise<void> {
+  try {
+    for (let i = 0; i < ERASE_MAX_PAGES; i++) {
+      const { done } = await transport.deleteWorkspace(id);
+      if (done) break;
+    }
+  } catch {
+    /* best-effort — retried on the next erase */
+  }
 }
 
 /* ── status ────────────────────────────────────────────────────────────────────────────────────── */

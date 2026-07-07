@@ -11,6 +11,8 @@ import { onRequestGet as wsList, onRequestPost as wsRegister } from '../function
 import { onRequestGet as ikGet, onRequestPut as ikPut } from '../functions/api/sync/wrapped-ik.ts';
 import { onRequestPost as push } from '../functions/api/sync/push.ts';
 import { onRequestGet as pull } from '../functions/api/sync/pull.ts';
+import { onRequestPost as del } from '../functions/api/sync/delete.ts';
+import { DELETE_PAGE, TOMBSTONE_TTL_MS, compactTombstones, deleteWorkspacePage } from '../functions/_lib/sync.ts';
 
 let pass = 0,
   fail = 0;
@@ -40,12 +42,18 @@ function mockDb() {
   };
   const parseConds = clause =>
     clause.split(/ AND /i).map(c => {
-      const m = c.trim().match(/^(\w+)\s*(=|>)\s*\?$/);
+      const m = c.trim().match(/^(\w+)\s*(=|>=|<=|>|<)\s*\?$/);
       if (!m) throw new Error('mock D1: bad condition — ' + c);
       return { col: m[1], op: m[2] };
     });
-  const matches = (row, conds, args, off) =>
-    conds.every((c, i) => (c.op === '=' ? row[c.col] === args[off + i] : row[c.col] > args[off + i]));
+  const cmp = {
+    '=': (a, b) => a === b,
+    '>': (a, b) => a > b,
+    '<': (a, b) => a < b,
+    '>=': (a, b) => a >= b,
+    '<=': (a, b) => a <= b,
+  };
+  const matches = (row, conds, args, off) => conds.every((c, i) => cmp[c.op](row[c.col], args[off + i]));
   // The atomic MAX(seq)+1 the write statement computes in-SQL (A261) — evaluated here so the mock
   // mirrors the real single-statement seq assignment.
   const nextSeq = ws => tables.sync_records.filter(r => r.workspace_id === ws).reduce((mx, r) => Math.max(mx, r.seq), 0) + 1;
@@ -132,8 +140,8 @@ function mockBucket() {
     async get(key) {
       return store.has(key) ? { text: async () => store.get(key) } : null;
     },
-    async delete(key) {
-      store.delete(key);
+    async delete(keys) {
+      for (const k of Array.isArray(keys) ? keys : [keys]) store.delete(k);
     },
   };
 }
@@ -360,11 +368,13 @@ console.log('\nPush → pull round-trip + seq monotonicity + tombstones:');
     inc.records.length === 1 && inc.records[0].blinded_id === 'b3' && inc.records[0].seq === 3
   );
 
-  // Tombstone: deleted:true flows through pull.
+  // Tombstone: deleted:true flows through pull. Use a real wall-clock `updated` (as a live client does)
+  // so the A265 compaction-on-push — which sweeps tombstones older than TOMBSTONE_TTL_MS — leaves this
+  // fresh tombstone in place for other devices to reconcile.
   await push({
     request: req('/api/sync/push', {
       cookie: cookieFor(token),
-      body: { workspace_id: 'w1', records: [rec('b1', 'c1-del', 200, { deleted: true })] },
+      body: { workspace_id: 'w1', records: [rec('b1', 'c1-del', Date.now(), { deleted: true })] },
     }),
     env,
   });
@@ -636,6 +646,150 @@ console.log('\nAtomic seq assignment (A261) — two records in one push get dist
     .map(r => r.seq)
     .sort((a, b) => a - b);
   ok('the two written records hold distinct, contiguous seqs (1,2) assigned in-SQL', seqs.length === 2 && seqs[0] === 1 && seqs[1] === 2);
+}
+
+console.log('\nWorkspace erase (A254) — server delete clears records + blobs, owner-only, not paywalled:');
+{
+  const db = mockDb();
+  const bucket = mockBucket();
+  const env = { ACCOUNTS_DB: db, SYNC_BUCKET: bucket };
+  const a = await createUser(db, 'era@example.com');
+  const b = await createUser(db, 'erb@example.com');
+  const { token: ta } = await createSession(db, a.id);
+  const { token: tb } = await createSession(db, b.id);
+  grantCloud(db, a.id);
+  grantCloud(db, b.id);
+  await wsRegister({
+    request: req('/api/sync/workspaces', { cookie: cookieFor(ta), body: { workspace_id: 'wa', wrapped_dek: 'D' } }),
+    env,
+  });
+  await push({
+    request: req('/api/sync/push', {
+      cookie: cookieFor(ta),
+      body: { workspace_id: 'wa', records: [rec('b1', 'c1', 100), rec('b2', 'c2', 100)] },
+    }),
+    env,
+  });
+
+  ok(
+    'delete without a session → 401',
+    (await del({ request: req('/api/sync/delete', { body: { workspace_id: 'wa' } }), env })).status === 401
+  );
+  const cross = await del({ request: req('/api/sync/delete', { cookie: cookieFor(tb), body: { workspace_id: 'wa' } }), env });
+  ok('delete of another user workspace → 404 (no existence leak)', cross.status === 404);
+  ok('...and A records untouched', db.tables.sync_records.filter(r => r.workspace_id === 'wa').length === 2);
+  const badorg = await del({
+    request: req('/api/sync/delete', { origin: 'https://evil.example', cookie: cookieFor(ta), body: { workspace_id: 'wa' } }),
+    env,
+  });
+  ok('delete cross-origin → 403', badorg.status === 403);
+  const noBucket = await del({
+    request: req('/api/sync/delete', { cookie: cookieFor(ta), body: { workspace_id: 'wa' } }),
+    env: { ACCOUNTS_DB: db },
+  });
+  ok('delete fails closed without SYNC_BUCKET → 503', noBucket.status === 503);
+
+  const gone = await del({ request: req('/api/sync/delete', { cookie: cookieFor(ta), body: { workspace_id: 'wa' } }), env });
+  const goneJson = await gone.json();
+  ok('owner delete → 200 with { deleted, done:true }', gone.status === 200 && goneJson.deleted === 2 && goneJson.done === true);
+  ok('change-index rows cleared', db.tables.sync_records.filter(r => r.workspace_id === 'wa').length === 0);
+  ok('R2 ciphertext blobs cleared', !bucket.store.has('records/wa/b1') && !bucket.store.has('records/wa/b2'));
+  ok('wrapped-DEK + registry shell rows removed', db.tables.sync_workspaces.length === 0 && db.tables.sync_workspace_keys.length === 0);
+
+  // A lapsed/free owner must STILL be able to erase — deletion is never paywalled (unlike push/register).
+  const lu = await createUser(db, 'lapse-del@example.com');
+  const { token: lt } = await createSession(db, lu.id);
+  grantCloud(db, lu.id);
+  await wsRegister({
+    request: req('/api/sync/workspaces', { cookie: cookieFor(lt), body: { workspace_id: 'wl', wrapped_dek: 'D' } }),
+    env,
+  });
+  await push({
+    request: req('/api/sync/push', { cookie: cookieFor(lt), body: { workspace_id: 'wl', records: [rec('b1', 'c1', 1)] } }),
+    env,
+  });
+  db.tables.subscriptions = db.tables.subscriptions.filter(s => s.user_id !== lu.id); // lapse
+  const lapsedDel = await del({ request: req('/api/sync/delete', { cookie: cookieFor(lt), body: { workspace_id: 'wl' } }), env });
+  ok(
+    'lapsed/free owner can still erase (delete not gated on cloud tier) → 200',
+    lapsedDel.status === 200 && (await lapsedDel.json()).done === true
+  );
+}
+
+console.log('\nWorkspace erase paging (A254) — DELETE_PAGE bounds each call so the client loops:');
+{
+  const db = mockDb();
+  const bucket = mockBucket();
+  const total = DELETE_PAGE + 1;
+  for (let i = 0; i < total; i++) {
+    const ref = `records/wp/b${i}`;
+    db.tables.sync_records.push({
+      workspace_id: 'wp',
+      blinded_id: 'b' + i,
+      seq: i + 1,
+      type: 'trade',
+      ciphertext_ref: ref,
+      updated: 100,
+      deleted: 0,
+    });
+    bucket.store.set(ref, 'x');
+  }
+  const p1 = await deleteWorkspacePage(db, bucket, 'wp');
+  ok('first page deletes DELETE_PAGE rows, done:false', p1.deleted === DELETE_PAGE && p1.done === false);
+  const p2 = await deleteWorkspacePage(db, bucket, 'wp');
+  ok('second page deletes the remainder, done:true', p2.deleted === 1 && p2.done === true);
+  ok(
+    'all rows + blobs cleared after paging',
+    db.tables.sync_records.filter(r => r.workspace_id === 'wp').length === 0 && bucket.store.size === 0
+  );
+}
+
+console.log('\nTombstone compaction (A265) — stale tombstones swept, live + recent rows kept:');
+{
+  const db = mockDb();
+  const bucket = mockBucket();
+  const now = 1_700_000_000_000;
+  const cutoff = now - TOMBSTONE_TTL_MS;
+  const seed = (blinded, updated, deleted) => {
+    const ref = `records/w/${blinded}`;
+    db.tables.sync_records.push({
+      workspace_id: 'w',
+      blinded_id: blinded,
+      seq: db.tables.sync_records.length + 1,
+      type: 'trade',
+      ciphertext_ref: ref,
+      updated,
+      deleted,
+    });
+    bucket.store.set(ref, 'x');
+  };
+  seed('stale', cutoff - 1000, 1); // tombstone older than the TTL → swept
+  seed('recent', now - 1000, 1); // tombstone within the TTL → kept
+  seed('live', now, 0); // not a tombstone → never swept
+  const n = await compactTombstones(db, bucket, 'w', now);
+  ok('compaction removes exactly the stale tombstone (returns 1)', n === 1);
+  ok(
+    '...its D1 row + R2 blob are gone',
+    !db.tables.sync_records.some(r => r.blinded_id === 'stale') && !bucket.store.has('records/w/stale')
+  );
+  ok(
+    'recent tombstone (within TTL) is kept',
+    db.tables.sync_records.some(r => r.blinded_id === 'recent') && bucket.store.has('records/w/recent')
+  );
+  ok('live record is untouched', db.tables.sync_records.some(r => r.blinded_id === 'live') && bucket.store.has('records/w/live'));
+
+  // Wiring: a real push sweeps stale tombstones as a side effect (now = Date.now() ≫ the seeded stamps).
+  const env = { ACCOUNTS_DB: db, SYNC_BUCKET: bucket };
+  const u = await createUser(db, 'sweep@example.com');
+  const { token } = await createSession(db, u.id);
+  grantCloud(db, u.id);
+  db.tables.sync_workspaces.push({ workspace_id: 'w', owner_user_id: u.id, created_at: now });
+  seed('old-tomb', 1000, 1); // ancient tombstone
+  await push({
+    request: req('/api/sync/push', { cookie: cookieFor(token), body: { workspace_id: 'w', records: [rec('fresh', 'cf', now + 1)] } }),
+    env,
+  });
+  ok('push piggybacks the tombstone sweep (ancient tombstone gone)', !db.tables.sync_records.some(r => r.blinded_id === 'old-tomb'));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

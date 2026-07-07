@@ -53,6 +53,9 @@ export interface SyncTransport {
   /** Push one ≤15-record batch (the caller chunks to the cap). */
   push(workspaceId: string, records: WireRecord[]): Promise<void>;
   pull(workspaceId: string, since: number): Promise<PullPage>;
+  /** A254: erase a workspace's server copy (records + ciphertext blobs). The server deletes one bounded
+   *  page per call, so `done: false` means more pages remain and the caller should call again. */
+  deleteWorkspace(workspaceId: string): Promise<{ done: boolean }>;
 }
 
 /** The per-workspace keys held in memory for a sync session (never persisted). */
