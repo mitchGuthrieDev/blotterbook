@@ -116,6 +116,7 @@
   import { flip } from 'svelte/animate';
   import { fade, slide } from 'svelte/transition';
   import { MediaQuery } from 'svelte/reactivity';
+  import { defaultSizeFor, supportedSizes, type ModEntry, type ModSize } from '../lib/modlayout.ts';
   import { dur } from '../lib/motion.ts';
   import {
     usd,
@@ -183,9 +184,9 @@
     onsetupsave?: (s: AppSetup) => void;
     /** Disable the cost-setup inputs on demo (never mutates). */
     costDisabled?: boolean;
-    /** Visible dashboard modules in order (persisted to Store.local); defaults to all shown. */
-    modules?: string[];
-    onmoduleschange?: (order: string[]) => void;
+    /** Visible dashboard modules — order + per-module size (A271; persisted to Store.local); defaults to all shown. */
+    modules?: ModEntry[];
+    onmoduleschange?: (mods: ModEntry[]) => void;
     /** F51: the compact Recent Trades module's rows (newest first, pre-capped by the app). */
     recentTrades?: { date: string; time: string; sym: string; side: 'Long' | 'Short'; qty: number; pnl: number; platform: string }[];
     /** F39/A142: full-fidelity batch-1 module data (Today · Drawdown · Streak). Optional — when the
@@ -367,32 +368,52 @@
     { key: 'ddstatus', label: 'Drawdown Status' }, // F39
     { key: 'streak', label: 'Streak Monitor' }, // F39
   ];
-  // A228/A243: modules in this set render lg:col-span-1 (half-width, paired) instead of the default
-  // full-width lg:col-span-2 — cal+cost was the original pairing, adv+term (A243) is the second.
-  // F39: the three compact batch-1 status cards are half-width too (they tile 2-up).
-  const PAIRED_MODULE_KEYS = ['cal', 'cost', 'adv', 'term', 'today', 'ddstatus', 'streak'];
+  // A271: the half-width-vs-full pairing that used to live here is now the module SIZE (md vs lg) — the
+  // default-size mapping (paired → md, others → lg) lives in modlayout.defaultSizeFor, which preserves
+  // this exact layout on upgrade. The render spans per size (spanClass) instead of a PAIRED set.
   const validKeys = (ks?: string[]) => (ks ?? DEFAULT_MODULE_KEYS).filter(k => MODULES.some(m => m.key === k));
+  // A271: keep the existing reorder/hide/add logic keyed on `modOrder` (a plain string[]) — untouched —
+  // and carry per-module SIZE in a parallel `modSizes` map. The persisted/emitted layout is the two
+  // recombined into ModEntry[]. This keeps the reorder logic risk-free while adding the size dimension.
+  const keysOfProp = (m?: ModEntry[]) => validKeys(m?.map(e => e.key));
+  const sizesOfProp = (m?: ModEntry[]): Record<string, ModSize> => Object.fromEntries((m ?? []).map(e => [e.key, e.size]));
+  const sizeOf = (key: string): ModSize => modSizes[key] ?? defaultSizeFor(key);
+  // 12-track grid span as a STATIC Tailwind class (media-query-aware: no span below lg → mobile stacks;
+  // literal strings so the JIT generates them). sm = span 2 (six/row), md = span 6 (half), lg = span 12.
+  const spanClass = (size: ModSize): string => (size === 'sm' ? 'lg:col-span-2' : size === 'md' ? 'lg:col-span-6' : 'lg:col-span-12');
   // svelte-ignore state_referenced_locally — initial layout only; the app re-seeds via the prop below.
-  let modOrder = $state<string[]>(validKeys(modules));
+  let modOrder = $state<string[]>(keysOfProp(modules));
   // svelte-ignore state_referenced_locally
-  let lastModKey = modules ? modules.join(',') : '';
+  let modSizes = $state<Record<string, ModSize>>(sizesOfProp(modules));
+  // svelte-ignore state_referenced_locally
+  let lastModKey = modules ? JSON.stringify(modules) : '';
   $effect(() => {
     // Re-seed from the prop when the app supplies a persisted layout (e.g. on first load after boot).
-    const key = (modules ?? []).join(',');
+    const key = modules ? JSON.stringify(modules) : '';
     if (key !== lastModKey) {
       lastModKey = key;
-      modOrder = validKeys(modules);
+      modOrder = keysOfProp(modules);
+      modSizes = sizesOfProp(modules);
     }
   });
   const hiddenModules = $derived(MODULES.filter(m => !modOrder.includes(m.key)));
   const moduleLabel = (key: string) => MODULES.find(m => m.key === key)?.label ?? key;
+  // Recombine order + sizes into the persisted ModEntry[] and emit.
+  function emitLayout(order: string[], sizes: Record<string, ModSize>) {
+    // A195: keep the re-seed guard in sync so the echoed-back prop doesn't redundantly reseed.
+    const mods = order.map(k => ({ key: k, size: sizes[k] ?? defaultSizeFor(k) }));
+    lastModKey = JSON.stringify(mods);
+    onmoduleschange?.(mods);
+  }
   function commitModules(order: string[]) {
     modOrder = order;
-    // A195: keep the re-seed guard in sync — the app echoes this order back through the `modules`
-    // prop, and without updating lastModKey the effect above redundantly reassigned modOrder (a
-    // fresh identical array) after every local edit.
-    lastModKey = order.join(',');
-    onmoduleschange?.(order);
+    emitLayout(order, modSizes);
+  }
+  // A271: change one module's size (staged behind the DashTabs dirty asterisk, like reorder/hide).
+  function setModuleSize(key: string, size: ModSize) {
+    if (!supportedSizes(key).includes(size) || sizeOf(key) === size) return;
+    modSizes = { ...modSizes, [key]: size };
+    emitLayout(modOrder, modSizes);
   }
   function moveModule(key: string, dir: -1 | 1) {
     const i = modOrder.indexOf(key),
@@ -1559,13 +1580,11 @@
        treatment as the original cal/cost pairing). A lone paired module (its partner hidden/moved
        elsewhere) just takes a half-track row — acceptable, matches the original cal/cost behavior.
        Narrow viewports keep the single-column stack. -->
-  <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+  <!-- A271: a 12-track grid on lg (superset of the old 2-track model). Each module spans per its size
+       (sm=2 · md=6 · lg=12); md/lg reproduce the old half/full widths exactly. Below lg it stacks. -->
+  <div class="grid grid-cols-1 gap-5 lg:grid-cols-12">
     {#each modOrder as key (key)}
-      <div
-        class={['min-w-0', !PAIRED_MODULE_KEYS.includes(key) && 'lg:col-span-2']}
-        animate:flip={{ duration: dur(180) }}
-        transition:fade={{ duration: dur(140) }}
-      >
+      <div class={['min-w-0', spanClass(sizeOf(key))]} animate:flip={{ duration: dur(180) }} transition:fade={{ duration: dur(140) }}>
         <Card.Root id="dashmod-{key}" class="h-full">
           {@render moduleHeader(key)}
           <Card.Content>

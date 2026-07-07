@@ -41,14 +41,8 @@
   import { UserRound } from '@lucide/svelte';
   import { fade } from 'svelte/transition';
   import { dur } from './lib/motion.ts';
-  import Dashboard, {
-    DEFAULT_MODULE_KEYS,
-    type DashStat,
-    type DayCell,
-    type StatDetail,
-    type FilterModel,
-    type FilterPatch,
-  } from './screens/Dashboard.svelte';
+  import Dashboard, { type DashStat, type DayCell, type StatDetail, type FilterModel, type FilterPatch } from './screens/Dashboard.svelte';
+  import { migrateLayout, defaultLayout, type ModEntry } from './lib/modlayout.ts';
   // The non-default screens are CODE-SPLIT: type-only static imports (erased at build) + lazy
   // `import()` loaders in the router below, so their chunks stay out of the /app first paint
   // (A96 budget). Dashboard stays static — it's the boot screen (and exports DEFAULT_MODULE_KEYS).
@@ -185,9 +179,20 @@
   // Named workspace layout templates (R12 parity): save/apply/delete the module layout by name; revert
   // clears the layout back to the default (all modules). Persisted to Store.local (per-surface key).
   const WS_KEY = isStaging ? 'bb:staging:dashLayouts' : 'bb:dashLayouts';
-  let wsTemplates = $state<Record<string, string[]>>((store.local.get(WS_KEY, {}) as Record<string, string[]>) || {});
+  // A271: a workspace template snapshots the full sized layout ({key,size}[]). Read through the SAME
+  // lossless migration as tab layouts, so pre-A271 templates (a bare key `string[]`) upgrade in place.
+  let wsTemplates = $state<Record<string, ModEntry[]>>(
+    Object.fromEntries(
+      Object.entries((store.local.get(WS_KEY, {}) as Record<string, unknown>) || {}).map(([name, v]) => [
+        name,
+        migrateLayout(v)?.mods ?? defaultLayout().mods,
+      ])
+    )
+  );
   function persistWs() {
-    store.local.set(WS_KEY, $state.snapshot(wsTemplates));
+    // Persist each template as the versioned payload so migrateLayout round-trips it on next read.
+    const out = Object.fromEntries(Object.entries($state.snapshot(wsTemplates)).map(([name, mods]) => [name, { v: 2, mods }]));
+    store.local.set(WS_KEY, out);
   }
 
   // A286: the Calendar screen's daily P&L target — persisted via the Store.local seam (per-surface key)
@@ -205,17 +210,17 @@
     save: (name: string) => {
       if (dash.isDemo) return;
       // A148: an untouched dashboard has dashModules === undefined (= the default layout) — capture
-      // the ACTUAL default keys, not [], so applying the saved template can't blank the dashboard.
-      wsTemplates = { ...wsTemplates, [name]: [...(dashModules ?? DEFAULT_MODULE_KEYS)] };
+      // the ACTUAL default layout, not [], so applying the saved template can't blank the dashboard.
+      wsTemplates = { ...wsTemplates, [name]: [...(dashModules ?? defaultLayout().mods)] };
       persistWs();
     },
     // A193: applying a template / resetting to default are EXPLICIT target states — they persist
     // immediately (stage + save), unlike incremental module edits which stage behind the dirty
     // asterisk. Keeps the template menu's contract consistent with its save/remove actions.
     apply: (name: string) => {
-      const order = wsTemplates[name];
-      if (order) {
-        dashTabsState.saveModules([...order]);
+      const mods = wsTemplates[name];
+      if (mods) {
+        dashTabsState.saveModules([...mods]);
         dashTabsState.saveTabLayout();
       }
     },

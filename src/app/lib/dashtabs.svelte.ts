@@ -5,6 +5,7 @@
 // createDashboard/createPagination — factory fn returning a runes-backed object with getters).
 import type { StoreLike } from '../../lib/core/types.ts';
 import { emit } from '../../lib/core/core.ts';
+import { migrateLayout, type ModEntry } from './modlayout.ts';
 
 export type DashTab = { id: string; name: string };
 
@@ -30,22 +31,22 @@ export function createDashTabs(store: StoreLike, opts: { isStaging: boolean }) {
   // shows a dirty asterisk meanwhile. Unsaved edits survive tab SWITCHES (in-memory drafts) but are
   // deliberately discarded on reload (the persisted layout is the saved one).
   let dirtyTabs = $state<string[]>([]);
-  const draftLayouts: Record<string, string[] | undefined> = {};
+  const draftLayouts: Record<string, ModEntry[] | undefined> = {};
+  // A271: read a tab's persisted layout through the lossless migration (v1 string[] → v2 {key,size}[]).
+  const loadModules = (tabId: string): ModEntry[] | undefined => migrateLayout(store.local.get(modKeyFor(tabId)))?.mods;
   const markDirty = (id: string) => {
     if (!dirtyTabs.includes(id)) dirtyTabs = [...dirtyTabs, id];
   };
   const clearDirty = (id: string) => (dirtyTabs = dirtyTabs.filter(t => t !== id));
 
   // svelte-ignore state_referenced_locally — initial read only; selectDashTab reassigns on switch.
-  let dashModules = $state<string[] | undefined>((store.local.get(modKeyFor(activeDashTab)) as string[] | null) ?? undefined);
+  let dashModules = $state<ModEntry[] | undefined>(loadModules(activeDashTab));
 
   function selectDashTab(id: string) {
     if (id === activeDashTab) return;
     if (dirtyTabs.includes(activeDashTab)) draftLayouts[activeDashTab] = dashModules ? [...dashModules] : undefined;
     activeDashTab = id;
-    dashModules = dirtyTabs.includes(id)
-      ? draftLayouts[id] && [...(draftLayouts[id] as string[])]
-      : ((store.local.get(modKeyFor(id)) as string[] | null) ?? undefined);
+    dashModules = dirtyTabs.includes(id) ? draftLayouts[id] && [...(draftLayouts[id] as ModEntry[])] : loadModules(id);
     persistTabs();
   }
   // Drag-reorder (A186; A192): DashTabs commits the FINAL order once, on drop — one persist per
@@ -60,7 +61,8 @@ export function createDashTabs(store: StoreLike, opts: { isStaging: boolean }) {
   }
   // Persist the ACTIVE tab's staged layout (the DashTabs Save button; clears the asterisk).
   function saveTabLayout() {
-    if (dashModules) store.local.set(modKeyFor(activeDashTab), $state.snapshot(dashModules));
+    // A271: persist the versioned payload ({ v: 2, mods }); migrateLayout upgrades any older stored shape on read.
+    if (dashModules) store.local.set(modKeyFor(activeDashTab), { v: 2, mods: $state.snapshot(dashModules) });
     else store.local.remove(modKeyFor(activeDashTab));
     delete draftLayouts[activeDashTab];
     clearDirty(activeDashTab);
@@ -103,9 +105,10 @@ export function createDashTabs(store: StoreLike, opts: { isStaging: boolean }) {
     if (activeDashTab === id) selectDashTab(dashTabs[0].id);
     else persistTabs();
   }
-  // A186: layout changes STAGE (dirty asterisk) — saveTabLayout() persists them.
-  function saveModules(order: string[]) {
-    dashModules = order;
+  // A186: layout changes STAGE (dirty asterisk) — saveTabLayout() persists them. A271: `mods` now carries
+  // per-module size ({key,size}[]), not just order.
+  function saveModules(mods: ModEntry[]) {
+    dashModules = mods;
     markDirty(activeDashTab);
   }
   // Reset the layout to the default (all modules shown, default order) — staged like any edit.
