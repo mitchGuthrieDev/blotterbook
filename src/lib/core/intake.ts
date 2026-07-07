@@ -164,7 +164,16 @@ export function reconcileImport(
   if (incomingKind === 'fills' && opts?.isAuthority) {
     // Authority window + event map from the same-family closed records already in the store.
     const auth = existing.filter(opts.isAuthority);
-    const authPnl = new Map(auth.map(t => [tkey(t), t.pnl]));
+    // A292: a key (time|symbol|side) can legitimately repeat in a closed export (two identical scalps
+    // in the same second — the A114 dup ordinal disambiguates them). Keep ALL P&Ls per key in a
+    // multiset, not a Map that keeps only the last, so an incoming trade matching ANY authoritative
+    // copy is corroborated instead of being dropped as a phantom.
+    const authPnl = new Map<string, number[]>();
+    for (const t of auth) {
+      const arr = authPnl.get(tkey(t));
+      if (arr) arr.push(t.pnl);
+      else authPnl.set(tkey(t), [t.pnl]);
+    }
     let lo = '',
       hi = '';
     for (const t of auth) {
@@ -173,8 +182,8 @@ export function reconcileImport(
     }
     for (const t of incoming) {
       if (lo && t.time >= lo && t.time <= hi) {
-        const p = authPnl.get(tkey(t));
-        if (p === undefined || p !== t.pnl) {
+        const pnls = authPnl.get(tkey(t));
+        if (!pnls || !pnls.includes(t.pnl)) {
           conflicted++; // phantom: the authoritative record has no such event (or a different P&L)
           continue;
         }

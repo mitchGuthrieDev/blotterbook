@@ -53,6 +53,10 @@
     econMode?: EconMode;
     /** Persist a new overlay mode. */
     oneconmode?: (mode: EconMode) => void;
+    /** Persisted daily P&L target driving the per-day hit-target checkmark (A286). */
+    dailyTarget?: number;
+    /** Persist a changed daily target. */
+    onsavetarget?: (value: number) => void;
   }
   let {
     monthDays,
@@ -72,11 +76,19 @@
     econEventsForDay,
     econMode = 'high',
     oneconmode,
+    dailyTarget = 200,
+    onsavetarget,
   }: Props = $props();
 
   let view = $state<'month' | 'year'>('month');
   let selectedDay = $state<number | null>(null);
-  let target = $state(200);
+  // A286: seed once from the persisted pref (this screen is the sole editor); persist on each change.
+  // svelte-ignore state_referenced_locally
+  let target = $state(dailyTarget);
+  function setTarget(v: number) {
+    target = Math.max(0, v);
+    onsavetarget?.(target);
+  }
   let note = $state('');
   let tags = $state<string[]>([]);
   let shots = $state<string[]>([]);
@@ -276,7 +288,7 @@
               type="button"
               class="relative grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
               aria-label="Lower target"
-              onclick={() => (target = Math.max(0, target - 50))}
+              onclick={() => setTarget(target - 50)}
             >
               <Minus class="size-3" />
             </button>
@@ -290,7 +302,7 @@
               type="button"
               class="relative grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
               aria-label="Raise target"
-              onclick={() => (target += 50)}
+              onclick={() => setTarget(target + 50)}
             >
               <Plus class="size-3" />
             </button>

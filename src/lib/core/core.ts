@@ -632,8 +632,6 @@ export function expiryOf(symbol: string, tradeDate?: string): ContractExpiry | n
 
 /** Compact trader-facing expiry label — month letter + 2-digit year, e.g. `M25` (F40). */
 export const expiryCode = (e: ContractExpiry) => `${e.code}${pad2(e.year % 100)}`;
-/** Human expiry label — `Jun 2025` (F40). */
-export const expiryLabel = (e: ContractExpiry) => `${MONTH_ABBR[e.month - 1]} ${e.year}`;
 
 /* ============================================================
    Broker / commission / cost model
@@ -858,6 +856,13 @@ export function rateFor(brokerKey: string, root: string, date?: string) {
 // ONE definition — shared by costModel, curveseries, and the blotter/editor row mappers.
 export const roundTurn = (rate: number, qty?: number) => rate * 2 * (qty || 1);
 
+/** A208 per-trade fee, single-sourced (A283): a trade's ACTUAL CSV commission wins VERBATIM (it's the
+ *  whole round-turn cost, qty already priced in by the broker); otherwise the modeled round-turn at the
+ *  given per-side `rate` × `qty`. Shared by costModel (dated per-trade rate) and the Blotter fee column
+ *  (current display rate) so the actual-wins decision can never drift between them. */
+export const feeForTrade = (t: Trade, rate: number, qty: number): number =>
+  t.commission != null && Number.isFinite(t.commission) ? (t.commission as number) : roundTurn(rate, qty);
+
 // Section-1256 blended federal rate + a given state rate (%). Takes the rate as a param so the cost
 // panel passes its own value (A32) — no DOM coupling.
 export function blendedRateFor(stateRatePct?: number | string) {
@@ -908,7 +913,7 @@ export function costModel(m: Metrics, inputs: CostInputs = {}): CostModel {
     // period/-broker symbol totals correctly but shows one reference figure.
     const { rate, known } = rateFor(inputs.brokerFor?.(t) ?? broker, t.root, t.date);
     const hasActual = t.commission != null && Number.isFinite(t.commission);
-    const rt = hasActual ? (t.commission as number) : roundTurn(rate, q);
+    const rt = feeForTrade(t, rate, q); // A208/A283 — actual CSV commission wins, else modeled round-turn
     totalComm += rt;
     let e = bySym.get(t.root);
     // The row's reference `rate` is the CURRENT rate (one extra lookup per new symbol), not

@@ -36,6 +36,9 @@ export type ReportVM = {
   taxRows: [string, string, boolean][];
   advRows: [string, string][];
   rangeLabel: string;
+  /** The range/scope-filtered trades the whole VM is built from — so a CSV export matches the preview
+   *  and every other export instead of dumping the full dataset (A282). */
+  trades: Trade[];
   md: string;
   text: string;
   mailto: string;
@@ -174,6 +177,7 @@ export function buildReportVM(
     taxRows,
     advRows,
     rangeLabel: label,
+    trades: slice,
     md: rep.reportMd,
     text: rep.reportText,
     mailto: rep.mailto,

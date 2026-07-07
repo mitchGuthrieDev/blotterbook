@@ -22,7 +22,7 @@ import { onRequestGet as pullFn } from '../functions/api/sync/pull.ts';
 import { recordKey } from '../functions/_lib/sync.ts';
 import { tradeId } from '../src/lib/core/store.ts';
 import { genIdentityKey, genWorkspaceDek, dekBytesOf, wrapDek, unwrapDekBytes, encryptRecord, blindId } from '../src/lib/core/crypto.ts';
-import { deriveWsKeys, pushChanges, pullAndMerge } from '../src/app/lib/cloudsync-core.ts';
+import { deriveWsKeys, pushChanges, pullAndMerge, syncPlan } from '../src/app/lib/cloudsync-core.ts';
 
 let pass = 0;
 const ok = (name, cond) => {
@@ -465,6 +465,18 @@ const stB = { cursor: 0, pushed: -1 };
   const blindedForIt = await blindId(keysA.blindKey, `trade:${raw}`);
   ok('blinded id is a 64-hex HMAC, not the raw tradeId', /^[0-9a-f]{64}$/.test(blindedForIt) && blindedForIt !== raw);
   ok('no D1 index row exposes a raw tradeId as its blinded_id', !db.tables.sync_records.some(r => r.blinded_id === raw));
+}
+
+// ── A284: the A279 sync-direction contract (what pullFromCloud / pushToCloud / Sync-now each do) ──
+// The controller (cloudsync.svelte.ts) is a rune module that can't be imported here, so the direction
+// decision it drives lives in the pure syncPlan() helper — lock it down.
+{
+  const both = syncPlan('both');
+  ok('Sync now (both): pulls AND pushes, incremental (no force)', both.pull && both.push && !both.forceFullPush);
+  const pull = syncPlan('pull');
+  ok('Pull from cloud: pulls only, never advances the pushed-watermark', pull.pull && !pull.push && !pull.forceFullPush);
+  const push = syncPlan('push');
+  ok('Push to cloud: pushes only, re-uploading everything (forceFullPush), no pull', !push.pull && push.push && push.forceFullPush);
 }
 
 console.log(`\n${pass} assertions passed.`);

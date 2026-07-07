@@ -3,7 +3,7 @@
    compute() metrics + costModel result + setup labels — ONE source for the on-screen report, the
    Markdown download, and the email summary (so they can't drift, like the vanilla export.js).
    Depends only on core formatters. */
-import { money, cls, ratio, DOW_LABEL, fmtDate, pad2 } from './core.ts';
+import { money, cls, ratio, DOW_LABEL, fmtDate, pad2, estimatedCommRoots } from './core.ts';
 import type { Metrics } from './core.ts';
 import type { CostModel, ReportLabels } from './types.ts';
 
@@ -27,8 +27,10 @@ export function buildReport(m: Metrics, c: CostModel, labels: ReportLabels) {
     ['Trades', String(m.n), ''],
     ['Active days', String(m.active), ''],
   ];
-  // A171: mark commissions computed off the FALLBACK per-side rate (root not in the fee table).
-  const estRoots = (c.bySym || []).filter(r => !r.known).map(r => r.root);
+  // A171: mark commissions computed off the FALLBACK per-side rate (root not in the fee table). A285:
+  // use the canonical estimatedCommRoots (!known && actual < count) so a root whose trades ALL carry
+  // real CSV commissions — which never used the fallback rate (A208) — is not falsely flagged.
+  const estRoots = estimatedCommRoots(c);
   const estNote = estRoots.length ? `* Commission rate estimated for ${estRoots.join(', ')} — root not in the fee table.` : '';
   const costRows = [
     ['Gross P&L', money(c.gross)],

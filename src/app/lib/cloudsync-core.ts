@@ -66,8 +66,25 @@ export interface WsKeys {
   blindKey: CryptoKey;
 }
 
-/** F62's per-batch record cap — batches over this get a 413, so the client chunks (mirrors sync.ts). */
-export const MAX_PUSH_RECORDS = 15;
+/** A279 sync direction → which halves of a reconcile run, and whether the push re-uploads everything.
+ *  Pure + node-testable (the controller in cloudsync.svelte.ts is a `.svelte.ts` rune module that can't
+ *  be imported into the node suites), so the direction contract that pullFromCloud/pushToCloud/Sync-now
+ *  depend on is locked here (A284). 'both' = incremental reconcile; 'pull' = pull+merge only, never
+ *  advancing the pushed-watermark; 'push' = re-upload every local record (watermark -1), no pull. */
+export interface SyncPlan {
+  pull: boolean;
+  push: boolean;
+  forceFullPush: boolean;
+}
+export function syncPlan(direction: 'both' | 'pull' | 'push'): SyncPlan {
+  return { pull: direction !== 'push', push: direction !== 'pull', forceFullPush: direction === 'push' };
+}
+
+/** F62's per-batch record cap — batches over this get a 413, so the client chunks. MUST match the
+ *  server cap in functions/_lib/sync.ts (MAX_PUSH_RECORDS = 12, lowered under A253 to stay within the
+ *  Cloudflare 50-subrequest budget). A281: was 15 here and drifted above the server's 12, so the first
+ *  full push after a 13+-record import 413'd with no re-chunk → the push errored. Keep these in lockstep. */
+export const MAX_PUSH_RECORDS = 12;
 
 const dec = new TextDecoder();
 

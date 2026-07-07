@@ -14,7 +14,7 @@
     num,
     ratio,
     rateFor,
-    roundTurn,
+    feeForTrade,
     BROKERS,
     BROKER_ORDER,
     estimatedCommRoots,
@@ -186,6 +186,16 @@
   let wsTemplates = $state<Record<string, string[]>>((store.local.get(WS_KEY, {}) as Record<string, string[]>) || {});
   function persistWs() {
     store.local.set(WS_KEY, $state.snapshot(wsTemplates));
+  }
+
+  // A286: the Calendar screen's daily P&L target — persisted via the Store.local seam (per-surface key)
+  // so it survives reload instead of resetting to $200. On demo the in-memory DemoStore just doesn't
+  // persist it across reloads, which is correct (a UI pref, not trade data).
+  const CAL_TARGET_KEY = isStaging ? 'bb:staging:calTarget' : 'bb:calTarget';
+  let calTarget = $state(Number(store.local.get(CAL_TARGET_KEY, 200)) || 200);
+  function saveCalTarget(v: number) {
+    calTarget = v;
+    store.local.set(CAL_TARGET_KEY, v);
   }
   const dashLayouts = $derived({
     names: Object.keys(wsTemplates),
@@ -486,13 +496,14 @@
       exitPrice: Number.isFinite(t.exitPrice) ? (t.exitPrice as number) : undefined,
       // F40: compact contract code ("M25"); undefined when the symbol has no month code.
       expiry: exp ? expiryCode(exp) : undefined,
-      // A208: a trade carrying its ACTUAL CSV commission shows that figure; the modeled rate
-      // only covers the rest (same rule as costModel).
+      // A208/A283: the actual-CSV-commission-wins-else-modeled rule is single-sourced in feeForTrade
+      // (same helper costModel uses), so this column can't drift from the cost totals. No fee shown when
+      // there's neither an actual commission nor a fee-table rate row (r) to model from.
       fees:
         t.commission != null && Number.isFinite(t.commission)
-          ? +t.commission.toFixed(2)
+          ? +feeForTrade(t, 0, qty).toFixed(2)
           : r
-            ? +roundTurn(r.rate, qty).toFixed(2)
+            ? +feeForTrade(t, r.rate, qty).toFixed(2)
             : undefined,
     };
   };
@@ -581,9 +592,11 @@
       // cell that reached the store un-sanitized can't execute when the export opens in Excel/Sheets,
       // then quote-wrap via the shared csvCell (core.ts, A247).
       const esc = (c: string) => csvCell(/^[=+\-@\t\r]/.test(c) ? `'${c}` : c);
+      // A282: export the SAME range/scope-filtered trades the preview + every other export use (vm.trades),
+      // not the full dataset — so a Custom/Month range in the toolbar is honored by CSV too.
       const rows = [
         ['date', 'time', 'symbol', 'side', 'qty', 'pnl'],
-        ...dash.allTrades.map(t => [t.date, t.time, t.root, t.side, String(t.qty ?? 1), String(t.pnl)]),
+        ...vm.trades.map(t => [t.date, t.time, t.root, t.side, String(t.qty ?? 1), String(t.pnl)]),
       ];
       downloadBlob('blotterbook-trades.csv', new Blob([rows.map(r => r.map(esc).join(',')).join('\n')], { type: 'text/csv' }));
     }
@@ -1160,6 +1173,8 @@
             tradesForDay={calTradesForDay}
             getJournal={day => dash.journalFor(dateOf(day))}
             onsavenote={(day, text, tags, shots) => dash.saveNote(dateOf(day), text, tags, shots)}
+            dailyTarget={calTarget}
+            onsavetarget={saveCalTarget}
             econMonth={calEconMonth}
             econDay={dateOf}
             econEventsForDay={date => econ.dayEvents(date)}

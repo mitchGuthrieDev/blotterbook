@@ -100,7 +100,7 @@
   // Dashboard — the redesigned overview: a scope toolbar, a KPI stat-card row, and the Performance
   // (equity curve) + Trading Calendar modules. Data comes from props (real metrics, wired by App.svelte
   // on all surfaces). Color lives only in the P&L.
-  import { SlidersHorizontal, Plus, GripVertical, MoreHorizontal, Pencil, LayoutGrid, RotateCcw } from '@lucide/svelte';
+  import { SlidersHorizontal, Plus, MoreHorizontal, Pencil, LayoutGrid, RotateCcw } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Input } from '$lib/components/ui/input';
@@ -606,8 +606,9 @@
 </script>
 
 {#snippet moduleHeader(key: string)}
+  <!-- A287: no drag grip here — module reorder is via the ⋯ menu (Move up / Move down). A GripVertical
+       icon used to sit here but the wrapper has no drag handlers, so it was a dead affordance. -->
   <div class="flex items-center gap-2 border-b border-border px-4 py-2.5">
-    <GripVertical class="size-4 text-muted-foreground" />
     <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{moduleLabel(key)}</span>
     <DropdownMenu.Root>
       <!-- A205: tooltip composed onto the menu trigger (tooltip child props → DropdownMenu.Trigger). -->
