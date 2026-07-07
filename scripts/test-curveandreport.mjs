@@ -253,6 +253,23 @@ ok('isoWeek: 2019-12-30 (Mon) is week 1 of 2020', isoWeek(new Date(2019, 11, 30)
   const m = compute([t('2026-01-05 10:00:00', 100, 'MWE'), t('2026-01-06 10:00:00', 50, 'MES')]);
   const c = costModel(m, { broker: 'AMP' });
   ok('estimatedCommRoots surfaces exactly the fallback-rate roots', JSON.stringify(estimatedCommRoots(c)) === '["MWE"]');
+
+  // A285: an UNKNOWN root (not in the fee table) whose trades ALL carry a REAL CSV commission never
+  // used the fallback rate (A208), so it must NOT be flagged as estimated — not in estimatedCommRoots
+  // and not in the buildReport footnote (which regressed to a bare !known filter).
+  const mAct = compute([{ ...t('2026-01-05 10:00:00', 100, 'ZZZZ'), commission: 4.5 }]);
+  const cAct = costModel(mAct, { broker: 'AMP' });
+  ok('A285: all-actual unknown root NOT in estimatedCommRoots', JSON.stringify(estimatedCommRoots(cAct)) === '[]');
+  const repAct = buildReport(mAct, cAct, {
+    broker: 'AMP',
+    feed: 'Bundle',
+    state: 'Arkansas',
+    scope: 'all time',
+    stateRate: 5,
+    platform: 50,
+    generated: new Date(2026, 5, 29, 9, 30),
+  });
+  ok('A285: report footnote NOT emitted for an all-actual unknown root', !repAct.reportMd.includes('Commission rate estimated'));
 }
 
 // ── A173: spanMonths clamp — reversed inputs can't produce a negative subscription accrual ──

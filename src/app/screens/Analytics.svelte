@@ -632,7 +632,9 @@
             <div class="flex items-center justify-between">
               <span class="text-muted-foreground">Max drawdown</span>
               <span class="font-semibold tabular-nums text-destructive">
-                {ddMoney(dd.maxd)}{maxDDpct != null ? ` · ${maxDDpct.toFixed(1)}% of peak` : ''}
+                <!-- A290: dollar figure from the compute-derived `maxDD` prop (matches the stat grid);
+                     the local `dd` walk stays only for the chart geometry + peak/trough indices. -->
+                {ddMoney(maxDD)}{maxDDpct != null ? ` · ${maxDDpct.toFixed(1)}% of peak` : ''}
               </span>
             </div>
             <div class="mt-1 text-[11px] text-muted-foreground">

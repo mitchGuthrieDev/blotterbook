@@ -61,7 +61,7 @@ re-platform), and [`docs/architecture.md`](docs/architecture.md).
   mount points (`<div id="app">` + `<script type="module" src="./main.ts">`, body
   `data-mode="app|demo|staging"`). The Svelte app lives in `src/app/`: the redesigned sidebar-shell
   `App.svelte` (an `AppShell` + hash router) + `screens/` (Dashboard/Calendar/Analytics/Blotter/
-  CsvLibrary/TradeEditor/Reports/Account — Account is staging-gated, F53) + `parts/` (BootSplash/
+  CsvLibrary/TradeEditor/Reports/Account — Account is prod + staging, logged-in only, F53) + `parts/` (BootSplash/
   CostSetup/Onboarding/ActivityTerminal/Definitions/StatusBanner/DashTabs/DatePickerPopover/
   DetectionStatus/EditableCellPopover/FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/
   ScreenshotLightbox/SegmentedControl/SymbolSelect/TagInput + the synced-workspaces
@@ -356,7 +356,7 @@ conforms to the rules below; keep it that way.
     main.ts             entry: imports tailwind.css + side-effect format + mount(App)  ·  ONE mode-aware App.svelte on every surface
     App.svelte          the redesigned sidebar-shell root (AppShell + hash router) — mode-aware via PAGE_MODE (CH16)
     screens/            the app screens (<script lang="ts">): Dashboard/Calendar/Analytics/Blotter/CsvLibrary/
-                        TradeEditor/Reports/Account (Account is staging-gated pending the accounts backend, F53)
+                        TradeEditor/Reports/Account (Account is prod + staging, logged-in only, F53)
     parts/              cross-screen pieces: BootSplash/CostSetup/Onboarding/ActivityTerminal/Definitions/
                         StatusBanner/DashTabs/DatePickerPopover/DetectionStatus/EditableCellPopover/
                         FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/ScreenshotLightbox/
@@ -455,8 +455,8 @@ recompute → modes → the no-egress guarantee) is [docs/data-flow.md](docs/dat
 The compute pipeline (`adapters`/`compute`/`costModel`) is the **pure-logic core**, reused
 verbatim (A29). The Svelte app drives it: reactive state lives in runes (`$state`/`$derived`)
 inside the components, and `App.svelte` resolves the active `Store` (real IndexedDB for app/staging via
-`Entitlements.storeFor()`, in-memory `DemoStore` for demo) once and — **on staging only** — wraps it in
-a `CloudStore` (F63) before **prop-drilling** it into the rune-module factories and down to
+`Entitlements.storeFor()`, in-memory `DemoStore` for demo) once and — **on every non-demo surface** — wraps it in
+a `CloudStore` (F63; inert until a cloud-tier user opts in + unlocks) before **prop-drilling** it into the rune-module factories and down to
 screens/parts (no `context()` seam), and `PAGE_MODE` (with `isDemo`/`isStaging` locals derived from
 it) adapts per surface. Boot: `loadRefData()` → `Store.init()` → `restoreSession()`
 (app seeds nothing → empty state shows first-run onboarding; demo seeds in-memory; staging seeds its

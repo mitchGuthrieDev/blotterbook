@@ -441,7 +441,7 @@ const t = (time, pnl, side = 'long', root = 'MES', qty = 1) => ({ time, date: ti
 
 // ── F40 / A137: expiryOf — futures contract expiry parsed from the raw export symbol ──
 {
-  const { expiryOf, expiryCode, expiryLabel } = core;
+  const { expiryOf, expiryCode } = core;
   const code = (sym, date) => {
     const x = expiryOf(sym, date);
     return x ? expiryCode(x) : null;
@@ -450,7 +450,7 @@ const t = (time, pnl, side = 'long', root = 'MES', qty = 1) => ({ time, date: ti
   {
     const x = expiryOf('MESM2025');
     ok('expiry: MESM2025 → M/Jun/2025', x && x.code === 'M' && x.month === 6 && x.year === 2025, JSON.stringify(x));
-    ok('expiry: label helpers (M25 / Jun 2025)', x && expiryCode(x) === 'M25' && expiryLabel(x) === 'Jun 2025');
+    ok('expiry: code helper (M25)', x && expiryCode(x) === 'M25');
   }
   // 2-digit year + thinkorswim `/` prefix (schwab /MESM25); service/venue/exchange prefixes.
   ok('expiry: /MESM25 (2-digit, slash prefix) → M25', code('/MESM25') === 'M25');

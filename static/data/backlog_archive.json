@@ -5089,6 +5089,116 @@
       "completedDate": "2026-07-07",
       "partial": false,
       "doneNote": "DONE (2026-07-07) — bounded both unbounded ledgers via SWEEP-ON-WRITE (Cloudflare Pages Functions can't run a Cron Trigger, so the item's swept-on-write alternative was taken). (1) webhook_events: markWebhookEvent() (functions/_lib/accounts.ts) now DELETEs rows older than WEBHOOK_EVENT_TTL_MS (7d — Stripe's replay/retry window) after each insert — one extra statement on a low-frequency path. (2) sync_records tombstones: compactTombstones() (functions/_lib/sync.ts) drops deleted=1 rows older than TOMBSTONE_TTL_MS (90d) plus their R2 blobs, bounded by COMPACT_PAGE (200) and piggybacked on push() best-effort so it never threatens the A15 subrequest budget (a device offline past the TTL simply re-adds on its next push — the same resurrection window the client already tolerates). schema.sql comment updated from the A265 TODO to the as-built sweep. Tests: webhook_events sweep (test-accounts.mjs) + tombstone compaction incl. the push-piggyback (test-sync.mjs); the mock D1/R2 stubs were extended for < / <= conditions and array R2 delete. Full npm test green."
+    },
+    {
+      "id": "A281",
+      "title": "Client/server MAX_PUSH_RECORDS drift breaks sync above 12 changed records",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07, R1 audit docs/repo-audit-2026-07-07.md). The client push-chunk cap had drifted above the server cap: src/app/lib/cloudsync-core.ts MAX_PUSH_RECORDS was 15 while functions/_lib/sync.ts enforces 12 (A253, to stay under the CF 50-subrequest budget) and 413s any batch >12 with no client re-chunk → the first full push after a 13+-record CSV import errored (status:'error'). Now that sync is live on prod (CH16) this was a live availability bug. Fixed: set the client constant to 12 with a comment tying it to the server cap."
+    },
+    {
+      "id": "A282",
+      "title": "Reports CSV export ignores the configured range/scope",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07, R1). The Reports 'CSV' export ran dash.allTrades (the whole dataset) while the preview + PDF/Markdown/Email/Copy all honor the configured range via vm (reports.ts slice). Fixed: added a range-scoped `trades` field to ReportVM (src/app/lib/reports.ts) and the CSV branch (src/app/App.svelte) now serializes vm.trades, so a Custom/Month range is honored consistently across every export."
+    },
+    {
+      "id": "A283",
+      "title": "A208 per-trade fee rule re-implemented in the SPA root, un-shared with costModel",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07, R1). The A208 actual-CSV-commission-wins-else-modeled fee rule was duplicated in App.svelte rowBase (the Blotter 'Fees' column), un-shared with costModel (core.ts) — a silent-drift risk vs the cost totals the column reconciles against. Fixed: extracted feeForTrade(t, rate, qty) in src/lib/core/core.ts, called from both costModel's loop and App.svelte's row mapper. Typecheck + compute/curveandreport suites green."
+    },
+    {
+      "id": "A284",
+      "title": "The A279 sync direction actions had zero test coverage",
+      "category": "CHORE / REFACTOR",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07, R1). pullFromCloud/pushToCloud/pauseCloudSync + runSync's direction branching were untested (the controller is a .svelte.ts rune module that can't be node-imported). Fixed: factored the direction decision into a pure syncPlan(direction) helper in src/app/lib/cloudsync-core.ts, wired runSync through it (dropping the redundant forceFullPush opt — direction 'push' implies it), and added test-cloudsync.mjs assertions locking the contract: both=pull+push incremental; pull=pull-only (never advances the pushed-watermark); push=push-only forceFullPush re-upload."
+    },
+    {
+      "id": "A285",
+      "title": "buildReport over-flags 'estimated commission' for all-actual unknown roots",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07, R1). core/report.ts buildReport flagged the estimated-rate footnote with a bare !r.known filter instead of the canonical estimatedCommRoots (!known && actual<count), so an unknown root whose trades ALL carry real CSV commissions (never used the fallback rate, A208) got a misleading footnote in the exported Markdown/email report. (The on-screen preview via app-lib reports.ts already used estimatedCommRoots and was correct.) Fixed: buildReport now uses estimatedCommRoots(c); added a test-curveandreport.mjs fixture asserting no footnote for an all-actual unknown root."
+    },
+    {
+      "id": "A286",
+      "title": "Calendar daily Target/day is session-only (never persisted)",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07, R1). The Calendar screen's 'Target/day' stepper (drives the per-day hit-target checkmark) was a bare let target=$state(200) — reset to $200 on every reload, never shared. Fixed: persisted via the Store.local seam (per-surface key bb[:staging]:calTarget) threaded through App.svelte (calTarget + saveCalTarget) into the Calendar screen as dailyTarget + onsavetarget props. On demo the in-memory DemoStore simply doesn't persist it across reload (a UI pref, not trade data — correct)."
+    },
+    {
+      "id": "A287",
+      "title": "Dashboard module drag-handle icon is a dead affordance",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07, R1). Dashboard module headers rendered a GripVertical grip (the universal drag affordance) but the wrapper had no drag handlers — reorder is menu-only (⋯ → Move up/down). Fixed: removed the misleading grip icon + its now-unused import; reorder stays via the menu. (Wiring real drag was the alternative; removing the false affordance is the lower-risk fix and matches DashTabs, which keeps its grip only because it IS wired.)"
+    },
+    {
+      "id": "A290",
+      "title": "Analytics underwater callout mixes a locally-walked maxDD with the compute prop",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07, R1). The Analytics max-drawdown callout showed a locally-walked dd.maxd next to the compute-derived maxDDpct prop — two independent derivations feeding one line. Fixed: the dollar figure now reads the compute maxDD prop (matching the stat grid); the local dd walk stays only for the chart geometry + peak/trough indices (which the core doesn't expose)."
+    },
+    {
+      "id": "A291",
+      "title": "Dead export expiryLabel",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07, R1). core.ts exported expiryLabel ('Jun 2025' form) with zero product readers (only expiryCode is used) — dead code kept alive by a unit test. Fixed: removed the export; updated the test-compute.mjs assertion to cover only expiryCode. MONTH_ABBR (still used by Calendar + Changelog) kept."
+    },
+    {
+      "id": "A292",
+      "title": "reconcileImport authority map collapses duplicate time|symbol|side keys",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07, R1). reconcileImport's fills-vs-closed authority pnl map (src/lib/core/intake.ts) keyed by time|symbol|side in a Map that kept only the LAST value, so two same-second identical-side same-symbol closed records (the A114 dup case) meant an incoming fills-derived trade matching the FIRST was dropped as a phantom. Fixed: the authority pnl is now a per-key multiset (number[]) with a membership check, so an incoming trade matching ANY authoritative copy is corroborated. Single-record behavior unchanged (a 1-element array is equivalent); adapters suite green. Kept the original lenient matching (no consumption) to avoid new drop behavior."
     }
   ]
 }

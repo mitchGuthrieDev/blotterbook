@@ -21,6 +21,7 @@ import { createCloudStore } from './cloudstore.ts';
 import {
   pushChanges,
   pullAndMerge,
+  syncPlan,
   deriveWsKeys,
   parseWrappedDek,
   type SyncTransport,
@@ -353,14 +354,9 @@ export async function enableCloudSync(): Promise<boolean> {
    merge only — the A279 "Pull from cloud" action), or 'push' (push only — the "Push to cloud" action).
    Either direction still merges by LWW/content-hash under the hood; the one-directional variants are a
    legibility/control affordance (the newest edit of each record wins regardless of who initiated). */
-async function runSync(opts: {
-  full?: boolean;
-  id?: string;
-  direction?: 'both' | 'pull' | 'push';
-  forceFullPush?: boolean;
-}): Promise<void> {
+async function runSync(opts: { full?: boolean; id?: string; direction?: 'both' | 'pull' | 'push' }): Promise<void> {
   const id = opts.id ?? activeId();
-  const direction = opts.direction ?? 'both';
+  const plan = syncPlan(opts.direction ?? 'both'); // A284: pure direction contract (pull/push/forceFullPush)
   if (!localStore || !isEnabled(id)) return;
   // A251: capture the sync generation + workspace id up front. `aborted()` is true once a switch is
   // pending (generation bumped) OR the active workspace no longer matches — it gates every store
@@ -387,7 +383,7 @@ async function runSync(opts: {
     if (id === activeId()) cloudSync.status = 'syncing';
     try {
       let merged = 0; // record count from the pull (truthy → a merge landed → reload the dashboard)
-      if (direction !== 'push') {
+      if (plan.pull) {
         // PULL — a full since=0 reconcile closes F62's concurrent-push seq race; steady-state is
         // incremental from the persisted cursor.
         const since = opts.full ? 0 : Number(store.local.get(cursorKey(id), 0)) || 0;
@@ -396,11 +392,11 @@ async function runSync(opts: {
         store.local.set(cursorKey(id), res.cursor);
         merged = res.merged;
       }
-      if (direction !== 'pull') {
+      if (plan.push) {
         // PUSH write-behind. The watermark is -1 until the first push completes (so a freshly-enabled
-        // workspace uploads everything), then the last cutoff. `forceFullPush` re-uploads everything
-        // (the "Push to cloud" action) without discarding remote — LWW still applies per record.
-        const watermark = opts.forceFullPush ? -1 : Number(store.local.get(pushedKey(id), -1));
+        // workspace uploads everything), then the last cutoff. `plan.forceFullPush` (direction 'push')
+        // re-uploads everything (the "Push to cloud" action) without discarding remote — LWW still applies.
+        const watermark = plan.forceFullPush ? -1 : Number(store.local.get(pushedKey(id), -1));
         const newWatermark = await pushChanges(store, keys, transport, id, watermark, aborted);
         if (aborted()) return; // a switch landed mid-push — leave the watermark unadvanced
         store.local.set(pushedKey(id), newWatermark);
@@ -446,7 +442,7 @@ export async function pushToCloud(): Promise<void> {
   if (!cloudSync.configured || !localStore) return;
   const id = activeId();
   if (!isEnabled(id)) return;
-  await runSync({ full: true, id, direction: 'push', forceFullPush: true });
+  await runSync({ full: true, id, direction: 'push' });
 }
 
 /** A279 "Pause sync" — stop syncing the active workspace WITHOUT erasing its cloud copy (that's the
