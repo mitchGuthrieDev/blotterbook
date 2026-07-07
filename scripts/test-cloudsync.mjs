@@ -21,7 +21,16 @@ import { onRequestPost as pushFn } from '../functions/api/sync/push.ts';
 import { onRequestGet as pullFn } from '../functions/api/sync/pull.ts';
 import { recordKey } from '../functions/_lib/sync.ts';
 import { tradeId } from '../src/lib/core/store.ts';
-import { genIdentityKey, genWorkspaceDek, dekBytesOf, wrapDek, unwrapDekBytes, encryptRecord, decryptRecord, blindId } from '../src/lib/core/crypto.ts';
+import {
+  genIdentityKey,
+  genWorkspaceDek,
+  dekBytesOf,
+  wrapDek,
+  unwrapDekBytes,
+  encryptRecord,
+  decryptRecord,
+  blindId,
+} from '../src/lib/core/crypto.ts';
 import { deriveWsKeys, pushChanges, pullAndMerge, syncPlan, collectChanges, mergeRecords } from '../src/app/lib/cloudsync-core.ts';
 
 let pass = 0;
@@ -432,7 +441,9 @@ const stB = { cursor: 0, pushed: -1 };
   const hidden = trade('2025-03-05 12:00:00', 'ESHURT2025', 'short', 999.99);
   const hiddenUpdated = Date.now(); // a real pushed record carries `updated` in BOTH the plaintext and the index row (A297)
   const blinded = await blindId(keysA.blindKey, `trade:${tradeId(hidden)}`);
-  const ct = JSON.stringify(await encryptRecord(keysA.recordKey, JSON.stringify({ ...hidden, id: tradeId(hidden), updated: hiddenUpdated })));
+  const ct = JSON.stringify(
+    await encryptRecord(keysA.recordKey, JSON.stringify({ ...hidden, id: tradeId(hidden), updated: hiddenUpdated }))
+  );
   await bucket.put(recordKey(WS, blinded), ct);
   db.tables.sync_records.push({
     workspace_id: WS,
@@ -516,13 +527,13 @@ const stB = { cursor: 0, pushed: -1 };
   await Adel.deleteTrade(gId); // A deletes locally (tombstone Td) — NOT pushed yet (concurrent)
   const Bfresh = memStore();
   await pullAndMerge(Bfresh, keysB, transport, WS, 0); // B pulls the still-live trade → fresh insert (pull-time > Td)
-  ok('B saw the still-live trade before the tombstone', (await Bfresh.getAllTrades()).some(t => t.id === gId));
+  ok(
+    'B saw the still-live trade before the tombstone',
+    (await Bfresh.getAllTrades()).some(t => t.id === gId)
+  );
   await pushChanges(Bfresh, keysB, transport, WS, -1); // B re-pushes its copy (origin clock, not re-stamped)
   await pullAndMerge(Adel, keysA, transport, WS, 0); // A reconciles
-  ok(
-    "A297: a concurrent stale re-push does not resurrect A's deleted trade",
-    !(await Adel.getAllTrades()).some(t => t.id === gId)
-  );
+  ok("A297: a concurrent stale re-push does not resurrect A's deleted trade", !(await Adel.getAllTrades()).some(t => t.id === gId));
 }
 
 // ── A307: the workspace-switch barrier covers the MERGE write phase, not just the pull ────────────
@@ -566,7 +577,10 @@ const stB = { cursor: 0, pushed: -1 };
   // untampered → decrypts + merges.
   const G = memStore();
   await mergeRecords(G, keysB, [{ ...wireRow }], WS, () => false);
-  ok('A308: an untampered v2 record decrypts + merges', (await G.getAllTrades()).some(t => t.pnl === 8));
+  ok(
+    'A308: an untampered v2 record decrypts + merges',
+    (await G.getAllTrades()).some(t => t.pnl === 8)
+  );
 
   // forged `deleted` → AAD mismatch → GCM auth fails → skipped (neither added nor applied as a delete).
   const H = memStore();
@@ -586,7 +600,10 @@ const stB = { cursor: 0, pushed: -1 };
   ok('A308: omitting aad yields a v1 envelope', recV1.v === 1);
   const J = memStore();
   await mergeRecords(J, keysB, [{ ...wireRow, ciphertext: JSON.stringify(recV1) }], WS, () => false);
-  ok('A308: a v1 record still decrypts (legacy, no AAD)', (await J.getAllTrades()).some(t => t.pnl === 8));
+  ok(
+    'A308: a v1 record still decrypts (legacy, no AAD)',
+    (await J.getAllTrades()).some(t => t.pnl === 8)
+  );
 }
 
 // ── A304: enable-adopt — when register returns a DIFFERENT wrapped DEK (a concurrent device won the

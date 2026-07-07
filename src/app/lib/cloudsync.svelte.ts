@@ -76,16 +76,7 @@ export const cloudSync = $state({
  *  fields above. Surfaces call this inside a `$derived` so it re-settles automatically. Tier gating
  *  ('cloud tier required' / subscribe) is handled by the surface BEFORE the pill is shown. */
 export type SyncPill =
-  | 'checking'
-  | 'off'
-  | 'paused'
-  | 'needs-sub'
-  | 'needs-unlock'
-  | 'offline'
-  | 'syncing'
-  | 'pending'
-  | 'synced'
-  | 'error';
+  'checking' | 'off' | 'paused' | 'needs-sub' | 'needs-unlock' | 'offline' | 'syncing' | 'pending' | 'synced' | 'error';
 export function syncPillState(): SyncPill {
   if (cloudSync.needsSub) return 'needs-sub'; // A306: lapsed subscription on an enabled workspace
   if (!cloudSync.enabled) {
@@ -754,4 +745,19 @@ async function runPush(): Promise<void> {
 export function onSyncUnlocked(): void {
   refreshSyncStatus();
   void syncActiveWorkspace({ full: true });
+}
+
+/** A311(d): called by vault.lock() — abort any in-flight sync + neutralize a pending debounced push,
+ *  and DROP the derived per-workspace keys, so nothing can sync against the now-locked account. Then
+ *  re-settle the pill to 'locked'. */
+export function onVaultLocked(): void {
+  syncGeneration++; // abort any in-flight run captured under an earlier generation
+  if (pushTimer) {
+    clearTimeout(pushTimer);
+    pushTimer = null;
+  }
+  dirtyDuringPush = false;
+  sessions.clear();
+  reconciled.clear();
+  refreshSyncStatus();
 }

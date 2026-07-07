@@ -157,7 +157,12 @@ export async function kekFromPassphrase(passphrase: string, salt: Bytes, params:
   });
   // Copy into a plain ArrayBuffer-backed view (hash-wasm's Uint8Array widens to ArrayBufferLike,
   // which crypto.subtle's BufferSource rejects).
-  const key = await subtle.importKey('raw', new Uint8Array(raw), 'AES-KW', false, ['wrapKey', 'unwrapKey']);
+  const rawKey = new Uint8Array(raw);
+  const key = await subtle.importKey('raw', rawKey, 'AES-KW', false, ['wrapKey', 'unwrapKey']);
+  // A311(e): zero the Argon2id output bytes (both the copy and the original) once imported into the
+  // non-extractable KEK — the derived key material no longer needs to live in a JS-visible buffer.
+  rawKey.fill(0);
+  if (raw instanceof Uint8Array) raw.fill(0);
   return { key, descriptor: { method: 'passphrase', argon2: { ...params, salt: bytesToBase64(salt) } } };
 }
 

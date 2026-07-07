@@ -22,6 +22,7 @@
  * mounts these flows for any logged-in user; demo never syncs or encrypts. */
 
 import type { WrappedIK } from '../../lib/core/types.ts';
+import { onVaultLocked } from './cloudsync.svelte.ts';
 
 /* ── the unlocked account IK — MEMORY ONLY, never persisted ────────────────────────────────────
  * A module-scoped variable, not $state and not a Store field: it is the single in-memory home of
@@ -183,6 +184,9 @@ export function lock(): void {
   cancelSetup();
   vault.unlocked = false;
   vault.error = '';
+  // A311(d): tell the sync controller to abort any in-flight run + drop its derived per-workspace keys,
+  // so a debounced push can't still fire against the now-locked account (previously left lazy).
+  onVaultLocked();
 }
 
 /* ── SETUP (mint IK + the one escrow recovery key) ─────────────────────────────────────────────*/
@@ -340,13 +344,17 @@ export function unlockWithPasskey(): Promise<boolean> {
   return guard(async () => {
     const { kekFromPrf, unwrapIK, descriptorOf, base64ToBytes } = await crypto();
     const { prf, credentialId } = await evalPrf();
-    const blob = await loadBlob('prf', credentialId);
-    if (!blob) throw new Error('This passkey is not enrolled for cloud-sync unlock — set it up first.');
-    const desc = descriptorOf(blob);
-    if (desc.method !== 'prf') throw new Error('Malformed passkey key.');
-    const kek = await kekFromPrf(prf, base64ToBytes(desc.hkdfSalt));
-    ik = await unwrapIK(blob, kek);
-    vault.unlocked = true;
+    try {
+      const blob = await loadBlob('prf', credentialId);
+      if (!blob) throw new Error('This passkey is not enrolled for cloud-sync unlock — set it up first.');
+      const desc = descriptorOf(blob);
+      if (desc.method !== 'prf') throw new Error('Malformed passkey key.');
+      const kek = await kekFromPrf(prf, base64ToBytes(desc.hkdfSalt));
+      ik = await unwrapIK(blob, kek);
+      vault.unlocked = true;
+    } finally {
+      prf.fill(0); // A311(e): zero the per-credential PRF secret once the KEK is derived
+    }
   });
 }
 
@@ -396,9 +404,13 @@ export function addPasskeyMethod(registerPrfPasskey: () => Promise<boolean>): Pr
     const ok = await registerPrfPasskey();
     if (!ok) throw new Error('Could not enroll the passkey.');
     const { prf, credentialId } = await evalPrf();
-    const { kekFromPrf, wrapIK } = await crypto();
-    const kek = await kekFromPrf(prf);
-    await putWrappedIk(await wrapIK(key, kek), credentialId);
-    await refreshVault();
+    try {
+      const { kekFromPrf, wrapIK } = await crypto();
+      const kek = await kekFromPrf(prf);
+      await putWrappedIk(await wrapIK(key, kek), credentialId);
+      await refreshVault();
+    } finally {
+      prf.fill(0); // A311(e): zero the per-credential PRF secret once the KEK is derived
+    }
   });
 }
