@@ -22,12 +22,18 @@
 
   const label = $derived.by(() => {
     switch (state) {
+      case 'checking':
+        return 'Checking…';
       case 'syncing':
         return 'Syncing…';
       case 'pending':
         return 'Pending upload';
       case 'needs-unlock':
         return 'Needs unlock';
+      case 'needs-sub':
+        return 'Subscription inactive';
+      case 'paused':
+        return 'Sync paused';
       case 'offline':
         return 'Offline — will sync later';
       case 'error':
@@ -39,12 +45,17 @@
     }
   });
 
+  // A306: keep the raw transport detail (e.g. "Push failed (413).") in the tooltip so the code is
+  // available without cluttering the primary copy.
+  const title = $derived(state === 'error' && cloudSync.errorDetail ? `${label} (${cloudSync.errorDetail})` : label);
+
   const tone = $derived.by(() => {
     switch (state) {
       case 'synced':
         return 'text-chart-2';
       case 'pending':
       case 'needs-unlock':
+      case 'needs-sub':
         return 'text-chart-4';
       case 'error':
         return 'text-destructive';
@@ -58,16 +69,18 @@
   class={['inline-flex min-w-0 items-center gap-1.5 text-xs font-medium', tone]}
   data-testid="sync-state"
   data-status={state}
-  title={label}
+  {title}
 >
-  {#if state === 'syncing'}
-    <RefreshCw class="size-3.5 shrink-0 animate-spin" />
+  {#if state === 'syncing' || state === 'checking'}
+    <RefreshCw class={['size-3.5 shrink-0', state === 'syncing' && 'animate-spin']} />
   {:else if state === 'synced'}
     <Cloud class="size-3.5 shrink-0" />
   {:else if state === 'pending'}
     <CloudUpload class="size-3.5 shrink-0" />
   {:else if state === 'needs-unlock'}
     <LockKeyhole class="size-3.5 shrink-0" />
+  {:else if state === 'needs-sub'}
+    <TriangleAlert class="size-3.5 shrink-0" />
   {:else if state === 'error'}
     <TriangleAlert class="size-3.5 shrink-0" />
   {:else}

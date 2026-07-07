@@ -56,7 +56,15 @@
     passphraseStrong,
     MIN_PASSPHRASE,
   } from '../lib/vault.svelte.ts';
-  import { cloudSync, onSyncUnlocked, syncActiveWorkspace, pullFromCloud, pushToCloud, pauseCloudSync } from '../lib/cloudsync.svelte.ts';
+  import {
+    cloudSync,
+    onSyncUnlocked,
+    syncActiveWorkspace,
+    pullFromCloud,
+    pushToCloud,
+    pauseCloudSync,
+    enableCloudSync,
+  } from '../lib/cloudsync.svelte.ts';
   import { downloadBlob } from '../lib/files.ts';
   import CloudSyncSetup from '../parts/CloudSyncSetup.svelte';
   import UnlockModal from '../parts/UnlockModal.svelte';
@@ -391,17 +399,33 @@
             stores ciphertext it can't read.
           </p>
 
-          {#if account.tier !== 'cloud'}
+          {#if !account.loaded}
+            <!-- A306: neutral while /api/me is still probing — don't flash the Subscribe CTA at a paying user. -->
+            <Skeleton class="h-9 w-48" data-testid="cloud-tier-checking" />
+          {:else if account.tier !== 'cloud'}
             <!-- LOCAL tier — cloud sync is the $5/mo supporter subscription. Setup is tier-gated so a
-                 free user never generates keys the server (A253 entitlement gate) would reject on write. -->
-            <div class="rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-sm text-muted-foreground">
-              Cloud sync is part of the <span class="font-medium text-foreground">$5/month</span> supporter tier — sync your journal across your
-              devices, still end-to-end encrypted. Your local data is unaffected either way.
-            </div>
-            <Button data-testid="cloud-subscribe" disabled={account.busy} onclick={() => void subscribe()} class="self-start">
-              <Cloud class="size-4" />
-              Subscribe — $5/month
-            </Button>
+                 free user never generates keys the server (A253 entitlement gate) would reject on write.
+                 A306: a user who has ALREADY set up cloud sync (or whose enabled workspace just 402/403'd)
+                 is a LAPSED subscriber, not a first-timer — show a RENEW path, not the first-time CTA. -->
+            {#if cloudSync.needsSub || vault.setUp}
+              <div class="rounded-md border border-chart-4/40 bg-chart-4/10 px-3 py-2.5 text-sm text-chart-4" data-testid="cloud-lapsed">
+                Your supporter subscription is inactive, so this device has stopped syncing. Renew to resume — your local data and encryption keys
+                are untouched.
+              </div>
+              <Button data-testid="cloud-renew" disabled={account.busy} onclick={() => void subscribe()} class="self-start">
+                <Cloud class="size-4" />
+                Renew — $5/month
+              </Button>
+            {:else}
+              <div class="rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-sm text-muted-foreground">
+                Cloud sync is part of the <span class="font-medium text-foreground">$5/month</span> supporter tier — sync your journal across your
+                devices, still end-to-end encrypted. Your local data is unaffected either way.
+              </div>
+              <Button data-testid="cloud-subscribe" disabled={account.busy} onclick={() => void subscribe()} class="self-start">
+                <Cloud class="size-4" />
+                Subscribe — $5/month
+              </Button>
+            {/if}
           {:else if !vault.loaded}
             <Skeleton class="h-9 w-48" />
           {:else if !vault.setUp}
@@ -471,6 +495,14 @@
                     <strong class="font-medium text-foreground">Pull</strong>/<strong class="font-medium text-foreground">Push</strong> move one
                     direction. When two devices differ, the newest edit of each record wins.
                   </p>
+                {:else if cloudSync.paused}
+                  <!-- A306: paused ≠ never-synced — a Resume control right here, not just in the switcher. -->
+                  <div class="flex flex-wrap items-center gap-2">
+                    <Button size="sm" data-testid="cloud-resume" disabled={cloudSync.busy} onclick={() => void enableCloudSync()}>
+                      <RefreshCw class="size-4" /> Resume sync
+                    </Button>
+                    <span class="text-xs text-muted-foreground">Sync is paused for this workspace on this device. Your cloud copy is kept.</span>
+                  </div>
                 {:else}
                   <p class="text-xs text-muted-foreground">
                     Turn on sync for a workspace from the workspace switcher (top of the sidebar) to start syncing this device.

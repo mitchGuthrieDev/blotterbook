@@ -56,18 +56,42 @@ export const cloudSync = $state({
   lastPull: 0,
   /** an enable/sync op is in flight. */
   busy: false,
+  /** A306: actionable, human copy for the current error (mapped from the status). */
   error: '',
+  /** A306: the raw transport detail (e.g. "Push failed (413).") — shown as a title/tooltip so the code
+   *  is still available for support without leaking into the primary copy. */
+  errorDetail: '',
   /** A309(b): the active workspace's server copy is GONE (a 404 on push/pull) — sync was auto-disabled
    *  here + the cached key dropped. Distinct from a plain 'off' so a surface can explain + offer re-enable. */
   serverGone: false,
+  /** A306: the active workspace is opted in but the subscription lapsed (a 402/403 on push/pull). Show a
+   *  RENEW path (not the first-time Subscribe CTA). */
+  needsSub: false,
+  /** A306: the active workspace was set up + synced, then PAUSED (pauseCloudSync) — distinct from
+   *  never-synced ('off'), so a surface can offer Resume instead of first-time Enable. */
+  paused: false,
 });
 
 /** A279: the parity state the status pill renders for the ACTIVE workspace, derived from the reactive
  *  fields above. Surfaces call this inside a `$derived` so it re-settles automatically. Tier gating
  *  ('cloud tier required' / subscribe) is handled by the surface BEFORE the pill is shown. */
-export type SyncPill = 'off' | 'needs-unlock' | 'offline' | 'syncing' | 'pending' | 'synced' | 'error';
+export type SyncPill =
+  | 'checking'
+  | 'off'
+  | 'paused'
+  | 'needs-sub'
+  | 'needs-unlock'
+  | 'offline'
+  | 'syncing'
+  | 'pending'
+  | 'synced'
+  | 'error';
 export function syncPillState(): SyncPill {
-  if (!cloudSync.enabled) return 'off';
+  if (cloudSync.needsSub) return 'needs-sub'; // A306: lapsed subscription on an enabled workspace
+  if (!cloudSync.enabled) {
+    if (cloudSync.tier === '') return 'checking'; // A306: neutral while /api/me is still probing
+    return cloudSync.paused ? 'paused' : 'off'; // A306: paused ≠ never-synced
+  }
   if (cloudSync.status === 'error') return 'error';
   if (cloudSync.status === 'syncing') return 'syncing';
   if (!cloudSync.unlocked) return 'needs-unlock';
@@ -95,16 +119,23 @@ const pendingByWs = new Map<string, boolean>(); // wsId → local edits owed to 
 const errorByWs = new Map<string, string>(); // wsId → last actionable sync error ('' = none)
 const runningByWs = new Set<string>(); // wsIds with a sync/push run in flight right now
 const serverGoneByWs = new Set<string>(); // A309(b): wsIds whose server copy 404'd → auto-disabled here
+const needsSubByWs = new Set<string>(); // A306: wsIds whose sync 402/403'd (lapsed subscription)
+const detailByWs = new Map<string, string>(); // A306: wsId → raw transport detail for the error tooltip
 
 function setPending(id: string, v: boolean): void {
   if (v) pendingByWs.set(id, true);
   else pendingByWs.delete(id);
   if (id === activeId()) cloudSync.pending = v;
 }
-function setError(id: string, msg: string): void {
+function setError(id: string, msg: string, detail: string = ''): void {
   if (msg) errorByWs.set(id, msg);
   else errorByWs.delete(id);
-  if (id === activeId()) cloudSync.error = msg;
+  if (detail) detailByWs.set(id, detail);
+  else detailByWs.delete(id);
+  if (id === activeId()) {
+    cloudSync.error = msg;
+    cloudSync.errorDetail = detail;
+  }
 }
 /** Mirror a workspace's transient status onto the reactive pill ONLY while it is the active one. */
 function setStatus(id: string, s: SyncStatus): void {
@@ -114,8 +145,27 @@ function setStatus(id: string, s: SyncStatus): void {
 function clearWsState(id: string): void {
   pendingByWs.delete(id);
   errorByWs.delete(id);
+  detailByWs.delete(id);
   runningByWs.delete(id);
   serverGoneByWs.delete(id);
+  needsSubByWs.delete(id);
+}
+
+/** A306: map a transport status to actionable, human copy. The raw detail (with the code) is kept
+ *  separately for the tooltip so support can still see it. */
+function syncErrorCopy(status: number): string {
+  switch (status) {
+    case 401:
+      return 'Your session expired — sign in again to keep syncing.';
+    case 402:
+    case 403:
+      return 'Your cloud subscription is inactive — renew to keep syncing this workspace.';
+    case 413:
+      return 'This change is too large to sync — try removing large screenshots.';
+    default:
+      if (status >= 500) return 'The sync service is temporarily unavailable — it will retry automatically.';
+      return 'Sync failed — it will retry automatically.';
+  }
 }
 
 /** A309(b): a 404 on an enabled workspace means its server copy was erased elsewhere. Auto-disable
@@ -136,14 +186,25 @@ function onServerCopyGone(id: string): void {
   refreshSyncStatus();
 }
 
-/** Route a run failure: a 404 on an enabled workspace → server-copy-gone; anything else → surface the
- *  error on the pill. Never called when the run was aborted by a switch. */
+/** Route a run failure (A306/A309): a 404 on an enabled workspace → server-copy-gone; a 402/403 →
+ *  needs-subscription (renew, not first-time Subscribe); everything else → actionable copy with the
+ *  raw code kept in the detail. Never called when the run was aborted by a switch. */
 function handleSyncError(id: string, e: unknown): void {
-  if (statusOf(e) === 404 && isEnabled(id)) {
+  const status = statusOf(e);
+  const detail = messageOf(e);
+  if (status === 404 && isEnabled(id)) {
     onServerCopyGone(id);
     return;
   }
-  setError(id, messageOf(e));
+  if ((status === 402 || status === 403) && isEnabled(id)) {
+    needsSubByWs.add(id);
+    setError(id, syncErrorCopy(status), detail);
+    if (id === activeId()) cloudSync.needsSub = true;
+    setStatus(id, 'error');
+    return;
+  }
+  needsSubByWs.delete(id);
+  setError(id, syncErrorCopy(status), detail);
   setStatus(id, 'error');
 }
 
@@ -194,6 +255,10 @@ const pushedKey = (id: string) => `bb:sync:${id}:pushed`;
 /** A309(a): epoch ms of the LAST successful sync of a workspace — persisted so a long-offline gap is
  *  detectable across refreshes. */
 const syncedAtKey = (id: string) => `bb:sync:${id}:at`;
+/** A306: set when a workspace was set up + synced, then PAUSED — persisted so "Paused" survives a
+ *  refresh and stays distinguishable from never-synced. */
+const pausedKey = (id: string) => `bb:sync:${id}:paused`;
+const isPaused = (id: string) => !!localStore?.local.get(pausedKey(id), false);
 
 /** A309(a): the server compacts delete tombstones after 90 days. A device offline longer than that
  *  has a watermark/cursor sitting PAST compacted records, so a normal incremental sync silently
@@ -329,6 +394,8 @@ function onErased(): void {
   localStore.local.set(enabledKey(id), false); // opt-out: no reconcile until the user re-enables
   localStore.local.remove(cursorKey(id));
   localStore.local.remove(pushedKey(id));
+  localStore.local.remove(pausedKey(id)); // A306: a purge is a full teardown, not a pause
+  localStore.local.remove(syncedAtKey(id));
   sessions.delete(id);
   reconciled.delete(id);
   clearWsState(id); // A299: drop this workspace's pending/error/in-flight flags
@@ -369,9 +436,13 @@ export function refreshSyncStatus(): void {
   cloudSync.enabled = isEnabled(id);
   // A299: mirror the ACTIVE workspace's per-workspace flags (a switch must not carry the previous
   // workspace's pending/error). A309(b): serverGone survives the auto-disable so the message stays up.
+  // A306: mirror paused / needsSub / errorDetail too.
   cloudSync.pending = pendingByWs.get(id) ?? false;
   cloudSync.error = errorByWs.get(id) ?? '';
+  cloudSync.errorDetail = detailByWs.get(id) ?? '';
   cloudSync.serverGone = serverGoneByWs.has(id);
+  cloudSync.needsSub = needsSubByWs.has(id);
+  cloudSync.paused = !cloudSync.enabled && isPaused(id);
   if (!cloudSync.enabled) {
     cloudSync.status = 'off';
     return;
@@ -428,6 +499,8 @@ export async function enableCloudSync(): Promise<boolean> {
   cloudSync.busy = true;
   setError(id, '');
   serverGoneByWs.delete(id); // A309(b): re-enabling clears a prior "server copy gone" flag
+  needsSubByWs.delete(id); // A306: clear a prior lapsed-subscription flag
+  localStore.local.set(pausedKey(id), false); // A306: enabling/resuming clears the paused marker
   try {
     if (cloudSync.tier !== 'cloud') throw new Error('Cloud tier required to sync.');
     const ik = getIK();
@@ -541,6 +614,8 @@ async function runSync(opts: { full?: boolean; id?: string; direction?: 'both' |
       // edits still owed to the cloud (the A279 regression: this used to clear pending unconditionally).
       if (plan.push) setPending(id, false);
       setError(id, ''); // a successful run clears the last error
+      needsSubByWs.delete(id); // A306: a successful sync proves the subscription is active again
+      if (id === activeId()) cloudSync.needsSub = false;
       if (merged && dashRef && id === activeId()) await dashRef.reload();
       setStatus(id, 'synced');
     } catch (e) {
@@ -595,6 +670,7 @@ export function pauseCloudSync(): void {
     pushTimer = null;
   }
   localStore.local.set(enabledKey(id), false);
+  localStore.local.set(pausedKey(id), true); // A306: remember it was paused (≠ never-synced) for Resume
   sessions.delete(id);
   reconciled.delete(id);
   clearWsState(id); // A299: drop this workspace's pending/error/in-flight flags
@@ -653,6 +729,8 @@ async function runPush(): Promise<void> {
       cloudSync.lastPull = cloudSync.lastPull || 0;
       setPending(id, false); // the debounced write-behind push reached the server
       setError(id, '');
+      needsSubByWs.delete(id); // A306: a successful push proves the subscription is active again
+      if (id === activeId()) cloudSync.needsSub = false;
       setStatus(id, 'synced');
     } catch (e) {
       if (!aborted()) handleSyncError(id, e); // A309(b): a 404 auto-disables; else surface the error

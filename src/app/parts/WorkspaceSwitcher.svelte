@@ -14,7 +14,7 @@
   // active workspace's real state — not-synced / synced (last pull) / syncing / offline / locked /
   // error — plus an "Enable sync" action (cloud tier + unlocked only; local tier shows an inert
   // "cloud tier required" hint). PROD + STAGING (not demo), like the rest of the switcher.
-  import { Layers, ChevronsUpDown, Check, Plus, Pencil, Trash2, CloudOff, Cloud, LockKeyhole } from '@lucide/svelte';
+  import { Layers, ChevronsUpDown, Check, Plus, Pencil, Trash2, CloudOff, Cloud, LockKeyhole, TriangleAlert } from '@lucide/svelte';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import * as Dialog from '$lib/components/ui/dialog';
   import * as AlertDialog from '$lib/components/ui/alert-dialog';
@@ -25,6 +25,7 @@
   import SyncStatusPill from './SyncStatusPill.svelte';
   import { cloudSync, enableCloudSync, syncActiveWorkspace, onSyncUnlocked, refreshSyncStatus } from '../lib/cloudsync.svelte.ts';
   import { refreshVault } from '../lib/vault.svelte.ts';
+  import { subscribe } from '../lib/account.svelte.ts';
   import type { Dashboard } from '../lib/dashboard.svelte.ts';
   import type { Workspace } from '../../lib/core/types.ts';
 
@@ -173,36 +174,60 @@
          passkey-vs-passphrase explainer live on the Account screen's cloud-sync card. -->
     <div class="flex flex-col gap-1.5 px-2 py-1.5" data-testid="sync-status">
       {#if !cloudSync.enabled}
-        {#if cloudSync.tier === 'cloud'}
-          {#if cloudSync.unlocked}
-            <button
-              type="button"
-              data-testid="sync-enable"
-              class="flex items-center gap-1.5 text-xs font-medium text-foreground hover:underline"
-              disabled={cloudSync.busy}
-              onclick={doEnable}
-            >
-              <Cloud class="size-3.5 shrink-0" />
-              {cloudSync.busy ? 'Enabling…' : 'Enable sync'}
-            </button>
-          {:else}
-            <button
-              type="button"
-              data-testid="sync-unlock"
-              class="flex items-center gap-1.5 text-xs font-medium text-foreground hover:underline"
-              onclick={openUnlock}
-            >
-              <LockKeyhole class="size-3.5 shrink-0" /> Unlock to enable sync
-            </button>
-          {/if}
-        {:else}
+        {#if cloudSync.tier === ''}
+          <!-- A306: neutral while /api/me is still probing — don't mislabel a paying user "cloud tier required". -->
+          <div class="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="sync-checking">
+            <Cloud class="size-3.5 shrink-0" /> Checking subscription…
+          </div>
+        {:else if cloudSync.tier !== 'cloud'}
           <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
             <CloudOff class="size-3.5 shrink-0" /> Local only · cloud tier required
           </div>
+        {:else if cloudSync.serverGone}
+          <!-- A309(b): the server copy was removed elsewhere — explain + offer re-enable. -->
+          <div class="flex items-start gap-1.5 text-xs text-chart-4" data-testid="sync-server-gone">
+            <TriangleAlert class="mt-0.5 size-3.5 shrink-0" /><span class="min-w-0">{cloudSync.error || 'Cloud copy removed.'}</span>
+          </div>
+          <button
+            type="button"
+            data-testid="sync-reenable"
+            class="self-start text-xs font-medium text-foreground hover:underline"
+            disabled={cloudSync.busy}
+            onclick={doEnable}>Re-enable sync</button
+          >
+        {:else if !cloudSync.unlocked}
+          <button
+            type="button"
+            data-testid="sync-unlock"
+            class="flex items-center gap-1.5 text-xs font-medium text-foreground hover:underline"
+            onclick={openUnlock}
+          >
+            <LockKeyhole class="size-3.5 shrink-0" /> Unlock to {cloudSync.paused ? 'resume' : 'enable'} sync
+          </button>
+        {:else}
+          <!-- A306: paused ≠ never-synced — offer Resume. -->
+          <button
+            type="button"
+            data-testid={cloudSync.paused ? 'sync-resume' : 'sync-enable'}
+            class="flex items-center gap-1.5 text-xs font-medium text-foreground hover:underline"
+            disabled={cloudSync.busy}
+            onclick={doEnable}
+          >
+            <Cloud class="size-3.5 shrink-0" />
+            {cloudSync.busy ? (cloudSync.paused ? 'Resuming…' : 'Enabling…') : cloudSync.paused ? 'Resume sync' : 'Enable sync'}
+          </button>
         {/if}
       {:else}
         <SyncStatusPill />
-        {#if !cloudSync.unlocked}
+        {#if cloudSync.needsSub}
+          <!-- A306: lapsed subscription on an enabled workspace — RENEW, not the first-time Subscribe CTA. -->
+          <button
+            type="button"
+            data-testid="sync-renew"
+            class="self-start text-xs font-medium text-chart-4 hover:underline"
+            onclick={() => void subscribe()}>Renew subscription</button
+          >
+        {:else if !cloudSync.unlocked}
           <button
             type="button"
             data-testid="sync-unlock"
