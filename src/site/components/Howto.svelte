@@ -261,6 +261,41 @@
                 <td class="px-3 py-1.5">when your broker reports them</td>
               </tr>
               <tr class="border-t border-border">
+                <td class="px-3 py-1.5">Tradovate / NinjaTrader — Performance</td>
+                <td class="px-3 py-1.5 text-chart-2">exact (platform-paired)</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-muted-foreground">—</td>
+              </tr>
+              <tr class="border-t border-border">
+                <td class="px-3 py-1.5">Tradovate / NinjaTrader — Fills</td>
+                <td class="px-3 py-1.5">derived</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-chart-2">yes (real, per-fill)</td>
+              </tr>
+              <tr class="border-t border-border">
+                <td class="px-3 py-1.5">Tradovate / NinjaTrader — Orders</td>
+                <td class="px-3 py-1.5">derived</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-muted-foreground">—</td>
+              </tr>
+              <tr class="border-t border-border">
+                <td class="px-3 py-1.5">Quantower — Trades</td>
+                <td class="px-3 py-1.5 text-chart-2">exact (per-fill)</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-chart-2">yes (Fee)</td>
+              </tr>
+              <tr class="border-t border-border">
+                <td class="px-3 py-1.5">ATAS X — statistics workbook (Journal sheet)</td>
+                <td class="px-3 py-1.5 text-chart-2">exact</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-chart-2">yes</td>
+                <td class="px-3 py-1.5 text-muted-foreground">—</td>
+              </tr>
+              <tr class="border-t border-border">
                 <td class="px-3 py-1.5">MotiveWave — trade report</td>
                 <td class="px-3 py-1.5 text-chart-2">exact</td>
                 <td class="px-3 py-1.5 text-chart-2">yes</td>
@@ -268,7 +303,7 @@
                 <td class="px-3 py-1.5 text-muted-foreground">—</td>
               </tr>
               <tr class="border-t border-border">
-                <td class="px-3 py-1.5">Fills exports (Tradovate, Rithmic, Sierra Chart, TradeStation, Webull, Schwab)</td>
+                <td class="px-3 py-1.5">Other fills exports (Rithmic, Sierra Chart, TradeStation, Webull, Schwab)</td>
                 <td class="px-3 py-1.5">derived</td>
                 <td class="px-3 py-1.5 text-chart-2">yes</td>
                 <td class="px-3 py-1.5 text-chart-2">yes</td>
@@ -397,9 +432,17 @@
         </h2>
         <p>Blotterbook's reference format. Works with the Paper Trading account and connected brokers. Two export types import:</p>
         <ol class="steps">
-          <li>Open the <b>Trading Panel</b> at the bottom of the chart and select the <b>Account</b> (e.g. Paper Trading).</li>
-          <li>Go to the <b>History</b> / <b>List of Trades</b> tab.</li>
-          <li>Use the export / download icon to save a <b>CSV</b>.</li>
+          <li>
+            Open the <b>Trading Panel</b> at the bottom of the chart, pick the <b>Account</b> (e.g. Paper Trading), then the <b>History</b> tab.
+          </li>
+          <li>
+            Click the <b>&#8942;</b> (column-picker) above the table and check every column — TradingView only exports the columns currently
+            visible, and a hidden <code>Status</code> or <code>Commission</code> column silently drops that data from the file.
+          </li>
+          <li>
+            Click the download icon in the table's top-right corner, choose <b>Balance history</b> or <b>Order history</b> from the
+            dropdown, and click <b>Download</b> — each produces its own CSV, and you can repeat for both.
+          </li>
         </ol>
         <p>
           <b>Balance history</b> (recommended) — columns <code>Time</code>, <code>Action</code>, <code>Realized PnL (value)</code>. Each row
@@ -426,8 +469,12 @@
         </h2>
         <p>
           NinjaTrader (web) runs on the Tradovate platform, so both apps produce the <b>same</b> export files — everything below applies to either.
-          Blotterbook reads three of the export types; import any or all of them (overlapping trades merge, never double-count):
         </p>
+        <ol class="steps">
+          <li>Click your account name (top of the platform) → the gear icon → <b>Account Reports</b>.</li>
+          <li>Pick a report type from the tabs there, set the account and date range, then click <b>Download Report</b> to get a CSV.</li>
+        </ol>
+        <p>Blotterbook reads three of the report types; import any or all of them (overlapping trades merge, never double-count):</p>
         <ol class="steps">
           <li>
             <b>Performance</b> — the platform's own round-trip pairing (P&amp;L, quantities, entry/exit times, hold time). The best single file
@@ -437,13 +484,13 @@
             <b>Fills</b> — per-fill executions <b>with your real commissions</b>, which override Blotterbook's modeled rates per trade.
           </li>
           <li>
-            <b>Orders</b> — also supported (<code>Orders.csv</code> via <b>Download Report</b>); no commission column, so modeled rates
-            apply.
+            <b>Orders</b> (<code>Orders.csv</code>) — also supported; no commission column, so modeled rates apply.
           </li>
         </ol>
         <p>
-          The other exports on that panel (Cash History, Account Balance History, Position History) aren't per-trade data — Blotterbook will
-          decline them.
+          The other report types on that panel (Cash History, Account Balance History, Position History) aren't per-trade data — Blotterbook
+          will decline them. Cash History does list per-contract commission cash lines if you need to sanity-check Fills against the
+          broker's own numbers.
         </p>
       </section>
 
@@ -456,8 +503,9 @@
           >
         </h2>
         <ol class="steps">
-          <li>In Quantower, open the <b>Trades</b> panel (not Orders history — that's order lifecycle, not trade data).</li>
-          <li>Set your account and date range, then export the table to CSV — you'll get <code>Trades.csv</code>.</li>
+          <li>In Quantower, open the <b>Trades</b> panel (not <b>Orders history</b> — that's order lifecycle, not trade data).</li>
+          <li>Right-click the panel's tab → <b>Export data</b>, pick <b>comma separated</b>, and check every column.</li>
+          <li>Click <b>Export file</b> — you'll get <code>Trades.csv</code>.</li>
         </ol>
         <p>
           Detected columns: <code>Side</code>, <code>Symbol</code>, <code>Price</code>, <code>Gross P/L</code>, <code>Fee</code>,
@@ -477,10 +525,11 @@
         <ol class="steps">
           <li>
             In ATAS X, open your account <b>Statistics</b> and use <b>Export</b> — the platform writes a single <code>.xlsx</code> workbook
-            (e.g. <code>ATAS X_statistics_….xlsx</code>).
+            for the selected account and date range (e.g. <code>ATAS X_statistics_….xlsx</code>), not a CSV.
           </li>
           <li>
-            Import that <code>.xlsx</code> file directly — no need to re-save it as CSV. Like everything else, it's read entirely in your browser.
+            Import that <code>.xlsx</code> file directly — no need to re-save it as CSV. Like everything else, it's read entirely in your
+            browser; only the <b>Journal</b> sheet inside is used.
           </li>
         </ol>
         <p>
@@ -501,11 +550,17 @@
           >
         </h2>
         <ol class="steps">
-          <li>In R&nbsp;|&nbsp;Trader, click <b>File → Orders History</b>.</li>
-          <li>Choose the account and date (one day at a time), then export to <b>CSV</b>.</li>
           <li>
-            Make sure <b>Buy/Sell</b>, <b>Symbol</b>, <b>Qty Filled</b>, <b>Avg Fill Price</b>, and a time column are visible — hidden
-            columns aren't exported.
+            In R&nbsp;|&nbsp;Trader, click <b>File → Orders History</b>, pick the account, and set the date — Rithmic exports one day at a
+            time, so pull each session separately for a longer history.
+          </li>
+          <li>
+            In the <b>Completed Orders</b> section (not Working Orders), right-click the column headers to add any that are missing — Rithmic
+            only exports the columns currently visible in the grid.
+          </li>
+          <li>
+            Confirm <b>Buy/Sell</b>, <b>Symbol</b>, <b>Qty Filled</b>, <b>Avg Fill Price</b>, and a time column (<code>Update Time</code> or
+            <code>Create Time</code>) are shown, then use the export icon to save a <b>CSV</b>.
           </li>
         </ol>
         <p>
@@ -523,9 +578,12 @@
           >
         </h2>
         <ol class="steps">
-          <li>Open <b>Trade → Trade Activity Log</b>.</li>
-          <li>Use <b>Save Log As…</b> (not <i>Export</i> — Export writes raw, unadjusted prices) to save a text/CSV file.</li>
-          <li>Keep the <b>Symbol</b>, <b>Quantity</b>, <b>BuySell</b>, <b>FillPrice</b>, and date/time columns visible.</li>
+          <li>Open <b>Trade → Trade Activity Log</b> to open the log window for the chart's symbol/account.</li>
+          <li>
+            From that window's <b>File</b> menu use <b>Save Log As…</b> — not <b>Export</b>, which writes raw, unadjusted prices that won't
+            match what you see in the log — to save a tab-separated text file.
+          </li>
+          <li>Before saving, keep the <b>Symbol</b>, <b>Quantity</b>, <b>BuySell</b>, <b>FillPrice</b>, and date/time columns visible.</li>
         </ol>
         <p>
           The file is usually <b>tab-separated</b>; Blotterbook handles that automatically. Detected columns: <code>BuySell</code>,
@@ -542,8 +600,12 @@
           >
         </h2>
         <ol class="steps">
-          <li>From the platform's <b>Accounts</b> / trade history (or Client Center), choose a date range.</li>
-          <li>Exclude broken/canceled trades and <b>download as CSV</b>.</li>
+          <li>Log into <b>TradeStation Client Center</b> (the web portal) and open the <b>Accounts</b> tab.</li>
+          <li>
+            Pick your account and a date range — TradeStation caps each download at roughly six months, so pull multiple ranges to cover a
+            longer history.
+          </li>
+          <li>Check <b>Exclude broken/canceled trades</b>, choose <b>CSV</b> as the format, and click <b>View / Download</b>.</li>
         </ol>
         <p>
           Detected columns: <code>Symbol</code>, <code>Type</code> (Buy/Sell), <code>Quantity</code>, <code>Price</code>,
@@ -560,8 +622,11 @@
           >
         </h2>
         <ol class="steps">
-          <li>Add a <b>Trades</b> panel (Trade Report).</li>
-          <li>Click <b>Export to CSV</b> on the right of the panel.</li>
+          <li>Add a <b>Trades</b> panel to your workspace (sometimes labeled Trade Report).</li>
+          <li>
+            Use the panel's <b>Export</b> button (top-right corner) to save the trade list as CSV. If you don't see an Export button, you're likely
+            looking at a summary/stats view rather than the trade list itself — those don't export.
+          </li>
         </ol>
         <p>
           Detected columns: <code>Instrument</code>, <code>Side</code>, <code>Entry/Exit Price</code>, <code>Entry/Exit Time</code>,
@@ -579,7 +644,10 @@
         </h2>
         <ol class="steps">
           <li>On Webull <b>desktop</b>, go to <b>Account → Orders → Order History</b>.</li>
-          <li>Select a date range (up to 90 days per export) and click <b>Export CSV</b>.</li>
+          <li>
+            Select a date range and click <b>Export</b>. Webull caps each export at 90 days — for a longer history, repeat with back-to-back
+            90-day windows and import each CSV (overlapping rows de-duplicate).
+          </li>
         </ol>
         <p>
           Detected columns: <code>Symbol</code>, <code>Side</code>, <code>Status</code>, <code>Filled</code>, <code>Avg Price</code>,
@@ -596,12 +664,19 @@
           >
         </h2>
         <ol class="steps">
-          <li>Create a <b>Flex Query</b> (Trade Confirmation / Trades) — or use an Activity Statement.</li>
           <li>
-            Include <b>DateTime</b>, <b>Symbol</b>, <b>Buy/Sell</b>, <b>Quantity</b>, <b>TradePrice</b>, and (ideally)
-            <b>Realized&nbsp;P/L</b>.
+            In IBKR's <b>Client Portal</b>, go to <b>Performance &amp; Reports → Flex Queries</b> and create a new <b>Trade Confirmation</b>
+            Flex Query.
           </li>
-          <li>Run it and download the <b>CSV</b>.</li>
+          <li>
+            Under <b>Executions</b>, select every field — at minimum you need <b>DateTime</b>, <b>Symbol</b>, <b>Buy/Sell</b>,
+            <b>Quantity</b>, <b>TradePrice</b>, and (ideally) <b>Realized&nbsp;P/L</b> and <b>IBCommission</b> — set the output format to
+            <b>CSV</b>, and save.
+          </li>
+          <li>
+            Back on the Flex Queries list, run your saved query, pick a date range, and download the <b>CSV</b>. An Activity Statement
+            export works too, as long as it includes the same trade-execution fields.
+          </li>
         </ol>
         <p>
           When the export carries <code>Realized&nbsp;P/L</code> per closing row, Blotterbook uses it directly; otherwise P&amp;L is computed
@@ -619,7 +694,10 @@
         </h2>
         <ol class="steps">
           <li>Open the desktop <b>thinkorswim</b> platform → <b>Monitor → Account Statement</b>.</li>
-          <li>Set the date range, then the gear icon → <b>Export to file</b> → <b>CSV</b>.</li>
+          <li>
+            Set the date range — for a first import, pull as far back as your account allows — then the gear icon →
+            <b>Export to file</b> → <b>CSV</b>.
+          </li>
         </ol>
         <p>
           The export has several sections; Blotterbook locates the <b>Account Trade History</b> block (columns <code>Exec Time</code>,
