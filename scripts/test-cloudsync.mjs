@@ -5,7 +5,7 @@
        each device's record key + blinding key;
      · the REAL F62 server functions (functions/api/sync/*) run over an in-memory D1 + R2 mock (the
        SAME dumb-blob-store contract the browser hits) — so the transport is faithful, not stubbed;
-     · the REAL client engine (src/app/lib/cloudsync-core.ts) pushes/pulls/merges;
+     · the REAL client engine (src/lib/core/cloudsync-core.ts) pushes/pulls/merges;
      · TWO independent in-memory Stores (clients A + B) share one account IK + workspace DEK.
 
    Asserts: (a) a record written on A appears identically on B after push→pull (trade union +
@@ -31,7 +31,7 @@ import {
   decryptRecord,
   blindId,
 } from '../src/lib/core/crypto.ts';
-import { deriveWsKeys, pushChanges, pullAndMerge, syncPlan, collectChanges, mergeRecords } from '../src/app/lib/cloudsync-core.ts';
+import { deriveWsKeys, pushChanges, pullAndMerge, syncPlan, collectChanges, mergeRecords } from '../src/lib/core/cloudsync-core.ts';
 
 let pass = 0;
 const ok = (name, cond) => {

@@ -16,7 +16,7 @@
  * runs identically in the browser (real fetch + IndexedDB Store) and in the node integration test
  * (a mock transport + an in-memory Store). */
 
-import type { StoreLike, Trade, StoredJournal, StoredTradeMeta, Tombstone, WrappedDek } from '../../lib/core/types.ts';
+import type { StoreLike, Trade, StoredJournal, StoredTradeMeta, Tombstone, WrappedDek } from './types.ts';
 
 /* ── the F62 transport contract (injected) ─────────────────────────────────────────────────────── */
 
@@ -93,7 +93,7 @@ const dec = new TextDecoder();
 
 /* ── lazy crypto core (keeps crypto.ts + the Argon2 wasm out of the /app boot bundle, A96) ──────── */
 function cryptoCore() {
-  return import('../../lib/core/crypto.ts');
+  return import('./crypto.ts');
 }
 
 /** Derive the record key + blinding key from a workspace DEK's raw bytes. The caller zeroes `bytes`. */
@@ -195,8 +195,8 @@ async function toWire(
   c: Change,
   workspaceId: string,
   enc2: {
-    encryptRecord: typeof import('../../lib/core/crypto.ts').encryptRecord;
-    blindId: typeof import('../../lib/core/crypto.ts').blindId;
+    encryptRecord: typeof import('./crypto.ts').encryptRecord;
+    blindId: typeof import('./crypto.ts').blindId;
   }
 ): Promise<WireRecord> {
   const blinded_id = await enc2.blindId(keys.blindKey, `${c.type}:${c.key}`);

@@ -29,7 +29,7 @@ import {
   type WireRecord,
   type WsKeys,
   type PullPage,
-} from './cloudsync-core.ts';
+} from '../../lib/core/cloudsync-core.ts';
 import { onEvent } from '../../lib/core/core.ts';
 
 type SyncStatus = 'off' | 'syncing' | 'synced' | 'offline' | 'locked' | 'error';
