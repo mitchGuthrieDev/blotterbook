@@ -61,19 +61,21 @@ re-platform), and [`docs/architecture.md`](docs/architecture.md).
   mount points (`<div id="app">` + `<script type="module" src="./main.ts">`, body
   `data-mode="app|demo|staging"`). The Svelte app lives in `src/app/`: the redesigned sidebar-shell
   `App.svelte` (an `AppShell` + hash router) + `screens/` (Dashboard/Calendar/Analytics/Blotter/
-  CsvLibrary/TradeEditor/Reports/Account — Account is prod + staging, logged-in only, F53) + `parts/` (BootSplash/
-  CostSetup/Onboarding/ActivityTerminal/Definitions/StatusBanner/DashTabs/DatePickerPopover/
+  CsvLibrary/TradeEditor/Reports/Account — Account ships on all surfaces, demo read-only, F53/CH16) + `parts/` (BootSplash/
+  CostSetup/Onboarding/ActivityTerminal/InfoTip/StatCardRow/StatusBanner/DashTabs/DatePickerPopover/
   DetectionStatus/EditableCellPopover/FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/
   ScreenshotLightbox/SegmentedControl/SymbolSelect/TagInput + the synced-workspaces
   parts WorkspaceSwitcher/CloudSyncSetup/UnlockModal/SyncStatusPill, A132/F61b/F63/A279) +
-  `lib/{dashboard.svelte.ts,dashtabs.svelte.ts,account.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports}`
-  plus the cloud-sync glue `{vault.svelte.ts` (in-memory key session, F61b)`,cloudstore.ts` (write-behind `StoreLike` wrapper, F63)`,cloudsync-core.ts` (pure push/pull/merge engine, F63)`,cloudsync.svelte.ts` (reactive sync controller, F63)`}`.
+  `lib/{dashboard.svelte.ts,dashtabs.svelte.ts,account.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports,econ.svelte.ts,modlayout.ts}`
+  plus the cloud-sync glue `{vault.svelte.ts` (in-memory key session, F61b)`,cloudstore.ts` (write-behind `StoreLike` wrapper, F63)`,cloudsync.svelte.ts` (reactive sync controller, F63)`}`.
   It reuses the **pure-logic core** in `src/lib/core/` (A29, native TS per A61): `adapters` (+ `xlsx`
   for the ATAS X .xlsx path, F52) / `intake` (CSV gates + cross-export reconciliation, A177/A219) /
   `compute`+`costModel` in `core` / `store` (now with delete tombstones + named workspaces, F58/F59) /
   `sampledata` / `demostore` / `curveseries` / `report` / `entitlements` (storage-tier resolver, wired
   to `/api/me`, F60) / `crypto` (E2E envelope-encryption core — AES-KW/GCM/HKDF/HMAC + Argon2id via
-  `hash-wasm`, F61a), with `format` shared by the app *and* the info pages. Cross-component state is
+  `hash-wasm`, F61a) / `cloudsync-core` (pure push/pull/merge engine, F63; relocated here from
+  `src/app/lib` for strict `tsc` coverage, A314), with `format` shared by the app *and* the info
+  pages. Cross-component state is
   Svelte runes (`$state`/`$derived`), not a
   shared globals object. `App.svelte` resolves the mode-aware `Store` (real IndexedDB for app/staging
   via `Entitlements.storeFor()`, the in-memory `DemoStore` for demo, so **demo persists nothing** — by
@@ -348,6 +350,9 @@ conforms to the rules below; keep it that way.
       crypto.ts         E2E envelope-encryption core (F61a): IK gen, AES-KW wrap/unwrap per unlock
                         method, HKDF-from-PRF, Argon2id passphrase KDF (hash-wasm, dyn-imported),
                         AES-GCM encrypt/decrypt, blindId/blindKeyFromDekBytes — pure, node-tested
+      cloudsync-core.ts pure push/pull/merge engine for cloud sync (F63) — framework-agnostic +
+                        node-tested (test-cloudsync.mjs), relocated here from src/app/lib for strict
+                        tsc coverage (A314)
       format.ts         shared esc/platformLabel + version-badge IIFE (ex assets/util.js — A76)
       types.ts          shared TS interfaces (Trade/Fill/CostModel/Metrics/StoreLike/… — A61)
     components/ui/      canonical shadcn-svelte primitives (ADR-002): button, badge, card, checkbox,
@@ -364,8 +369,8 @@ conforms to the rules below; keep it that way.
     main.ts             entry: imports tailwind.css + side-effect format + mount(App)  ·  ONE mode-aware App.svelte on every surface
     App.svelte          the redesigned sidebar-shell root (AppShell + hash router) — mode-aware via PAGE_MODE (CH16)
     screens/            the app screens (<script lang="ts">): Dashboard/Calendar/Analytics/Blotter/CsvLibrary/
-                        TradeEditor/Reports/Account (Account is prod + staging, logged-in only, F53)
-    parts/              cross-screen pieces: BootSplash/CostSetup/Onboarding/ActivityTerminal/Definitions/
+                        TradeEditor/Reports/Account (Account ships on all surfaces, demo read-only, F53/CH16)
+    parts/              cross-screen pieces: BootSplash/CostSetup/Onboarding/ActivityTerminal/InfoTip/StatCardRow/
                         StatusBanner/DashTabs/DatePickerPopover/DetectionStatus/EditableCellPopover/
                         FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/ScreenshotLightbox/
                         SegmentedControl/SymbolSelect/TagInput + synced-workspaces UI (opt-in, cloud-tier):
@@ -375,10 +380,13 @@ conforms to the rules below; keep it that way.
                         pagination.svelte.ts, actions.ts (styleProps), batch.ts
                         (multi-file import queue, F47), files.ts (readImage/downloadBlob — ex util.js, A76),
                         flags.ts (APP_FLAGS), flavor.ts, motion.ts, nav.ts, analytics.ts + reports.ts
-                        (Analytics / Reports view-model builders) + cloud-sync glue (opt-in, cloud-tier):
-                        vault.svelte.ts (in-memory key session, F61b), cloudstore.ts (write-behind
-                        StoreLike wrapper), cloudsync-core.ts (pure push/pull/merge engine),
-                        cloudsync.svelte.ts (reactive sync controller) — all F63
+                        (Analytics / Reports view-model builders), econ.svelte.ts (econ-calendar module
+                        state, reads static/data/econ-events.json, R14/R14a), modlayout.ts (versioned
+                        {key,size}[] dashboard module-layout state — 12-track grid, size menu + corner
+                        drag-resize, A271) + cloud-sync glue (opt-in, cloud-tier): vault.svelte.ts
+                        (in-memory key session, F61b), cloudstore.ts (write-behind StoreLike wrapper,
+                        F63), cloudsync.svelte.ts (reactive sync controller, F63) — over the pure
+                        cloudsync-core.ts engine, now in src/lib/core/ (A314)
   site/                 MARKETING + INFO — Svelte SSG (A69; prerendered at build by scripts/vite-ssg.mjs, hydrated in place)
     components/         Home / Howto / Roadmap / Changelog / Legal / Admin .svelte (the page components)
     lib/                shared chrome: Nav.svelte, Footer.svelte, SiteShell.svelte (base/typography styles + globals)
