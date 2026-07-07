@@ -57,6 +57,9 @@ export const cloudSync = $state({
   /** an enable/sync op is in flight. */
   busy: false,
   error: '',
+  /** A309(b): the active workspace's server copy is GONE (a 404 on push/pull) — sync was auto-disabled
+   *  here + the cached key dropped. Distinct from a plain 'off' so a surface can explain + offer re-enable. */
+  serverGone: false,
 });
 
 /** A279: the parity state the status pill renders for the ACTIVE workspace, derived from the reactive
@@ -91,6 +94,7 @@ const reconciled = new Set<string>(); // wsIds that have had their FULL since=0 
 const pendingByWs = new Map<string, boolean>(); // wsId → local edits owed to the cloud (un-pushed)
 const errorByWs = new Map<string, string>(); // wsId → last actionable sync error ('' = none)
 const runningByWs = new Set<string>(); // wsIds with a sync/push run in flight right now
+const serverGoneByWs = new Set<string>(); // A309(b): wsIds whose server copy 404'd → auto-disabled here
 
 function setPending(id: string, v: boolean): void {
   if (v) pendingByWs.set(id, true);
@@ -111,6 +115,48 @@ function clearWsState(id: string): void {
   pendingByWs.delete(id);
   errorByWs.delete(id);
   runningByWs.delete(id);
+  serverGoneByWs.delete(id);
+}
+
+/** A309(b): a 404 on an enabled workspace means its server copy was erased elsewhere. Auto-disable
+ *  sync for it HERE, drop the cached key + cursors, and flag `serverGone` with a clear message so a
+ *  surface can offer re-enable — instead of looping 404s behind an opaque "Pull failed (404)." */
+function onServerCopyGone(id: string): void {
+  if (!localStore) return;
+  localStore.local.set(enabledKey(id), false);
+  localStore.local.remove(cursorKey(id));
+  localStore.local.remove(pushedKey(id));
+  localStore.local.remove(syncedAtKey(id));
+  sessions.delete(id);
+  reconciled.delete(id);
+  pendingByWs.delete(id);
+  runningByWs.delete(id);
+  serverGoneByWs.add(id);
+  errorByWs.set(id, 'This workspace’s cloud copy was removed. Sync is off for it on this device — re-enable to sync again.');
+  refreshSyncStatus();
+}
+
+/** Route a run failure: a 404 on an enabled workspace → server-copy-gone; anything else → surface the
+ *  error on the pill. Never called when the run was aborted by a switch. */
+function handleSyncError(id: string, e: unknown): void {
+  if (statusOf(e) === 404 && isEnabled(id)) {
+    onServerCopyGone(id);
+    return;
+  }
+  setError(id, messageOf(e));
+  setStatus(id, 'error');
+}
+
+/** A309(a): if this workspace has been offline longer than the server's tombstone TTL, its
+ *  watermark/cursor may sit past compacted records — reset to a FULL re-push + re-pull so it converges
+ *  instead of silently diverging. Called at the start of each run. */
+function resetIfStaleGap(store: StoreLike, id: string): void {
+  const last = Number(store.local.get(syncedAtKey(id), 0)) || 0;
+  if (last && Date.now() - last > TOMBSTONE_TTL_MS) {
+    store.local.set(pushedKey(id), -1); // re-push everything
+    store.local.set(cursorKey(id), 0); // re-pull the whole change-index
+    reconciled.delete(id);
+  }
 }
 
 /* ── A251: workspace-switch barrier — a switch must NEVER read/write one workspace's records under
@@ -145,17 +191,37 @@ export async function cancelActiveSync(): Promise<void> {
 const enabledKey = (id: string) => `bb:sync:${id}:on`;
 const cursorKey = (id: string) => `bb:sync:${id}:cursor`;
 const pushedKey = (id: string) => `bb:sync:${id}:pushed`;
+/** A309(a): epoch ms of the LAST successful sync of a workspace — persisted so a long-offline gap is
+ *  detectable across refreshes. */
+const syncedAtKey = (id: string) => `bb:sync:${id}:at`;
+
+/** A309(a): the server compacts delete tombstones after 90 days. A device offline longer than that
+ *  has a watermark/cursor sitting PAST compacted records, so a normal incremental sync silently
+ *  diverges — force a full re-push + re-pull instead. Matches the server's tombstone TTL. */
+const TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
 const onLine = () => typeof navigator === 'undefined' || navigator.onLine;
 const activeId = () => (localStore ? localStore.activeWorkspace().id : '');
 const isEnabled = (id: string) => !!localStore?.local.get(enabledKey(id), false);
 const messageOf = (e: unknown) => (e instanceof Error ? e.message || 'Sync failed.' : 'Sync failed.');
 
+/** A309(b)/A306: an HTTP failure from the F62 transport, carrying the raw status so the controller can
+ *  branch (404 → server copy gone; 401/402/403/413/5xx → actionable copy). */
+export class SyncHttpError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'SyncHttpError';
+    this.status = status;
+  }
+}
+const statusOf = (e: unknown): number => (e instanceof SyncHttpError ? e.status : 0);
+
 /* ── the F62 transport (real fetch; session-cookie carried) ────────────────────────────────────── */
 const transport: SyncTransport = {
   async listWorkspaces() {
     const res = await fetch('/api/sync/workspaces', { credentials: 'include', headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error(`Could not list synced workspaces (${res.status}).`);
+    if (!res.ok) throw new SyncHttpError(res.status, `Could not list synced workspaces (${res.status}).`);
     const data = (await res.json()) as { workspaces?: Array<{ workspace_id: string; wrapped_dek: string | null }> };
     return data.workspaces ?? [];
   },
@@ -166,7 +232,7 @@ const transport: SyncTransport = {
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ workspace_id: workspaceId, wrapped_dek: wrappedDek }),
     });
-    if (!res.ok) throw new Error(`Could not enable sync for this workspace (${res.status}).`);
+    if (!res.ok) throw new SyncHttpError(res.status, `Could not enable sync for this workspace (${res.status}).`);
   },
   async push(workspaceId, records: WireRecord[]) {
     const res = await fetch('/api/sync/push', {
@@ -175,14 +241,14 @@ const transport: SyncTransport = {
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ workspace_id: workspaceId, records }),
     });
-    if (!res.ok) throw new Error(`Push failed (${res.status}).`);
+    if (!res.ok) throw new SyncHttpError(res.status, `Push failed (${res.status}).`);
   },
   async pull(workspaceId, since) {
     const res = await fetch(`/api/sync/pull?workspace_id=${encodeURIComponent(workspaceId)}&since=${since}`, {
       credentials: 'include',
       headers: { Accept: 'application/json' },
     });
-    if (!res.ok) throw new Error(`Pull failed (${res.status}).`);
+    if (!res.ok) throw new SyncHttpError(res.status, `Pull failed (${res.status}).`);
     return (await res.json()) as PullPage;
   },
   async deleteWorkspace(workspaceId) {
@@ -192,7 +258,7 @@ const transport: SyncTransport = {
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ workspace_id: workspaceId }),
     });
-    if (!res.ok) throw new Error(`Could not erase the synced copy (${res.status}).`);
+    if (!res.ok) throw new SyncHttpError(res.status, `Could not erase the synced copy (${res.status}).`);
     return (await res.json()) as { done: boolean };
   },
 };
@@ -297,9 +363,10 @@ export function refreshSyncStatus(): void {
   cloudSync.unlocked = getIK() !== null;
   cloudSync.enabled = isEnabled(id);
   // A299: mirror the ACTIVE workspace's per-workspace flags (a switch must not carry the previous
-  // workspace's pending/error).
+  // workspace's pending/error). A309(b): serverGone survives the auto-disable so the message stays up.
   cloudSync.pending = pendingByWs.get(id) ?? false;
   cloudSync.error = errorByWs.get(id) ?? '';
+  cloudSync.serverGone = serverGoneByWs.has(id);
   if (!cloudSync.enabled) {
     cloudSync.status = 'off';
     return;
@@ -355,6 +422,7 @@ export async function enableCloudSync(): Promise<boolean> {
   const id = activeId();
   cloudSync.busy = true;
   setError(id, '');
+  serverGoneByWs.delete(id); // A309(b): re-enabling clears a prior "server copy gone" flag
   try {
     if (cloudSync.tier !== 'cloud') throw new Error('Cloud tier required to sync.');
     const ik = getIK();
@@ -430,6 +498,7 @@ async function runSync(opts: { full?: boolean; id?: string; direction?: 'both' |
     runningByWs.add(id); // A299: mark this workspace's run in flight (cleared in finally, even on abort)
     setStatus(id, 'syncing');
     try {
+      resetIfStaleGap(store, id); // A309(a): a >90d-offline gap forces a full re-push + re-pull
       let merged = 0; // record count from the pull (truthy → a merge landed → reload the dashboard)
       if (plan.pull) {
         // PULL — a full since=0 reconcile closes F62's concurrent-push seq race; steady-state is
@@ -451,6 +520,7 @@ async function runSync(opts: { full?: boolean; id?: string; direction?: 'both' |
       }
       reconciled.add(id);
       cloudSync.lastPull = Date.now();
+      store.local.set(syncedAtKey(id), Date.now()); // A309(a): record a successful sync for the offline-gap check
       // A299: only a run that actually PUSHED clears "pending upload" — a pull-only run leaves local
       // edits still owed to the cloud (the A279 regression: this used to clear pending unconditionally).
       if (plan.push) setPending(id, false);
@@ -458,10 +528,7 @@ async function runSync(opts: { full?: boolean; id?: string; direction?: 'both' |
       if (merged && dashRef && id === activeId()) await dashRef.reload();
       setStatus(id, 'synced');
     } catch (e) {
-      if (!aborted()) {
-        setError(id, messageOf(e));
-        setStatus(id, 'error');
-      }
+      if (!aborted()) handleSyncError(id, e); // A309(b): a 404 auto-disables; else surface the error
     } finally {
       runningByWs.delete(id);
     }
@@ -561,19 +628,18 @@ async function runPush(): Promise<void> {
   setStatus(id, 'syncing');
   const run = (async () => {
     try {
+      resetIfStaleGap(store, id); // A309(a): a >90d-offline gap forces a full re-push
       const watermark = Number(store.local.get(pushedKey(id), -1));
       const newWatermark = await pushChanges(store, keys, transport, id, watermark, aborted);
       if (aborted()) return;
       store.local.set(pushedKey(id), newWatermark);
+      store.local.set(syncedAtKey(id), Date.now()); // A309(a): record the successful push
       cloudSync.lastPull = cloudSync.lastPull || 0;
       setPending(id, false); // the debounced write-behind push reached the server
       setError(id, '');
       setStatus(id, 'synced');
     } catch (e) {
-      if (!aborted()) {
-        setError(id, messageOf(e));
-        setStatus(id, 'error');
-      }
+      if (!aborted()) handleSyncError(id, e); // A309(b): a 404 auto-disables; else surface the error
     } finally {
       runningByWs.delete(id);
     }
