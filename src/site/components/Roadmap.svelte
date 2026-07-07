@@ -9,12 +9,30 @@
   <h1>Roadmap</h1>
   <p class="blurb">
     Where <b>Blotterbook</b> is headed — the big picture, not a task list. You already get a full futures journal with a true-cost &amp; tax
-    dashboard; next come numbers you can trust to the cent, deeper journaling, and sync across your devices — all built privacy-first. For
-    the per-release detail, see the <a href="changelog.html">Changelog</a>.
+    dashboard and end-to-end-encrypted sync across your devices; next come numbers you can trust to the cent and deeper journaling — all
+    built privacy-first. For the per-release detail, see the <a href="changelog.html">Changelog</a>.
   </p>
 
   <h2>Available now</h2>
   <ul class="mt-[18px] list-none p-0">
+    <li class="flex items-start gap-3 border-b border-border py-[11px]">
+      <span
+        class="mt-px flex h-5 w-5 flex-none items-center justify-center rounded-[6px] border border-chart-2/45 bg-chart-2/15 text-[12px] text-chart-2"
+        >&#10003;</span
+      >
+      <div class="flex-1">
+        <b class="text-foreground"
+          >Sync across your devices<span
+            class="ml-2 rounded-full border border-chart-3/30 bg-chart-3/12 px-2 py-0.5 align-middle font-mono text-[10px] uppercase tracking-[0.08em] text-chart-3"
+            >$5/mo</span
+          ></b
+        >
+        <p class="mt-[3px] mb-0 text-[13.5px] leading-[1.5] text-muted-foreground">
+          End-to-end-encrypted sync of your trades, notes, tags, and saved filters, so your journal follows you to any device — secured by a
+          one-time recovery key and a key we never see. The one optional paid add-on; everything else stays free.
+        </p>
+      </div>
+    </li>
     <li class="flex items-start gap-3 border-b border-border py-[11px]">
       <span
         class="mt-px flex h-5 w-5 flex-none items-center justify-center rounded-[6px] border border-chart-2/45 bg-chart-2/15 text-[12px] text-chart-2"
@@ -157,24 +175,6 @@
 
   <h2>Planned</h2>
   <ul class="mt-[18px] list-none p-0">
-    <li class="flex items-start gap-3 border-b border-border py-[11px]">
-      <span
-        class="mt-px flex h-5 w-5 flex-none items-center justify-center rounded-[6px] border border-border text-[12px] text-muted-foreground"
-        >&#9633;</span
-      >
-      <div class="flex-1">
-        <b class="text-foreground"
-          >Sync across your devices<span
-            class="ml-2 rounded-full border border-chart-3/30 bg-chart-3/12 px-2 py-0.5 align-middle font-mono text-[10px] tracking-[0.08em] uppercase text-chart-3"
-            >$5/mo</span
-          ></b
-        >
-        <p class="mt-[3px] mb-0 text-[13.5px] leading-[1.5] text-muted-foreground">
-          End-to-end-encrypted sync of your trades, notes, tags, and saved filters, so your journal follows you to any device — and we never
-          see your data. The one optional paid add-on; everything else stays free.
-        </p>
-      </div>
-    </li>
     <li class="flex items-start gap-3 border-b border-border py-[11px]">
       <span
         class="mt-px flex h-5 w-5 flex-none items-center justify-center rounded-[6px] border border-border text-[12px] text-muted-foreground"
