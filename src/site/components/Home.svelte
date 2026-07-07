@@ -568,8 +568,20 @@
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
             aria-hidden="true"
-          ></span><b class="flex-1 text-[15px] font-semibold">Tradovate / NinjaTrader</b><span
-            class="pstate font-mono text-[10.5px] text-chart-2">Verified · real exports</span
+          ></span><b class="flex-1 text-[15px] font-semibold">Tradovate</b><span class="pstate font-mono text-[10.5px] text-chart-2"
+            >Verified · real exports</span
+          ></a
+        >
+      </li>
+      <li>
+        <a
+          class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          href="howto.html#imp-tradovate"
+          ><span
+            class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
+            aria-hidden="true"
+          ></span><b class="flex-1 text-[15px] font-semibold">NinjaTrader</b><span class="pstate font-mono text-[10.5px] text-chart-2"
+            >Verified · real exports</span
           ></a
         >
       </li>
