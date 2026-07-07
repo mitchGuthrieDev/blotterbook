@@ -40,6 +40,12 @@ export async function onRequestPost(ctx: Ctx) {
   form.set('success_url', `${origin}/app/app.html?donated=1#account`);
   form.set('cancel_url', `${origin}/#pricing`);
   if (clientRef) form.set('client_reference_id', clientRef);
+  // For a SUBSCRIPTION, also stamp the user id into the subscription's OWN metadata: client_reference_id
+  // rides only on the checkout SESSION, but the cloud grant is driven by the customer.subscription.*
+  // events, whose objects don't carry it. Putting it in subscription_data.metadata lets the webhook
+  // resolve the account directly from those events — order-independent, and works for $0/trial signups
+  // where the donation-credit linkage (which needs a positive USD charge) never fires.
+  if (plan === 'subscription' && clientRef) form.set('subscription_data[metadata][client_reference_id]', clientRef);
 
   try {
     const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
