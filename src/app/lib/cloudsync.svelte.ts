@@ -24,6 +24,7 @@ import {
   syncPlan,
   deriveWsKeys,
   parseWrappedDek,
+  recordAad,
   type SyncTransport,
   type WireRecord,
   type WsKeys,
@@ -250,6 +251,11 @@ const syncedAtKey = (id: string) => `bb:sync:${id}:at`;
  *  refresh and stays distinguishable from never-synced. */
 const pausedKey = (id: string) => `bb:sync:${id}:paused`;
 const isPaused = (id: string) => !!localStore?.local.get(pausedKey(id), false);
+
+/** A298: the reserved meta key that carries a workspace's display NAME as a normal (encrypted) synced
+ *  record, so another device can decrypt + show it in the "Available in your cloud" adopt list before
+ *  it has the workspace's DB. Pushed on enable; read via a targeted blinded-id lookup. */
+const WS_NAME_KEY = 'bb:ws:name';
 
 /** A309(a): the server compacts delete tombstones after 90 days. A device offline longer than that
  *  has a watermark/cursor sitting PAST compacted records, so a normal incremental sync silently
@@ -530,8 +536,12 @@ export async function enableCloudSync(): Promise<boolean> {
     }
     sessions.set(id, keys);
     localStore.local.set(enabledKey(id), true);
+    localStore.local.set(pausedKey(id), false);
     localStore.local.set(pushedKey(id), -1); // full push next
     localStore.local.set(cursorKey(id), 0);
+    // A298: stamp the workspace's display name as a synced (encrypted) meta record so a peer can show
+    // it in the adopt list. LWW/idempotent — a no-op once it matches.
+    if (localStore.activeWorkspace().id === id) await localStore.setMeta(WS_NAME_KEY, localStore.activeWorkspace().name);
     await runSync({ full: true, id });
     return true;
   } catch (e) {
@@ -745,6 +755,94 @@ async function runPush(): Promise<void> {
 export function onSyncUnlocked(): void {
   refreshSyncStatus();
   void syncActiveWorkspace({ full: true });
+}
+
+/* ── A298: multi-device adopt — surface cloud workspaces absent on THIS device + add them ─────────── */
+
+export interface CloudWorkspace {
+  id: string;
+  name: string;
+}
+
+/** Read a workspace's display NAME from its synced records (the reserved WS_NAME_KEY meta record),
+ *  given its keys — a targeted blinded-id lookup so we don't decrypt the whole workspace. Best-effort:
+ *  returns '' when no name record exists yet (older enable, or none pushed). */
+async function fetchWorkspaceName(
+  id: string,
+  keys: WsKeys,
+  crypto: {
+    blindId: typeof import('../../lib/core/crypto.ts').blindId;
+    decryptRecord: typeof import('../../lib/core/crypto.ts').decryptRecord;
+  }
+): Promise<string> {
+  const target = await crypto.blindId(keys.blindKey, `meta:${WS_NAME_KEY}`);
+  const dec = new TextDecoder();
+  let since = 0;
+  for (let guard = 0; guard < 50; guard++) {
+    const page = await transport.pull(id, since);
+    const row = page.records.find(r => r.blinded_id === target && r.type === 'meta' && !r.deleted);
+    if (row) {
+      try {
+        const aad = recordAad(id, row.type, row.blinded_id, row.updated, row.deleted);
+        const obj = JSON.parse(dec.decode(await crypto.decryptRecord(keys.recordKey, JSON.parse(row.ciphertext), aad))) as {
+          value?: unknown;
+        };
+        return typeof obj.value === 'string' ? obj.value : '';
+      } catch {
+        return '';
+      }
+    }
+    since = page.nextSince;
+    if (!page.more || !page.records.length) break;
+  }
+  return '';
+}
+
+/** A298: list the caller's CLOUD workspaces that are NOT yet on this device (and whose DEK we can
+ *  unwrap — i.e. genuinely ours), with a decrypted display name. Needs the IK unlocked. Never throws;
+ *  returns [] when locked / offline / on error. */
+export async function listCloudWorkspaces(): Promise<CloudWorkspace[]> {
+  if (!localStore || !cloudSync.configured) return [];
+  const ik = getIK();
+  if (!ik || !onLine()) return [];
+  try {
+    const localIds = new Set(localStore.listWorkspaces().map(w => w.id));
+    const server = await transport.listWorkspaces();
+    const absent = server.filter(w => w.workspace_id && w.wrapped_dek && !localIds.has(w.workspace_id));
+    if (!absent.length) return [];
+    const crypto = await import('../../lib/core/crypto.ts');
+    const out: CloudWorkspace[] = [];
+    for (const w of absent) {
+      const blob = parseWrappedDek(w.wrapped_dek);
+      if (!blob) continue;
+      try {
+        const bytes = await crypto.unwrapDekBytes(blob, ik); // proves this workspace is decryptable by our IK
+        const keys = await deriveWsKeys(bytes);
+        bytes.fill(0);
+        const name = await fetchWorkspaceName(w.workspace_id, keys, crypto);
+        out.push({ id: w.workspace_id, name: name || 'Synced workspace' });
+      } catch {
+        // wrong IK / corrupt blob → not ours to adopt; skip.
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** A298: adopt a cloud workspace onto THIS device — create a local registry entry keyed by the
+ *  SERVER'S id + mark it enabled with fresh cursors, so a switch to it runs a full reconcile that
+ *  unwraps the server DEK (ensureKeys) and pulls its data. The CALLER then switches to it (via
+ *  dashboard.switchWorkspace, which honours the A251 barrier) and refreshes. Requires an unlocked IK. */
+export function adoptCloudWorkspace(ws: CloudWorkspace): boolean {
+  if (!localStore || !getIK()) return false;
+  localStore.adoptWorkspace(ws.id, ws.name);
+  localStore.local.set(enabledKey(ws.id), true);
+  localStore.local.set(cursorKey(ws.id), 0);
+  localStore.local.set(pushedKey(ws.id), -1);
+  localStore.local.set(pausedKey(ws.id), false);
+  return true;
 }
 
 /** A311(d): called by vault.lock() — abort any in-flight sync + neutralize a pending debounced push,

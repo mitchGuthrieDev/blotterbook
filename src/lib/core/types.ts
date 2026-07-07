@@ -592,6 +592,11 @@ export interface StoreLike {
   listWorkspaces(): Workspace[];
   /** Create a new local workspace backed by a fresh (suffixed) IndexedDB; returns the entry. */
   createWorkspace(name: string): Workspace;
+  /** A298: adopt a workspace that already exists in the cloud under a SPECIFIC (server) id — creates a
+   *  local registry entry + per-workspace DB keyed by that id, so a synced workspace registered on
+   *  another device becomes reachable here. Idempotent: returns the existing entry if the id is
+   *  already local. */
+  adoptWorkspace(id: string, name: string): Workspace;
   /** Rename a workspace; returns the updated entry, or undefined if the id/name was rejected. */
   renameWorkspace(id: string, name: string): Workspace | undefined;
   /** Delete a workspace: drop its whole IndexedDB (deleteDatabase) AND remove the registry entry.

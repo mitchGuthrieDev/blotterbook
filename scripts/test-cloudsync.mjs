@@ -638,4 +638,50 @@ const stB = { cursor: 0, pushed: -1 };
   ok("A304: the adopted record key decrypts the winner's ciphertext", pt === 'hello');
 }
 
+// ── A298: multi-device ADOPT of a NON-default named workspace ─────────────────────────────────────
+// A named (non-'default') workspace registered on device A must be adoptable on device B: B unwraps the
+// SAME server DEK (keyed by the SERVER'S workspace id) and reconciles the SAME dataset — not a divergent
+// copy. Its display NAME travels as an encrypted meta record (WS_NAME_KEY), so B can show it pre-adopt.
+{
+  const wsF = 'ws-futures'; // a stable, cross-device id (the whole point — not a per-device UUID)
+  const NAME_KEY = 'bb:ws:name';
+  const dekF = await genWorkspaceDek();
+  const dekFBytes = await dekBytesOf(dekF);
+  await transport.registerWorkspace(wsF, JSON.stringify(await wrapDek(dekF, ik)));
+  const keysAF = await deriveWsKeys(dekFBytes);
+
+  // Device B adopts the DEK from the server (unwrap under the shared IK) — the adopt-by-id path.
+  const listed2 = await transport.listWorkspaces();
+  const fEntry = listed2.find(w => w.workspace_id === wsF);
+  const keysBF = await deriveWsKeys(await unwrapDekBytes(JSON.parse(fEntry.wrapped_dek), ik));
+
+  const AF = memStore();
+  await AF.addTrades([trade('2025-10-01 09:00:00', 'MESZ2025', 'long', 321)]);
+  await AF.setMeta(NAME_KEY, 'Futures Desk'); // the display name, pushed as an encrypted meta record
+  await pushChanges(AF, keysAF, transport, wsF, -1);
+
+  // B reads the workspace NAME via a targeted blinded-id lookup (mirrors fetchWorkspaceName) — proving
+  // a peer can label the adopt affordance before it has the workspace's DB.
+  const target = await blindId(keysBF.blindKey, `meta:${NAME_KEY}`);
+  let name = '';
+  {
+    const page = await transport.pull(wsF, 0);
+    const row = page.records.find(r => r.blinded_id === target && r.type === 'meta' && !r.deleted);
+    if (row) {
+      const aad = `${wsF}|meta|${row.blinded_id}|${row.updated}|0`;
+      const obj = JSON.parse(new TextDecoder().decode(await decryptRecord(keysBF.recordKey, JSON.parse(row.ciphertext), aad)));
+      name = obj.value;
+    }
+  }
+  ok('A298: a peer decrypts the workspace name from the synced meta record', name === 'Futures Desk');
+
+  // B adopts + reconciles — same id + same DEK ⇒ the SAME dataset converges (no divergent duplicate).
+  const BF = memStore();
+  await pullAndMerge(BF, keysBF, transport, wsF, 0);
+  ok(
+    'A298: the adopted peer converges on the named workspace data',
+    (await BF.getAllTrades()).some(t => t.pnl === 321)
+  );
+}
+
 console.log(`\n${pass} assertions passed.`);

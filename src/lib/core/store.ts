@@ -954,6 +954,17 @@ export const Store: StoreLike = {
     lsSet(WS_REGISTRY_KEY, [...reg, ws]);
     return ws;
   },
+  adoptWorkspace(id, name) {
+    // A298: create a local entry keyed by the SERVER'S id (its DB derives from that id, like
+    // createWorkspace) so the workspace synced on another device becomes reachable here. Idempotent.
+    const reg = ensureWorkspaces();
+    const existing = reg.find(w => w.id === id);
+    if (existing) return existing;
+    const clean = (name || '').trim().slice(0, 60) || 'Synced workspace';
+    const ws: Workspace = { id, name: clean, dbName: WS_DB_PREFIX + id, createdAt: Date.now() };
+    lsSet(WS_REGISTRY_KEY, [...reg, ws]);
+    return ws;
+  },
   renameWorkspace(id, name) {
     const reg = ensureWorkspaces();
     const clean = (name || '').trim().slice(0, 60);

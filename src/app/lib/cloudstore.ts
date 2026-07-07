@@ -39,6 +39,7 @@ export function createCloudStore(local: StoreLike, onWrite: () => void): StoreLi
     activeWorkspace: () => local.activeWorkspace(),
     listWorkspaces: () => local.listWorkspaces(),
     createWorkspace: (name: string): Workspace => local.createWorkspace(name),
+    adoptWorkspace: (id: string, name: string): Workspace => local.adoptWorkspace(id, name),
     renameWorkspace: (id: string, name: string) => local.renameWorkspace(id, name),
     deleteWorkspace: (id: string) => local.deleteWorkspace(id),
     setActiveWorkspace: (id: string) => local.setActiveWorkspace(id),

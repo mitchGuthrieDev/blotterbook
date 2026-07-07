@@ -23,7 +23,16 @@
   import IconTip from '$lib/components/IconTip.svelte';
   import UnlockModal from './UnlockModal.svelte';
   import SyncStatusPill from './SyncStatusPill.svelte';
-  import { cloudSync, enableCloudSync, syncActiveWorkspace, onSyncUnlocked, refreshSyncStatus } from '../lib/cloudsync.svelte.ts';
+  import {
+    cloudSync,
+    enableCloudSync,
+    syncActiveWorkspace,
+    onSyncUnlocked,
+    refreshSyncStatus,
+    listCloudWorkspaces,
+    adoptCloudWorkspace,
+    type CloudWorkspace,
+  } from '../lib/cloudsync.svelte.ts';
   import { refreshVault } from '../lib/vault.svelte.ts';
   import { subscribe } from '../lib/account.svelte.ts';
   import type { Dashboard } from '../lib/dashboard.svelte.ts';
@@ -93,6 +102,26 @@
     renameOpen = false;
   }
 
+  // ---- A298: adopt a workspace that's synced in the cloud but not on THIS device ----
+  let cloudOnly = $state<CloudWorkspace[]>([]);
+  let adopting = $state('');
+  async function refreshCloud() {
+    // Only meaningful for a cloud-tier, unlocked account; otherwise there's nothing to adopt.
+    cloudOnly = cloudSync.tier === 'cloud' && cloudSync.unlocked ? await listCloudWorkspaces() : [];
+  }
+  async function adopt(w: CloudWorkspace) {
+    if (adopting) return;
+    adopting = w.id;
+    try {
+      if (!adoptCloudWorkspace(w)) return;
+      await dash.switchWorkspace(w.id); // A251 barrier + reload onto the adopted dataset
+      refresh();
+      await refreshCloud();
+    } finally {
+      adopting = '';
+    }
+  }
+
   // ---- delete (the active workspace); the store refuses the last remaining one ----
   let deleteOpen = $state(false);
   let deleteError = $state('');
@@ -114,7 +143,7 @@
   }
 </script>
 
-<DropdownMenu.Root>
+<DropdownMenu.Root onOpenChange={o => o && void refreshCloud()}>
   {#if collapsed}
     <!-- Icon-only trigger (desktop icon rail) — ambiguous without a label, so wrap it in a tooltip
          naming the active workspace (IconTip convention for icon-only controls). -->
@@ -162,6 +191,29 @@
         </DropdownMenu.Item>
       {/each}
     </DropdownMenu.Group>
+    {#if cloudOnly.length}
+      <!-- A298: workspaces synced in your cloud but not yet on THIS device. Adopt one → it's created
+           locally with the SERVER's id + DEK, so it reconciles the same dataset (not a divergent copy). -->
+      <DropdownMenu.Separator />
+      <DropdownMenu.Group>
+        <DropdownMenu.Label>Available in your cloud</DropdownMenu.Label>
+        {#each cloudOnly as w (w.id)}
+          <div class="flex items-center gap-2 px-2 py-1.5 text-sm" data-testid="cloud-adopt-row">
+            <Cloud class="size-4 shrink-0 text-muted-foreground" />
+            <span class="min-w-0 flex-1 truncate">{w.name}</span>
+            <button
+              type="button"
+              class="shrink-0 text-xs font-medium text-foreground hover:underline disabled:opacity-50"
+              data-testid="cloud-adopt"
+              disabled={!!adopting}
+              onclick={() => void adopt(w)}
+            >
+              {adopting === w.id ? 'Adding…' : 'Add to this device'}
+            </button>
+          </div>
+        {/each}
+      </DropdownMenu.Group>
+    {/if}
     <DropdownMenu.Separator />
     <DropdownMenu.Item onSelect={openCreate}><Plus class="size-4" /> New workspace…</DropdownMenu.Item>
     <DropdownMenu.Item onSelect={openRename}><Pencil class="size-4" /> Rename…</DropdownMenu.Item>

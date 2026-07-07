@@ -184,7 +184,7 @@ export async function collectChanges(store: StoreLike, sinceWatermark: number): 
  *  fixed field order with a stable `deleted` encoding. Authenticated, not secret: the server already
  *  sees every field here — binding them just stops a WRITE-capable server forging `deleted`/`updated`/
  *  `type` (which would force a fleet delete or skew LWW) without the tag failing. */
-function recordAad(workspaceId: string, type: string, blindedId: string, updated: number, deleted: boolean): string {
+export function recordAad(workspaceId: string, type: string, blindedId: string, updated: number, deleted: boolean): string {
   return `${workspaceId}|${type}|${blindedId}|${updated}|${deleted ? 1 : 0}`;
 }
 
