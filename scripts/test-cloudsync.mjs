@@ -22,7 +22,7 @@ import { onRequestGet as pullFn } from '../functions/api/sync/pull.ts';
 import { recordKey } from '../functions/_lib/sync.ts';
 import { tradeId } from '../src/lib/core/store.ts';
 import { genIdentityKey, genWorkspaceDek, dekBytesOf, wrapDek, unwrapDekBytes, encryptRecord, blindId } from '../src/lib/core/crypto.ts';
-import { deriveWsKeys, pushChanges, pullAndMerge, syncPlan } from '../src/app/lib/cloudsync-core.ts';
+import { deriveWsKeys, pushChanges, pullAndMerge, syncPlan, collectChanges } from '../src/app/lib/cloudsync-core.ts';
 
 let pass = 0;
 const ok = (name, cond) => {
@@ -171,14 +171,14 @@ function memStore() {
               next[k] = t[k];
             }
           if (next) {
-            next.updated = Date.now();
+            next.updated = t.updated ?? Date.now(); // A297: preserve the incoming clock (no re-stamp echo)
             trades.set(id, next);
           }
           continue;
         }
         const tb = tombs.get(`trade:${id}`); // F58/A255/A269: LWW suppression, composite-keyed lookup
         if (tb && tb.updated >= (t.updated ?? 0)) continue; // clock suppresses; a newer record resurrects
-        trades.set(id, { ...t, id, updated: Date.now() });
+        trades.set(id, { ...t, id, updated: t.updated ?? Date.now() }); // A297: preserve the incoming clock
         added++;
       }
       return { added, duplicate, total: trades.size };
@@ -428,8 +428,9 @@ const stB = { cursor: 0, pushed: -1 };
   // stores one: ciphertext in R2, an index row in D1. An incremental `seq > caughtUp` pull cannot see
   // it; only a full since=0 reconcile does.
   const hidden = trade('2025-03-05 12:00:00', 'ESHURT2025', 'short', 999.99);
+  const hiddenUpdated = Date.now(); // a real pushed record carries `updated` in BOTH the plaintext and the index row (A297)
   const blinded = await blindId(keysA.blindKey, `trade:${tradeId(hidden)}`);
-  const ct = JSON.stringify(await encryptRecord(keysA.recordKey, JSON.stringify({ ...hidden, id: tradeId(hidden) })));
+  const ct = JSON.stringify(await encryptRecord(keysA.recordKey, JSON.stringify({ ...hidden, id: tradeId(hidden), updated: hiddenUpdated })));
   await bucket.put(recordKey(WS, blinded), ct);
   db.tables.sync_records.push({
     workspace_id: WS,
@@ -437,7 +438,7 @@ const stB = { cursor: 0, pushed: -1 };
     seq: caughtUp,
     type: 'trade',
     ciphertext_ref: recordKey(WS, blinded),
-    updated: Date.now(),
+    updated: hiddenUpdated,
     deleted: 0,
   });
 
@@ -477,6 +478,49 @@ const stB = { cursor: 0, pushed: -1 };
   ok('Pull from cloud: pulls only, never advances the pushed-watermark', pull.pull && !pull.push && !pull.forceFullPush);
   const push = syncPlan('push');
   ok('Push to cloud: pushes only, re-uploading everything (forceFullPush), no pull', !push.pull && push.push && push.forceFullPush);
+}
+
+// ── A297: pulled trades keep their ORIGIN clock (no re-stamp echo, no delete resurrection) ────────
+// (1) A push from the PRE-PULL watermark must NOT re-include a freshly-pulled trade — its `updated`
+// is the origin clock (in the past), not the pull-time clock. The old bug re-stamped every pulled
+// trade to Date.now(), so it landed ABOVE the watermark and echoed straight back up on every reconcile.
+{
+  const A3 = memStore();
+  const B3 = memStore();
+  await A3.addTrades([trade('2025-07-01 09:00:00', 'MESU2025', 'long', 77)]); // origin clock ≈ now
+  await pushChanges(A3, keysA, transport, WS, -1); // A uploads its trade
+  await sleep(3);
+  const watermark3 = Date.now(); // strictly after every origin clock — the watermark a push on B runs from
+  await sleep(3);
+  await pullAndMerge(B3, keysB, transport, WS, 0); // B pulls everything (fresh inserts)
+  const changes3 = await collectChanges(B3, watermark3);
+  ok(
+    'A297: a freshly-pulled trade is not re-pushed (origin clock preserved, no echo)',
+    !changes3.some(c => c.type === 'trade' && !c.deleted)
+  );
+}
+
+// (2) A delete on device A is not resurrected by a peer that concurrently pulled the still-live
+// trade AFTER the local delete but BEFORE the tombstone was pushed. Old bug: the peer re-stamped the
+// pulled trade to pull-time (> the tombstone clock), so its echo beat the tombstone under LWW and the
+// trade resurrected on the deleting device.
+{
+  const gT = trade('2025-08-01 09:00:00', 'MNQU2025', 'long', 15);
+  const gId = tradeId(gT);
+  const Adel = memStore();
+  await Adel.addTrades([gT]); // origin clock T0
+  await pushChanges(Adel, keysA, transport, WS, -1); // server has the live trade
+  await sleep(3);
+  await Adel.deleteTrade(gId); // A deletes locally (tombstone Td) — NOT pushed yet (concurrent)
+  const Bfresh = memStore();
+  await pullAndMerge(Bfresh, keysB, transport, WS, 0); // B pulls the still-live trade → fresh insert (pull-time > Td)
+  ok('B saw the still-live trade before the tombstone', (await Bfresh.getAllTrades()).some(t => t.id === gId));
+  await pushChanges(Bfresh, keysB, transport, WS, -1); // B re-pushes its copy (origin clock, not re-stamped)
+  await pullAndMerge(Adel, keysA, transport, WS, 0); // A reconciles
+  ok(
+    "A297: a concurrent stale re-push does not resurrect A's deleted trade",
+    !(await Adel.getAllTrades()).some(t => t.id === gId)
+  );
 }
 
 console.log(`\n${pass} assertions passed.`);

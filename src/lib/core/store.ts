@@ -391,7 +391,11 @@ export const Store: StoreLike = {
                   setField(next, k, t[k]);
                 }
               if (next) {
-                next.updated = Date.now(); // F58: LWW clock on the enrichment write
+                // A297: PRESERVE the incoming clock when the duplicate carries one (a pulled/synced
+                // trade travels with its origin `updated`) so a pull→enrich→push cycle can't re-stamp
+                // it and echo forever; only a clockless CSV row (a fresh local import) gets Date.now().
+                // Matches journal/meta/trademeta, which preserve the incoming `updated` under LWW (A260).
+                next.updated = t.updated ?? Date.now(); // F58: LWW clock on the enrichment write
                 existing.set(id, next);
                 store.put(next);
               }
@@ -403,8 +407,12 @@ export const Store: StoreLike = {
             // A154: computed id LAST so a crafted input object carrying its own `id` key (e.g. a
             // tampered backup) can never override the content hash the dedupe/meta paths rely on.
             // fileIds is copied to a plain array — a Svelte $state proxy would throw in the
-            // structured clone (same rule as saveTradeMeta's .filter). F58: stamp the LWW clock.
-            const rec = t.fileIds ? { ...t, fileIds: [...t.fileIds], id, updated: Date.now() } : { ...t, id, updated: Date.now() };
+            // structured clone (same rule as saveTradeMeta's .filter). A297: PRESERVE an incoming
+            // `updated` (a pulled/synced trade carries its origin clock) and only stamp Date.now() for
+            // a clockless CSV row — re-stamping every pulled trade guaranteed a re-push echo AND could
+            // resurrect a delete (an inflated pull-time clock beat a real tombstone under LWW).
+            const u = t.updated ?? Date.now();
+            const rec = t.fileIds ? { ...t, fileIds: [...t.fileIds], id, updated: u } : { ...t, id, updated: u };
             existing.set(id, rec);
             store.put(rec);
             added++;
