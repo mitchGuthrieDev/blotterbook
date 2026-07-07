@@ -4,7 +4,10 @@
  * Called ONLY by the send-trigger workflow (.github/workflows/changelog-email.yml), which fires on a
  * push to main touching static/data/changelog.json. Auth is a shared secret (CHANGELOG_NOTIFY_SECRET,
  * GH secret ↔ Pages env var) compared in constant time — a real control (S22), not the fail-open
- * limiter. The Function reads /data/changelog.json, takes the top prod release, and:
+ * limiter. An optional `?version=<v>` query param is a deploy-freshness gate: if the live changelog's
+ * top release isn't yet `<v>`, the Function returns 425 (the new commit hasn't finished deploying) so
+ * the caller can retry — never sending a stale version. The Function reads /data/changelog.json, takes
+ * the top prod release, and:
  *   - dedupes against the `changelog_sends` ledger (a re-run / second push never double-sends);
  *   - fans out to CONFIRMED subscribers only, each with a per-recipient one-click unsubscribe link +
  *     List-Unsubscribe(-Post) headers, batched under the A15 50-subrequest cap (sendEmailBatch).
@@ -52,6 +55,16 @@ export async function onRequestPost(ctx: Ctx) {
     return json({ error: 'Could not read the changelog.' }, 502);
   }
   if (!release || !release.version || !release.title) return json({ error: 'No release to send.' }, 400);
+
+  // --- deploy-freshness gate: the trigger workflow passes ?version=<the version it just committed>.
+  // Until Cloudflare Pages has rolled out that commit, this Function (and the changelog.json it reads)
+  // still serve the PREVIOUS release — so answer 425 "Too Early" and let the caller retry, rather than
+  // broadcasting the wrong (stale) version. This replaces the workflow's old, challenge-prone client
+  // poll of the static /data/changelog.json with a single authenticated path. Omitted → no gate. ---
+  const expected = new URL(request.url).searchParams.get('version');
+  if (expected && release.version !== expected) {
+    return json({ error: 'deploy-not-live', expected, live: release.version }, 425);
+  }
 
   // --- idempotency: never re-send a version already broadcast ---
   if (await sendLedgerFor(db, release.version)) return json({ ok: true, deduped: true, version: release.version });

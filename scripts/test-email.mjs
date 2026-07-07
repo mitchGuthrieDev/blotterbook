@@ -378,6 +378,34 @@ console.log('\nnotify-changelog — confirmed-only broadcast + idempotency:');
   }
 }
 
+console.log('\nnotify-changelog — deploy-freshness gate (?version=):');
+{
+  const f = installFetch();
+  try {
+    const db = mockDb();
+    const env = { ACCOUNTS_DB: db, ...RESEND_ENV, CHANGELOG_NOTIFY_SECRET: 'sekret' };
+    const notifyVersion = version =>
+      notify({
+        request: new Request(`${ORIGIN}/api/notify-changelog?version=${version}`, {
+          method: 'POST',
+          headers: { 'x-changelog-secret': 'sekret' },
+        }),
+        env,
+      });
+
+    // live top release is 9.9.9 (mock) — a stale expectation means the deploy isn't live yet.
+    const early = await notifyVersion('1.0.0');
+    ok('stale ?version → 425 (deploy not live), nothing sent or ledgered', early.status === 425 && db.tables.changelog_sends.length === 0);
+    ok('...425 body reports expected vs live', (await early.json()).live === '9.9.9');
+
+    // matching version → proceeds to the normal (idempotent) send.
+    const live = await notifyVersion('9.9.9');
+    ok('matching ?version → 200 send', live.status === 200 && (await live.json()).version === '9.9.9');
+  } finally {
+    f.restore();
+  }
+}
+
 console.log('\nnotify-changelog — 0 recipients still ledgers; fail-closed shapes:');
 {
   const f = installFetch();

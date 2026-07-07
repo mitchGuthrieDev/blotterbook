@@ -12,6 +12,15 @@ name: Changelog email
 # CONFIG (owner-gated): set two repo secrets — CHANGELOG_NOTIFY_URL (the deployed origin, e.g.
 # https://blotterbook.com) and CHANGELOG_NOTIFY_SECRET (matching the Pages env var of the same name).
 # When either is unset the job no-ops cleanly, so forks / unconfigured repos never fail.
+#
+# CLOUDFLARE (owner-gated, one-time): the origin sits behind Cloudflare, whose Bot Fight Mode / Managed
+# Challenge answers this runner's request with a "Just a moment…" interstitial (HTTP 403) instead of
+# reaching the Function — a JS challenge curl can't solve. Add a WAF custom rule to let the send through:
+#   When incoming requests match…
+#     (http.request.uri.path eq "/api/notify-changelog" and http.request.headers["x-changelog-secret"] ne "")
+#   Then… Skip → Managed Challenge / Bot Fight Mode / Security Level.
+# The shared secret still authenticates the request server-side, so the skip only widens who may *reach*
+# the endpoint, not who may act. If the challenge ever returns, the job below fails fast with this fix.
 
 on:
   push:
@@ -50,27 +59,61 @@ jobs:
           # The version we just committed — the send should broadcast exactly this one.
           EXPECTED="$(node -e "process.stdout.write((require('./static/data/changelog.json').releases[0]||{}).version||'')")"
           echo "Committed top release: ${EXPECTED:-<none>}"
+          if [ -z "$EXPECTED" ]; then
+            echo "No top release version in changelog.json — nothing to broadcast."
+            exit 0
+          fi
 
-          # Cloudflare Pages needs a moment to deploy the new commit before the live changelog.json
-          # reflects it (and before /api/notify-changelog reads the new top release). Poll for it.
+          BASE="${NOTIFY_URL%/}"
+          # A browser-ish UA so plain Bot-Fight (UA-keyed) heuristics don't reflexively challenge the runner;
+          # the WAF skip rule (see header) is what reliably lets the secret-bearing POST through.
+          UA="Mozilla/5.0 (compatible; BlotterbookChangelogBot/1.0; +https://blotterbook.com)"
+
+          # One authenticated path does both jobs: it waits out the Cloudflare Pages deploy (the Function
+          # answers 425 while it still serves the previous release) and performs the idempotent send. No
+          # separate static-file poll — that GET carried no secret, so the WAF skip couldn't cover it.
           for attempt in $(seq 1 20); do
-            LIVE="$(curl -fsS "${NOTIFY_URL%/}/data/changelog.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{process.stdout.write((JSON.parse(s).releases[0]||{}).version||'')}catch(e){}})" || true)"
-            if [ -n "$EXPECTED" ] && [ "$LIVE" = "$EXPECTED" ]; then
-              echo "Live deploy is up to date (${LIVE})."
-              break
+            : > /tmp/notify-body.txt
+            HTTP_CODE="$(curl -sS -o /tmp/notify-body.txt -w '%{http_code}' \
+              -X POST "${BASE}/api/notify-changelog?version=${EXPECTED}" \
+              -A "$UA" \
+              -H "Accept: application/json" \
+              -H "x-changelog-secret: ${NOTIFY_SECRET}")" || HTTP_CODE=000
+
+            # A Cloudflare challenge means the request never reached our Function — retrying won't help.
+            if grep -qiE "Just a moment|challenge-platform|__cf_chl|Enable JavaScript and cookies" /tmp/notify-body.txt; then
+              echo "::error::Cloudflare served a bot challenge (HTTP ${HTTP_CODE}) — the request never reached /api/notify-changelog."
+              echo "::error::Add a WAF skip rule (see this workflow's header): Skip Managed Challenge/Bot Fight Mode when"
+              echo "::error::  http.request.uri.path eq \"/api/notify-changelog\" and http.request.headers[\"x-changelog-secret\"] ne \"\""
+              echo "----- response body (truncated) -----"; head -c 800 /tmp/notify-body.txt; echo; echo "-------------------------------------"
+              exit 1
             fi
-            echo "Waiting for deploy… (attempt ${attempt}, live=${LIVE:-<none>})"
+
+            case "$HTTP_CODE" in
+              2??)
+                echo "Sent (HTTP ${HTTP_CODE}):"; cat /tmp/notify-body.txt; echo
+                exit 0
+                ;;
+              425)
+                echo "Deploy not live yet (attempt ${attempt}) — Pages still serving the previous release. Waiting…"
+                ;;
+              401)
+                echo "::error::notify-changelog rejected the secret (401) — CHANGELOG_NOTIFY_SECRET must match the Pages env var."
+                cat /tmp/notify-body.txt; echo
+                exit 1
+                ;;
+              5??|000)
+                echo "Transient failure (HTTP ${HTTP_CODE}, attempt ${attempt}) — retrying…"
+                cat /tmp/notify-body.txt; echo
+                ;;
+              *)
+                echo "::error::notify-changelog returned ${HTTP_CODE}"
+                cat /tmp/notify-body.txt; echo
+                exit 1
+                ;;
+            esac
             sleep 30
           done
 
-          echo "POSTing /api/notify-changelog…"
-          HTTP_CODE="$(curl -sS -o /tmp/notify-body.json -w '%{http_code}' \
-            -X POST "${NOTIFY_URL%/}/api/notify-changelog" \
-            -H "x-changelog-secret: ${NOTIFY_SECRET}")"
-          echo "Response ${HTTP_CODE}:"
-          cat /tmp/notify-body.json || true
-          echo
-          if [ "$HTTP_CODE" -ge 400 ]; then
-            echo "::error::notify-changelog returned ${HTTP_CODE}"
-            exit 1
-          fi
+          echo "::error::Timed out after 20 attempts waiting for the deploy to go live / the send to succeed."
+          exit 1
