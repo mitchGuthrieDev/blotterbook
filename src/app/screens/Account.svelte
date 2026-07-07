@@ -23,6 +23,7 @@
     Download,
     RefreshCw,
     Fingerprint,
+    Trash2,
   } from '@lucide/svelte';
   import * as Card from '$lib/components/ui/card';
   import { Button } from '$lib/components/ui/button';
@@ -31,12 +32,14 @@
   import { Badge } from '$lib/components/ui/badge';
   import { Separator } from '$lib/components/ui/separator';
   import { Skeleton } from '$lib/components/ui/skeleton';
+  import * as AlertDialog from '$lib/components/ui/alert-dialog';
   import { usdCents } from '../../lib/core/core.ts';
   import {
     account,
     refreshSession,
     register,
     addPasskey,
+    deletePasskey,
     login,
     logout,
     emailVerifySend,
@@ -145,6 +148,16 @@
   const recoverValid = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoverEmail.trim()));
   // one passkey on record → nudge to add a second (until dismissed)
   const showSecondPasskeyNudge = $derived(!!account.user && account.passkeys.length === 1 && !nudgeDismissed);
+
+  // A302: passkey removal (stolen-device remediation) — confirm before removing. The server refuses
+  // to delete the LAST passkey (a stranded account has no login), so the Remove control only renders
+  // when more than one is enrolled; re-enroll a replacement first to remove the final one.
+  let pkRemove = $state<{ id: string; name: string } | null>(null);
+  async function onRemovePasskey() {
+    const pk = pkRemove;
+    pkRemove = null;
+    if (pk) await deletePasskey(pk.id);
+  }
 
   const fmtDate = (ms: number | null) =>
     ms == null ? '—' : new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -374,7 +387,21 @@
                   Added {fmtDate(pk.createdAt)}{pk.lastUsedAt != null ? ` · last used ${fmtDate(pk.lastUsedAt)}` : ''}
                 </p>
               </div>
-              {#if pk.backedUp}<Badge variant="secondary">Synced</Badge>{/if}
+              <div class="flex items-center gap-2">
+                {#if pk.backedUp}<Badge variant="secondary">Synced</Badge>{/if}
+                {#if account.passkeys.length > 1}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="text-destructive hover:text-destructive"
+                    {disabled}
+                    onclick={() => (pkRemove = { id: pk.id, name: pk.nickname || 'Passkey' })}
+                  >
+                    <Trash2 class="size-4" />
+                    <span class="sr-only">Remove passkey</span>
+                  </Button>
+                {/if}
+              </div>
             </li>
           {:else}
             <li class="text-sm text-muted-foreground">No passkeys on record.</li>
@@ -386,6 +413,26 @@
         </Button>
       </Card.Content>
     </Card.Root>
+
+    <!-- A302: confirm passkey removal (stolen-device remediation) — the underlying endpoint is scoped
+         to the caller + refuses to strand the account by deleting the last passkey. -->
+    <AlertDialog.Root open={pkRemove !== null} onOpenChange={o => !o && (pkRemove = null)}>
+      <AlertDialog.Content>
+        <AlertDialog.Header>
+          <AlertDialog.Title>Remove “{pkRemove?.name}”?</AlertDialog.Title>
+          <AlertDialog.Description>
+            This device will no longer be able to sign in with this passkey. If it was lost or stolen, removing it revokes its access. You
+            can enroll a new passkey any time.
+          </AlertDialog.Description>
+        </AlertDialog.Header>
+        <AlertDialog.Footer>
+          <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+          <AlertDialog.Action class="bg-destructive text-white hover:bg-destructive/90" onclick={onRemovePasskey}
+            >Remove passkey</AlertDialog.Action
+          >
+        </AlertDialog.Footer>
+      </AlertDialog.Content>
+    </AlertDialog.Root>
 
     <!-- ── F61b/CH16: cloud-sync keys (prod + staging, logged-in only; demo never renders this) ── -->
     {#if cloudSyncOn}

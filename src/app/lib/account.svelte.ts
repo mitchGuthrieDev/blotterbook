@@ -149,6 +149,15 @@ export function registerPrfPasskey(): Promise<boolean> {
   });
 }
 
+/** Remove one of the signed-in account's passkeys (A302 stolen-device remediation). Scoped to the
+ *  caller server-side (deleteCredentialForUser); the server refuses to remove the LAST passkey (a
+ *  400 the UI surfaces), so the caller must enroll a replacement first. Not a WebAuthn ceremony. */
+export function deletePasskey(id: string): Promise<boolean> {
+  return ceremony(async () => {
+    await api('/api/account/passkey-delete', { id });
+  });
+}
+
 /** Usernameless passkey login (discoverable credential — no email prompt). */
 export function login(): Promise<boolean> {
   return ceremony(async () => {
