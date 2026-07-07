@@ -5021,6 +5021,17 @@
       "doneNote": "DONE (2026-07-07, #119) — Composite ${type}:${id} tombstone key so a trade and its trademeta no longer collide (edited-trade deletes now propagate)."
     },
     {
+      "id": "A272",
+      "title": "(gated by A271) Calendar-screen module dynamically fills the viewport (reduce negative space)",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-07 alongside the A271 screens slice. The Calendar screen's month grid now dynamically fills the viewport (its permanent Large state in the sizing model) instead of leaving negative space: on lg+ the month Card carries a class-based lg:min-h-[70vh] and its day-cell grid becomes flex-1 with grid-template-rows auto + N×minmax(0,1fr) (N = the month's 4/5/6 weeks, literal classes so the Tailwind JIT emits them), so day cells reflow taller to consume the space while keeping numbers legible and undistorted. Static CSS = no layout shift on load; CSP-clean (no inline style); lg-gated so mobile keeps its A182 square single-column cells and the year heatmap is unaffected. Covered by a new e2e assert (Calendar month-fill class); full suite 105 green."
+    },
+    {
       "id": "A279",
       "title": "Rework Cloud Sync UX — replace lock/unlock with sync-now + a parity status pill; clarify passkey vs passphrase (ref Obsidian)",
       "category": "FEATURES",

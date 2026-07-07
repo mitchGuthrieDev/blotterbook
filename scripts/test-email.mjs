@@ -427,12 +427,12 @@ console.log('\nnotify-changelog — PUBLIC_ORIGIN brands user-facing links (A315
     });
     ok('send succeeds when invoked at the pages.dev origin', r.status === 200);
     const msg = f.sent.batch[0][0];
-    ok('unsubscribe link uses PUBLIC_ORIGIN, not the invoking pages.dev origin', msg.html.includes('https://blotterbook.com/api/unsubscribe?token='));
-    ok('...never leaks the pages.dev host into the link', !msg.html.includes('pages.dev'));
     ok(
-      '...List-Unsubscribe header matches',
-      msg.headers['List-Unsubscribe'].startsWith('<https://blotterbook.com/api/unsubscribe?token=')
+      'unsubscribe link uses PUBLIC_ORIGIN, not the invoking pages.dev origin',
+      msg.html.includes('https://blotterbook.com/api/unsubscribe?token=')
     );
+    ok('...never leaks the pages.dev host into the link', !msg.html.includes('pages.dev'));
+    ok('...List-Unsubscribe header matches', msg.headers['List-Unsubscribe'].startsWith('<https://blotterbook.com/api/unsubscribe?token='));
   } finally {
     f.restore();
   }
