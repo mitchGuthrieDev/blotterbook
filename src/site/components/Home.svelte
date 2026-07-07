@@ -189,65 +189,232 @@
   </nav>
 </header>
 
-<!-- ============ HERO / MAIN LANDING ============ -->
-<section id="home" class="flex min-h-screen scroll-mt-0 flex-col items-center justify-center px-[22px] pb-[72px] pt-[88px] text-center">
-  <div class="inner flex w-full max-w-[1180px] flex-col items-center">
-    <div
-      class="livepill mb-[22px] inline-flex items-center gap-2 rounded-full border border-border bg-card px-[13px] py-[6px] font-mono text-[12px] tracking-[0.04em] {pillState ===
-        'live' || pillState === 'maint'
-        ? 'text-foreground'
-        : 'text-muted-foreground'}"
-      title="Checks whether the live Blotterbook app is responding"
-    >
-      <span
-        class="livedot relative h-2 w-2 flex-none rounded-full {pillState === 'live'
-          ? 'bg-chart-2 livedot-live'
-          : pillState === 'down'
-            ? 'bg-destructive'
-            : pillState === 'maint'
-              ? 'bg-chart-4'
-              : 'bg-faint'}"
-      ></span><span>{pillText}</span>
-    </div>
-    <div class="banner w-full max-w-[880px]">
-      <img
-        src="assets/banner.svg"
-        alt="Blotterbook — futures journal and cost dashboard"
-        class="block h-auto w-full rounded-[14px] border border-border"
-      />
-    </div>
-    <p class="tag mx-auto mt-6 max-w-[620px] text-[clamp(15px,1.7vw,17px)] leading-[1.6] text-muted-foreground">
-      A fast, private futures trading journal and true-cost dashboard. Import your broker CSV and see real, after-cost, after-tax
-      performance — everything runs in your browser.
-    </p>
-    <div class="hero-ctas mt-[30px] flex flex-wrap justify-center gap-3">
+<!-- ============ HERO / MAIN LANDING (A274 refresh) ============
+     Left-aligned hero (matches the rest of the page's section headers) + a device-framed live-P&L
+     dashboard, translated from the 21st.dev "Efferd" hero-3 reference into our tokens/CSP rules:
+     no external screenshot (single dark theme, own synthetic panel), no inline style="" (mask +
+     SVG strokes are scoped CSS), Geist Mono, greyscale chrome with color only in the data layer. -->
+<section id="home" class="relative flex scroll-mt-0 flex-col overflow-hidden px-[22px] pb-[72px] pt-[96px]">
+  <div class="mx-auto w-full max-w-[1180px]">
+    <div class="flex max-w-[660px] flex-col items-start gap-[22px]">
+      <!-- announcement chip (the reference's "NOW …" pill → a real Blotterbook announcement) -->
       <a
-        class="cta-lg inline-flex items-center gap-[9px] rounded-[11px] bg-primary px-7 py-[14px] text-[15px] font-semibold text-primary-foreground transition-[filter,transform] duration-150 hover:translate-y-[-1px] hover:brightness-[1.08]"
-        href="/app/">Launch Blotterbook &rarr;</a
+        class="rise r1 group inline-flex w-fit items-center gap-[10px] rounded-md border border-border bg-card px-[6px] py-[5px] text-[12.5px] text-muted-foreground shadow-[0_1px_0_rgba(0,0,0,0.3)] transition-colors hover:border-ring"
+        href="#pricing"
       >
-      <a
-        class="cta-ghost inline-flex items-center gap-2 rounded-[11px] border border-border bg-card px-6 py-[13px] text-[15px] font-medium text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-secondary"
-        href="/app/demo.html">See Demo</a
+        <span
+          class="rounded-[3px] border border-border bg-popover px-[6px] py-[2px] font-mono text-[10.5px] tracking-[0.14em] text-foreground"
+          >NEW</span
+        >
+        <span>Cloud sync is live — end&#8209;to&#8209;end encrypted</span>
+        <span class="h-4 w-px flex-none bg-border"></span>
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          class="h-[13px] w-[13px] flex-none fill-none stroke-current stroke-2 [stroke-linecap:round] [stroke-linejoin:round] transition-transform duration-150 group-hover:translate-x-[2px]"
+          ><path d="M5 12h14M13 6l6 6-6 6" /></svg
+        >
+      </a>
+
+      <h1 class="rise r2 m-0 text-balance text-[clamp(2.4rem,5.4vw,3.6rem)] font-medium leading-[1.04] tracking-[-0.02em]">
+        Know what you actually <span class="text-muted-foreground">keep.</span>
+      </h1>
+
+      <p
+        class="rise r3 m-0 max-w-[560px] text-[clamp(15px,1.7vw,18px)] leading-[1.6] text-muted-foreground [&>b]:font-medium [&>b]:text-foreground"
       >
+        A local-first trading journal for futures traders. Import your broker CSVs — <b>parsed in your browser, never uploaded</b> — and see Gross,
+        Net, and Take-home after commissions, exchange fees, and taxes.
+      </p>
+
+      <div class="rise r4 flex flex-wrap items-center gap-3 pt-1">
+        <a
+          class="inline-flex items-center gap-[9px] rounded-[11px] bg-primary px-7 py-[13px] text-[15px] font-semibold text-primary-foreground transition-[filter,transform] duration-150 hover:translate-y-[-1px] hover:brightness-[1.08]"
+          href="/app/"
+          >Launch Blotterbook<svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            class="h-4 w-4 fill-none stroke-current stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"
+            ><path d="M5 12h14M13 6l6 6-6 6" /></svg
+          ></a
+        >
+        <a
+          class="inline-flex items-center gap-2 rounded-[11px] border border-input bg-input/30 px-6 py-[12px] text-[15px] font-medium text-foreground transition-[border-color,background] duration-150 hover:border-ring hover:bg-accent"
+          href="/app/demo.html"
+          ><svg viewBox="0 0 24 24" aria-hidden="true" class="h-[15px] w-[15px] flex-none fill-current"><path d="M6 4l14 8-14 8z" /></svg
+          >Try the demo</a
+        >
+      </div>
+
+      <div class="rise r5 flex flex-wrap items-center gap-x-[18px] gap-y-2 pt-1 text-[12.5px] text-muted-foreground">
+        <span
+          class="livepill inline-flex items-center gap-2 {pillState === 'live' || pillState === 'maint'
+            ? 'text-foreground'
+            : 'text-muted-foreground'}"
+          title="Checks whether the live Blotterbook app is responding"
+        >
+          <span
+            class="livedot relative h-2 w-2 flex-none rounded-full {pillState === 'live'
+              ? 'bg-chart-2 livedot-live'
+              : pillState === 'down'
+                ? 'bg-destructive'
+                : pillState === 'maint'
+                  ? 'bg-chart-4'
+                  : 'bg-faint'}"
+          ></span>{pillText}
+        </span>
+        <span class="inline-flex items-center gap-[6px]"
+          ><svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            class="h-[13px] w-[13px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"
+            ><path d="M20 6L9 17l-5-5" /></svg
+          >No account needed</span
+        >
+        <span class="inline-flex items-center gap-[6px]"
+          ><svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            class="h-[13px] w-[13px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"
+            ><path d="M20 6L9 17l-5-5" /></svg
+          >Nothing leaves your browser</span
+        >
+      </div>
     </div>
-    <div class="hero-strip mt-10 flex max-w-[780px] flex-wrap justify-center gap-7">
+  </div>
+
+  <!-- device-framed live-P&L dashboard — a synthetic panel (swappable for a real capture later),
+       single dark theme, bottom-masked into the page. Chrome greyscale; color only in the data. -->
+  <div class="showcase rise r6 relative mx-auto mt-[52px] w-full max-w-[1180px]">
+    <div class="relative rounded-[10px] border border-border bg-background p-2 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7)] ring-1 ring-card">
       <div
-        class="min-w-[180px] flex-1 text-[13px] leading-[1.55] text-muted-foreground [&>b]:mb-[5px] [&>b]:block [&>b]:text-[14px] [&>b]:text-foreground"
+        class="grid min-h-[440px] grid-cols-[184px_1fr] overflow-hidden rounded-[6px] border border-border bg-background max-[820px]:grid-cols-1"
       >
-        <b>Private by design</b>Your trades are parsed and stored locally. Nothing is uploaded.
-      </div>
-      <div
-        class="min-w-[180px] flex-1 text-[13px] leading-[1.55] text-muted-foreground [&>b]:mb-[5px] [&>b]:block [&>b]:text-[14px] [&>b]:text-foreground"
-      >
-        <b>True cost &amp; tax model</b>Per-symbol commissions, data fees, and a Section 1256 tax estimate.
-      </div>
-      <div
-        class="min-w-[180px] flex-1 text-[13px] leading-[1.55] text-muted-foreground [&>b]:mb-[5px] [&>b]:block [&>b]:text-[14px] [&>b]:text-foreground"
-      >
-        <b>Journal &amp; analyze</b>Calendar, equity curve, filters, day-notes, and deep statistics.
+        <aside class="flex flex-col gap-[3px] border-r border-border bg-card p-3 max-[820px]:hidden" aria-hidden="true">
+          <div class="flex items-center gap-2 px-[6px] pb-3 pt-1 text-[12.5px] font-semibold">
+            <span class="h-2 w-2 flex-none rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--chart-3))]"></span>Blotterbook
+          </div>
+          <span class="dnav on"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              ><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect
+                x="14"
+                y="12"
+                width="7"
+                height="9"
+              /><rect x="3" y="16" width="7" height="5" /></svg
+            >Dashboard</span
+          >
+          <span class="dnav"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              ><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M3 10h18M8 2v4M16 2v4" /></svg
+            >Calendar</span
+          >
+          <span class="dnav"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              ><path d="M3 3v18h18" /><path d="M7 14l4-4 3 3 5-6" /></svg
+            >Analytics</span
+          >
+          <span class="dnav"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              ><path d="M4 6h16M4 12h16M4 18h10" /></svg
+            >Blotter</span
+          >
+          <span class="dnav"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              ><path d="M14 3v5h5" /><path d="M6 3h8l5 5v13H6z" /></svg
+            >Reports</span
+          >
+          <span class="mt-3 px-2 pb-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground opacity-70">Data</span>
+          <span class="dnav"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              ><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /></svg
+            >CSV Library</span
+          >
+          <span class="dnav"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              ><path d="M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20" /></svg
+            >Account</span
+          >
+        </aside>
+        <div class="flex flex-col gap-[14px] p-4">
+          <div class="flex items-center gap-[10px]">
+            <span class="text-[13px] font-semibold">Dashboard</span>
+            <div class="ml-auto flex overflow-hidden rounded-[5px] border border-border text-[11px]">
+              <span class="px-[10px] py-[4px] text-muted-foreground">Gross</span>
+              <span class="bg-accent px-[10px] py-[4px] text-foreground">Net</span>
+              <span class="px-[10px] py-[4px] text-muted-foreground">Take-home</span>
+            </div>
+          </div>
+          <div class="grid grid-cols-4 gap-[10px] max-[820px]:grid-cols-2">
+            <div class="rounded-[6px] border border-border bg-card p-3">
+              <div class="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Net P&amp;L</div>
+              <div class="mt-[5px] text-[19px] font-semibold text-chart-2 [font-variant-numeric:tabular-nums]">+$18,432</div>
+              <div class="mt-[3px] text-[10.5px] text-muted-foreground">+12.4% after costs</div>
+            </div>
+            <div class="rounded-[6px] border border-border bg-card p-3">
+              <div class="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Win rate</div>
+              <div class="mt-[5px] text-[19px] font-semibold [font-variant-numeric:tabular-nums]">58.3%</div>
+              <div class="mt-[3px] text-[10.5px] text-muted-foreground">412 trades · 240W</div>
+            </div>
+            <div class="rounded-[6px] border border-border bg-card p-3">
+              <div class="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Take-home</div>
+              <div class="mt-[5px] text-[19px] font-semibold text-chart-3 [font-variant-numeric:tabular-nums]">+$13,190</div>
+              <div class="mt-[3px] text-[10.5px] text-muted-foreground">after §1256 tax est.</div>
+            </div>
+            <div class="rounded-[6px] border border-border bg-card p-3">
+              <div class="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Total costs</div>
+              <div class="mt-[5px] text-[19px] font-semibold text-destructive [font-variant-numeric:tabular-nums]">&#8722;$2,847</div>
+              <div class="mt-[3px] text-[10.5px] text-muted-foreground">commissions + fees</div>
+            </div>
+          </div>
+          <div class="flex flex-1 flex-col gap-2 rounded-[6px] border border-border bg-card p-[14px]">
+            <div class="flex items-center gap-[14px]">
+              <span class="text-[12px] font-semibold">Equity curve</span>
+              <span class="ml-auto flex flex-wrap gap-x-[14px] gap-y-1 text-[10.5px] text-muted-foreground">
+                <span class="inline-flex items-center gap-[5px]"
+                  ><span class="inline-block h-[2px] w-[9px] rounded-full bg-chart-1"></span>Gross</span
+                >
+                <span class="inline-flex items-center gap-[5px]"
+                  ><span class="inline-block h-[2px] w-[9px] rounded-full bg-chart-2"></span>Net</span
+                >
+                <span class="inline-flex items-center gap-[5px]"
+                  ><span class="inline-block h-[2px] w-[9px] rounded-full bg-chart-3"></span>Take-home</span
+                >
+              </span>
+            </div>
+            <svg
+              class="h-auto w-full"
+              viewBox="0 0 920 240"
+              preserveAspectRatio="none"
+              role="img"
+              aria-label="Cumulative equity curve — Gross, Net, and Take-home rising over time"
+            >
+              <line class="eq-grid" x1="40" y1="55" x2="900" y2="55" />
+              <line class="eq-grid" x1="40" y1="110" x2="900" y2="110" />
+              <line class="eq-grid" x1="40" y1="165" x2="900" y2="165" />
+              <line class="eq-baseline" x1="40" y1="220" x2="900" y2="220" />
+              <path
+                class="eq-net-area"
+                d="M40,196 118,184 196,200 274,166 352,172 430,140 508,150 586,112 664,122 742,86 820,96 898,60 898,220 40,220 Z"
+              />
+              <polyline
+                class="eq-gross"
+                points="40,178 118,166 196,182 274,146 352,152 430,120 508,128 586,90 664,100 742,62 820,72 898,38"
+              />
+              <polyline
+                class="eq-net"
+                points="40,196 118,184 196,200 274,166 352,172 430,140 508,150 586,112 664,122 742,86 820,96 898,60"
+              />
+              <polyline
+                class="eq-take"
+                points="40,208 118,198 196,212 274,180 352,188 430,158 508,168 586,134 664,144 742,110 820,120 898,86"
+              />
+              <circle class="eq-dot" cx="898" cy="60" r="3.5" />
+            </svg>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="scrollhint mt-[46px] font-mono text-[12px] tracking-[0.1em] text-muted-foreground">SCROLL ↓</div>
   </div>
 </section>
 
@@ -266,36 +433,36 @@
     <!-- condensed use-cases, horizontal -->
     <div class="uc-row mt-[30px] grid grid-cols-4 gap-[14px] max-[900px]:grid-cols-2 max-[560px]:grid-cols-1">
       <div
-        class="ucx relative overflow-hidden rounded-[12px] border border-border bg-card p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--chart-3))] before:content-['']"
+        class="ucx rounded-[10px] border border-border bg-card p-4 transition-[border-color,transform] duration-200 hover:-translate-y-[2px] hover:border-ring"
       >
-        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-chart-3">Cost intelligence</p>
+        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">Cost intelligence</p>
         <h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Brokers &amp; feeds vs. real PnL</h3>
         <p class="m-0 text-[12.5px] leading-[1.55] text-muted-foreground">
           Flip commission tiers and data feeds; watch your net move across your real history.
         </p>
       </div>
       <div
-        class="ucx relative overflow-hidden rounded-[12px] border border-border bg-card p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--chart-3))] before:content-['']"
+        class="ucx rounded-[10px] border border-border bg-card p-4 transition-[border-color,transform] duration-200 hover:-translate-y-[2px] hover:border-ring"
       >
-        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-chart-3">Tax planning</p>
+        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">Tax planning</p>
         <h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Location-based estimates</h3>
         <p class="m-0 text-[12.5px] leading-[1.55] text-muted-foreground">
           A Section 1256 blend on positive net profit, by state — know it long before April.
         </p>
       </div>
       <div
-        class="ucx relative overflow-hidden rounded-[12px] border border-border bg-card p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--chart-3))] before:content-['']"
+        class="ucx rounded-[10px] border border-border bg-card p-4 transition-[border-color,transform] duration-200 hover:-translate-y-[2px] hover:border-ring"
       >
-        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-chart-3">Business budgeting</p>
+        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">Business budgeting</p>
         <h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Break-even before you trade</h3>
         <p class="m-0 text-[12.5px] leading-[1.55] text-muted-foreground">
           Subscriptions + commissions become a break-even-per-trade and a clear cost waterfall.
         </p>
       </div>
       <div
-        class="ucx relative overflow-hidden rounded-[12px] border border-border bg-card p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--chart-3))] before:content-['']"
+        class="ucx rounded-[10px] border border-border bg-card p-4 transition-[border-color,transform] duration-200 hover:-translate-y-[2px] hover:border-ring"
       >
-        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-chart-3">Discipline &amp; review</p>
+        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">Discipline &amp; review</p>
         <h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Journal every session</h3>
         <p class="m-0 text-[12.5px] leading-[1.55] text-muted-foreground">
           Day-notes, equity-curve markup, and stats by session and weekday to find your edge.
@@ -384,7 +551,7 @@
     >
       <li>
         <a
-          class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-tradingview"
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
@@ -396,19 +563,31 @@
       </li>
       <li>
         <a
-          class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-tradovate"
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
             aria-hidden="true"
-          ></span><b class="flex-1 text-[15px] font-semibold">Tradovate / NinjaTrader</b><span
-            class="pstate font-mono text-[10.5px] text-chart-2">Verified · real exports</span
+          ></span><b class="flex-1 text-[15px] font-semibold">Tradovate</b><span class="pstate font-mono text-[10.5px] text-chart-2"
+            >Verified · real exports</span
           ></a
         >
       </li>
       <li>
         <a
-          class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          href="howto.html#imp-tradovate"
+          ><span
+            class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
+            aria-hidden="true"
+          ></span><b class="flex-1 text-[15px] font-semibold">NinjaTrader</b><span class="pstate font-mono text-[10.5px] text-chart-2"
+            >Verified · real exports</span
+          ></a
+        >
+      </li>
+      <li>
+        <a
+          class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-quantower"
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
@@ -420,7 +599,7 @@
       </li>
       <li>
         <a
-          class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-atas"
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
@@ -432,7 +611,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-rithmic"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Rithmic R|Trader</b
@@ -441,7 +620,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-sierrachart"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Sierra Chart</b
@@ -450,7 +629,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-tradestation"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">TradeStation</b
@@ -459,7 +638,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-motivewave"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">MotiveWave</b
@@ -468,7 +647,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-webull"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Webull</b
@@ -477,7 +656,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-ibkr"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Interactive Brokers</b
@@ -486,7 +665,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-schwab"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Schwab / thinkorswim</b
@@ -520,18 +699,16 @@
       <b>synced workspaces</b> are coming as a low-cost add-on.
     </p>
     <div class="price-grid mt-[34px] grid grid-cols-[1.1fr_1fr_1fr] items-stretch gap-4 max-[900px]:grid-cols-1">
-      <div
-        class="plan flex flex-col rounded-[14px] border border-primary/50 bg-card p-[26px] shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_15%,transparent),0_14px_40px_-22px_color-mix(in_srgb,var(--primary)_50%,transparent)]"
-      >
+      <div class="plan flex flex-col rounded-[14px] border border-primary/50 bg-card p-[26px] ring-1 ring-primary/30">
         <span
-          class="ribbon mb-[14px] self-start rounded-[6px] bg-primary/12 px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-primary"
+          class="ribbon mb-[14px] self-start rounded-[4px] border border-border bg-popover px-[9px] py-[3px] font-mono text-[10.5px] uppercase tracking-[0.12em] text-foreground"
           >Available now</span
         >
         <h3 class="mb-1 text-[18px] font-semibold">Blotterbook</h3>
         <p class="mb-[18px] text-[13px] leading-[1.5] text-muted-foreground">
           The full app, free for everyone — nothing about your trades uploaded, everything runs in your browser.
         </p>
-        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em]">Free</div>
+        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em] [font-variant-numeric:tabular-nums]">Free</div>
         <ul class="my-4 mb-[22px] flex list-none flex-col gap-[10px] p-0">
           <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-muted-foreground">
             <svg
@@ -562,14 +739,14 @@
 
       <div class="plan flex flex-col rounded-[14px] border border-border bg-card p-[26px]">
         <span
-          class="mb-[14px] self-start rounded-[6px] border border-chart-3/40 px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-chart-3"
+          class="mb-[14px] self-start rounded-[4px] border border-border bg-popover px-[9px] py-[3px] font-mono text-[10.5px] uppercase tracking-[0.12em] text-foreground"
           >Optional</span
         >
         <h3 class="mb-1 text-[18px] font-semibold">Back the project</h3>
         <p class="mb-[18px] text-[13px] leading-[1.5] text-muted-foreground">
           Pay-what-helps support that keeps Blotterbook free and funds new features.
         </p>
-        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em]">
+        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em] [font-variant-numeric:tabular-nums]">
           $25 <small class="text-[14px] font-normal text-muted-foreground">one-time</small>
         </div>
         <ul class="my-4 mb-[18px] flex list-none flex-col gap-[10px] p-0">
@@ -596,15 +773,19 @@
           </li>
         </ul>
         <div class="mt-auto flex flex-col gap-2">
+          <p class="text-[11px] leading-[1.4] text-muted-foreground">
+            A voluntary, non-refundable donation — not a purchase, and it grants no product access or entitlement.
+            <a href="legal.html#donations">See donation terms</a>.
+          </p>
           {#if DONATION_LINKS.once25}
             <a
-              class="inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
+              class="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
               href={DONATION_LINKS.once25}
               target="_blank"
               rel="noopener noreferrer">Back with $25 &rarr;</a
             >
           {:else}
-            <p class="text-[12px] leading-[1.5] text-muted-foreground">$25 one-time — donations open soon via Stripe.</p>
+            <p class="mt-auto text-[12px] leading-[1.5] text-muted-foreground">$25 one-time — donations open soon via Stripe.</p>
           {/if}
           {#if DONATION_LINKS.tier50}
             <a
@@ -614,23 +795,19 @@
               rel="noopener noreferrer">Back with $50 &rarr;</a
             >
           {/if}
-          <p class="text-[11px] leading-[1.4] text-muted-foreground">
-            A voluntary, non-refundable donation — not a purchase, and it grants no product access or entitlement.
-            <a href="legal.html#donations">See donation terms</a>.
-          </p>
         </div>
       </div>
 
       <div class="plan flex flex-col rounded-[14px] border border-border bg-card p-[26px]">
         <span
-          class="ribbon mb-[14px] self-start rounded-[6px] bg-primary/12 px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-primary"
+          class="ribbon mb-[14px] self-start rounded-[4px] border border-border bg-popover px-[9px] py-[3px] font-mono text-[10.5px] uppercase tracking-[0.12em] text-foreground"
           >Available now</span
         >
         <h3 class="mb-1 text-[18px] font-semibold">Synced workspaces</h3>
         <p class="mb-[18px] text-[13px] leading-[1.5] text-muted-foreground">
           End-to-end-encrypted sync of your trades, notes, tags &amp; saved filters across devices.
         </p>
-        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em] text-foreground">
+        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em] [font-variant-numeric:tabular-nums] text-foreground">
           $5 <small class="text-[14px] font-normal text-muted-foreground">/ month</small>
         </div>
         <ul class="my-4 mb-[22px] flex list-none flex-col gap-[10px] p-0">
@@ -657,11 +834,11 @@
           </li>
         </ul>
         <div class="mt-auto flex flex-col gap-2">
+          <p class="text-[11px] leading-[1.4] text-muted-foreground">Launch the app, sign in, and subscribe from your account.</p>
           <a
-            class="inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
+            class="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
             href="/app/#account">Get cloud sync in the app &rarr;</a
           >
-          <p class="text-[11px] leading-[1.4] text-muted-foreground">Launch the app, sign in, and subscribe from your account.</p>
         </div>
       </div>
     </div>
@@ -681,7 +858,7 @@
     <div class="faq-list mt-[30px] max-w-[840px] border-t border-border">
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -698,7 +875,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -716,7 +893,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -732,7 +909,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -748,7 +925,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -764,7 +941,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -780,7 +957,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -796,7 +973,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -984,18 +1161,109 @@
     }
   }
 
-  /* scroll hint — keyframe-driven (kept scoped) */
-  .scrollhint {
-    animation: bob 2.4s ease-in-out infinite;
+  /* ============ hero refresh (A274): entrance stagger + device-frame showcase ============
+     Keyframe/state-driven bits + the showcase mask stay scoped (keep-scoped rule for animation +
+     the {@html}-independent state); the box/flex/spacing props are utilities on the elements. */
+  .rise {
+    opacity: 0;
+    transform: translateY(14px);
+    animation: riseIn 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
   }
-  @keyframes bob {
-    0%,
-    100% {
-      transform: translateY(0);
+  .rise.r1 {
+    animation-delay: 0.04s;
+  }
+  .rise.r2 {
+    animation-delay: 0.1s;
+  }
+  .rise.r3 {
+    animation-delay: 0.17s;
+  }
+  .rise.r4 {
+    animation-delay: 0.24s;
+  }
+  .rise.r5 {
+    animation-delay: 0.31s;
+  }
+  .rise.r6 {
+    animation-delay: 0.16s;
+  }
+  @keyframes riseIn {
+    to {
+      opacity: 1;
+      transform: none;
     }
-    50% {
-      transform: translateY(5px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rise {
+      animation: none;
+      opacity: 1;
+      transform: none;
     }
+  }
+
+  /* bottom-fade the app screenshot into the page (the reference's mask-b-from) */
+  .showcase {
+    -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+  }
+
+  /* device-frame sidebar rows — repeated rows collapse to one scoped rule instead of N utility strings */
+  .dnav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 4px;
+    padding: 7px 8px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .dnav.on {
+    background: var(--accent);
+    color: var(--foreground);
+  }
+  .dnav svg {
+    height: 14px;
+    width: 14px;
+    flex: none;
+  }
+
+  /* equity-curve mock: the SVG is authored in-template (NOT {@html}), so plain scoped selectors
+     match; strokes pull from the chart tokens so the mock tracks the palette (never hardcode a color). */
+  .eq-grid {
+    stroke: var(--border);
+    stroke-width: 1;
+  }
+  .eq-baseline {
+    stroke: var(--border);
+    stroke-width: 1.5;
+  }
+  .eq-gross {
+    fill: none;
+    stroke: var(--chart-1);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .eq-net {
+    fill: none;
+    stroke: var(--chart-2);
+    stroke-width: 2.25;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .eq-net-area {
+    fill: var(--chart-2);
+    fill-opacity: 0.1;
+  }
+  .eq-take {
+    fill: none;
+    stroke: var(--chart-3);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .eq-dot {
+    fill: var(--chart-2);
   }
 
   /* feature explorer: the active item tints its child .ficon — a descendant rule on the {@html}-free
