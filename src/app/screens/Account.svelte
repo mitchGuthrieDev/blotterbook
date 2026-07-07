@@ -56,10 +56,11 @@
     passphraseStrong,
     MIN_PASSPHRASE,
   } from '../lib/vault.svelte.ts';
-  import { onSyncUnlocked } from '../lib/cloudsync.svelte.ts';
+  import { cloudSync, onSyncUnlocked, syncActiveWorkspace, pullFromCloud, pushToCloud, pauseCloudSync } from '../lib/cloudsync.svelte.ts';
   import { downloadBlob } from '../lib/files.ts';
   import CloudSyncSetup from '../parts/CloudSyncSetup.svelte';
   import UnlockModal from '../parts/UnlockModal.svelte';
+  import SyncStatusPill from '../parts/SyncStatusPill.svelte';
 
   interface Props {
     /** demo surface — disables every control (demo never mutates) and skips the session probe. */
@@ -410,10 +411,10 @@
               Set up cloud sync
             </Button>
           {:else if !vault.unlocked}
-            <!-- set up, locked for this session -->
+            <!-- set up, locked for this session — the E2E key isn't in memory yet -->
             <div class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-chart-4/40 bg-chart-4/10 px-3 py-2">
               <p class="flex items-center gap-2 text-xs text-chart-4">
-                <LockKeyhole class="size-4" /> Locked — unlock once to sync this session.
+                <LockKeyhole class="size-4" /> Encryption locked — unlock once to sync this session.
               </p>
               <Button size="sm" data-testid="cloud-unlock-open" onclick={() => (unlockOpen = true)}>
                 <LockKeyholeOpen class="size-4" /> Unlock
@@ -423,16 +424,80 @@
             <!-- unlocked in memory for this session -->
             <div class="flex flex-wrap items-center justify-between gap-2">
               <Badge variant="outline" class="border-chart-2/40 text-chart-2" data-testid="cloud-unlocked">
-                <LockKeyholeOpen class="mr-1 size-3.5" /> Unlocked this session
+                <LockKeyholeOpen class="mr-1 size-3.5" /> Encryption unlocked this session
               </Badge>
-              <Button variant="outline" size="sm" onclick={() => lock()}>
+              <Button variant="outline" size="sm" data-testid="cloud-lock" onclick={() => lock()}>
                 <LockKeyhole class="size-4" /> Lock
               </Button>
             </div>
+
+            <!-- A279: active-workspace sync parity + explicit direction controls (staging only — the
+                 sync engine runs behind cloudSync.configured; on prod the keys set up but don't sync). -->
+            {#if cloudSync.configured}
+              <div class="flex flex-col gap-2 rounded-md border border-border p-3" data-testid="cloud-sync-panel">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <SyncStatusPill />
+                  {#if cloudSync.enabled && cloudSync.status !== 'syncing'}
+                    <Button size="sm" data-testid="cloud-sync-now" onclick={() => void syncActiveWorkspace({ full: true })}>
+                      <RefreshCw class="size-4" /> Sync now
+                    </Button>
+                  {/if}
+                </div>
+                {#if cloudSync.enabled}
+                  <div class="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      data-testid="cloud-pull"
+                      disabled={cloudSync.status === 'syncing'}
+                      onclick={() => void pullFromCloud()}
+                    >
+                      Pull from cloud
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      data-testid="cloud-push"
+                      disabled={cloudSync.status === 'syncing'}
+                      onclick={() => void pushToCloud()}
+                    >
+                      Push to cloud
+                    </Button>
+                    <Button variant="ghost" size="sm" data-testid="cloud-pause" onclick={() => pauseCloudSync()}>Pause sync</Button>
+                  </div>
+                  <p class="text-xs text-muted-foreground">
+                    <strong class="font-medium text-foreground">Sync now</strong> reconciles both ways;
+                    <strong class="font-medium text-foreground">Pull</strong>/<strong class="font-medium text-foreground">Push</strong> move one
+                    direction. When two devices differ, the newest edit of each record wins.
+                  </p>
+                {:else}
+                  <p class="text-xs text-muted-foreground">
+                    Turn on sync for a workspace from the workspace switcher (top of the sidebar) to start syncing this device.
+                  </p>
+                {/if}
+              </div>
+            {/if}
+
+            <!-- A279: clarify the two secrets — signing in vs decrypting. -->
+            <details class="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
+              <summary class="cursor-pointer font-medium text-foreground">How sign-in and encryption relate</summary>
+              <div class="mt-2 flex flex-col gap-1.5 leading-relaxed">
+                <p>
+                  Your <strong class="text-foreground">passkey</strong> signs you into your account — it proves who you are to the server.
+                </p>
+                <p>
+                  Your <strong class="text-foreground">passphrase</strong> or <strong class="text-foreground">recovery key</strong> unlocks your
+                  end-to-end encryption — it turns your synced data back into plaintext in this browser. The server never sees it, so it can never
+                  read your trades.
+                </p>
+                <p>A passkey that supports PRF can do both: sign you in <em>and</em> unlock encryption in one tap.</p>
+              </div>
+            </details>
+
             <Separator />
-            <!-- add-a-method flows: each re-wraps the SAME in-memory IK under a new KEK -->
+            <!-- add-a-method flows: each re-wraps the SAME in-memory IK (the encryption key) under a new KEK -->
             <div class="flex flex-col gap-3">
-              <p class="text-xs font-medium text-muted-foreground">Unlock methods</p>
+              <p class="text-xs font-medium text-muted-foreground">Encryption keys (unlock methods)</p>
 
               <div class="flex flex-col gap-2">
                 <Label for="add-passphrase" class="flex items-center gap-2"><KeyRound class="size-4" /> Set or change passphrase</Label>

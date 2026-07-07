@@ -134,8 +134,13 @@ test('cloud sync (staging): lock, then unlock the IK with the passphrase', async
   await page.getByTestId('cloud-finish').click();
   await expect(page.getByTestId('cloud-unlocked')).toBeVisible({ timeout: 15_000 });
 
+  // A279: unlocked → the reworked card shows the parity sync panel (staging runs the sync engine) and
+  // the passkey-vs-passphrase explainer — replacing the old bare lock/unlock framing.
+  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible();
+  await expect(page.getByText('How sign-in and encryption relate')).toBeVisible();
+
   // Lock → the in-memory IK is cleared, the card offers to unlock again.
-  await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await page.getByTestId('cloud-lock').click();
   await expect(page.getByTestId('cloud-unlock-open')).toBeVisible();
   await expect(page.getByTestId('cloud-unlocked')).toHaveCount(0);
 

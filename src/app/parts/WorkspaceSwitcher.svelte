@@ -14,19 +14,7 @@
   // active workspace's real state — not-synced / synced (last pull) / syncing / offline / locked /
   // error — plus an "Enable sync" action (cloud tier + unlocked only; local tier shows an inert
   // "cloud tier required" hint). PROD + STAGING (not demo), like the rest of the switcher.
-  import {
-    Layers,
-    ChevronsUpDown,
-    Check,
-    Plus,
-    Pencil,
-    Trash2,
-    CloudOff,
-    Cloud,
-    RefreshCw,
-    LockKeyhole,
-    TriangleAlert,
-  } from '@lucide/svelte';
+  import { Layers, ChevronsUpDown, Check, Plus, Pencil, Trash2, CloudOff, Cloud, LockKeyhole } from '@lucide/svelte';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import * as Dialog from '$lib/components/ui/dialog';
   import * as AlertDialog from '$lib/components/ui/alert-dialog';
@@ -34,6 +22,7 @@
   import { Input } from '$lib/components/ui/input';
   import IconTip from '$lib/components/IconTip.svelte';
   import UnlockModal from './UnlockModal.svelte';
+  import SyncStatusPill from './SyncStatusPill.svelte';
   import { cloudSync, enableCloudSync, syncActiveWorkspace, onSyncUnlocked, refreshSyncStatus } from '../lib/cloudsync.svelte.ts';
   import { refreshVault } from '../lib/vault.svelte.ts';
   import type { Dashboard } from '../lib/dashboard.svelte.ts';
@@ -71,30 +60,6 @@
     if (!ok && cloudSync.status === 'locked') await openUnlock();
     refresh();
   }
-  const fmtAgo = (ms: number) => {
-    if (!ms) return '';
-    const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
-    if (s < 60) return 'just now';
-    const m = Math.round(s / 60);
-    return m < 60 ? `${m}m ago` : `${Math.round(m / 60)}h ago`;
-  };
-  // Human label for the current sync state (drives the status row).
-  const syncLabel = $derived.by(() => {
-    switch (cloudSync.status) {
-      case 'syncing':
-        return 'Syncing…';
-      case 'synced':
-        return cloudSync.lastPull ? `Synced · ${fmtAgo(cloudSync.lastPull)}` : 'Synced';
-      case 'offline':
-        return 'Offline — will sync later';
-      case 'locked':
-        return 'Locked';
-      case 'error':
-        return cloudSync.error || 'Sync error';
-      default:
-        return 'Not synced';
-    }
-  });
 
   // ---- create ----
   let createOpen = $state(false);
@@ -203,7 +168,9 @@
       <Trash2 class="size-4" /> Delete…
     </DropdownMenu.Item>
     <DropdownMenu.Separator />
-    <!-- F63: real per-workspace cloud-sync status + opt-in (staging only). -->
+    <!-- A279: cloud-sync PARITY row (staging only) — a status pill + a clear "Sync now" instead of the
+         old lock/unlock framing. Direction controls (Pull/Push/Pause) + the passkey-vs-passphrase
+         explainer live on the Account screen's cloud-sync card. -->
     <div class="flex flex-col gap-1.5 px-2 py-1.5" data-testid="sync-status">
       {#if !cloudSync.enabled}
         {#if cloudSync.tier === 'cloud'}
@@ -234,21 +201,8 @@
           </div>
         {/if}
       {:else}
-        <div class="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="sync-state" data-status={cloudSync.status}>
-          {#if cloudSync.status === 'syncing'}
-            <RefreshCw class="size-3.5 shrink-0 animate-spin" />
-          {:else if cloudSync.status === 'synced'}
-            <Cloud class="size-3.5 shrink-0 text-chart-2" />
-          {:else if cloudSync.status === 'locked'}
-            <LockKeyhole class="size-3.5 shrink-0 text-chart-4" />
-          {:else if cloudSync.status === 'error'}
-            <TriangleAlert class="size-3.5 shrink-0 text-destructive" />
-          {:else}
-            <CloudOff class="size-3.5 shrink-0" />
-          {/if}
-          <span class="min-w-0 flex-1 truncate">{syncLabel}</span>
-        </div>
-        {#if cloudSync.status === 'locked'}
+        <SyncStatusPill />
+        {#if !cloudSync.unlocked}
           <button
             type="button"
             data-testid="sync-unlock"
@@ -259,7 +213,7 @@
           <button
             type="button"
             data-testid="sync-now"
-            class="self-start text-xs text-muted-foreground hover:underline"
+            class="self-start text-xs font-medium text-foreground hover:underline"
             onclick={() => void syncActiveWorkspace({ full: true })}>Sync now</button
           >
         {/if}
