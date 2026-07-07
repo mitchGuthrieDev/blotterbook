@@ -3,10 +3,6 @@
    info-page scripts (changelog/admin). Single source for HTML escaping across the app, the info
    pages, and the admin panel (A7). */
 
-/* CH14: a real module export, not a global. Starts as a resolved promise so every importer
-   can `await versionsReady` even on pages with no badge; the badge IIFE reassigns it below. */
-export let versionsReady = Promise.resolve(null);
-
 /* S14: defensively strip any legacy `?k=<token>` from the URL on load so a token can't linger
    in the address bar or browser history. NOTE (S19): `?k=` is NO LONGER an accepted auth path —
    the staging token travels only in the path-scoped `bb_staging` cookie — so this is just
@@ -43,14 +39,15 @@ export function platformLabel(prod: string | number) {
 
 /* CH12 — populate the version badge(s) at runtime from data/versions.json, so all surfaces
    read one source of truth without a rebuild. The baked `.ver` literal stays as the offline
-   fallback. Two tracks: staging page → `staging`, app + demo → `prod`. Reassigns the exported
-   versionsReady promise so app/widgets.js can read the badge after it's set. */
+   fallback. Two tracks: staging page → `staging`, app + demo → `prod`. Fire-and-forget: nothing
+   awaits this fetch (the former exported `versionsReady` promise had zero external readers and was
+   removed in A314 — the badge is populated by the direct DOM writes below, not by an importer). */
 (function () {
   if (typeof document === 'undefined') return;
   const badges = document.querySelectorAll('.ver');
   if (!badges.length) return; // info/admin pages have no badge
   const mode = (document.body && document.body.dataset.mode) || 'app'; // app | demo | staging
-  versionsReady = fetch('/data/versions.json', { cache: 'no-store' })
+  fetch('/data/versions.json', { cache: 'no-store' })
     .then(r => (r.ok ? r.json() : null))
     .then(v => {
       if (v) {
