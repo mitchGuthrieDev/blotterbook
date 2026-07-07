@@ -4,6 +4,17 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.65.0",
+      "date": "2026-07-07",
+      "title": "A refreshed homepage",
+      "summary": "The Blotterbook homepage got a cleaner, more focused redesign — a stronger hero built around a preview of the app's real after-cost dashboard, and tidied Features, Platforms, and Pricing sections.",
+      "highlights": [
+        "A new hero centered on what Blotterbook is for: seeing your real, after-cost, after-tax take-home — with a dashboard preview showing Gross, Net, and Take-home.",
+        "Cleaner, more consistent Features, Platforms, and Pricing sections, with color reserved for the numbers that matter (green for profit, red for cost).",
+        "Supported platforms are easier to scan, with Tradovate and NinjaTrader now listed separately."
+      ]
+    },
+    {
       "version": "0.64.0",
       "date": "2026-07-07",
       "title": "Subscribe to cloud sync from the app",

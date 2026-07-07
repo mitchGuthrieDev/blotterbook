@@ -5045,6 +5045,17 @@
       "completedDate": "2026-07-07",
       "partial": false,
       "doneNote": "CANCELLED (2026-07-07, owner decision) — not building the marketing nav mega-menu / shadcn-svelte navigation-menu primitive; the existing flat header stays untouched for now. The A274 homepage refresh shipped without touching the header/nav. Re-file if a nav redesign is revisited."
+    },
+    {
+      "id": "A274",
+      "title": "Homepage design refresh — deliberate styling now that we're live (retire the MVP look)",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07, PR #124) — Homepage (src/site/components/Home.svelte) refreshed end-to-end, translating the 21st.dev 'Efferd' hero-3 reference into our stack (Svelte 5 + Tailwind v4 + tokens; no React port). Shipped: a left-aligned hero (value prop + announcement chip + dual CTAs + live-status trust row) with a device-framed SYNTHETIC P&L dashboard replacing banner.svg; Features de-chromed (dropped the purple gradient left-bars + chart-3 eyebrows) with a hover-lift; Pricing unified to the mono NEW-chip, a subtle primary ring on the featured card, tabular-num prices, and CTAs pinned to the card bottom so they align; Platforms split Tradovate/NinjaTrader into a uniform 4x3 grid; FAQ token-based row hover. Greyscale chrome with color reserved for the data layer (ADR-002), CSP-clean (no inline style=), single dark theme, prerendered SSG, prefers-reduced-motion honored; lint/typecheck/format/build/e2e(101) green; prod bumped 0.64.0->0.65.0. DEFERRED (re-file if wanted): the hero dashboard is a synthetic panel, not a real screenshot capture; no dedicated testimonials/trust-credibility section; footer left as-is. A280 (nav mega-menu) was cancelled separately per owner."
     }
   ]
 }
