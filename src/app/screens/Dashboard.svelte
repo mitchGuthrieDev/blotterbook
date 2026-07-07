@@ -100,7 +100,7 @@
   // Dashboard — the redesigned overview: a scope toolbar, a KPI stat-card row, and the Performance
   // (equity curve) + Trading Calendar modules. Data comes from props (real metrics, wired by App.svelte
   // on all surfaces). Color lives only in the P&L.
-  import { SlidersHorizontal, Plus, MoreHorizontal, Pencil, LayoutGrid, RotateCcw } from '@lucide/svelte';
+  import { SlidersHorizontal, Plus, MoreHorizontal, Pencil, LayoutGrid, RotateCcw, Maximize2 } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Input } from '$lib/components/ui/input';
@@ -110,12 +110,13 @@
   import * as Select from '$lib/components/ui/select';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import IconTip from '$lib/components/IconTip.svelte';
-  import { ChevronUp, ChevronDown, EyeOff } from '@lucide/svelte';
+  import { ChevronUp, ChevronDown, EyeOff, Check } from '@lucide/svelte';
   import { X, Trash2, CalendarClock } from '@lucide/svelte';
   import * as Dialog from '$lib/components/ui/dialog';
   import { flip } from 'svelte/animate';
   import { fade, slide } from 'svelte/transition';
   import { MediaQuery } from 'svelte/reactivity';
+  import { defaultSizeFor, supportedSizes, spanFor, type ModEntry, type ModSize } from '../lib/modlayout.ts';
   import { dur } from '../lib/motion.ts';
   import {
     usd,
@@ -183,9 +184,11 @@
     onsetupsave?: (s: AppSetup) => void;
     /** Disable the cost-setup inputs on demo (never mutates). */
     costDisabled?: boolean;
-    /** Visible dashboard modules in order (persisted to Store.local); defaults to all shown. */
-    modules?: string[];
-    onmoduleschange?: (order: string[]) => void;
+    /** A271: staging-gate the corner drag-resize handle (the ⋯ menu Size radio ships everywhere). */
+    isStaging?: boolean;
+    /** Visible dashboard modules — order + per-module size (A271; persisted to Store.local); defaults to all shown. */
+    modules?: ModEntry[];
+    onmoduleschange?: (mods: ModEntry[]) => void;
     /** F51: the compact Recent Trades module's rows (newest first, pre-capped by the app). */
     recentTrades?: { date: string; time: string; sym: string; side: 'Long' | 'Short'; qty: number; pnl: number; platform: string }[];
     /** F39/A142: full-fidelity batch-1 module data (Today · Drawdown · Streak). Optional — when the
@@ -233,6 +236,7 @@
     setup,
     onsetupsave,
     costDisabled = false,
+    isStaging = false,
     modules,
     onmoduleschange,
     recentTrades = [],
@@ -367,32 +371,111 @@
     { key: 'ddstatus', label: 'Drawdown Status' }, // F39
     { key: 'streak', label: 'Streak Monitor' }, // F39
   ];
-  // A228/A243: modules in this set render lg:col-span-1 (half-width, paired) instead of the default
-  // full-width lg:col-span-2 — cal+cost was the original pairing, adv+term (A243) is the second.
-  // F39: the three compact batch-1 status cards are half-width too (they tile 2-up).
-  const PAIRED_MODULE_KEYS = ['cal', 'cost', 'adv', 'term', 'today', 'ddstatus', 'streak'];
+  // A271: the half-width-vs-full pairing that used to live here is now the module SIZE (md vs lg) — the
+  // default-size mapping (paired → md, others → lg) lives in modlayout.defaultSizeFor, which preserves
+  // this exact layout on upgrade. The render spans per size (spanClass) instead of a PAIRED set.
   const validKeys = (ks?: string[]) => (ks ?? DEFAULT_MODULE_KEYS).filter(k => MODULES.some(m => m.key === k));
+  // A271: keep the existing reorder/hide/add logic keyed on `modOrder` (a plain string[]) — untouched —
+  // and carry per-module SIZE in a parallel `modSizes` map. The persisted/emitted layout is the two
+  // recombined into ModEntry[]. This keeps the reorder logic risk-free while adding the size dimension.
+  const keysOfProp = (m?: ModEntry[]) => validKeys(m?.map(e => e.key));
+  const sizesOfProp = (m?: ModEntry[]): Record<string, ModSize> => Object.fromEntries((m ?? []).map(e => [e.key, e.size]));
+  const sizeOf = (key: string): ModSize => modSizes[key] ?? defaultSizeFor(key);
+  // 12-track grid span as a STATIC Tailwind class (media-query-aware: no span below lg → mobile stacks;
+  // literal strings so the JIT generates them). sm = span 2 (six/row), md = span 6 (half), lg = span 12.
+  const spanClass = (size: ModSize): string => (size === 'sm' ? 'lg:col-span-2' : size === 'md' ? 'lg:col-span-6' : 'lg:col-span-12');
+  const SIZE_LABEL: Record<ModSize, string> = { sm: 'Small', md: 'Medium', lg: 'Large' };
+  // A271/A272: Large modules that benefit from filling the viewport get extra height (the perf equity
+  // curve + the trading calendar); others just widen. Class-based (no inline style — CSP/A55).
+  const FILL_AT_LARGE = new Set(['perf', 'cal']);
+  const fillClass = (key: string): string => (sizeOf(key) === 'lg' && FILL_AT_LARGE.has(key) ? 'lg:min-h-[65vh]' : '');
   // svelte-ignore state_referenced_locally — initial layout only; the app re-seeds via the prop below.
-  let modOrder = $state<string[]>(validKeys(modules));
+  let modOrder = $state<string[]>(keysOfProp(modules));
   // svelte-ignore state_referenced_locally
-  let lastModKey = modules ? modules.join(',') : '';
+  let modSizes = $state<Record<string, ModSize>>(sizesOfProp(modules));
+  // svelte-ignore state_referenced_locally
+  let lastModKey = modules ? JSON.stringify(modules) : '';
   $effect(() => {
     // Re-seed from the prop when the app supplies a persisted layout (e.g. on first load after boot).
-    const key = (modules ?? []).join(',');
+    const key = modules ? JSON.stringify(modules) : '';
     if (key !== lastModKey) {
       lastModKey = key;
-      modOrder = validKeys(modules);
+      modOrder = keysOfProp(modules);
+      modSizes = sizesOfProp(modules);
     }
   });
   const hiddenModules = $derived(MODULES.filter(m => !modOrder.includes(m.key)));
   const moduleLabel = (key: string) => MODULES.find(m => m.key === key)?.label ?? key;
+  // Recombine order + sizes into the persisted ModEntry[] and emit.
+  function emitLayout(order: string[], sizes: Record<string, ModSize>) {
+    // A195: keep the re-seed guard in sync so the echoed-back prop doesn't redundantly reseed.
+    const mods = order.map(k => ({ key: k, size: sizes[k] ?? defaultSizeFor(k) }));
+    lastModKey = JSON.stringify(mods);
+    onmoduleschange?.(mods);
+  }
   function commitModules(order: string[]) {
     modOrder = order;
-    // A195: keep the re-seed guard in sync — the app echoes this order back through the `modules`
-    // prop, and without updating lastModKey the effect above redundantly reassigned modOrder (a
-    // fresh identical array) after every local edit.
-    lastModKey = order.join(',');
-    onmoduleschange?.(order);
+    emitLayout(order, modSizes);
+  }
+  // A271: change one module's size (staged behind the DashTabs dirty asterisk, like reorder/hide).
+  function setModuleSize(key: string, size: ModSize) {
+    if (!supportedSizes(key).includes(size) || sizeOf(key) === size) return;
+    modSizes = { ...modSizes, [key]: size };
+    emitLayout(modOrder, modSizes);
+  }
+  const sizeIndex = (key: string) => supportedSizes(key).indexOf(sizeOf(key));
+
+  // ── A271: corner drag-resize (staging-gated; pointer path). Snap to the nearest of the three preset
+  // spans [2,6,12] on the measured track width — rAF-throttled, live-previewed by swapping the span
+  // class, committed on release. The keyboard path is arrow keys on the role="slider" handle + the
+  // Size radio in the ⋯ menu. Not rendered on narrow (mobile stacks; size is ignored there). ──
+  let gridEl = $state<HTMLElement>();
+  let resizing = $state<{ key: string; size: ModSize } | null>(null);
+  let rafPending = 0;
+  const previewSize = (key: string): ModSize => (resizing?.key === key ? resizing.size : sizeOf(key));
+  // Snap to the nearest of the module's SUPPORTED sizes (by 12-track span) — so a drag can't land on a
+  // size a module doesn't offer (e.g. the current rich modules skip Small).
+  const nearestSize = (key: string, spanGuess: number): ModSize =>
+    supportedSizes(key).reduce((best, s) => (Math.abs(spanFor(s) - spanGuess) < Math.abs(spanFor(best) - spanGuess) ? s : best));
+  function startResize(e: PointerEvent, key: string) {
+    if (isNarrow.current) return;
+    const handle = e.currentTarget as HTMLElement;
+    const card = handle.closest('[data-mod]') as HTMLElement | null;
+    if (!card || !gridEl) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    const trackW = gridEl.getBoundingClientRect().width / 12;
+    const cardLeft = card.getBoundingClientRect().left;
+    const onMove = (ev: PointerEvent) => {
+      if (rafPending) return;
+      rafPending = requestAnimationFrame(() => {
+        rafPending = 0;
+        resizing = { key, size: nearestSize(key, (ev.clientX - cardLeft) / Math.max(1, trackW)) };
+      });
+    };
+    const onUp = () => {
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', onUp);
+      if (rafPending) {
+        cancelAnimationFrame(rafPending);
+        rafPending = 0;
+      }
+      if (resizing) setModuleSize(resizing.key, resizing.size);
+      resizing = null;
+    };
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', onUp);
+  }
+  function onResizeKey(e: KeyboardEvent, key: string) {
+    const sizes = supportedSizes(key);
+    const i = sizes.indexOf(sizeOf(key));
+    if ((e.key === 'ArrowRight' || e.key === 'ArrowUp') && i < sizes.length - 1) {
+      e.preventDefault();
+      setModuleSize(key, sizes[i + 1]);
+    } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowDown') && i > 0) {
+      e.preventDefault();
+      setModuleSize(key, sizes[i - 1]);
+    }
   }
   function moveModule(key: string, dir: -1 | 1) {
     const i = modOrder.indexOf(key),
@@ -635,6 +718,18 @@
         <DropdownMenu.Item disabled={modOrder.indexOf(key) === modOrder.length - 1} onSelect={() => moveModule(key, 1)}
           ><ChevronDown class="size-4" /> Move down</DropdownMenu.Item
         >
+        <DropdownMenu.Separator />
+        <!-- A271: per-module size — the discoverable, keyboard-friendly path to change size (the corner
+             drag handle is the pointer path). Each stages behind the DashTabs dirty asterisk. -->
+        <DropdownMenu.Group>
+          <DropdownMenu.Label class="text-xs font-normal text-muted-foreground">Size</DropdownMenu.Label>
+          {#each supportedSizes(key) as sz (sz)}
+            <DropdownMenu.Item onSelect={() => setModuleSize(key, sz)}>
+              <Check class={['size-4', sizeOf(key) === sz ? 'opacity-100' : 'opacity-0']} />
+              {SIZE_LABEL[sz]}
+            </DropdownMenu.Item>
+          {/each}
+        </DropdownMenu.Group>
         <DropdownMenu.Separator />
         <DropdownMenu.Item onSelect={() => hideModule(key)}><EyeOff class="size-4" /> Hide module</DropdownMenu.Item>
       </DropdownMenu.Content>
@@ -1559,15 +1654,36 @@
        treatment as the original cal/cost pairing). A lone paired module (its partner hidden/moved
        elsewhere) just takes a half-track row — acceptable, matches the original cal/cost behavior.
        Narrow viewports keep the single-column stack. -->
-  <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+  <!-- A271: a 12-track grid on lg (superset of the old 2-track model). Each module spans per its size
+       (sm=2 · md=6 · lg=12); md/lg reproduce the old half/full widths exactly. Below lg it stacks. -->
+  <div bind:this={gridEl} class="grid grid-cols-1 gap-5 lg:grid-cols-12">
     {#each modOrder as key (key)}
       <div
-        class={['min-w-0', !PAIRED_MODULE_KEYS.includes(key) && 'lg:col-span-2']}
+        data-mod
+        class={['min-w-0', spanClass(previewSize(key))]}
         animate:flip={{ duration: dur(180) }}
         transition:fade={{ duration: dur(140) }}
       >
-        <Card.Root id="dashmod-{key}" class="h-full">
+        <Card.Root id="dashmod-{key}" class={['relative h-full', fillClass(key)]}>
           {@render moduleHeader(key)}
+          {#if isStaging}
+            <!-- A271: corner drag-resize handle (staging). Pointer drag snaps to Small/Medium/Large;
+                 role=slider + arrow keys are the keyboard path (the ⋯ menu Size radio is the other). -->
+            <button
+              type="button"
+              class="absolute right-1 bottom-1 z-10 hidden size-5 cursor-nwse-resize touch-none place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring lg:grid"
+              role="slider"
+              aria-label="Resize {moduleLabel(key)} module"
+              aria-valuemin={0}
+              aria-valuemax={supportedSizes(key).length - 1}
+              aria-valuenow={sizeIndex(key)}
+              aria-valuetext={SIZE_LABEL[sizeOf(key)]}
+              onpointerdown={e => startResize(e, key)}
+              onkeydown={e => onResizeKey(e, key)}
+            >
+              <Maximize2 class="size-3" />
+            </button>
+          {/if}
           <Card.Content>
             {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'term'}<ActivityTerminal
               />{:else if key === 'compare'}{@render compareBody()}{:else if key === 'blotter'}{@render blotterBody()}{:else if key === 'today'}{@render todayBody()}{:else if key === 'ddstatus'}{@render ddBody()}{:else if key === 'streak'}{@render streakBody()}{/if}

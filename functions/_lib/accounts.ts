@@ -22,6 +22,10 @@ import { json } from './http.ts';
 
 export const SESSION_COOKIE = '__Host-bb_session';
 export const SESSION_TTL_MS = 30 * 24 * 3600 * 1000; // 30-day sliding window
+// A302: hard ABSOLUTE cap measured from created_at. The sliding TTL alone lets an exfiltrated cookie
+// live forever if used at least monthly (each use + each /api/me probe re-issues Max-Age). This ceiling
+// forces re-authentication (a fresh passkey ceremony) after 90 days no matter how often it's used.
+export const SESSION_ABSOLUTE_MAX_MS = 90 * 24 * 3600 * 1000;
 export const CHALLENGE_TTL_MS = 5 * 60 * 1000; // pending WebAuthn ceremonies live ~5 min
 export const RECOVERY_TTL_MS = 15 * 60 * 1000; // verify / recovery magic-link tokens live ~15 min (F55)
 
@@ -68,6 +72,7 @@ export interface CredentialRow {
   transports: string | null; // JSON array
   aaguid: string | null;
   backed_up: number | null;
+  user_verified: number | null; // 1 = UV performed at enrollment (A310)
   nickname: string | null;
   created_at: number;
   last_used_at: number | null;
@@ -86,6 +91,7 @@ export interface ChallengeRow {
   user_id: string | null;
   email: string | null;
   challenge: string;
+  recovery: number | null; // 1 = recovery-originated register challenge (A302)
   expires_at: number;
 }
 export interface DonationRow {
@@ -116,6 +122,7 @@ export interface SubscriptionRow {
   current_period_end: number | null; // ms epoch (Stripe seconds converted at the webhook boundary)
   updated: number; // ms epoch of the last webhook update
   past_due_since: number | null; // ms epoch of the FIRST failure of the current past_due run (grace base; NULL when not past_due — A266)
+  last_event_created: number | null; // Stripe event.created (SECONDS) of the last APPLIED lifecycle event (out-of-order guard — A303)
 }
 
 /* ---- encoding / crypto -------------------------------------------------------------------- */
@@ -232,7 +239,10 @@ export async function sessionFromRequest(request: Request, db: AccountsDb, now =
   const secret = token.slice(dot + 1);
   const row = await db.prepare('SELECT * FROM sessions WHERE id = ?').bind(id).first<SessionRow>();
   if (!row) return null;
-  if (row.expires_at <= now) {
+  // Expired by the sliding TTL, OR past the A302 absolute cap from created_at — either way it's dead.
+  // (created_at can be null on legacy rows written before the column existed → the cap is skipped.)
+  const pastAbsoluteCap = row.created_at != null && now >= row.created_at + SESSION_ABSOLUTE_MAX_MS;
+  if (row.expires_at <= now || pastAbsoluteCap) {
     await db.prepare('DELETE FROM sessions WHERE id = ?').bind(id).run();
     return null;
   }
@@ -242,7 +252,15 @@ export async function sessionFromRequest(request: Request, db: AccountsDb, now =
   return { ...row, expires_at: expiresAt, last_seen_at: now };
 }
 
-/** Delete the session row named by the request's cookie (logout). No-op on a bad token. */
+/** Delete the session row named by the request's cookie (logout). No-op on a bad token.
+ *
+ * DECISION (A310): this deletes by session id WITHOUT verifying the cookie's secret. That is
+ * intentional and safe — this is a REVOCATION-ONLY primitive, never an authentication one. The worst
+ * an attacker who guesses/knows only a session id (not the secret) can do is destroy that session,
+ * i.e. log its owner out — a denial of convenience, never an escalation. It cannot read data, mint a
+ * session, or authenticate as anyone (that path is sessionFromRequest, which DOES constant-time
+ * compare the secret hash). Keeping it secret-free lets logout succeed even from a partially-corrupt
+ * cookie. Do NOT reuse destroySession as an auth check. */
 export async function destroySession(request: Request, db: AccountsDb): Promise<void> {
   const token = readSessionToken(request);
   const id = token?.split('.')[0];
@@ -260,14 +278,39 @@ export function sessionClearCookie(): string {
 
 export async function putChallenge(
   db: AccountsDb,
-  ch: { type: 'register' | 'login'; challenge: string; userId?: string | null; email?: string | null },
+  ch: { type: 'register' | 'login'; challenge: string; userId?: string | null; email?: string | null; recovery?: boolean },
   now = Date.now()
 ): Promise<void> {
   await db.prepare('DELETE FROM challenges WHERE expires_at < ?').bind(now).run(); // opportunistic sweep
   await db
-    .prepare('INSERT INTO challenges (id, type, user_id, email, challenge, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(randomB64u(16), ch.type, ch.userId ?? null, ch.email ?? null, ch.challenge, now + CHALLENGE_TTL_MS)
+    .prepare('INSERT INTO challenges (id, type, user_id, email, challenge, recovery, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(randomB64u(16), ch.type, ch.userId ?? null, ch.email ?? null, ch.challenge, ch.recovery ? 1 : null, now + CHALLENGE_TTL_MS)
     .run();
+}
+
+/** Revoke ALL sessions for a user (A302) — used on recovery re-enrollment so a stolen device's
+ *  sessions can't outlive a recovery, and available as a general "sign out everywhere" primitive. */
+export async function deleteSessionsForUser(db: AccountsDb, userId: string): Promise<void> {
+  await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+}
+
+/** Delete a user and EVERY D1 row keyed to them (A305). Explicit child-row deletes — never relies on a
+ *  D1 ON DELETE CASCADE (the foreign_keys pragma may be off, and live DBs predate the A305 FK migration),
+ *  so this is correct with or without the FKs. The caller (/api/account/delete) MUST first clear the
+ *  user's R2 ciphertext + sync_records via deleteWorkspacePage — a D1 delete can't reach R2. Workspace
+ *  rows (sync_workspaces/sync_workspace_keys) are also dropped by owner here as a backstop in case a
+ *  shell was orphaned. Ordered children-first. */
+export async function deleteUserAccount(db: AccountsDb, userId: string): Promise<void> {
+  await db.prepare('DELETE FROM sync_wrapped_ik WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM sync_workspace_keys WHERE owner_user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM sync_workspaces WHERE owner_user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM subscriptions WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM credentials WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM donations WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM recovery_tokens WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM challenges WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
 }
 
 /** Look up a pending challenge by its value + type and DELETE it (single-use — a second
@@ -293,7 +336,10 @@ export async function userByEmail(db: AccountsDb, email: string) {
 export async function userById(db: AccountsDb, id: string) {
   return db.prepare('SELECT * FROM users WHERE id = ?').bind(id).first<UserRow>();
 }
-export async function createUser(db: AccountsDb, email: string, now = Date.now()): Promise<UserRow> {
+/** Create a user, race-safe (A310): the INSERT is `ON CONFLICT(email) DO NOTHING`, so a concurrent
+ *  double-registration of the same email can't 500 on the UNIQUE constraint. Returns the created row,
+ *  or `null` when the email was already taken (the caller maps that to a clean 409). */
+export async function createUser(db: AccountsDb, email: string, now = Date.now()): Promise<UserRow | null> {
   const row: UserRow = {
     id: crypto.randomUUID(),
     email,
@@ -303,8 +349,13 @@ export async function createUser(db: AccountsDb, email: string, now = Date.now()
     donation_total_cents: 0,
     stripe_customer_id: null,
   };
-  await db.prepare('INSERT INTO users (id, email, email_verified, created_at) VALUES (?, ?, ?, ?)').bind(row.id, row.email, 0, now).run();
-  return row;
+  const res = (await db
+    .prepare('INSERT INTO users (id, email, email_verified, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(email) DO NOTHING')
+    .bind(row.id, row.email, 0, now)
+    .run()) as { meta?: { changes?: number } } | undefined;
+  // changes === 1 → we inserted; 0 → a concurrent registration already claimed this email → null
+  // (the caller returns a clean 409 instead of an uncaught UNIQUE-constraint 500).
+  return (res?.meta?.changes ?? 0) > 0 ? row : null;
 }
 
 export async function credentialById(db: AccountsDb, id: string) {
@@ -314,20 +365,44 @@ export async function credentialsForUser(db: AccountsDb, userId: string): Promis
   const { results } = await db.prepare('SELECT * FROM credentials WHERE user_id = ? ORDER BY created_at').bind(userId).all<CredentialRow>();
   return results;
 }
+/** Insert a passkey credential, race-safe (A310): `ON CONFLICT(id) DO NOTHING` so a concurrent
+ *  double-verify of the same credential can't 500 on the PK. Returns `true` when THIS call inserted
+ *  the row, `false` when a concurrent verify already registered it (the caller returns a clean 409).
+ *  Persists `user_verified` (A310) — whether the authenticator performed UV at enrollment. */
 export async function insertCredential(
   db: AccountsDb,
-  c: { id: string; userId: string; publicKey: string; counter: number; transports: string[]; aaguid: string | null; backedUp: boolean },
+  c: {
+    id: string;
+    userId: string;
+    publicKey: string;
+    counter: number;
+    transports: string[];
+    aaguid: string | null;
+    backedUp: boolean;
+    userVerified: boolean;
+  },
   now = Date.now()
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const res = (await db
     .prepare(
-      'INSERT INTO credentials (id, user_id, public_key, counter, transports, aaguid, backed_up, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO credentials (id, user_id, public_key, counter, transports, aaguid, backed_up, user_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING'
     )
-    .bind(c.id, c.userId, c.publicKey, c.counter, JSON.stringify(c.transports), c.aaguid, c.backedUp ? 1 : 0, now)
-    .run();
+    .bind(c.id, c.userId, c.publicKey, c.counter, JSON.stringify(c.transports), c.aaguid, c.backedUp ? 1 : 0, c.userVerified ? 1 : 0, now)
+    .run()) as { meta?: { changes?: number } } | undefined;
+  // changes === 1 → this call inserted; 0 → a concurrent verify already registered this credential id
+  // (the caller returns a clean 409 instead of an uncaught PK-constraint 500).
+  return (res?.meta?.changes ?? 0) > 0;
 }
 export async function touchCredential(db: AccountsDb, id: string, counter: number, now = Date.now()): Promise<void> {
   await db.prepare('UPDATE credentials SET counter = ?, last_used_at = ? WHERE id = ?').bind(counter, now, id).run();
+}
+
+/** Delete a credential OWNED BY the given user (A302). Scoped by user_id so a caller can never delete
+ *  another account's passkey. Returns the number of rows deleted (0 = not found / not theirs). */
+export async function deleteCredentialForUser(db: AccountsDb, userId: string, id: string): Promise<number> {
+  const res = (await db.prepare('DELETE FROM credentials WHERE id = ? AND user_id = ?').bind(id, userId).run()) as
+    { meta?: { changes?: number } } | undefined;
+  return res?.meta?.changes ?? 0;
 }
 
 export function parseTransports(text: string | null): string[] {
@@ -341,6 +416,32 @@ export function parseTransports(text: string | null): string[] {
 
 export async function setEmailVerified(db: AccountsDb, userId: string): Promise<void> {
   await db.prepare('UPDATE users SET email_verified = ? WHERE id = ?').bind(1, userId).run();
+}
+
+// A310 — never-verified-account squatting mitigation. An anonymous registration binds ANY email with
+// no proof of ownership (register-verify), yet recovery only emails VERIFIED addresses — so an attacker
+// who registers victim@x first permanently blocks the real victim from BOTH signup (409) and recovery
+// (silent no-send). This TTL is the age past which a never-verified account is considered an abandoned
+// shell eligible for purge, freeing its email. 30 days is comfortably longer than the email-verify
+// token TTL, so a real user who intends to verify has ample time.
+export const UNVERIFIED_USER_TTL_MS = 30 * 24 * 3600 * 1000;
+
+/**
+ * Purge never-verified accounts older than {@link UNVERIFIED_USER_TTL_MS}, freeing their squatted
+ * emails. The FK cascades (credentials/sessions/subscriptions/sync_* — ON DELETE CASCADE) clean the
+ * child rows. Returns the number of users removed.
+ *
+ * NOTE (A310): this is a bounded helper, deliberately NOT auto-wired to any request path — automatic
+ * deletion of a real (if unverified) user's account is a product-policy call, and cloud-synced R2
+ * blobs need the account-delete pager (A305) to clean fully, not a bare D1 cascade. It is provided for
+ * a manual/admin sweep. The complementary proven-ownership (magic-link) RECLAIM flow — letting the real
+ * owner take over a squatted email before the TTL elapses — remains unimplemented (see the audit).
+ */
+export async function purgeUnverifiedUsers(db: AccountsDb, now = Date.now()): Promise<number> {
+  const cutoff = now - UNVERIFIED_USER_TTL_MS;
+  const res = (await db.prepare('DELETE FROM users WHERE email_verified = 0 AND created_at < ?').bind(cutoff).run()) as
+    { meta?: { changes?: number } } | undefined;
+  return res?.meta?.changes ?? 0;
 }
 
 /* ---- donations (Phase 2 — F54) --------------------------------------------------------------
@@ -455,7 +556,11 @@ export function grantsCloud(sub: SubscriptionRow | null, now: number): boolean {
   // Grace runs from the first failure of this past_due run (A266 clamp); fall back to `updated` for
   // legacy rows written before past_due_since existed.
   if (sub.status === 'past_due' && now < (sub.past_due_since ?? sub.updated) + SUBSCRIPTION_GRACE_MS) return true;
-  if (sub.current_period_end != null && now < sub.current_period_end) return true;
+  // Ride out the already-paid period ONLY after a clean cancel — a user who cancels keeps cloud until
+  // the period they paid for ends. Do NOT extend this to past_due/unpaid: Stripe advances
+  // current_period_end into the new (unpaid) period on a failed renewal, so an ungated fallback would
+  // hand a delinquent account a free unpaid month and silently defeat the dunning grace above (A303).
+  if (sub.status === 'canceled' && sub.current_period_end != null && now < sub.current_period_end) return true;
   return false;
 }
 
@@ -486,6 +591,7 @@ export async function upsertSubscription(
     stripeCustomerId: string | null;
     status: string | null;
     currentPeriodEnd: number | null;
+    eventCreated?: number | null; // Stripe event.created (SECONDS) driving this update — persisted for the out-of-order guard (A303)
   },
   now = Date.now()
 ): Promise<void> {
@@ -496,19 +602,21 @@ export async function upsertSubscription(
   const isPastDue = s.status === 'past_due';
   const wasPastDue = existing?.status === 'past_due';
   const pastDueSince = isPastDue ? (wasPastDue ? (existing?.past_due_since ?? now) : now) : null;
+  // A303: carry the applied event.created forward (keep the prior stamp when this update didn't carry one).
+  const lastEventCreated = s.eventCreated ?? existing?.last_event_created ?? null;
   if (existing) {
     await db
       .prepare(
-        'UPDATE subscriptions SET stripe_subscription_id = ?, stripe_customer_id = ?, status = ?, current_period_end = ?, updated = ?, past_due_since = ? WHERE user_id = ?'
+        'UPDATE subscriptions SET stripe_subscription_id = ?, stripe_customer_id = ?, status = ?, current_period_end = ?, updated = ?, past_due_since = ?, last_event_created = ? WHERE user_id = ?'
       )
-      .bind(s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince, s.userId)
+      .bind(s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince, lastEventCreated, s.userId)
       .run();
   } else {
     await db
       .prepare(
-        'INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, status, current_period_end, updated, past_due_since) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, status, current_period_end, updated, past_due_since, last_event_created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
       )
-      .bind(s.userId, s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince)
+      .bind(s.userId, s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince, lastEventCreated)
       .run();
   }
 }

@@ -157,7 +157,12 @@ export async function kekFromPassphrase(passphrase: string, salt: Bytes, params:
   });
   // Copy into a plain ArrayBuffer-backed view (hash-wasm's Uint8Array widens to ArrayBufferLike,
   // which crypto.subtle's BufferSource rejects).
-  const key = await subtle.importKey('raw', new Uint8Array(raw), 'AES-KW', false, ['wrapKey', 'unwrapKey']);
+  const rawKey = new Uint8Array(raw);
+  const key = await subtle.importKey('raw', rawKey, 'AES-KW', false, ['wrapKey', 'unwrapKey']);
+  // A311(e): zero the Argon2id output bytes (both the copy and the original) once imported into the
+  // non-extractable KEK — the derived key material no longer needs to live in a JS-visible buffer.
+  rawKey.fill(0);
+  if (raw instanceof Uint8Array) raw.fill(0);
   return { key, descriptor: { method: 'passphrase', argon2: { ...params, salt: bytesToBase64(salt) } } };
 }
 
@@ -273,19 +278,33 @@ export async function blindKeyFromDekBytes(bytes: Bytes): Promise<CryptoKey> {
 
 /** Encrypt a record with its workspace DEK. Fresh 96-bit random IV per record (never reused with a
  *  given DEK); the GCM tag authenticates the ciphertext. Accepts a string (UTF-8 encoded) or raw
- *  bytes; returns a serializable EncryptedRecord. */
-export async function encryptRecord(dek: CryptoKey, plaintext: string | Bytes): Promise<EncryptedRecord> {
+ *  bytes; returns a serializable EncryptedRecord.
+ *
+ *  A308: pass `aad` (the canonical index-metadata string) to bind it as GCM additional authenticated
+ *  data → a `v:2` envelope. Omit it (legacy callers / tests) → a `v:1` envelope with no AAD, byte-for-
+ *  byte the prior format. The AAD is authenticated but NOT encrypted: it must be reproducible at
+ *  decrypt from the wire row, and decrypt fails if any bound field was altered. */
+export async function encryptRecord(dek: CryptoKey, plaintext: string | Bytes, aad?: string): Promise<EncryptedRecord> {
   const iv = globalThis.crypto.getRandomValues(new Uint8Array(IV_LEN));
   const bytes = typeof plaintext === 'string' ? enc.encode(plaintext) : plaintext;
-  const ct = await subtle.encrypt({ name: 'AES-GCM', iv }, dek, bytes);
-  return { v: 1, alg: 'AES-GCM', iv: bytesToBase64(iv), ct: bytesToBase64(new Uint8Array(ct)) };
+  const params: AesGcmParams = { name: 'AES-GCM', iv };
+  if (aad !== undefined) params.additionalData = enc.encode(aad);
+  const ct = await subtle.encrypt(params, dek, bytes);
+  return { v: aad !== undefined ? 2 : 1, alg: 'AES-GCM', iv: bytesToBase64(iv), ct: bytesToBase64(new Uint8Array(ct)) };
 }
 
 /** Decrypt a record with its workspace DEK. THROWS if the ciphertext was tampered with (a flipped
- *  byte) or the wrong DEK is used — the GCM auth tag fails and Web Crypto rejects. Returns the raw
- *  plaintext bytes (callers TextDecode for JSON). */
-export async function decryptRecord(dek: CryptoKey, rec: EncryptedRecord): Promise<Bytes> {
-  const pt = await subtle.decrypt({ name: 'AES-GCM', iv: base64ToBytes(rec.iv) }, dek, base64ToBytes(rec.ct));
+ *  byte), the wrong DEK is used, OR (v2) the reconstructed `aad` doesn't match what was bound at
+ *  encrypt — the GCM auth tag fails and Web Crypto rejects. Returns the raw plaintext bytes (callers
+ *  TextDecode for JSON).
+ *
+ *  A308: a `v:2` record binds the index metadata as AAD, so the caller MUST pass the same canonical
+ *  string (rebuilt from the wire row); a forged `deleted`/`updated`/`type` makes this throw. A `v:1`
+ *  record carries no AAD, so `aad` is ignored — legacy / already-synced ciphertext still decrypts. */
+export async function decryptRecord(dek: CryptoKey, rec: EncryptedRecord, aad?: string): Promise<Bytes> {
+  const params: AesGcmParams = { name: 'AES-GCM', iv: base64ToBytes(rec.iv) };
+  if (rec.v >= 2) params.additionalData = enc.encode(aad ?? '');
+  const pt = await subtle.decrypt(params, dek, base64ToBytes(rec.ct));
   return new Uint8Array(pt);
 }
 

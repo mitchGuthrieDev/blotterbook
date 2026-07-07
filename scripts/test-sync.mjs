@@ -12,6 +12,7 @@ import { onRequestGet as ikGet, onRequestPut as ikPut } from '../functions/api/s
 import { onRequestPost as push } from '../functions/api/sync/push.ts';
 import { onRequestGet as pull } from '../functions/api/sync/pull.ts';
 import { onRequestPost as del } from '../functions/api/sync/delete.ts';
+import { onRequestPost as accountDelete } from '../functions/api/account/delete.ts';
 import { DELETE_PAGE, TOMBSTONE_TTL_MS, compactTombstones, deleteWorkspacePage } from '../functions/_lib/sync.ts';
 
 let pass = 0,
@@ -35,6 +36,10 @@ function mockDb() {
     users: [],
     sessions: [],
     subscriptions: [], // A253 — callerHasCloud() reads this to gate the mutating routes
+    credentials: [], // A305 — deleteUserAccount cleans these
+    donations: [],
+    recovery_tokens: [],
+    challenges: [],
     sync_workspaces: [],
     sync_workspace_keys: [],
     sync_wrapped_ik: [],
@@ -54,6 +59,9 @@ function mockDb() {
     '<=': (a, b) => a <= b,
   };
   const matches = (row, conds, args, off) => conds.every((c, i) => cmp[c.op](row[c.col], args[off + i]));
+  // A write result carrying the affected-row count (empty rows array tagged with `.changes`), so run()
+  // can surface D1's meta.changes (A310 race-safe createUser/insertCredential read it).
+  const changed = n => Object.assign([], { changes: n });
   // The atomic MAX(seq)+1 the write statement computes in-SQL (A261) — evaluated here so the mock
   // mirrors the real single-statement seq assignment.
   const nextSeq = ws => tables.sync_records.filter(r => r.workspace_id === ws).reduce((mx, r) => Math.max(mx, r.seq), 0) + 1;
@@ -88,8 +96,13 @@ function mockDb() {
     }
     if ((m = s.match(/^INSERT INTO (\w+) \(([^)]+)\) VALUES/i))) {
       const cols = m[2].split(',').map(c => c.trim());
-      tables[m[1]].push(Object.fromEntries(cols.map((c, i) => [c, args[i] ?? null])));
-      return [];
+      const row = Object.fromEntries(cols.map((c, i) => [c, args[i] ?? null]));
+      // `ON CONFLICT(<col>) DO NOTHING` — first-writer-wins: skip when a row with that key already
+      // exists (A304 relies on this for the wrapped-DEK register).
+      const conflict = s.match(/ON CONFLICT\((\w+)\) DO NOTHING/i);
+      if (conflict && tables[m[1]].some(r => r[conflict[1]] === row[conflict[1]])) return changed(0);
+      tables[m[1]].push(row);
+      return changed(1);
     }
     if ((m = s.match(/^SELECT \* FROM (\w+) WHERE (.+?)(?: ORDER BY (\w+)( DESC)?)?(?: LIMIT (\d+))?$/i))) {
       const conds = parseConds(m[2]);
@@ -121,7 +134,10 @@ function mockDb() {
       const api = args => ({
         bind: (...a) => api(a),
         first: async () => exec(sql, args)[0] ?? null,
-        run: async () => exec(sql, args),
+        run: async () => {
+          const r = exec(sql, args);
+          return { meta: { changes: (r && r.changes) || 0 } };
+        },
         all: async () => ({ results: exec(sql, args) }),
       });
       return api([]);
@@ -274,19 +290,28 @@ console.log('\nWorkspace register + list (idempotent, owned-by-caller):');
     'register 200 with workspace_id + created_at',
     reg.status === 200 && regJson.workspace_id === 'w1' && typeof regJson.created_at === 'number'
   );
-  ok('S25: register response carries no name/trade field', !('name' in regJson) && !('wrapped_dek' in regJson));
+  // A304: the response now echoes the STORED wrapped DEK (so a concurrent loser adopts the winner's).
+  ok('register echoes the stored wrapped DEK (first write)', regJson.wrapped_dek === 'DEK-1');
+  ok('S25: register response carries no name/trade field', !('name' in regJson));
 
   const list1 = await (await wsList({ request: req('/api/sync/workspaces', { method: 'GET', cookie: cookieFor(t1) }), env })).json();
   ok('list returns the workspace with its wrapped DEK', list1.workspaces.length === 1 && list1.workspaces[0].wrapped_dek === 'DEK-1');
 
-  // Idempotent re-register by the owner updates the DEK, no duplicate row.
-  await wsRegister({
+  // A304 FIRST-WRITER-WINS: a second register (e.g. a concurrent second device) with a DIFFERENT DEK
+  // must NOT overwrite the first — it returns the EXISTING (first) blob and leaves the stored row unchanged.
+  const reReg = await wsRegister({
     request: req('/api/sync/workspaces', { cookie: cookieFor(t1), body: { workspace_id: 'w1', wrapped_dek: 'DEK-2' } }),
     env,
   });
+  const reRegJson = await reReg.json();
   ok('re-register is idempotent (one workspace row)', db.tables.sync_workspaces.filter(w => w.workspace_id === 'w1').length === 1);
+  ok('re-register returns the FIRST DEK, not the new one (adopt-existing)', reReg.status === 200 && reRegJson.wrapped_dek === 'DEK-1');
+  ok(
+    '...and the STORED wrapped DEK is unchanged (never overwritten)',
+    db.tables.sync_workspace_keys.find(k => k.workspace_id === 'w1').wrapped_dek === 'DEK-1'
+  );
   const list2 = await (await wsList({ request: req('/api/sync/workspaces', { method: 'GET', cookie: cookieFor(t1) }), env })).json();
-  ok('re-register updated the wrapped DEK', list2.workspaces[0].wrapped_dek === 'DEK-2');
+  ok('list still shows the first DEK after a divergent re-register', list2.workspaces[0].wrapped_dek === 'DEK-1');
 
   // A different user cannot claim the same workspace_id.
   const steal = await wsRegister({
@@ -294,7 +319,7 @@ console.log('\nWorkspace register + list (idempotent, owned-by-caller):');
     env,
   });
   ok('cross-user register of an existing workspace_id → 409', steal.status === 409);
-  ok("...and did not change the owner's DEK", db.tables.sync_workspace_keys.find(k => k.workspace_id === 'w1').wrapped_dek === 'DEK-2');
+  ok("...and did not change the owner's DEK", db.tables.sync_workspace_keys.find(k => k.workspace_id === 'w1').wrapped_dek === 'DEK-1');
 
   const list2b = await (await wsList({ request: req('/api/sync/workspaces', { method: 'GET', cookie: cookieFor(t2) }), env })).json();
   ok("u2's workspace list does not include u1's workspace", list2b.workspaces.length === 0);
@@ -303,7 +328,7 @@ console.log('\nWorkspace register + list (idempotent, owned-by-caller):');
   await wsRegister({
     request: req('/api/sync/workspaces', {
       cookie: cookieFor(t1),
-      body: { workspace_id: 'w1', wrapped_dek: 'DEK-2', name: rec('name-blind', 'ENC-NAME', 5, { type: 'workspace-name' }) },
+      body: { workspace_id: 'w1', wrapped_dek: 'DEK-1', name: rec('name-blind', 'ENC-NAME', 5, { type: 'workspace-name' }) },
     }),
     env,
   });
@@ -790,6 +815,127 @@ console.log('\nTombstone compaction (A265) — stale tombstones swept, live + re
     env,
   });
   ok('push piggybacks the tombstone sweep (ancient tombstone gone)', !db.tables.sync_records.some(r => r.blinded_id === 'old-tomb'));
+}
+
+console.log('\nAccount deletion (A305) — clears R2 + all D1 rows, resumable, fail-closed:');
+{
+  const db = mockDb();
+  const bucket = mockBucket();
+  const env = { ACCOUNTS_DB: db, SYNC_BUCKET: bucket };
+  const user = await createUser(db, 'gone@example.com');
+  const { token } = await createSession(db, user.id);
+  grantCloud(db, user.id);
+
+  // fail-closed shapes
+  ok(
+    'account-delete 503 without ACCOUNTS_DB',
+    (await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env: { SYNC_BUCKET: bucket } })).status ===
+      503
+  );
+  ok(
+    'account-delete 503 without SYNC_BUCKET',
+    (await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env: { ACCOUNTS_DB: db } })).status === 503
+  );
+  ok('account-delete 401 without a session', (await accountDelete({ request: req('/api/account/delete'), env })).status === 401);
+  ok(
+    'account-delete cross-origin → 403',
+    (await accountDelete({ request: req('/api/account/delete', { origin: 'https://evil.example', cookie: cookieFor(token) }), env }))
+      .status === 403
+  );
+
+  // seed a full account: two workspaces with pushed records (R2 blobs), + credential/subscription/
+  // wrapped-ik/donation/recovery rows.
+  for (const w of ['wa', 'wb']) {
+    await wsRegister({
+      request: req('/api/sync/workspaces', { cookie: cookieFor(token), body: { workspace_id: w, wrapped_dek: 'D-' + w } }),
+      env,
+    });
+    await push({
+      request: req('/api/sync/push', {
+        cookie: cookieFor(token),
+        body: { workspace_id: w, records: [rec(w + '-b1', w + '-c1', 100), rec(w + '-b2', w + '-c2', 100)] },
+      }),
+      env,
+    });
+    db.tables.sync_wrapped_ik.push({ user_id: user.id, method: 'prf', key_id: w, wrapped_ik: 'IK', updated: 100 });
+  }
+  db.tables.credentials.push({ id: 'cred-1', user_id: user.id, public_key: 'pk', counter: 0, created_at: 100 });
+  db.tables.donations.push({
+    id: 'don-1',
+    user_id: user.id,
+    email: 'gone@example.com',
+    amount_cents: 500,
+    created_at: 100,
+    claimed_at: 100,
+  });
+  db.tables.recovery_tokens.push({
+    id: 'rt-1',
+    user_id: user.id,
+    email: 'gone@example.com',
+    purpose: 'verify',
+    token_hash: 'h',
+    created_at: 100,
+    expires_at: 200,
+  });
+  db.tables.challenges.push({ id: 'ch-1', type: 'register', user_id: user.id, email: 'gone@example.com', challenge: 'x', expires_at: 200 });
+  const blobsBefore = bucket.store.size;
+  ok('R2 holds the pushed ciphertext blobs before delete', blobsBefore === 4);
+
+  const res = await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env });
+  const rj = await res.json();
+  ok('account-delete 200 done:true', res.status === 200 && rj.done === true && rj.deleted === true);
+  ok('...clears the session cookie', /Max-Age=0/.test(res.headers.get('Set-Cookie') || ''));
+
+  // every trace of the user is gone
+  ok('all R2 ciphertext blobs removed', bucket.store.size === 0);
+  ok('sync_records emptied', db.tables.sync_records.length === 0);
+  ok('sync_workspaces + keys dropped', db.tables.sync_workspaces.length === 0 && db.tables.sync_workspace_keys.length === 0);
+  ok('sync_wrapped_ik removed', db.tables.sync_wrapped_ik.length === 0);
+  ok('credentials removed', db.tables.credentials.length === 0);
+  ok('sessions removed', db.tables.sessions.length === 0);
+  ok('subscriptions removed', db.tables.subscriptions.length === 0);
+  ok('donations removed', db.tables.donations.length === 0);
+  ok('recovery_tokens removed', db.tables.recovery_tokens.length === 0);
+  ok('challenges removed', db.tables.challenges.length === 0);
+  ok('the user row itself is gone', db.tables.users.length === 0);
+
+  // a second delete with the (now invalid) session → 401 (session was revoked)
+  ok(
+    'a repeat delete after removal → 401 (session gone)',
+    (await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env })).status === 401
+  );
+
+  // Resumable: a workspace larger than the per-call page budget returns done:false and keeps the user
+  // until a follow-up call finishes the job.
+  const bdb = mockDb();
+  const bbk = mockBucket();
+  const benv = { ACCOUNTS_DB: bdb, SYNC_BUCKET: bbk };
+  const bu = await createUser(bdb, 'big@example.com');
+  const { token: bt } = await createSession(bdb, bu.id);
+  bdb.tables.sync_workspaces.push({ workspace_id: 'big', owner_user_id: bu.id, created_at: 100 });
+  bdb.tables.sync_workspace_keys.push({ workspace_id: 'big', owner_user_id: bu.id, wrapped_dek: 'D', updated: 100 });
+  const TOTAL = 5001; // > MAX_PAGES_PER_CALL(10) × DELETE_PAGE(500) → needs two invocations
+  for (let i = 1; i <= TOTAL; i++) {
+    bdb.tables.sync_records.push({
+      workspace_id: 'big',
+      blinded_id: 'b' + i,
+      seq: i,
+      type: 'trade',
+      ciphertext_ref: 'ref' + i,
+      updated: 100,
+      deleted: 0,
+    });
+    bbk.store.set('ref' + i, 'x');
+  }
+  const first = await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(bt) }), env: benv });
+  const fj = await first.json();
+  ok('a large account pages: first call returns done:false', first.status === 200 && fj.done === false);
+  ok('...the user still exists mid-delete', bdb.tables.users.length === 1);
+  ok('...and only the budgeted pages were cleared so far', bdb.tables.sync_records.length === TOTAL - 10 * 500);
+  const second = await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(bt) }), env: benv });
+  ok('the follow-up call finishes (done:true)', (await second.json()).done === true);
+  ok('...all records + blobs gone', bdb.tables.sync_records.length === 0 && bbk.store.size === 0);
+  ok('...and the user is deleted', bdb.tables.users.length === 0);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -69,7 +69,8 @@ export async function onRequestPost(ctx: Ctx) {
     attestationType: 'none',
     excludeCredentials: existing.map(c => ({ id: c.id, transports: parseTransports(c.transports) as AuthenticatorTransportFuture[] })),
     // Discoverable credential required — login is usernameless (no email prompt on login).
-    authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
+    // A310: user verification required — every passkey doubles as the cloud-sync PRF key (UV-capable).
+    authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
   });
   await putChallenge(db, { type: 'register', challenge: options.challenge, userId: user?.id ?? null, email });
   return json({ options });

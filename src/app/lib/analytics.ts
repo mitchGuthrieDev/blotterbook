@@ -2,7 +2,7 @@
 // compute() Metrics + the working trade list into the discrete arrays/values the Analytics component
 // renders (KPI strip, P&L histogram, hour/weekday signed bars, per-symbol + long/short breakdowns,
 // and the advanced-stats grid). Pure: no runes, no DOM — the staging shell calls it from a $derived.
-import { usd, money, num, ratio, fmtDur, tone, dowBuckets, tagBuckets, DOW_LABEL, type Metrics } from '../../lib/core/core.ts';
+import { usd, money, num, ratio, advStatVals, fmtDur, tone, dowBuckets, tagBuckets, DOW_LABEL, type Metrics } from '../../lib/core/core.ts';
 import type { Trade } from '../../lib/core/types.ts';
 
 export type Kpi = { label: string; value: string; tone?: 'pos' | 'neg' };
@@ -131,17 +131,18 @@ export function buildAnalytics(m: Metrics, trades: Trade[], tagsFor: (t: Trade) 
     : '—';
 
   // ── Advanced-stats grid ──
+  const av = advStatVals(m); // A289: shared stat values (this surface keeps its own verbose labels)
   const statRows: StatRow[] = [
-    { k: 'Payoff ratio (avg win / avg loss)', v: ratio(m.wl) },
+    { k: 'Payoff ratio (avg win / avg loss)', v: av.payoff },
     { k: 'Average win', v: usd(m.avgW), tone: 'pos' },
     { k: 'Average loss', v: usd(m.avgL), tone: 'neg' },
     { k: 'Expectancy / trade', v: usd(m.expectancy), tone: tone(m.expectancy) },
     { k: 'Per-trade std dev', v: money(m.tStd) },
-    { k: 'Sortino (daily)', v: num(m.sortino) },
-    { k: 'Recovery factor (net / max DD)', v: ratio(m.recovery) },
-    { k: 'Profit concentration (top 5)', v: m.concPct == null ? '—' : `${Math.round(m.concPct)}%` },
-    { k: 'Max consecutive wins', v: `${m.mcw}` },
-    { k: 'Max consecutive losses', v: `${m.mcl}` },
+    { k: 'Sortino (daily)', v: av.sortino },
+    { k: 'Recovery factor (net / max DD)', v: av.recovery },
+    { k: 'Profit concentration (top 5)', v: av.concentration },
+    { k: 'Max consecutive wins', v: av.maxConsecWins },
+    { k: 'Max consecutive losses', v: av.maxConsecLosses },
     { k: 'Avg hold time', v: avgHold },
     { k: 'Largest winning streak', v: usd(m.maxWinStk), tone: 'pos' },
     { k: 'Largest losing streak', v: usd(m.maxLossStk), tone: 'neg' },

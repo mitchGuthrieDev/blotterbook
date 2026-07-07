@@ -269,14 +269,6 @@
             aria-hidden="true"
             class="h-[13px] w-[13px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"
             ><path d="M20 6L9 17l-5-5" /></svg
-          >No account needed</span
-        >
-        <span class="inline-flex items-center gap-[6px]"
-          ><svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            class="h-[13px] w-[13px] flex-none fill-none stroke-green stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"
-            ><path d="M20 6L9 17l-5-5" /></svg
           >Nothing leaves your browser</span
         >
       </div>
@@ -605,7 +597,7 @@
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
             aria-hidden="true"
           ></span><b class="flex-1 text-[15px] font-semibold">ATAS X</b><span class="pstate font-mono text-[10.5px] text-chart-2"
-            >Verified · real exports (.xlsx)</span
+            >Verified · real exports</span
           ></a
         >
       </li>

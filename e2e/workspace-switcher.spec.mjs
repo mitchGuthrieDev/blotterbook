@@ -200,6 +200,30 @@ test('cloud sync: demo and prod never call /api/sync (inert CloudStore off enabl
   expect(syncCalls, syncCalls.join('\n')).toHaveLength(0);
 });
 
+// A306: while the tier probe (/api/me) is still in flight (cloudSync.tier === ''), the switcher shows
+// a NEUTRAL "Checking…" — it must NOT mislabel a would-be cloud user "cloud tier required" during the
+// window. The full A279/A299 pill state machine (enable → synced → pending → pause + per-workspace
+// switch) is driven end-to-end in cloud-sync.spec.mjs.
+test('workspace switcher: shows a neutral "checking…" while the tier probe is in flight (A306)', async ({ page }) => {
+  await page.route('**/api/me', async route => {
+    await new Promise(r => setTimeout(r, 4000)); // hold the probe so tier stays '' when we open the menu
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ tier: 'cloud', cloudSync: true, user: null, passkeys: [] }),
+    });
+  });
+  // Boot WITHOUT waiting for network idle — `networkidle` would block on the held /api/me above, so by
+  // the time the menu opened the probe would already have resolved (tier='cloud') and the transient
+  // 'checking' window would be gone. The dashboard renders off the local Store, independent of the probe.
+  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
+  await page.goto(STAGING, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+  await trigger(page).click();
+  await expect(page.getByTestId('sync-checking')).toBeVisible();
+  await expect(page.getByText('cloud tier required')).toHaveCount(0);
+});
+
 // F63: the per-workspace sync-status affordance renders on STAGING for a cloud-tier account. Without
 // an unlocked key it offers "Unlock to enable sync" (the e2e server can't run /api/sync, so this
 // asserts the affordance is present + wired, not a full push/pull — convergence is proven in

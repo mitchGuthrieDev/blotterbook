@@ -1,12 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { watchErrors } from './helpers.mjs';
 
-// UI-redesign Phase-3 cutover: the STAGING surface is re-platformed onto the new sidebar-shell SPA
-// (StagingApp = AppShell + a hash router over the seven screens), booting the REAL engine over its
-// isolated, seeded IndexedDB (loadRefData → Store → seed → compute/costModel). app/demo keep the
-// current App.svelte (guarded by interactions.spec.mjs) until the redesign is promoted off staging.
-// These specs verify the shell boots clean, every screen renders REAL data, and the three persistence
-// paths (journal notes, per-trade tags, CSV import) round-trip through the isolated DB.
+// CH16 cutover: ALL app surfaces (app/demo/staging) render the ONE redesigned sidebar-shell SPA
+// (src/app/App.svelte = AppShell + a hash router over the seven screens + Account). This file is the
+// FULL redesign-DOM engine coverage — it drives it against the STAGING surface specifically because
+// staging boots the REAL engine over its own isolated, seeded IndexedDB (loadRefData → Store → seed →
+// compute/costModel), unlike demo's in-memory, read-only DemoStore (see interactions.spec.mjs for
+// what's demo-specific) or prod's unseeded first-run state. Every screen render, the three
+// persistence paths (journal notes, per-trade tags, CSV import), and the F56 login-gate behavior
+// (staging is gated by default; ARMED/bypass tests live at the bottom of this file) are verified here.
 
 const STAGING = '/app/staging.html';
 const nav = page => page.locator('nav[aria-label="Primary"]');

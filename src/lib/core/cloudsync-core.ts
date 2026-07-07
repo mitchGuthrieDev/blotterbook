@@ -16,7 +16,7 @@
  * runs identically in the browser (real fetch + IndexedDB Store) and in the node integration test
  * (a mock transport + an in-memory Store). */
 
-import type { StoreLike, Trade, StoredJournal, StoredTradeMeta, Tombstone, WrappedDek } from '../../lib/core/types.ts';
+import type { StoreLike, Trade, StoredJournal, StoredTradeMeta, Tombstone, WrappedDek } from './types.ts';
 
 /* ── the F62 transport contract (injected) ─────────────────────────────────────────────────────── */
 
@@ -49,7 +49,10 @@ export interface PullPage {
  *  node test backs it with the real Pages Functions over a mock D1/R2 — the identical contract. */
 export interface SyncTransport {
   listWorkspaces(): Promise<Array<{ workspace_id: string; wrapped_dek: string | null }>>;
-  registerWorkspace(workspaceId: string, wrappedDek: string): Promise<void>;
+  /** Register the workspace's wrapped DEK. A304: first-writer-wins server-side — the response returns
+   *  the EFFECTIVE wrapped DEK (the existing one if a concurrent device already registered, else the
+   *  one just stored). The caller adopts it when it differs from what it sent. */
+  registerWorkspace(workspaceId: string, wrappedDek: string): Promise<string>;
   /** Push one ≤15-record batch (the caller chunks to the cap). */
   push(workspaceId: string, records: WireRecord[]): Promise<void>;
   pull(workspaceId: string, since: number): Promise<PullPage>;
@@ -90,7 +93,7 @@ const dec = new TextDecoder();
 
 /* ── lazy crypto core (keeps crypto.ts + the Argon2 wasm out of the /app boot bundle, A96) ──────── */
 function cryptoCore() {
-  return import('../../lib/core/crypto.ts');
+  return import('./crypto.ts');
 }
 
 /** Derive the record key + blinding key from a workspace DEK's raw bytes. The caller zeroes `bytes`. */
@@ -176,17 +179,29 @@ export async function collectChanges(store: StoreLike, sinceWatermark: number): 
   return out;
 }
 
-/** Encrypt + blind one change into a WireRecord (opaque ciphertext + blinded id only — S25). */
+/** A308 — the canonical GCM AAD that binds a v2 record's index metadata to its ciphertext. It must be
+ *  BYTE-IDENTICAL on push (from the Change) and pull (from the wire row) or GCM auth fails, so it is a
+ *  fixed field order with a stable `deleted` encoding. Authenticated, not secret: the server already
+ *  sees every field here — binding them just stops a WRITE-capable server forging `deleted`/`updated`/
+ *  `type` (which would force a fleet delete or skew LWW) without the tag failing. */
+export function recordAad(workspaceId: string, type: string, blindedId: string, updated: number, deleted: boolean): string {
+  return `${workspaceId}|${type}|${blindedId}|${updated}|${deleted ? 1 : 0}`;
+}
+
+/** Encrypt + blind one change into a WireRecord (opaque ciphertext + blinded id only — S25). A308:
+ *  writes a v2 envelope binding this row's index metadata as AAD. */
 async function toWire(
   keys: WsKeys,
   c: Change,
+  workspaceId: string,
   enc2: {
-    encryptRecord: typeof import('../../lib/core/crypto.ts').encryptRecord;
-    blindId: typeof import('../../lib/core/crypto.ts').blindId;
+    encryptRecord: typeof import('./crypto.ts').encryptRecord;
+    blindId: typeof import('./crypto.ts').blindId;
   }
 ): Promise<WireRecord> {
   const blinded_id = await enc2.blindId(keys.blindKey, `${c.type}:${c.key}`);
-  const rec = await enc2.encryptRecord(keys.recordKey, c.plain);
+  const aad = recordAad(workspaceId, c.type, blinded_id, c.updated, c.deleted);
+  const rec = await enc2.encryptRecord(keys.recordKey, c.plain, aad);
   return { blinded_id, type: c.type, ciphertext: JSON.stringify(rec), updated: c.updated, deleted: c.deleted || undefined };
 }
 
@@ -215,7 +230,7 @@ export async function pushChanges(
   if (!changes.length) return Math.max(watermark, cutoff);
   if (shouldAbort()) return watermark; // re-check after the async read, before anything is pushed
   const { encryptRecord, blindId } = await cryptoCore();
-  const wire = await Promise.all(changes.map(c => toWire(keys, c, { encryptRecord, blindId })));
+  const wire = await Promise.all(changes.map(c => toWire(keys, c, workspaceId, { encryptRecord, blindId })));
   for (let i = 0; i < wire.length; i += MAX_PUSH_RECORDS) {
     if (shouldAbort()) return watermark; // a switch landed mid-push — stop, leave the watermark unadvanced
     await transport.push(workspaceId, wire.slice(i, i + MAX_PUSH_RECORDS));
@@ -248,9 +263,22 @@ function realKey(type: WireType, obj: Record<string, unknown>): string {
  *   · journal / trademeta / meta / file → store.importAll ONLY when strictly newer than local (LWW)
  *   · deletes → the store's delete methods (which write a local tombstone), gated + idempotent so a
  *               remote delete never ping-pongs (skip when already absent AND already tombstoned).
+ *
+ * A307: `shouldAbort` is re-checked AFTER the (async) decrypt/resolve pass and BEFORE the write phase.
+ * pullAndMerge's last barrier check runs before this call, but the decrypt loop awaits, so a workspace
+ * switch can land in that window; without this re-check the merge would write one workspace's records
+ * into another's now-active DB. On abort it writes NOTHING and returns `false`, so pullAndMerge leaves
+ * the cursor UNADVANCED and the next reconcile re-reads it. Returns `true` when the merge completed
+ * (whether or not any record actually landed).
  */
-export async function mergeRecords(store: StoreLike, keys: WsKeys, records: PulledRecord[]): Promise<void> {
-  if (!records.length) return;
+export async function mergeRecords(
+  store: StoreLike,
+  keys: WsKeys,
+  records: PulledRecord[],
+  workspaceId: string = '',
+  shouldAbort: () => boolean = () => false
+): Promise<boolean> {
+  if (!records.length) return true;
   const { decryptRecord } = await cryptoCore();
 
   // Resolve to the latest record per (type:key) by `updated` (LWW within the batch).
@@ -264,7 +292,11 @@ export async function mergeRecords(store: StoreLike, keys: WsKeys, records: Pull
     if (!WIRE_TYPES.has(r.type)) continue; // ignore an unknown/legacy record type defensively
     let obj: Record<string, unknown>;
     try {
-      obj = JSON.parse(dec.decode(await decryptRecord(keys.recordKey, JSON.parse(r.ciphertext)))) as Record<string, unknown>;
+      // A308: rebuild the AAD from the wire row. A v2 record's GCM tag was bound to
+      // `workspaceId|type|blinded_id|updated|deleted`; a forged field makes decrypt throw → skipped
+      // (A263). A v1 record ignores the AAD (no additionalData), so legacy ciphertext still decrypts.
+      const aad = recordAad(workspaceId, r.type, r.blinded_id, r.updated, r.deleted);
+      obj = JSON.parse(dec.decode(await decryptRecord(keys.recordKey, JSON.parse(r.ciphertext), aad))) as Record<string, unknown>;
     } catch {
       skipped++;
       continue;
@@ -277,6 +309,10 @@ export async function mergeRecords(store: StoreLike, keys: WsKeys, records: Pull
     if (!prev || r.updated >= prev.updated) latest.set(id, { type, key, updated: r.updated, deleted: r.deleted, obj });
   }
   if (skipped) console.warn(`cloudsync: skipped ${skipped} undecryptable record(s) during merge`);
+
+  // A307: the decrypt/resolve loop above awaited — re-check the switch barrier BEFORE reading or
+  // writing the store, so a switch that landed mid-decrypt can't merge into the wrong workspace's DB.
+  if (shouldAbort()) return false;
 
   // Snapshot local `updated` per record + the local tombstones, for the LWW gate.
   const [trades, journal, trademeta, meta, tombs] = await Promise.all([
@@ -327,6 +363,10 @@ export async function mergeRecords(store: StoreLike, keys: WsKeys, records: Pull
     else if (r.type === 'meta') payload.meta.push({ key: String(r.obj.key), value: r.obj.value, updated: r.updated });
   }
 
+  // A307: the local snapshot above awaited too — final barrier check immediately before the first
+  // store mutation, so nothing is written into a workspace that was switched away mid-merge.
+  if (shouldAbort()) return false;
+
   // Apply deletes first (independent keys from the upserts), then the upserts through importAll —
   // the same hardened trust boundary a backup restore flows through (S15/S17/S20/A154).
   for (const d of deletes) {
@@ -336,6 +376,7 @@ export async function mergeRecords(store: StoreLike, keys: WsKeys, records: Pull
   }
   const hasUpserts = payload.trades.length || payload.journal.length || payload.trademeta.length || payload.meta.length;
   if (hasUpserts) await store.importAll(payload as unknown as Record<string, unknown>);
+  return true;
 }
 
 /**
@@ -366,7 +407,10 @@ export async function pullAndMerge(
     if (!page.more || !page.records.length) break;
   }
   if (shouldAbort()) return { cursor: since, merged: 0 }; // bail before writing the merge into the store
-  await mergeRecords(store, keys, all);
+  // A307: mergeRecords re-checks the barrier before its own write phase; if it aborted (a switch
+  // landed during decrypt/snapshot), it wrote nothing → leave the cursor UNADVANCED for a re-read.
+  const merged = await mergeRecords(store, keys, all, workspaceId, shouldAbort);
+  if (!merged) return { cursor: since, merged: 0 };
   return { cursor, merged: all.length };
 }
 

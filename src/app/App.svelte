@@ -15,6 +15,8 @@
     ratio,
     rateFor,
     feeForTrade,
+    advStatVals,
+    costLineVals,
     BROKERS,
     BROKER_ORDER,
     estimatedCommRoots,
@@ -39,14 +41,8 @@
   import { UserRound } from '@lucide/svelte';
   import { fade } from 'svelte/transition';
   import { dur } from './lib/motion.ts';
-  import Dashboard, {
-    DEFAULT_MODULE_KEYS,
-    type DashStat,
-    type DayCell,
-    type StatDetail,
-    type FilterModel,
-    type FilterPatch,
-  } from './screens/Dashboard.svelte';
+  import Dashboard, { type DashStat, type DayCell, type StatDetail, type FilterModel, type FilterPatch } from './screens/Dashboard.svelte';
+  import { migrateLayout, defaultLayout, type ModEntry } from './lib/modlayout.ts';
   // The non-default screens are CODE-SPLIT: type-only static imports (erased at build) + lazy
   // `import()` loaders in the router below, so their chunks stay out of the /app first paint
   // (A96 budget). Dashboard stays static — it's the boot screen (and exports DEFAULT_MODULE_KEYS).
@@ -64,7 +60,7 @@
   import BootSplash from './parts/BootSplash.svelte';
   import LaunchGate from './parts/LaunchGate.svelte';
   import WorkspaceSwitcher from './parts/WorkspaceSwitcher.svelte';
-  import { account, refreshSession } from './lib/account.svelte.ts';
+  import { account, refreshSession, completeRecovery } from './lib/account.svelte.ts';
   import { wrapStore, configureCloudSync } from './lib/cloudsync.svelte.ts';
   import { loadFlags, APP_FLAGS, accountGateEnabled, type AppFlags } from './lib/flags.ts';
   import { pickFlavor } from './lib/flavor.ts';
@@ -111,7 +107,7 @@
     trades: () => import('./screens/TradeEditor.svelte'),
     reports: () => import('./screens/Reports.svelte'),
     csv: () => import('./screens/CsvLibrary.svelte'),
-    account: () => import('./screens/Account.svelte'), // F53 — staging-gated route below
+    account: () => import('./screens/Account.svelte'),
   };
 
   // F53/CH16: passkey accounts, promoted to every surface (demo renders it read-only via isDemo).
@@ -183,9 +179,20 @@
   // Named workspace layout templates (R12 parity): save/apply/delete the module layout by name; revert
   // clears the layout back to the default (all modules). Persisted to Store.local (per-surface key).
   const WS_KEY = isStaging ? 'bb:staging:dashLayouts' : 'bb:dashLayouts';
-  let wsTemplates = $state<Record<string, string[]>>((store.local.get(WS_KEY, {}) as Record<string, string[]>) || {});
+  // A271: a workspace template snapshots the full sized layout ({key,size}[]). Read through the SAME
+  // lossless migration as tab layouts, so pre-A271 templates (a bare key `string[]`) upgrade in place.
+  let wsTemplates = $state<Record<string, ModEntry[]>>(
+    Object.fromEntries(
+      Object.entries((store.local.get(WS_KEY, {}) as Record<string, unknown>) || {}).map(([name, v]) => [
+        name,
+        migrateLayout(v)?.mods ?? defaultLayout().mods,
+      ])
+    )
+  );
   function persistWs() {
-    store.local.set(WS_KEY, $state.snapshot(wsTemplates));
+    // Persist each template as the versioned payload so migrateLayout round-trips it on next read.
+    const out = Object.fromEntries(Object.entries($state.snapshot(wsTemplates)).map(([name, mods]) => [name, { v: 2, mods }]));
+    store.local.set(WS_KEY, out);
   }
 
   // A286: the Calendar screen's daily P&L target — persisted via the Store.local seam (per-surface key)
@@ -203,17 +210,17 @@
     save: (name: string) => {
       if (dash.isDemo) return;
       // A148: an untouched dashboard has dashModules === undefined (= the default layout) — capture
-      // the ACTUAL default keys, not [], so applying the saved template can't blank the dashboard.
-      wsTemplates = { ...wsTemplates, [name]: [...(dashModules ?? DEFAULT_MODULE_KEYS)] };
+      // the ACTUAL default layout, not [], so applying the saved template can't blank the dashboard.
+      wsTemplates = { ...wsTemplates, [name]: [...(dashModules ?? defaultLayout().mods)] };
       persistWs();
     },
     // A193: applying a template / resetting to default are EXPLICIT target states — they persist
     // immediately (stage + save), unlike incremental module edits which stage behind the dirty
     // asterisk. Keeps the template menu's contract consistent with its save/remove actions.
     apply: (name: string) => {
-      const order = wsTemplates[name];
-      if (order) {
-        dashTabsState.saveModules([...order]);
+      const mods = wsTemplates[name];
+      if (mods) {
+        dashTabsState.saveModules([...mods]);
         dashTabsState.saveTabLayout();
       }
     },
@@ -259,6 +266,8 @@
   function statDetail(key: string): StatDetail {
     const m = dash.metricsActive;
     const c = dash.cost;
+    const cv = costLineVals(c); // A288/A289: single-sourced cost + stat values (labels kept local)
+    const av = advStatVals(m);
     const bar = (
       label: string,
       v: number,
@@ -282,9 +291,9 @@
           desc: 'Realized P&L as imported — before modeled costs. The waterfall below applies commissions, subscriptions and estimated Section 1256 tax.',
           bars: [bar('Gross', c.gross, mx, 'pos'), bar('Net (pre-tax)', c.netPreTax, mx, 'pos'), bar('Take-home', c.afterTax, mx, 'muted')],
           rows: [
-            { label: 'Gross P&L', value: usd(c.gross), tone: tone(c.gross) },
-            { label: 'Commissions (all-in)', value: usd(-c.totalComm), tone: 'neg' },
-            { label: `Subscriptions (${c.months} mo)`, value: usd(-c.fixedPeriod), tone: 'neg' },
+            { label: 'Gross P&L', value: cv.gross, tone: tone(c.gross) },
+            { label: 'Commissions (all-in)', value: cv.commissions, tone: 'neg' },
+            { label: `Subscriptions (${c.months} mo)`, value: cv.subscriptions, tone: 'neg' },
             { label: 'Est. 1256 tax', value: usd(-c.tax), tone: 'neg' },
             { label: 'Take-home', value: usd(c.afterTax), tone: tone(c.afterTax) },
           ],
@@ -332,7 +341,7 @@
           rows: [
             { label: 'Average win', value: usd(m.avgW), tone: 'pos' },
             { label: 'Average loss', value: usd(m.avgL), tone: 'neg' },
-            { label: 'Payoff ratio', value: ratio(m.wl) },
+            { label: 'Payoff ratio', value: av.payoff },
             { label: 'Per-trade std dev', value: money(m.tStd) },
           ],
         };
@@ -355,7 +364,7 @@
                   : '—',
             },
             { label: 'Duration', value: `${m.maxDDdur} trades` },
-            { label: 'Recovery factor', value: ratio(m.recovery) },
+            { label: 'Recovery factor', value: av.recovery },
           ],
         };
       case 'sharpe':
@@ -365,7 +374,7 @@
           desc: 'Daily mean P&L ÷ daily P&L std dev (illustrative — not annualized).',
           rows: [
             { label: 'Avg daily P&L', value: usd(m.avgDaily), tone: tone(m.avgDaily) },
-            { label: 'Sortino (daily)', value: num(m.sortino) },
+            { label: 'Sortino (daily)', value: av.sortino },
             { label: 'Active days', value: `${m.active}` },
             { label: 'Avg trades / day', value: m.avgTrades.toFixed(1) },
           ],
@@ -455,14 +464,15 @@
   });
   const dashCostRows = $derived.by(() => {
     const c = dash.cost;
+    const cv = costLineVals(c); // A288: single-sourced cost-line values (labels/markers stay here)
     return [
-      { label: 'Gross P&L', value: usd(c.gross), tone: tone(c.gross) },
+      { label: 'Gross P&L', value: cv.gross, tone: tone(c.gross) },
       {
         label: `Commissions (all-in)${dashEstRoots.length ? ' *' : ''}${c.actualCommTrades > 0 ? ' †' : ''}`,
-        value: usd(-c.totalComm),
+        value: cv.commissions,
         tone: 'neg' as const,
       },
-      { label: `Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, value: usd(-c.fixedPeriod), tone: 'neg' as const },
+      { label: `Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, value: cv.subscriptions, tone: 'neg' as const },
       { label: 'Est. 1256 tax', value: usd(-c.tax), tone: 'neg' as const },
       { label: 'Take-home', value: usd(c.afterTax), tone: tone(c.afterTax), total: true },
       { label: 'Break-even / trade', value: usd(c.bePer) },
@@ -917,7 +927,20 @@
     });
     // F56: only when the gate is armed (staging + flag) do we probe /api/me — prod/demo issue no
     // account traffic at all. refreshSession never throws; account.loaded flips when it settles.
-    if (gateArmed) void refreshSession();
+    if (gateArmed) {
+      void refreshSession();
+      // A300: a lost-passkey recovery link (`?recover=<token>`) lands here BEHIND the login gate —
+      // Account.svelte (which normally handles it) never mounts while the gate blocks, so the 15-min
+      // token used to just expire. Run the re-enrollment ceremony pre-gate; on success account.user
+      // flips and the gate falls through. Scrub the token so a reload can't reuse a spent link.
+      const recoverToken = new URLSearchParams(location.search).get('recover');
+      if (recoverToken) {
+        const url = new URL(location.href);
+        url.searchParams.delete('recover');
+        history.replaceState(null, '', url.pathname + url.search + url.hash);
+        void completeRecovery(recoverToken);
+      }
+    }
     // A256/F63: initialize cloud sync on every NON-DEMO surface (probes the tier, wires focus/
     // connectivity, settles per-workspace status). It stays inert on local tier — no /api/sync
     // (write-behind) traffic until a cloud-tier user enables + unlocks a workspace. Demo never calls
@@ -1142,6 +1165,7 @@
           costDisabled={dash.isDemo}
           modules={dashModules}
           onmoduleschange={dashTabsState.saveModules}
+          {isStaging}
           recentTrades={dash.filtered
             .slice(-12)
             .reverse()

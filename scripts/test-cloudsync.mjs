@@ -5,7 +5,7 @@
        each device's record key + blinding key;
      · the REAL F62 server functions (functions/api/sync/*) run over an in-memory D1 + R2 mock (the
        SAME dumb-blob-store contract the browser hits) — so the transport is faithful, not stubbed;
-     · the REAL client engine (src/app/lib/cloudsync-core.ts) pushes/pulls/merges;
+     · the REAL client engine (src/lib/core/cloudsync-core.ts) pushes/pulls/merges;
      · TWO independent in-memory Stores (clients A + B) share one account IK + workspace DEK.
 
    Asserts: (a) a record written on A appears identically on B after push→pull (trade union +
@@ -21,8 +21,17 @@ import { onRequestPost as pushFn } from '../functions/api/sync/push.ts';
 import { onRequestGet as pullFn } from '../functions/api/sync/pull.ts';
 import { recordKey } from '../functions/_lib/sync.ts';
 import { tradeId } from '../src/lib/core/store.ts';
-import { genIdentityKey, genWorkspaceDek, dekBytesOf, wrapDek, unwrapDekBytes, encryptRecord, blindId } from '../src/lib/core/crypto.ts';
-import { deriveWsKeys, pushChanges, pullAndMerge, syncPlan } from '../src/app/lib/cloudsync-core.ts';
+import {
+  genIdentityKey,
+  genWorkspaceDek,
+  dekBytesOf,
+  wrapDek,
+  unwrapDekBytes,
+  encryptRecord,
+  decryptRecord,
+  blindId,
+} from '../src/lib/core/crypto.ts';
+import { deriveWsKeys, pushChanges, pullAndMerge, syncPlan, collectChanges, mergeRecords } from '../src/lib/core/cloudsync-core.ts';
 
 let pass = 0;
 const ok = (name, cond) => {
@@ -81,8 +90,13 @@ function mockDb() {
     }
     if ((m = s.match(/^INSERT INTO (\w+) \(([^)]+)\) VALUES/i))) {
       const cols = m[2].split(',').map(c => c.trim());
-      tables[m[1]].push(Object.fromEntries(cols.map((c, i) => [c, args[i] ?? null])));
-      return [];
+      const row = Object.fromEntries(cols.map((c, i) => [c, args[i] ?? null]));
+      // `ON CONFLICT(<col>) DO NOTHING` — skip when the key exists; report affected rows via .changes
+      // so run() can surface D1's meta.changes (A310 race-safe createUser/insertCredential).
+      const conflict = s.match(/ON CONFLICT\((\w+)\) DO NOTHING/i);
+      if (conflict && tables[m[1]].some(r => r[conflict[1]] === row[conflict[1]])) return Object.assign([], { changes: 0 });
+      tables[m[1]].push(row);
+      return Object.assign([], { changes: 1 });
     }
     if ((m = s.match(/^SELECT \* FROM (\w+) WHERE (.+?)(?: ORDER BY (\w+)( DESC)?)?(?: LIMIT (\d+))?$/i))) {
       const conds = parseConds(m[2]);
@@ -114,7 +128,10 @@ function mockDb() {
       const api = args => ({
         bind: (...a) => api(a),
         first: async () => exec(sql, args)[0] ?? null,
-        run: async () => exec(sql, args),
+        run: async () => {
+          const r = exec(sql, args);
+          return { meta: { changes: (r && r.changes) || 0 } };
+        },
         all: async () => ({ results: exec(sql, args) }),
       });
       return api([]);
@@ -171,14 +188,14 @@ function memStore() {
               next[k] = t[k];
             }
           if (next) {
-            next.updated = Date.now();
+            next.updated = t.updated ?? Date.now(); // A297: preserve the incoming clock (no re-stamp echo)
             trades.set(id, next);
           }
           continue;
         }
         const tb = tombs.get(`trade:${id}`); // F58/A255/A269: LWW suppression, composite-keyed lookup
         if (tb && tb.updated >= (t.updated ?? 0)) continue; // clock suppresses; a newer record resurrects
-        trades.set(id, { ...t, id, updated: Date.now() });
+        trades.set(id, { ...t, id, updated: t.updated ?? Date.now() }); // A297: preserve the incoming clock
         added++;
       }
       return { added, duplicate, total: trades.size };
@@ -281,6 +298,8 @@ function makeTransport(env, token) {
     async registerWorkspace(id, dek) {
       const r = await call(wsRegister, '/api/sync/workspaces', 'POST', { workspace_id: id, wrapped_dek: dek });
       if (!r.ok) throw new Error('register ' + r.status);
+      const j = await r.json().catch(() => null); // A304: the server returns the EFFECTIVE wrapped DEK
+      return j?.wrapped_dek ?? dek;
     },
     async push(id, records) {
       const r = await call(pushFn, '/api/sync/push', 'POST', { workspace_id: id, records });
@@ -428,8 +447,11 @@ const stB = { cursor: 0, pushed: -1 };
   // stores one: ciphertext in R2, an index row in D1. An incremental `seq > caughtUp` pull cannot see
   // it; only a full since=0 reconcile does.
   const hidden = trade('2025-03-05 12:00:00', 'ESHURT2025', 'short', 999.99);
+  const hiddenUpdated = Date.now(); // a real pushed record carries `updated` in BOTH the plaintext and the index row (A297)
   const blinded = await blindId(keysA.blindKey, `trade:${tradeId(hidden)}`);
-  const ct = JSON.stringify(await encryptRecord(keysA.recordKey, JSON.stringify({ ...hidden, id: tradeId(hidden) })));
+  const ct = JSON.stringify(
+    await encryptRecord(keysA.recordKey, JSON.stringify({ ...hidden, id: tradeId(hidden), updated: hiddenUpdated }))
+  );
   await bucket.put(recordKey(WS, blinded), ct);
   db.tables.sync_records.push({
     workspace_id: WS,
@@ -437,7 +459,7 @@ const stB = { cursor: 0, pushed: -1 };
     seq: caughtUp,
     type: 'trade',
     ciphertext_ref: recordKey(WS, blinded),
-    updated: Date.now(),
+    updated: hiddenUpdated,
     deleted: 0,
   });
 
@@ -477,6 +499,197 @@ const stB = { cursor: 0, pushed: -1 };
   ok('Pull from cloud: pulls only, never advances the pushed-watermark', pull.pull && !pull.push && !pull.forceFullPush);
   const push = syncPlan('push');
   ok('Push to cloud: pushes only, re-uploading everything (forceFullPush), no pull', !push.pull && push.push && push.forceFullPush);
+}
+
+// ── A297: pulled trades keep their ORIGIN clock (no re-stamp echo, no delete resurrection) ────────
+// (1) A push from the PRE-PULL watermark must NOT re-include a freshly-pulled trade — its `updated`
+// is the origin clock (in the past), not the pull-time clock. The old bug re-stamped every pulled
+// trade to Date.now(), so it landed ABOVE the watermark and echoed straight back up on every reconcile.
+{
+  const A3 = memStore();
+  const B3 = memStore();
+  await A3.addTrades([trade('2025-07-01 09:00:00', 'MESU2025', 'long', 77)]); // origin clock ≈ now
+  await pushChanges(A3, keysA, transport, WS, -1); // A uploads its trade
+  await sleep(3);
+  const watermark3 = Date.now(); // strictly after every origin clock — the watermark a push on B runs from
+  await sleep(3);
+  await pullAndMerge(B3, keysB, transport, WS, 0); // B pulls everything (fresh inserts)
+  const changes3 = await collectChanges(B3, watermark3);
+  ok(
+    'A297: a freshly-pulled trade is not re-pushed (origin clock preserved, no echo)',
+    !changes3.some(c => c.type === 'trade' && !c.deleted)
+  );
+}
+
+// (2) A delete on device A is not resurrected by a peer that concurrently pulled the still-live
+// trade AFTER the local delete but BEFORE the tombstone was pushed. Old bug: the peer re-stamped the
+// pulled trade to pull-time (> the tombstone clock), so its echo beat the tombstone under LWW and the
+// trade resurrected on the deleting device.
+{
+  const gT = trade('2025-08-01 09:00:00', 'MNQU2025', 'long', 15);
+  const gId = tradeId(gT);
+  const Adel = memStore();
+  await Adel.addTrades([gT]); // origin clock T0
+  await pushChanges(Adel, keysA, transport, WS, -1); // server has the live trade
+  await sleep(3);
+  await Adel.deleteTrade(gId); // A deletes locally (tombstone Td) — NOT pushed yet (concurrent)
+  const Bfresh = memStore();
+  await pullAndMerge(Bfresh, keysB, transport, WS, 0); // B pulls the still-live trade → fresh insert (pull-time > Td)
+  ok(
+    'B saw the still-live trade before the tombstone',
+    (await Bfresh.getAllTrades()).some(t => t.id === gId)
+  );
+  await pushChanges(Bfresh, keysB, transport, WS, -1); // B re-pushes its copy (origin clock, not re-stamped)
+  await pullAndMerge(Adel, keysA, transport, WS, 0); // A reconciles
+  ok("A297: a concurrent stale re-push does not resurrect A's deleted trade", !(await Adel.getAllTrades()).some(t => t.id === gId));
+}
+
+// ── A307: the workspace-switch barrier covers the MERGE write phase, not just the pull ────────────
+// The controller (cloudsync.svelte.ts) is a rune module we can't import here; the overlap-then-switch
+// path (a `focus` + `online` reconcile racing a workspace switch) is asserted end-to-end in the e2e
+// specs. Here we lock down the pure primitive that makes that safe: `shouldAbort` threaded into
+// mergeRecords is honoured BEFORE the write phase, so a switch that lands mid-merge writes nothing and
+// pullAndMerge leaves the cursor unadvanced.
+{
+  // (1) mergeRecords aborts after decrypt, before the first store mutation → nothing written.
+  const D = memStore();
+  const page = await transport.pull(WS, 0);
+  ok('A307: the server has records to attempt a merge', page.records.length > 0);
+  const wrote = await mergeRecords(D, keysB, page.records, WS, () => true);
+  ok('A307: an aborted merge returns false (write phase skipped)', wrote === false);
+  ok('A307: an aborted merge writes nothing into the switched-away store', (await D.getAllTrades()).length === 0);
+
+  // (2) a merge with no abort still lands (the guard is inert when the workspace never changes).
+  const E = memStore();
+  const wrote2 = await mergeRecords(E, keysB, page.records, WS, () => false);
+  ok('A307: a non-aborted merge still writes (guard inert)', wrote2 === true && (await E.getAllTrades()).length > 0);
+
+  // (3) pullAndMerge under a pending switch bails with the cursor UNADVANCED.
+  const F = memStore();
+  const res = await pullAndMerge(F, keysB, transport, WS, 0, () => true);
+  ok('A307: pullAndMerge aborts with the cursor unadvanced', res.cursor === 0 && res.merged === 0 && (await F.getAllTrades()).length === 0);
+}
+
+// ── A308: the v2 envelope binds index metadata as AAD — forging it fails GCM auth (record skipped),
+// while a v1 record (no AAD) still decrypts (already-synced prod ciphertext stays readable) ─────────
+{
+  const t8 = trade('2025-09-09 09:00:00', 'ZZZU2025', 'long', 8);
+  const id8 = tradeId(t8);
+  const updated8 = Date.now();
+  const blinded8 = await blindId(keysA.blindKey, `trade:${id8}`);
+  const aad8 = `${WS}|trade|${blinded8}|${updated8}|0`; // the canonical AAD mergeRecords rebuilds
+  const rec8 = await encryptRecord(keysA.recordKey, JSON.stringify({ ...t8, id: id8, updated: updated8 }), aad8);
+  ok('A308: passing aad yields a v2 envelope', rec8.v === 2);
+  const wireRow = { blinded_id: blinded8, seq: 1, type: 'trade', updated: updated8, deleted: false, ciphertext: JSON.stringify(rec8) };
+
+  // untampered → decrypts + merges.
+  const G = memStore();
+  await mergeRecords(G, keysB, [{ ...wireRow }], WS, () => false);
+  ok(
+    'A308: an untampered v2 record decrypts + merges',
+    (await G.getAllTrades()).some(t => t.pnl === 8)
+  );
+
+  // forged `deleted` → AAD mismatch → GCM auth fails → skipped (neither added nor applied as a delete).
+  const H = memStore();
+  await mergeRecords(H, keysB, [{ ...wireRow, deleted: true }], WS, () => false);
+  ok(
+    'A308: a v2 record with a forged `deleted` is rejected',
+    (await H.getAllTrades()).length === 0 && (await H.getTombstones()).length === 0
+  );
+
+  // forged `updated` → AAD mismatch → skipped (can't skew LWW).
+  const I = memStore();
+  await mergeRecords(I, keysB, [{ ...wireRow, updated: updated8 + 1 }], WS, () => false);
+  ok('A308: a v2 record with a forged `updated` is rejected', (await I.getAllTrades()).length === 0);
+
+  // v1 (no AAD) still decrypts — backward compatible with already-synced prod data.
+  const recV1 = await encryptRecord(keysA.recordKey, JSON.stringify({ ...t8, id: id8, updated: updated8 }));
+  ok('A308: omitting aad yields a v1 envelope', recV1.v === 1);
+  const J = memStore();
+  await mergeRecords(J, keysB, [{ ...wireRow, ciphertext: JSON.stringify(recV1) }], WS, () => false);
+  ok(
+    'A308: a v1 record still decrypts (legacy, no AAD)',
+    (await J.getAllTrades()).some(t => t.pnl === 8)
+  );
+}
+
+// ── A304: enable-adopt — when register returns a DIFFERENT wrapped DEK (a concurrent device won the
+// first-writer-wins register), the client ADOPTS it instead of its minted DEK, or it strands the
+// winner's ciphertext undecryptable. The controller isn't node-importable, so exercise the exact pure
+// sequence enableCloudSync runs against a simulated first-writer-wins transport. ─────────────────────
+{
+  const ik2 = await genIdentityKey();
+  // Device A registered FIRST — this DEK is what a first-writer-wins server keeps + echoes back.
+  const winnerDek = await genWorkspaceDek();
+  const winnerKeys = await deriveWsKeys(await dekBytesOf(winnerDek));
+  const winnerWrapped = JSON.stringify(await wrapDek(winnerDek, ik2));
+
+  // Device B mints its OWN DEK, then registers — the server echoes the WINNER's wrapped DEK (never overwrites).
+  const mineDek = await genWorkspaceDek();
+  const mineBytes = await dekBytesOf(mineDek);
+  const mineWrapped = JSON.stringify(await wrapDek(mineDek, ik2));
+  const registerFirstWriterWins = async () => winnerWrapped;
+
+  const effective = await registerFirstWriterWins();
+  const adoptBlob = effective !== mineWrapped ? JSON.parse(effective) : null;
+  const adoptedKeys = adoptBlob ? await deriveWsKeys(await unwrapDekBytes(adoptBlob, ik2)) : await deriveWsKeys(mineBytes);
+
+  // Proof of adoption: B's blinded ids now agree with the winner's, and B can decrypt the winner's ciphertext.
+  const bBlind = await blindId(adoptedKeys.blindKey, 'trade:abc');
+  const winnerBlind = await blindId(winnerKeys.blindKey, 'trade:abc');
+  const mineBlind = await blindId((await deriveWsKeys(mineBytes)).blindKey, 'trade:abc');
+  ok('A304: adopted keys match the winner (blinded ids agree, not the minted DEK)', bBlind === winnerBlind && bBlind !== mineBlind);
+  const aad = 'ws|meta|x|1|0';
+  const rec = await encryptRecord(winnerKeys.recordKey, 'hello', aad);
+  const pt = new TextDecoder().decode(await decryptRecord(adoptedKeys.recordKey, rec, aad));
+  ok("A304: the adopted record key decrypts the winner's ciphertext", pt === 'hello');
+}
+
+// ── A298: multi-device ADOPT of a NON-default named workspace ─────────────────────────────────────
+// A named (non-'default') workspace registered on device A must be adoptable on device B: B unwraps the
+// SAME server DEK (keyed by the SERVER'S workspace id) and reconciles the SAME dataset — not a divergent
+// copy. Its display NAME travels as an encrypted meta record (WS_NAME_KEY), so B can show it pre-adopt.
+{
+  const wsF = 'ws-futures'; // a stable, cross-device id (the whole point — not a per-device UUID)
+  const NAME_KEY = 'bb:ws:name';
+  const dekF = await genWorkspaceDek();
+  const dekFBytes = await dekBytesOf(dekF);
+  await transport.registerWorkspace(wsF, JSON.stringify(await wrapDek(dekF, ik)));
+  const keysAF = await deriveWsKeys(dekFBytes);
+
+  // Device B adopts the DEK from the server (unwrap under the shared IK) — the adopt-by-id path.
+  const listed2 = await transport.listWorkspaces();
+  const fEntry = listed2.find(w => w.workspace_id === wsF);
+  const keysBF = await deriveWsKeys(await unwrapDekBytes(JSON.parse(fEntry.wrapped_dek), ik));
+
+  const AF = memStore();
+  await AF.addTrades([trade('2025-10-01 09:00:00', 'MESZ2025', 'long', 321)]);
+  await AF.setMeta(NAME_KEY, 'Futures Desk'); // the display name, pushed as an encrypted meta record
+  await pushChanges(AF, keysAF, transport, wsF, -1);
+
+  // B reads the workspace NAME via a targeted blinded-id lookup (mirrors fetchWorkspaceName) — proving
+  // a peer can label the adopt affordance before it has the workspace's DB.
+  const target = await blindId(keysBF.blindKey, `meta:${NAME_KEY}`);
+  let name = '';
+  {
+    const page = await transport.pull(wsF, 0);
+    const row = page.records.find(r => r.blinded_id === target && r.type === 'meta' && !r.deleted);
+    if (row) {
+      const aad = `${wsF}|meta|${row.blinded_id}|${row.updated}|0`;
+      const obj = JSON.parse(new TextDecoder().decode(await decryptRecord(keysBF.recordKey, JSON.parse(row.ciphertext), aad)));
+      name = obj.value;
+    }
+  }
+  ok('A298: a peer decrypts the workspace name from the synced meta record', name === 'Futures Desk');
+
+  // B adopts + reconciles — same id + same DEK ⇒ the SAME dataset converges (no divergent duplicate).
+  const BF = memStore();
+  await pullAndMerge(BF, keysBF, transport, wsF, 0);
+  ok(
+    'A298: the adopted peer converges on the named workspace data',
+    (await BF.getAllTrades()).some(t => t.pnl === 321)
+  );
 }
 
 console.log(`\n${pass} assertions passed.`);

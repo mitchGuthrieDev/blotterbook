@@ -50,6 +50,9 @@ export function createDemoStore(): StoreLike {
     createWorkspace() {
       return DEMO_WORKSPACE; // no-op: demo can't add a workspace (nothing persists)
     },
+    adoptWorkspace() {
+      return DEMO_WORKSPACE; // no-op: demo never syncs, so there is nothing to adopt (A298)
+    },
     renameWorkspace() {
       return DEMO_WORKSPACE; // no-op
     },

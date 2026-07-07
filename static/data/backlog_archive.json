@@ -5199,6 +5199,237 @@
       "completedDate": "2026-07-07",
       "partial": false,
       "doneNote": "DONE (2026-07-07, R1). reconcileImport's fills-vs-closed authority pnl map (src/lib/core/intake.ts) keyed by time|symbol|side in a Map that kept only the LAST value, so two same-second identical-side same-symbol closed records (the A114 dup case) meant an incoming fills-derived trade matching the FIRST was dropped as a phantom. Fixed: the authority pnl is now a per-key multiset (number[]) with a membership check, so an incoming trade matching ANY authoritative copy is corroborated. Single-record behavior unchanged (a 1-element array is equivalent); adapters suite green. Kept the original lenient matching (no consumption) to avoid new drop behavior."
+    },
+    {
+      "id": "A294",
+      "title": "Remove the 'No Account Needed' copy from the homepage",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). Removed the 'No account needed' trust chip from the homepage hero trust row (src/site/components/Home.svelte) — the row now reads the live-status pill + 'Nothing leaves your browser'. Aligns with A293 introducing an Account entry point. CSP-clean, prerender unchanged; typecheck/lint/format + full e2e green."
+    },
+    {
+      "id": "A295",
+      "title": "Drop the '(.xlsx)' suffix from the ATAS X entry in the supported-platforms list",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). The ATAS X <b> label was already just 'ATAS X'; the '(.xlsx)' actually lived in that entry's status pill ('Verified · real exports (.xlsx)') — removed it there so it reads 'Verified · real exports'. Label-only: the .xlsx import path (F52 xlsx.ts/atasXlsxToCsv) is untouched, and the body-copy mentions of the .xlsx export (Home prose + Howto import steps) were intentionally left."
+    },
+    {
+      "id": "A288",
+      "title": "Cost-summary rows assembled three times from the same CostModel",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). The cost-summary lines (Gross / Commissions / Subscriptions) were assembled from the same CostModel in three surfaces (Reports costRows, dashboard dashCostRows, the stat-detail popover). On inspection the LABELS/markers differ BY DESIGN per surface (subscription '(N mo)' vs '(X/mo × Y)'; the dashboard's †/* markers), so a shared row-BUILDER would have altered labels — instead single-sourced the VALUES via a new costLineVals(c) helper in core.ts ({gross, commissions, subscriptions}). All three sites read the values from it and keep their own labels; output byte-identical (verified by npm test + full e2e)."
+    },
+    {
+      "id": "A289",
+      "title": "Advanced-stats Metrics→rows mapping duplicated across three surfaces",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). The advanced-stats value expressions (payoff/sortino/recovery/concentration/max-consec) were duplicated across Analytics (statRows), Reports (advRows) and the App.svelte stat-detail popovers — including the profit-concentration ternary copied verbatim in 2+ places. Labels are intentionally worded differently per surface (e.g. 'Sortino' vs 'Sortino (daily)'), so extracted the shared VALUES into advStatVals(m) in core.ts; each surface reads values from it and keeps its own labels. Output unchanged; the concentration ternary now lives once. Companion to A288."
+    },
+    {
+      "id": "A297",
+      "title": "Sync: pulled trades re-stamped with a fresh local `updated` → re-push echo + delete-resurrection",
+      "category": "FIXES",
+      "priority": "P1",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). store.addTrades now preserves an incoming `updated` on both fresh insert and enrichment (stamping Date.now() only for clockless CSV rows), so a steady-state pull no longer re-stamps pulled trades and echoes them back as a phantom re-push; test-cloudsync.mjs asserts pull→collectChanges emits nothing and a stale concurrent re-push can't resurrect a delete."
+    },
+    {
+      "id": "A298",
+      "title": "Sync: adopt non-Default synced workspaces on a second device (+ stop divergent duplicate DEKs)",
+      "category": "FIXES",
+      "priority": "P1",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). Added a cloud-adopt flow — listCloudWorkspaces()/adoptCloudWorkspace() + the WorkspaceSwitcher 'Available in your cloud' section + store.adoptWorkspace — so a second device decrypts the server workspace name and adopts the SERVER's id + DEK instead of minting a divergent duplicate."
+    },
+    {
+      "id": "A299",
+      "title": "Sync: per-workspace status/pending/error (fix the pill lying after a switch + perpetual-spinner no-escape + pull-clears-pending)",
+      "category": "FIXES",
+      "priority": "P1",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). pending/error/status became per-workspace maps (pendingByWs/errorByWs/runningByWs); refreshSyncStatus fully re-derives the active workspace (no stale 'syncing'/'error' after a switch), runningByWs clears in finally even on abort (no stranded spinner), and 'pending' clears only when a push actually ran (not on a pull-only run)."
+    },
+    {
+      "id": "A300",
+      "title": "Auth: passkey recovery is unreachable behind the prod login gate → permanent lockout",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). LaunchGate gained an enumeration-safe 'Lost your passkey?' recovery form and App.svelte handles a pre-gate `?recover=<token>` via completeRecovery, so a logged-out prod user can start and finish an emailed passkey-recovery link even with the account gate armed."
+    },
+    {
+      "id": "A301",
+      "title": "Auth: rate-limit result discarded on email-send endpoints (+ recover-verify unthrottled) → email-bombing",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). Added the missing rate-limit guards on the email-send endpoints — email-verify-send and recover-send now return 429 past the threshold instead of discarding the rateLimited() result, and recover-verify (previously the only account route with none) got the standard 5-per-5-min guard."
+    },
+    {
+      "id": "A302",
+      "title": "Auth: no passkey/session revocation — recovery leaves the lost passkey + all sessions valid; add credential-delete + session cap",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). Backend + client: scoped POST /api/account/passkey-delete (caller-scoped delete with a last-passkey lockout guard) + session revocation on recovery + a 90-day absolute session cap; and the Account screen's passkey list gained a confirm-gated Remove control (rendered only when more than one passkey is enrolled)."
+    },
+    {
+      "id": "A303",
+      "title": "Accounts: subscription-entitlement lifecycle bugs (grace over-grant, no webhook ordering, sub charge credited as donation)",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). Fixed the subscription-entitlement lifecycle: grantsCloud gates the current_period_end grace fallback on a canceled status (no over-grant), provisionSubscription drops out-of-order webhook events by comparing event.created to a persisted last_event_created, and subscription-mode checkouts skip donation crediting; each has a test-accounts.mjs case."
+    },
+    {
+      "id": "A304",
+      "title": "Sync: first-writer-wins DEK registration (concurrent enable overwrites the wrapped DEK, strands ciphertext)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). Server workspace register is first-writer-wins (INSERT … ON CONFLICT DO NOTHING, returns the stored wrapped_dek) and enableCloudSync adopts the returned DEK when it differs from the freshly-minted one, so a concurrent enable across two devices can't strand ciphertext under an overwritten key; covered by a test-cloudsync.mjs adopt assertion."
+    },
+    {
+      "id": "A305",
+      "title": "Accounts: add an account-deletion endpoint + fix schema FK/orphan cleanup (GDPR posture)",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). Added an authed, Origin-checked, fail-closed POST /api/account/delete — a two-phase resumable pager clears R2 ciphertext + sync_records via deleteWorkspacePage, then deleteUserAccount does children-first D1 deletes; schema.sql added ON DELETE CASCADE FKs to donations.user_id, recovery_tokens.user_id and sync_records.workspace_id; orphan-free behavior tested in test-sync.mjs."
+    },
+    {
+      "id": "A306",
+      "title": "Sync UX: actionable error messages + lapsed-subscription + paused states (replace raw status codes + dead ends)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). Transport errors now map to actionable copy via syncErrorCopy (401/402/403/413/5xx) with the raw code kept in errorDetail/title; distinct needs-sub (renew CTA) and paused (resume) states plus a neutral 'checking…' while the tier probe is in flight all shipped on the switcher + Account cloud-sync card."
+    },
+    {
+      "id": "A307",
+      "title": "Sync: close the workspace-switch barrier hole (mergeRecords is abort-blind; runSync overwrites inFlight)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). mergeRecords now takes shouldAbort and re-checks it after the async decrypt pass and before each write phase, and runSync/runPush chain inFlight = allSettled([inFlight, run]) so cancelActiveSync awaits every overlapping run — a workspace switch can never merge one workspace's records into another's DB; test-cloudsync.mjs asserts an aborted merge writes nothing and leaves the cursor unadvanced."
+    },
+    {
+      "id": "A308",
+      "title": "Sync crypto: authenticate index metadata (AAD) so a write-capable server cannot forge deletes/rollbacks",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). encryptRecord/decryptRecord bind AAD = workspaceId|type|blinded_id|updated|deleted as a v2 GCM envelope (recordAad), so a write-capable server can't forge index metadata — a forged deleted/updated/type fails auth and is skipped (A263 poison-pill resilience) — while v1 legacy ciphertext still decrypts; covered by test-cloudsync.mjs."
+    },
+    {
+      "id": "A309",
+      "title": "Sync: long-offline device tombstone strand (>90d) + erase-on-one-device 404 self-heal",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). resetIfStaleGap forces a full re-push + re-pull when the persisted last-sync gap exceeds the 90-day tombstone TTL (long-offline convergence), and onServerCopyGone treats a 404 on an enabled workspace as server-copy-gone — auto-disable, drop the cached key + cursors, and surface a serverGone message with a re-enable affordance."
+    },
+    {
+      "id": "A311",
+      "title": "Sync UX + vault polish batch: reactive fmtAgo, locked-user explainer, trade-LWW copy, lock() key-drop, zeroization",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). Sync-UX + vault polish batch: a 30s reactive tick ages the pill's fmtAgo; the pill + explainer render for locked users; trade copy reads 'combined, never overwritten'; lock()→onVaultLocked bumps the sync generation, clears sessions and refreshes status; and the PRF secret + Argon2id output are zeroed after use."
+    },
+    {
+      "id": "A312",
+      "title": "Test coverage: the A279 sync state machine (pill transitions, pending, pause, direction buttons)",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). Added e2e/cloud-sync.spec.mjs coverage driving the A279/A299 pill state machine against a stubbed F62 transport — data-status through enable→synced→pending→pause→resume plus the pull/push/sync-now direction controls and a per-workspace switch re-deriving to 'off'. (Error-state / needs-sub pill transitions remain node-tested only, not e2e-asserted — the stated Done-when is met.)"
+    },
+    {
+      "id": "A313",
+      "title": "Docs drift sweep: cloud-sync GA (8 staging-gated passages), 9-vs-17 suites, econ/modlayout/parts/CI-scripts undocumented",
+      "category": "COMMENTS / READABILITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). Docs drift sweep: removed all 8 'staging-gated' cloud-sync passages (functions/README.md, docs/architecture.md, docs/data-flow.md) in favour of 'live on prod + staging, opt-in cloud-tier', corrected 'the 9 node suites'→17 in CLAUDE.md + ci.yml, documented econ-calendar + modlayout.ts + the CI scripts, and fixed the parts/ list (dropped the ghost Definitions, added InfoTip + StatCardRow)."
+    },
+    {
+      "id": "A314",
+      "title": "Repo hygiene: relocate cloudsync-core to core, phosphor-svelte→devDeps, dead versionsReady export, stale e2e header",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). Repo hygiene: relocated cloudsync-core.ts into src/lib/core/ (now under strict standalone tsc), moved phosphor-svelte to devDependencies, removed the dead format.ts versionsReady export + fixed its stale comment, made BUS/EXCH_FALLBACK/EXCH_HISTORY module-private in core.ts (no external readers), and rewrote the e2e/staging-redesign.spec.mjs header to the post-CH16 world."
     }
   ]
 }

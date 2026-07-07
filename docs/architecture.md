@@ -61,8 +61,9 @@ What remains are practical invariants, not moats:
 
 1. **Client-side by construction** — parsing, metrics, and IndexedDB storage all run in the browser,
    and **compute never touches the network on any tier**. This is how the app is *built*, not a hard
-   egress ban: the opt-in `cloud`-tier **synced-workspaces** feature (F58–F63, staging-gated today)
-   egresses trade data *only* as end-to-end-encrypted ciphertext — see
+   egress ban: the opt-in `cloud`-tier **synced-workspaces** feature (F58–F63, live on prod +
+   staging, opt-in `cloud`-tier, never demo) egresses trade data *only* as end-to-end-encrypted
+   ciphertext — see
    [Storage tiers, sync & the refined moat](#storage-tiers-sync--the-refined-moat).
 2. **Standard, pinned dependency tree** — Vite + Svelte 5 + Tailwind v4 + shadcn-svelte/bits-ui plus
    dev tooling (ESLint, Prettier, Playwright). Versions are pinned and the lockfile is committed.
@@ -586,8 +587,8 @@ release notes), and `legal.html` (disclaimers, terms, privacy summary).
 - **Calendar-day & session grouping** — both use the literal `Time` value, not the
   CME session day; RTH/ETH assumes the timestamp's clock time.
 - **Sharpe is illustrative** — daily PnL, population std, not annualized.
-- **Local storage is per-browser** — on prod, data is not synced across devices and is
-  cleared if you clear site data. Use **Manage data → Download backup** for a
+- **Local storage is per-browser** — on `local`-tier or an un-synced workspace, data is not synced
+  across devices and is cleared if you clear site data. Use **Manage data → Download backup** for a
   portable JSON snapshot. (Cross-device sync is the `cloud`-tier **synced-workspaces** feature,
-  F58–F63 — built but **staging-gated**, not yet promoted to prod; see
+  F58–F63 — **live on prod + staging**, opt-in `cloud`-tier, never demo; see
   [Storage tiers, sync & the refined moat](#storage-tiers-sync--the-refined-moat).)
