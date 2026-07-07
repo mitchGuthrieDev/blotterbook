@@ -15,18 +15,38 @@
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
   import { Skeleton } from '$lib/components/ui/skeleton';
-  import { account, login, register } from '../lib/account.svelte.ts';
+  import { account, login, register, recoverSend } from '../lib/account.svelte.ts';
 
-  let creating = $state(false);
+  type View = 'default' | 'creating' | 'recovering';
+  let view = $state<View>('default');
   let email = $state('');
   const disabled = $derived(account.busy || !account.available);
   const emailValid = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()));
+
+  // A300: lost-passkey recovery, reachable BEFORE the gate lets you in. recoverSend is enumeration-safe
+  // (always generic), so we just show a "check your email" confirmation. The emailed `?recover=` link is
+  // then handled pre-gate by App.svelte's onMount.
+  let recoverEmail = $state('');
+  let recoverSent = $state(false);
+  const recoverValid = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoverEmail.trim()));
+
+  function toDefault() {
+    view = 'default';
+    recoverSent = false;
+  }
 
   async function onCreate(e: SubmitEvent) {
     e.preventDefault();
     if (disabled || !emailValid) return;
     // On success account.user flips → App unmounts the gate; no local navigation needed.
     if (await register(email.trim().toLowerCase())) email = '';
+  }
+
+  async function onRecover(e: SubmitEvent) {
+    e.preventDefault();
+    if (disabled || !recoverValid) return;
+    await recoverSend(recoverEmail);
+    recoverSent = true; // always generic — never reveals whether the account exists
   }
 </script>
 
@@ -57,19 +77,29 @@
             <p class="text-xs text-destructive" role="alert">{account.error}</p>
           {/if}
 
-          {#if !creating}
+          {#if view === 'default'}
             <div class="flex flex-col gap-2 sm:flex-row">
               <Button class="flex-1" {disabled} onclick={() => void login()}>
                 <KeyRound class="size-4" />
                 Log in
               </Button>
-              <Button class="flex-1" variant="secondary" {disabled} onclick={() => (creating = true)}>
+              <Button class="flex-1" variant="secondary" {disabled} onclick={() => (view = 'creating')}>
                 <Plus class="size-4" />
                 Create account
               </Button>
             </div>
             <p class="text-center text-xs text-muted-foreground">Passkey-only — no passwords. Your trade data never leaves this browser.</p>
-          {:else}
+            <!-- A300: lost-passkey recovery, reachable before the gate lets you in. -->
+            <button
+              type="button"
+              class="text-center text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+              data-testid="gate-recover-open"
+              {disabled}
+              onclick={() => (view = 'recovering')}
+            >
+              Lost your passkey?
+            </button>
+          {:else if view === 'creating'}
             <form class="flex flex-col gap-2" onsubmit={onCreate}>
               <Label for="gate-email">Email</Label>
               <Input id="gate-email" type="email" placeholder="you@example.com" autocomplete="email" bind:value={email} {disabled} />
@@ -79,9 +109,42 @@
                   <Plus class="size-4" />
                   Create account with a passkey
                 </Button>
-                <Button type="button" variant="ghost" {disabled} onclick={() => (creating = false)}>Back</Button>
+                <Button type="button" variant="ghost" {disabled} onclick={toDefault}>Back</Button>
               </div>
             </form>
+          {:else}
+            <!-- A300: recover access — email a re-enrollment link. Enumeration-safe: always generic. -->
+            {#if recoverSent}
+              <div class="flex flex-col gap-3" data-testid="gate-recover-sent">
+                <div class="rounded-md border border-chart-2/40 bg-chart-2/10 px-3 py-2 text-xs text-chart-2" role="status">
+                  If an account exists for that email, we've sent a recovery link. Open it on this device to enroll a new passkey.
+                </div>
+                <Button type="button" variant="ghost" class="self-start" onclick={toDefault}>Back to sign in</Button>
+              </div>
+            {:else}
+              <form class="flex flex-col gap-2" onsubmit={onRecover}>
+                <Label for="gate-recover-email">Recover access</Label>
+                <Input
+                  id="gate-recover-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  autocomplete="email"
+                  bind:value={recoverEmail}
+                  {disabled}
+                  data-testid="gate-recover-email"
+                />
+                <p class="text-xs text-muted-foreground">
+                  Lost the passkey to this account? We'll email a link to enroll a new one. Your encrypted data is untouched.
+                </p>
+                <div class="mt-1 flex flex-col gap-2 sm:flex-row">
+                  <Button type="submit" class="flex-1" data-testid="gate-recover-send" disabled={disabled || !recoverValid}>
+                    <KeyRound class="size-4" />
+                    Email a recovery link
+                  </Button>
+                  <Button type="button" variant="ghost" {disabled} onclick={toDefault}>Back</Button>
+                </div>
+              </form>
+            {/if}
           {/if}
         </Card.Content>
       </Card.Root>

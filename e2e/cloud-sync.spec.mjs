@@ -11,10 +11,11 @@ import { test, expect } from '@playwright/test';
 const STAGING = '/app/staging.html';
 
 const nav = page => page.locator('nav[aria-label="Primary"]');
-const gotoAccount = async page => {
-  await nav(page).getByRole('button', { name: 'Account', exact: true }).click();
-  await expect(page.locator('header h1')).toHaveText('Account');
+const gotoScreen = async (page, name) => {
+  await nav(page).getByRole('button', { name, exact: true }).click();
+  await expect(page.locator('header h1')).toHaveText(name);
 };
+const gotoAccount = async page => gotoScreen(page, 'Account');
 
 // Stub the account session (logged in) + the F62 wrapped-IK blob store (an in-memory upsert map).
 // `tier` defaults to 'cloud' (the entitled path that reaches key setup); pass 'local' to exercise
@@ -54,6 +55,56 @@ function installStubs(page, { tier = 'cloud' } = {}) {
   });
   return blobs;
 }
+
+// A312: stub the F62 SYNC transport (workspaces register/list + push + pull) so the A279 state machine
+// can be driven end-to-end against the static server. First-writer-wins register echoes the effective
+// wrapped_dek (A304); pull returns an empty page; push/pull are counted so control EFFECTS are
+// assertable. `pushDelayMs` lets a test hold a push open long enough to observe the 'pending' state.
+function installSyncTransport(page, { pushDelayMs = 0 } = {}) {
+  const s = { workspaces: {}, pushCount: 0, pullCount: 0, pushDelayMs };
+  page.route('**/api/sync/workspaces', route => {
+    const req = route.request();
+    if (req.method() === 'POST') {
+      const body = req.postDataJSON();
+      if (!s.workspaces[body.workspace_id]) s.workspaces[body.workspace_id] = body.wrapped_dek; // never overwrite (A304)
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ workspace_id: body.workspace_id, wrapped_dek: s.workspaces[body.workspace_id] }),
+      });
+    }
+    const list = Object.entries(s.workspaces).map(([id, dek]) => ({ workspace_id: id, wrapped_dek: dek }));
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ workspaces: list }) });
+  });
+  page.route('**/api/sync/push', async route => {
+    s.pushCount++;
+    if (s.pushDelayMs) await new Promise(r => setTimeout(r, s.pushDelayMs));
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+  });
+  page.route('**/api/sync/pull**', route => {
+    s.pullCount++;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ records: [], nextSince: 0, more: false }),
+    });
+  });
+  return s;
+}
+
+// Reach an unlocked cloud-sync session from the Account screen (setup with a confirmed recovery key).
+async function setupAndUnlock(page) {
+  await gotoAccount(page);
+  await page.getByTestId('cloud-setup-open').click();
+  await page.getByTestId('cloud-generate').click();
+  await expect(page.getByTestId('recovery-key')).toBeVisible({ timeout: 8000 });
+  await page.getByTestId('recovery-saved').click();
+  await page.getByTestId('cloud-finish').click();
+  await expect(page.getByTestId('cloud-unlocked')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible();
+}
+
+const wsTrigger = page => page.getByRole('button', { name: /^Switch workspace: /, exact: false });
 
 // Boot staging with the F56 launch gate forced OFF (these specs exercise cloud sync, not the gate).
 async function bootStaging(page) {
@@ -149,6 +200,80 @@ test('cloud sync (staging): lock, then unlock the IK with the passphrase', async
   await page.getByPlaceholder('Your cloud-sync passphrase').fill(PASSPHRASE);
   await page.getByTestId('unlock-passphrase-submit').click();
   await expect(page.getByTestId('cloud-unlocked')).toBeVisible({ timeout: 15_000 });
+});
+
+test('cloud sync (staging): A279/A299 state machine — enable → synced, controls, pending, pause/resume, per-workspace', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  installStubs(page); // /api/me (cloud) + the wrapped-IK blob store
+  const sync = installSyncTransport(page, { pushDelayMs: 1200 }); // slow push so 'pending' is observable
+  await bootStaging(page);
+  await setupAndUnlock(page);
+
+  const panelPill = page.getByTestId('cloud-sync-panel').getByTestId('sync-state');
+
+  // Enable sync for the active workspace from the switcher → the pill runs syncing → synced.
+  await wsTrigger(page).click();
+  await page.getByTestId('sync-enable').click();
+  await page.keyboard.press('Escape');
+  await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+
+  // The direction controls now render + have REAL effects (each hits the stubbed transport).
+  let pulls = sync.pullCount;
+  let pushes = sync.pushCount;
+  await page.getByTestId('cloud-pull').click();
+  await expect.poll(() => sync.pullCount).toBeGreaterThan(pulls);
+  expect(sync.pushCount).toBe(pushes); // pull-only never pushes (A299 pending-clear parity)
+  await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+
+  pushes = sync.pushCount;
+  await page.getByTestId('cloud-push').click();
+  await expect.poll(() => sync.pushCount).toBeGreaterThan(pushes);
+
+  pulls = sync.pullCount;
+  pushes = sync.pushCount;
+  await page.getByTestId('cloud-sync-now').click();
+  await expect.poll(() => sync.pullCount).toBeGreaterThan(pulls);
+  await expect.poll(() => sync.pushCount).toBeGreaterThan(pushes);
+  await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+
+  // A279 PENDING: a local write (a journal note) marks the workspace "pending upload" until the
+  // (slow) debounced push reaches the server, then settles back to 'synced'.
+  await gotoScreen(page, 'Calendar');
+  await page.locator('button:has(span.text-chart-2), button:has(span.text-destructive)').first().click();
+  await expect(page.getByText('Journal note')).toBeVisible();
+  await page.locator('textarea').fill('pending-state note');
+  await page.getByRole('button', { name: 'Save note' }).click();
+  await gotoAccount(page);
+  await expect(panelPill).toHaveAttribute('data-status', 'pending', { timeout: 4000 });
+  await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+
+  // PAUSE → the pill reads 'paused' (distinct from never-synced) and a Resume control appears.
+  await page.getByTestId('cloud-pause').click();
+  await expect(panelPill).toHaveAttribute('data-status', 'paused', { timeout: 8000 });
+  await expect(page.getByTestId('cloud-resume')).toBeVisible();
+
+  // RESUME → back to synced, direction controls return.
+  await page.getByTestId('cloud-resume').click();
+  await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+  await expect(page.getByTestId('cloud-pull')).toBeVisible();
+
+  // A299 PER-WORKSPACE: create a second workspace + switch to it — the pill must re-derive to 'off'
+  // (the new workspace is NOT enabled), NOT carry the Default workspace's 'synced'. Switching back
+  // restores 'synced'.
+  await wsTrigger(page).click();
+  await page.getByRole('menuitem', { name: 'New workspace…' }).click();
+  const dlg = page.getByRole('dialog');
+  await dlg.getByPlaceholder('Workspace name').fill('Second');
+  await dlg.getByRole('button', { name: 'Create' }).click();
+  await expect(wsTrigger(page)).toHaveAttribute('aria-label', /Second/, { timeout: 8000 });
+  await expect(panelPill).toHaveAttribute('data-status', 'off', { timeout: 8000 });
+
+  await wsTrigger(page).click();
+  await page.getByRole('menuitem', { name: 'Default', exact: true }).click();
+  await expect(wsTrigger(page)).toHaveAttribute('aria-label', /Default/, { timeout: 8000 });
+  await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
 });
 
 test('cloud sync (demo): NEVER renders any setup/unlock UI (in-memory DemoStore never syncs)', async ({ page }) => {

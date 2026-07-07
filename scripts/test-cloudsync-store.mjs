@@ -1,6 +1,6 @@
 /* A258 — REAL-Store sync coverage (R1 pass 9). The hand-mock in test-cloudsync.mjs diverged from the
    actual persistence layer and MASKED the pass-9 P1s (A251/A252) and the A255 LWW flip. This suite runs
-   the pure merge core (src/app/lib/cloudsync-core.ts: mergeRecords / pullAndMerge) against the ACTUAL
+   the pure merge core (src/lib/core/cloudsync-core.ts: mergeRecords / pullAndMerge) against the ACTUAL
    src/lib/core/store.ts `Store` on `fake-indexeddb`, with records encrypted by the REAL crypto core —
    so the store trust boundary (importAll / addTrades tombstone suppression / delete-on-empty) is
    exercised for real, not simulated. Covers:
@@ -33,7 +33,7 @@ globalThis.localStorage = (() => {
 
 const { Store } = await import('../src/lib/core/store.ts');
 const { genWorkspaceDek, dekBytesOf, encryptRecord, blindId } = await import('../src/lib/core/crypto.ts');
-const { deriveWsKeys, mergeRecords, pullAndMerge, collectChanges } = await import('../src/app/lib/cloudsync-core.ts');
+const { deriveWsKeys, mergeRecords, pullAndMerge, collectChanges } = await import('../src/lib/core/cloudsync-core.ts');
 
 let pass = 0;
 const ok = (name, cond) => {

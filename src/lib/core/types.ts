@@ -566,9 +566,15 @@ export interface WrappedDek {
 }
 
 /** One AES-GCM-encrypted record (a trade / journal / meta row). Authenticated: a flipped byte or
- *  the wrong DEK makes decryptRecord throw. IV is fresh-random per record. */
+ *  the wrong DEK makes decryptRecord throw. IV is fresh-random per record.
+ *
+ *  A308 — versioned envelope: `v:1` has NO additional-authenticated-data (legacy / already-synced prod
+ *  ciphertext); `v:2` binds the index metadata (`workspaceId|type|blinded_id|updated|deleted`) as GCM
+ *  AAD, so a server that can WRITE the index can't forge `deleted`/`updated`/`type` without the auth
+ *  tag failing. Decrypt reconstructs the AAD from the wire row for a v2 record and passes NONE for a
+ *  v1 record — mixed v1/v2 workspaces decrypt transparently, so the migration never strands data. */
 export interface EncryptedRecord {
-  v: 1;
+  v: 1 | 2;
   alg: 'AES-GCM';
   /** Base64 of the 12-byte random IV (never reused with the same DEK). */
   iv: string;
@@ -586,6 +592,11 @@ export interface StoreLike {
   listWorkspaces(): Workspace[];
   /** Create a new local workspace backed by a fresh (suffixed) IndexedDB; returns the entry. */
   createWorkspace(name: string): Workspace;
+  /** A298: adopt a workspace that already exists in the cloud under a SPECIFIC (server) id — creates a
+   *  local registry entry + per-workspace DB keyed by that id, so a synced workspace registered on
+   *  another device becomes reachable here. Idempotent: returns the existing entry if the id is
+   *  already local. */
+  adoptWorkspace(id: string, name: string): Workspace;
   /** Rename a workspace; returns the updated entry, or undefined if the id/name was rejected. */
   renameWorkspace(id: string, name: string): Workspace | undefined;
   /** Delete a workspace: drop its whole IndexedDB (deleteDatabase) AND remove the registry entry.
