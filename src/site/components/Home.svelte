@@ -433,36 +433,36 @@
     <!-- condensed use-cases, horizontal -->
     <div class="uc-row mt-[30px] grid grid-cols-4 gap-[14px] max-[900px]:grid-cols-2 max-[560px]:grid-cols-1">
       <div
-        class="ucx relative overflow-hidden rounded-[12px] border border-border bg-card p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--chart-3))] before:content-['']"
+        class="ucx rounded-[10px] border border-border bg-card p-4 transition-[border-color,transform] duration-200 hover:-translate-y-[2px] hover:border-ring"
       >
-        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-chart-3">Cost intelligence</p>
+        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">Cost intelligence</p>
         <h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Brokers &amp; feeds vs. real PnL</h3>
         <p class="m-0 text-[12.5px] leading-[1.55] text-muted-foreground">
           Flip commission tiers and data feeds; watch your net move across your real history.
         </p>
       </div>
       <div
-        class="ucx relative overflow-hidden rounded-[12px] border border-border bg-card p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--chart-3))] before:content-['']"
+        class="ucx rounded-[10px] border border-border bg-card p-4 transition-[border-color,transform] duration-200 hover:-translate-y-[2px] hover:border-ring"
       >
-        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-chart-3">Tax planning</p>
+        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">Tax planning</p>
         <h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Location-based estimates</h3>
         <p class="m-0 text-[12.5px] leading-[1.55] text-muted-foreground">
           A Section 1256 blend on positive net profit, by state — know it long before April.
         </p>
       </div>
       <div
-        class="ucx relative overflow-hidden rounded-[12px] border border-border bg-card p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--chart-3))] before:content-['']"
+        class="ucx rounded-[10px] border border-border bg-card p-4 transition-[border-color,transform] duration-200 hover:-translate-y-[2px] hover:border-ring"
       >
-        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-chart-3">Business budgeting</p>
+        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">Business budgeting</p>
         <h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Break-even before you trade</h3>
         <p class="m-0 text-[12.5px] leading-[1.55] text-muted-foreground">
           Subscriptions + commissions become a break-even-per-trade and a clear cost waterfall.
         </p>
       </div>
       <div
-        class="ucx relative overflow-hidden rounded-[12px] border border-border bg-card p-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-[3px] before:bg-[linear-gradient(180deg,var(--primary),var(--chart-3))] before:content-['']"
+        class="ucx rounded-[10px] border border-border bg-card p-4 transition-[border-color,transform] duration-200 hover:-translate-y-[2px] hover:border-ring"
       >
-        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-chart-3">Discipline &amp; review</p>
+        <p class="mb-[7px] font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">Discipline &amp; review</p>
         <h3 class="mb-[6px] text-[14.5px] font-semibold leading-[1.25] tracking-[-0.01em]">Journal every session</h3>
         <p class="m-0 text-[12.5px] leading-[1.55] text-muted-foreground">
           Day-notes, equity-curve markup, and stats by session and weekday to find your edge.
@@ -687,18 +687,16 @@
       <b>synced workspaces</b> are coming as a low-cost add-on.
     </p>
     <div class="price-grid mt-[34px] grid grid-cols-[1.1fr_1fr_1fr] items-stretch gap-4 max-[900px]:grid-cols-1">
-      <div
-        class="plan flex flex-col rounded-[14px] border border-primary/50 bg-card p-[26px] shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_15%,transparent),0_14px_40px_-22px_color-mix(in_srgb,var(--primary)_50%,transparent)]"
-      >
+      <div class="plan flex flex-col rounded-[14px] border border-primary/50 bg-card p-[26px] ring-1 ring-primary/30">
         <span
-          class="ribbon mb-[14px] self-start rounded-[6px] bg-primary/12 px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-primary"
+          class="ribbon mb-[14px] self-start rounded-[4px] border border-border bg-popover px-[9px] py-[3px] font-mono text-[10.5px] uppercase tracking-[0.12em] text-foreground"
           >Available now</span
         >
         <h3 class="mb-1 text-[18px] font-semibold">Blotterbook</h3>
         <p class="mb-[18px] text-[13px] leading-[1.5] text-muted-foreground">
           The full app, free for everyone — nothing about your trades uploaded, everything runs in your browser.
         </p>
-        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em]">Free</div>
+        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em] [font-variant-numeric:tabular-nums]">Free</div>
         <ul class="my-4 mb-[22px] flex list-none flex-col gap-[10px] p-0">
           <li class="flex gap-[9px] text-[13.5px] leading-[1.45] text-muted-foreground">
             <svg
@@ -729,14 +727,14 @@
 
       <div class="plan flex flex-col rounded-[14px] border border-border bg-card p-[26px]">
         <span
-          class="mb-[14px] self-start rounded-[6px] border border-chart-3/40 px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-chart-3"
+          class="mb-[14px] self-start rounded-[4px] border border-border bg-popover px-[9px] py-[3px] font-mono text-[10.5px] uppercase tracking-[0.12em] text-foreground"
           >Optional</span
         >
         <h3 class="mb-1 text-[18px] font-semibold">Back the project</h3>
         <p class="mb-[18px] text-[13px] leading-[1.5] text-muted-foreground">
           Pay-what-helps support that keeps Blotterbook free and funds new features.
         </p>
-        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em]">
+        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em] [font-variant-numeric:tabular-nums]">
           $25 <small class="text-[14px] font-normal text-muted-foreground">one-time</small>
         </div>
         <ul class="my-4 mb-[18px] flex list-none flex-col gap-[10px] p-0">
@@ -790,14 +788,14 @@
 
       <div class="plan flex flex-col rounded-[14px] border border-border bg-card p-[26px]">
         <span
-          class="ribbon mb-[14px] self-start rounded-[6px] bg-primary/12 px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-primary"
+          class="ribbon mb-[14px] self-start rounded-[4px] border border-border bg-popover px-[9px] py-[3px] font-mono text-[10.5px] uppercase tracking-[0.12em] text-foreground"
           >Available now</span
         >
         <h3 class="mb-1 text-[18px] font-semibold">Synced workspaces</h3>
         <p class="mb-[18px] text-[13px] leading-[1.5] text-muted-foreground">
           End-to-end-encrypted sync of your trades, notes, tags &amp; saved filters across devices.
         </p>
-        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em] text-foreground">
+        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em] [font-variant-numeric:tabular-nums] text-foreground">
           $5 <small class="text-[14px] font-normal text-muted-foreground">/ month</small>
         </div>
         <ul class="my-4 mb-[22px] flex list-none flex-col gap-[10px] p-0">
