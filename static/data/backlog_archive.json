@@ -4856,6 +4856,17 @@
       "doneNote": "DONE (2026-07-07, #119) — Server-side cloud-tier entitlement gate (402) + storage quota on the mutating /api/sync routes. Client-side tier gate + subscribe CTA in #121."
     },
     {
+      "id": "A254",
+      "title": "Sync: purge resurrection — subscribe controller to erase + reset sync cursors on CloudStore.purge()",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": true,
+      "doneNote": "Shipped two of three parts; the third was descoped by owner decision. (1) Client resurrection fix (#119): purging a synced workspace disables its sync + resets its cursor/watermark so a reconcile can't resurrect. (2) Server erase (2026-07-07): a session-authed, owner-only POST /api/sync/delete deletes the workspace's sync_records rows + R2 ciphertext blobs (paged within the A15 subrequest budget) then drops the wrapped-DEK + registry shell; the cloudsync controller's onErased propagates a local purge to it best-effort; never paywalled; verified by scripts/test-sync.mjs. (3) Cross-device auto-drop: DROPPED (owner decision 2026-07-07) after the design correction showed the only sound path is client-driven tombstone-then-wipe (the server cannot mint tombstones under zero-knowledge, and a vanished-workspace-wipes-local handler is unsafe for the local-first moat) — the accepted, documented limitation: a second device keeps its local copy until it reconciles (its next listWorkspaces omits the deleted workspace and its pull 404s, so the stale copy persists locally but never re-uploads). Limitation documented in docs/synced-workspaces.md."
+    },
+    {
       "id": "A255",
       "title": "Sync: make trade tombstone suppression LWW-consistent with journal/trademeta/meta (convergence)",
       "category": "FIXES",
@@ -5008,6 +5019,17 @@
       "completedDate": "2026-07-07",
       "partial": false,
       "doneNote": "DONE (2026-07-07, #119) — Composite ${type}:${id} tombstone key so a trade and its trademeta no longer collide (edited-trade deletes now propagate)."
+    },
+    {
+      "id": "A279",
+      "title": "Rework Cloud Sync UX — replace lock/unlock with sync-now + a parity status pill; clarify passkey vs passphrase (ref Obsidian)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-07 (design note docs/cloud-sync-ux-a279.md) and promoted to prod with the CH16 cloud-sync GA the same day. SyncStatusPill.svelte — one shared parity pill (off / needs-unlock / offline / syncing / pending / synced / error) via syncPillState(); the engine (cloudsync.svelte.ts) gained pending tracking, runSync direction ('both'|'pull'|'push') + forceFullPush, and pullFromCloud()/pushToCloud()/pauseCloudSync(); explicit direction is honest LWW ('the newest edit of each record wins' — no destructive force-override); WorkspaceSwitcher trimmed to pill + 'Sync now'; the Account cloud-sync card gained pill + Sync now + Pull/Push/Pause + the 'How sign-in and encryption relate' explainer (passkey signs in; passphrase/recovery unlocks E2E encryption; a PRF passkey does both); UnlockModal reframed 'Unlock encryption'. e2e updated, full suite 101 green; A299/A306 (archived) subsequently made status/pending/error per-workspace and fixed the error copy. OWNER SIGN-OFF 2026-07-07: reviewed visually — intuitive and unobtrusive, approved. The deliberately-deferred server-side 'behind' probe (the focus/online/unlock pull auto-resolves a behind cloud) remains an optional future follow-up."
     },
     {
       "id": "A280",

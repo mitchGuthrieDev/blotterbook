@@ -151,6 +151,16 @@ trade. So:
   incoming `updated` is newer than the tombstone) is a one-line change; F58 isolates the decision behind
   a single predicate.
 - Tombstones sync like any other record and are the delete half of LWW.
+- **"Erase all data" does NOT propagate cross-device (accepted limitation — A254, owner decision
+  2026-07-07).** Erasing a synced workspace purges it locally *and* server-side (the owner-only
+  `POST /api/sync/delete` removes the R2 blobs + D1 change-index, then the wrapped DEK + registry
+  shell), but a **second device that hasn't reconciled keeps its local copy**: its next
+  `listWorkspaces` simply omits the deleted workspace and its pull 404s, so the stale copy persists
+  locally but never re-uploads. This is deliberate: the server cannot mint tombstones under
+  zero-knowledge (only a client holding the DEK can), and treating a vanished workspace as a wipe
+  signal would let a server response (or a transient 404) destroy local data — unacceptable for a
+  local-first product. `Store.purge()` likewise clears the local delete-log by design (a purge is a
+  clean slate, not a set of deletions to propagate).
 - **Clock-skew caveat:** LWW keys on the wall-clock `updated`, so a device with a fast clock can win a
   same-record conflict. For a *single user's* devices this is acceptable — trades are content-hash-immune
   (union, never conflict), and only concurrent edits to the *same* journal/meta record on two devices
