@@ -21,7 +21,7 @@ import { onRequestPost as pushFn } from '../functions/api/sync/push.ts';
 import { onRequestGet as pullFn } from '../functions/api/sync/pull.ts';
 import { recordKey } from '../functions/_lib/sync.ts';
 import { tradeId } from '../src/lib/core/store.ts';
-import { genIdentityKey, genWorkspaceDek, dekBytesOf, wrapDek, unwrapDekBytes, encryptRecord, blindId } from '../src/lib/core/crypto.ts';
+import { genIdentityKey, genWorkspaceDek, dekBytesOf, wrapDek, unwrapDekBytes, encryptRecord, decryptRecord, blindId } from '../src/lib/core/crypto.ts';
 import { deriveWsKeys, pushChanges, pullAndMerge, syncPlan, collectChanges, mergeRecords } from '../src/app/lib/cloudsync-core.ts';
 
 let pass = 0;
@@ -281,6 +281,8 @@ function makeTransport(env, token) {
     async registerWorkspace(id, dek) {
       const r = await call(wsRegister, '/api/sync/workspaces', 'POST', { workspace_id: id, wrapped_dek: dek });
       if (!r.ok) throw new Error('register ' + r.status);
+      const j = await r.json().catch(() => null); // A304: the server returns the EFFECTIVE wrapped DEK
+      return j?.wrapped_dek ?? dek;
     },
     async push(id, records) {
       const r = await call(pushFn, '/api/sync/push', 'POST', { workspace_id: id, records });
@@ -585,6 +587,38 @@ const stB = { cursor: 0, pushed: -1 };
   const J = memStore();
   await mergeRecords(J, keysB, [{ ...wireRow, ciphertext: JSON.stringify(recV1) }], WS, () => false);
   ok('A308: a v1 record still decrypts (legacy, no AAD)', (await J.getAllTrades()).some(t => t.pnl === 8));
+}
+
+// ── A304: enable-adopt — when register returns a DIFFERENT wrapped DEK (a concurrent device won the
+// first-writer-wins register), the client ADOPTS it instead of its minted DEK, or it strands the
+// winner's ciphertext undecryptable. The controller isn't node-importable, so exercise the exact pure
+// sequence enableCloudSync runs against a simulated first-writer-wins transport. ─────────────────────
+{
+  const ik2 = await genIdentityKey();
+  // Device A registered FIRST — this DEK is what a first-writer-wins server keeps + echoes back.
+  const winnerDek = await genWorkspaceDek();
+  const winnerKeys = await deriveWsKeys(await dekBytesOf(winnerDek));
+  const winnerWrapped = JSON.stringify(await wrapDek(winnerDek, ik2));
+
+  // Device B mints its OWN DEK, then registers — the server echoes the WINNER's wrapped DEK (never overwrites).
+  const mineDek = await genWorkspaceDek();
+  const mineBytes = await dekBytesOf(mineDek);
+  const mineWrapped = JSON.stringify(await wrapDek(mineDek, ik2));
+  const registerFirstWriterWins = async () => winnerWrapped;
+
+  const effective = await registerFirstWriterWins();
+  const adoptBlob = effective !== mineWrapped ? JSON.parse(effective) : null;
+  const adoptedKeys = adoptBlob ? await deriveWsKeys(await unwrapDekBytes(adoptBlob, ik2)) : await deriveWsKeys(mineBytes);
+
+  // Proof of adoption: B's blinded ids now agree with the winner's, and B can decrypt the winner's ciphertext.
+  const bBlind = await blindId(adoptedKeys.blindKey, 'trade:abc');
+  const winnerBlind = await blindId(winnerKeys.blindKey, 'trade:abc');
+  const mineBlind = await blindId((await deriveWsKeys(mineBytes)).blindKey, 'trade:abc');
+  ok('A304: adopted keys match the winner (blinded ids agree, not the minted DEK)', bBlind === winnerBlind && bBlind !== mineBlind);
+  const aad = 'ws|meta|x|1|0';
+  const rec = await encryptRecord(winnerKeys.recordKey, 'hello', aad);
+  const pt = new TextDecoder().decode(await decryptRecord(adoptedKeys.recordKey, rec, aad));
+  ok("A304: the adopted record key decrypts the winner's ciphertext", pt === 'hello');
 }
 
 console.log(`\n${pass} assertions passed.`);

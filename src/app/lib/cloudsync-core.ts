@@ -49,7 +49,10 @@ export interface PullPage {
  *  node test backs it with the real Pages Functions over a mock D1/R2 — the identical contract. */
 export interface SyncTransport {
   listWorkspaces(): Promise<Array<{ workspace_id: string; wrapped_dek: string | null }>>;
-  registerWorkspace(workspaceId: string, wrappedDek: string): Promise<void>;
+  /** Register the workspace's wrapped DEK. A304: first-writer-wins server-side — the response returns
+   *  the EFFECTIVE wrapped DEK (the existing one if a concurrent device already registered, else the
+   *  one just stored). The caller adopts it when it differs from what it sent. */
+  registerWorkspace(workspaceId: string, wrappedDek: string): Promise<string>;
   /** Push one ≤15-record batch (the caller chunks to the cap). */
   push(workspaceId: string, records: WireRecord[]): Promise<void>;
   pull(workspaceId: string, since: number): Promise<PullPage>;

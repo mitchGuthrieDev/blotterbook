@@ -233,6 +233,11 @@ const transport: SyncTransport = {
       body: JSON.stringify({ workspace_id: workspaceId, wrapped_dek: wrappedDek }),
     });
     if (!res.ok) throw new SyncHttpError(res.status, `Could not enable sync for this workspace (${res.status}).`);
+    // A304: the server never overwrites an existing wrapped DEK — it returns the EFFECTIVE one. Return
+    // it so enableCloudSync can adopt the winner's DEK on a concurrent enable (fall back to ours if an
+    // older server build doesn't echo it yet).
+    const data = (await res.json().catch(() => null)) as { wrapped_dek?: string | null } | null;
+    return data?.wrapped_dek ?? wrappedDek;
   },
   async push(workspaceId, records: WireRecord[]) {
     const res = await fetch('/api/sync/push', {
@@ -443,10 +448,21 @@ export async function enableCloudSync(): Promise<boolean> {
     } else {
       const dek = await crypto.genWorkspaceDek();
       const bytes = await crypto.dekBytesOf(dek);
-      const wrapped = await crypto.wrapDek(dek, ik);
-      await transport.registerWorkspace(id, JSON.stringify(wrapped));
-      keys = await deriveWsKeys(bytes);
-      bytes.fill(0);
+      const wrapped = JSON.stringify(await crypto.wrapDek(dek, ik));
+      const effective = await transport.registerWorkspace(id, wrapped);
+      const adoptBlob = parseWrappedDek(effective);
+      if (effective !== wrapped && adoptBlob) {
+        // A304: a concurrent enable already registered a DIFFERENT wrapped DEK (first-writer-wins on
+        // the server). ADOPT it — unwrap → derive keys from the winner's DEK — so we never strand
+        // ciphertext the peer pushed under its key.
+        bytes.fill(0);
+        const adoptBytes = await crypto.unwrapDekBytes(adoptBlob, ik);
+        keys = await deriveWsKeys(adoptBytes);
+        adoptBytes.fill(0);
+      } else {
+        keys = await deriveWsKeys(bytes);
+        bytes.fill(0);
+      }
     }
     sessions.set(id, keys);
     localStore.local.set(enabledKey(id), true);
