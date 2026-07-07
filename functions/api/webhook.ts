@@ -49,6 +49,7 @@ import {
 } from '../_lib/accounts.ts';
 
 interface CheckoutSession {
+  mode?: unknown; // 'payment' | 'subscription' | 'setup' — a subscription checkout is NOT a donation (A303)
   amount_total?: unknown;
   currency?: unknown;
   customer?: unknown;
@@ -73,6 +74,7 @@ interface StripeSubObject {
 interface StripeEvent {
   id?: unknown;
   type?: unknown;
+  created?: unknown; // Stripe UNIX SECONDS — used to drop out-of-order subscription-lifecycle deliveries (A303)
   data?: { object?: unknown } | null;
 }
 
@@ -112,12 +114,14 @@ export async function onRequestPost({ request, env }: Ctx) {
   const eventId = str(event.id);
   if (!eventId) return json({ error: 'invalid_payload', message: 'Missing event id.' }, 400);
   const type = String(event.type ?? 'unknown');
+  const eventCreated = typeof event.created === 'number' && Number.isFinite(event.created) ? event.created : null;
 
   // ── Donations (F54) — the checkout path is unchanged. ──
   if (type === 'checkout.session.completed') return provisionDonation(db, eventId, (event.data?.object ?? {}) as CheckoutSession);
 
   // ── Subscription lifecycle (F60) — status + current_period_end drive the cloud tier in me.ts. ──
-  if (SUBSCRIPTION_EVENTS.has(type)) return provisionSubscription(db, eventId, type, (event.data?.object ?? {}) as StripeSubObject);
+  if (SUBSCRIPTION_EVENTS.has(type))
+    return provisionSubscription(db, eventId, type, eventCreated, (event.data?.object ?? {}) as StripeSubObject);
 
   // Ack (200) unrelated events so Stripe stops retrying — we only provision on the events above.
   return json({ received: true, ignored: type });
@@ -126,6 +130,10 @@ export async function onRequestPost({ request, env }: Ctx) {
 /** F54 donation provisioning — records the checkout event (dedupe-keyed by event id) and credits
  *  the resolved account when the linkage is trusted and the amount+currency are creditable. */
 async function provisionDonation(db: AccountsDb, eventId: string, obj: CheckoutSession) {
+  // A303(c): a subscription-mode checkout (the cloud-sync purchase) is NOT a donation — provisioning
+  // it via the subscription lifecycle events. Crediting it here would stamp donated_at + inflate
+  // donation_total_cents, conflating a purchase with a gift (Home.svelte legally distinguishes them).
+  if (obj.mode === 'subscription') return json({ received: true, ignored: 'subscription_checkout' });
   // Replay-safe dedupe: already processed this event id → no-op success.
   if (await donationById(db, eventId)) return json({ received: true, deduped: true });
 
@@ -168,7 +176,7 @@ async function provisionDonation(db: AccountsDb, eventId: string, obj: CheckoutS
 
 /** F60 subscription-lifecycle provisioning — upserts the user's current subscription (status +
  *  current_period_end), keyed to the account by trusted linkage. Dedupes replays by event id. */
-async function provisionSubscription(db: AccountsDb, eventId: string, type: string, obj: StripeSubObject) {
+async function provisionSubscription(db: AccountsDb, eventId: string, type: string, eventCreated: number | null, obj: StripeSubObject) {
   // Replay-safe dedupe (mirrors the donation PK): already processed this event id → no-op success.
   if (await webhookEventSeen(db, eventId)) return json({ received: true, deduped: true });
 
@@ -192,6 +200,15 @@ async function provisionSubscription(db: AccountsDb, eventId: string, type: stri
 
   const now = Date.now();
   const existing = await subscriptionForUser(db, user.id);
+  // A303(b): out-of-order guard. Stripe does NOT guarantee delivery order, so a delayed
+  // subscription.updated(active) can arrive AFTER subscription.deleted and permanently resurrect a
+  // canceled sub (a deleted subscription emits no further events to correct it). Drop any event
+  // OLDER than the last one applied to this subscription (compared on event.created, SECONDS). Mark it
+  // seen so Stripe stops retrying a stale delivery we've deliberately skipped.
+  if (eventCreated != null && existing?.last_event_created != null && eventCreated < existing.last_event_created) {
+    await markWebhookEvent(db, eventId, type, now);
+    return json({ received: true, stale: true });
+  }
   // Stripe sends current_period_end in SECONDS → store ms. Read the top-level field (older API
   // versions) OR the subscription-item field (newer versions moved it there). The invoice object
   // (payment_failed) carries neither, so keep whatever the last subscription event recorded.
@@ -208,6 +225,7 @@ async function provisionSubscription(db: AccountsDb, eventId: string, type: stri
       stripeCustomerId: customerId ?? existing?.stripe_customer_id ?? null,
       status,
       currentPeriodEnd,
+      eventCreated,
     },
     now
   );

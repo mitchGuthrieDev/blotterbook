@@ -13,7 +13,7 @@
  */
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import type { AuthenticatorTransportFuture } from '@simplewebauthn/server';
-import { json } from '../../_lib/http.ts';
+import { json, rateLimited } from '../../_lib/http.ts';
 import type { Ctx } from '../../_lib/types.ts';
 import {
   badOrigin,
@@ -36,6 +36,7 @@ export async function onRequestPost(ctx: Ctx) {
   if (!checkOrigin(request)) return badOrigin();
   const db = getDb(env);
   if (!db) return dbUnavailable();
+  if (await rateLimited(env, 'acct-recover-verify', request, 5, 300)) return json({ error: 'Too many attempts — try again shortly.' }, 429);
 
   const body = await readJson<{ token?: unknown }>(request);
   const token = typeof body?.token === 'string' ? body.token : '';
@@ -57,9 +58,12 @@ export async function onRequestPost(ctx: Ctx) {
     userName: user.email,
     attestationType: 'none',
     excludeCredentials: existing.map(c => ({ id: c.id, transports: parseTransports(c.transports) as AuthenticatorTransportFuture[] })),
-    authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
+    // A310: UV required — the recovery-enrolled passkey is also a cloud-sync PRF key (UV-capable).
+    authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
   });
   // Bind the new-passkey challenge to the recovered user → register-verify enrolls it + starts a session.
-  await putChallenge(db, { type: 'register', challenge: options.challenge, userId: user.id, email: user.email });
+  // recovery:true marks it so register-verify REVOKES the user's prior sessions (A302) — a recovery
+  // (e.g. after a lost/stolen device) must not leave the old device's sessions alive.
+  await putChallenge(db, { type: 'register', challenge: options.challenge, userId: user.id, email: user.email, recovery: true });
   return json({ options });
 }

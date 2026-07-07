@@ -8,9 +8,13 @@
 import { createHmac } from 'node:crypto';
 import {
   SESSION_COOKIE,
+  SESSION_ABSOLUTE_MAX_MS,
   createSession,
   sessionFromRequest,
   destroySession,
+  deleteSessionsForUser,
+  deleteCredentialForUser,
+  credentialsForUser,
   sessionSetCookie,
   sessionClearCookie,
   putChallenge,
@@ -19,6 +23,9 @@ import {
   sha256b64u,
   createUser,
   insertCredential,
+  credentialById,
+  purgeUnverifiedUsers,
+  UNVERIFIED_USER_TTL_MS,
   createRecoveryToken,
   consumeRecoveryToken,
   donationById,
@@ -43,6 +50,7 @@ import {
 } from '../functions/api/account/email-verify-confirm.ts';
 import { onRequestPost as recoverSend } from '../functions/api/account/recover-send.ts';
 import { onRequestPost as recoverVerify } from '../functions/api/account/recover-verify.ts';
+import { onRequestPost as passkeyDelete } from '../functions/api/account/passkey-delete.ts';
 
 let pass = 0,
   fail = 0;
@@ -74,6 +82,9 @@ function mockDb() {
     const conds = clause.split(/ AND /i).map(c => c.trim().match(/^(\w+) = \?$/)[1]);
     return rows.filter(r => conds.every((col, i) => r[col] === args[offset + i]));
   };
+  // A write result carrying the affected-row count (as an empty rows array with a `.changes` tag), so
+  // run() can surface D1's meta.changes while first()/all() still see an empty result set.
+  const changed = n => Object.assign([], { changes: n });
   const exec = (sql, args) => {
     const s = sql.trim().replace(/\s+/g, ' ');
     let m;
@@ -81,11 +92,16 @@ function mockDb() {
       const cols = m[2].split(',').map(c => c.trim());
       const row = Object.fromEntries(cols.map((c, i) => [c, args[i] ?? null]));
       const t = tables[m[1]];
+      // `ON CONFLICT(<col>) DO NOTHING` — first-writer-wins: skip silently when a row with that key
+      // already exists (A304 wrapped-DEK register; A310 race-safe createUser/insertCredential). Report
+      // 0 rows changed so the caller can detect the loser (mirrors D1's meta.changes).
+      const conflict = s.match(/ON CONFLICT\((\w+)\) DO NOTHING/i);
+      if (conflict && t.some(r => r[conflict[1]] === row[conflict[1]])) return changed(0);
       // Only enforce the `id` PK when the table actually has one (subscriptions is keyed by user_id).
       if (row.id !== undefined && t.some(r => r.id === row.id)) throw new Error(`UNIQUE constraint failed: ${m[1]}.id`);
       if (m[1] === 'users' && t.some(r => r.email === row.email)) throw new Error('UNIQUE constraint failed: users.email');
       t.push(row);
-      return [];
+      return changed(1);
     }
     if ((m = s.match(/^SELECT \* FROM (\w+) WHERE (.+?)(?: ORDER BY .+)?$/i))) return where(tables[m[1]], m[2], args);
     // Generalized to any single-column key (`WHERE <col> = ?`) — `id` still matches (F60 upserts by user_id).
@@ -95,6 +111,18 @@ function mockDb() {
       const row = tables[m[1]].find(r => r[keyCol] === args[cols.length]);
       if (row) cols.forEach((c, i) => (row[c] = args[i]));
       return [];
+    }
+    if ((m = s.match(/^DELETE FROM (\w+) WHERE email_verified = 0 AND created_at < \?$/i))) {
+      // A310 never-verified-account purge (purgeUnverifiedUsers) — reports the affected count.
+      const before = tables[m[1]].length;
+      tables[m[1]] = tables[m[1]].filter(r => !(r.email_verified === 0 && r.created_at < args[0]));
+      return changed(before - tables[m[1]].length);
+    }
+    if ((m = s.match(/^DELETE FROM (\w+) WHERE id = \? AND user_id = \?$/i))) {
+      // A302 scoped credential delete (deleteCredentialForUser) — reports the affected count.
+      const before = tables[m[1]].length;
+      tables[m[1]] = tables[m[1]].filter(r => !(r.id === args[0] && r.user_id === args[1]));
+      return changed(before - tables[m[1]].length);
     }
     if ((m = s.match(/^DELETE FROM (\w+) WHERE (\w+) < \?$/i))) {
       // TTL sweeps: challenges/recovery by expires_at, webhook_events by created_at (A265).
@@ -113,10 +141,28 @@ function mockDb() {
       const api = args => ({
         bind: (...a) => api(a),
         first: async () => exec(sql, args)[0] ?? null,
-        run: async () => exec(sql, args),
+        run: async () => {
+          const r = exec(sql, args);
+          return { meta: { changes: (r && r.changes) || 0 } };
+        },
         all: async () => ({ results: exec(sql, args) }),
       });
       return api([]);
+    },
+  };
+}
+
+// In-memory KV stub for the defense-in-depth rate limiter (functions/_lib/http.ts rateLimited).
+// get/put over a Map; expirationTtl is ignored (tests never advance the clock past a window).
+function mockKv() {
+  const store = new Map();
+  return {
+    store,
+    async get(key) {
+      return store.has(key) ? store.get(key) : null;
+    },
+    async put(key, value) {
+      store.set(key, value);
     },
   };
 }
@@ -146,12 +192,13 @@ const signedWebhook = (rawBody, { secret = WH_SECRET, t = Math.floor(Date.now() 
     body: rawBody,
   });
 };
-const checkoutEvent = (id, { email, ref, amount = 2500, currency = 'usd', customer = 'cus_1' } = {}) =>
+const checkoutEvent = (id, { email, ref, amount = 2500, currency = 'usd', customer = 'cus_1', mode } = {}) =>
   JSON.stringify({
     id,
     type: 'checkout.session.completed',
     data: {
       object: {
+        ...(mode ? { mode } : {}),
         amount_total: amount,
         currency,
         customer,
@@ -161,7 +208,9 @@ const checkoutEvent = (id, { email, ref, amount = 2500, currency = 'usd', custom
     },
   });
 // F60 subscription-lifecycle event (customer.subscription.* / invoice.payment_failed).
-const subEvent = (id, type, obj) => signedWebhook(JSON.stringify({ id, type, data: { object: obj } }));
+// `created` (Stripe UNIX SECONDS) drives the A303 out-of-order guard; omitted → not sent.
+const subEvent = (id, type, obj, created) =>
+  signedWebhook(JSON.stringify({ id, type, ...(created != null ? { created } : {}), data: { object: obj } }));
 const secs = ms => Math.floor(ms / 1000); // Stripe current_period_end is UNIX SECONDS
 
 console.log('Session token hash/verify round-trip:');
@@ -348,6 +397,7 @@ console.log('\n/api/me shapes + logout:');
     transports: ['internal'],
     aaguid: 'aa',
     backedUp: true,
+    userVerified: true,
   });
   const { token } = await createSession(db, user.id);
   const me = await meGet({ request: req('/api/me', { method: 'GET', cookie: cookieFor(token) }), env });
@@ -649,6 +699,106 @@ console.log('\nSubscription linkage robustness (checkout metadata + items[].curr
   );
 }
 
+console.log('\nSubscription-lifecycle hardening (A303) — grace over-grant, out-of-order, sub-as-donation:');
+{
+  // (a) grantsCloud: a past_due account PAST the grace must NOT keep cloud via the current_period_end
+  //     fallback, even though Stripe advances current_period_end into the new UNPAID period.
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db, STRIPE_WEBHOOK_SECRET: WH_SECRET };
+  const user = await createUser(db, 'grace@example.com');
+  const { token } = await createSession(db, user.id);
+  const me = async () => (await meGet({ request: req('/api/me', { method: 'GET', cookie: cookieFor(token) }), env })).json();
+  await webhook({
+    request: subEvent('evt_g_created', 'customer.subscription.created', {
+      id: 'sub_g',
+      customer: 'cus_g',
+      status: 'active',
+      current_period_end: secs(Date.now() + 30 * DAY),
+      metadata: { client_reference_id: user.id },
+    }),
+    env,
+  });
+  await webhook({ request: subEvent('evt_g_pf', 'invoice.payment_failed', { subscription: 'sub_g', customer: 'cus_g' }), env });
+  // Stripe advanced current_period_end into the NEXT (unpaid) period on the failed renewal.
+  db.tables.subscriptions[0].current_period_end = Date.now() + 25 * DAY;
+  db.tables.subscriptions[0].past_due_since = Date.now() - (SUBSCRIPTION_GRACE_MS + 1000); // grace elapsed
+  const past = await me();
+  ok(
+    'past_due past grace with a FUTURE current_period_end drops to local (grace no longer dead)',
+    past.tier === 'local' && past.cloudSync === false
+  );
+  // canceled with a still-future period keeps cloud (the ONE legitimate fallback path).
+  db.tables.subscriptions[0].status = 'canceled';
+  db.tables.subscriptions[0].current_period_end = Date.now() + 5 * DAY;
+  ok('a clean cancel still rides out the already-paid period (cloud)', (await me()).tier === 'cloud');
+
+  // (b) out-of-order guard: a delayed subscription.updated(active) with an OLDER event.created arriving
+  //     AFTER subscription.deleted must NOT resurrect the canceled sub.
+  const db2 = mockDb();
+  const env2 = { ACCOUNTS_DB: db2, STRIPE_WEBHOOK_SECRET: WH_SECRET };
+  const u2 = await createUser(db2, 'order@example.com');
+  const t0 = 1_700_000_000; // base event.created (seconds)
+  await webhook({
+    request: subEvent(
+      'evt_o_created',
+      'customer.subscription.created',
+      {
+        id: 'sub_o',
+        customer: 'cus_o',
+        status: 'active',
+        current_period_end: secs(Date.now() + 30 * DAY),
+        metadata: { client_reference_id: u2.id },
+      },
+      t0
+    ),
+    env: env2,
+  });
+  await webhook({
+    request: subEvent('evt_o_deleted', 'customer.subscription.deleted', { id: 'sub_o', customer: 'cus_o', status: 'canceled' }, t0 + 100),
+    env: env2,
+  });
+  ok('subscription.deleted applied (canceled)', db2.tables.subscriptions[0].status === 'canceled');
+  // A STALE updated(active) that Stripe generated BEFORE the delete but delivered after it.
+  const stale = await webhook({
+    request: subEvent('evt_o_stale', 'customer.subscription.updated', { id: 'sub_o', customer: 'cus_o', status: 'active' }, t0 + 50),
+    env: env2,
+  });
+  ok('an out-of-order (older) updated is dropped as stale', (await stale.json()).stale === true);
+  ok('...and the subscription stays canceled (no resurrection)', db2.tables.subscriptions[0].status === 'canceled');
+  // A genuinely NEWER event still applies.
+  await webhook({
+    request: subEvent(
+      'evt_o_new',
+      'customer.subscription.updated',
+      { id: 'sub_o', customer: 'cus_o', status: 'active', current_period_end: secs(Date.now() + 30 * DAY) },
+      t0 + 200
+    ),
+    env: env2,
+  });
+  ok('a newer updated still applies (status active)', db2.tables.subscriptions[0].status === 'active');
+
+  // (c) a subscription-mode checkout.session.completed must NOT be credited as a donation.
+  const db3 = mockDb();
+  const env3 = { ACCOUNTS_DB: db3, STRIPE_WEBHOOK_SECRET: WH_SECRET };
+  const u3 = await createUser(db3, 'buyer@example.com');
+  await setEmailVerified(db3, u3.id);
+  const r = await webhook({
+    request: signedWebhook(checkoutEvent('evt_submode', { email: 'buyer@example.com', amount: 500, mode: 'subscription' })),
+    env: env3,
+  });
+  ok('subscription-mode checkout is ignored (not a donation)', (await r.json()).ignored === 'subscription_checkout');
+  ok('...no donation row written', db3.tables.donations.length === 0);
+  const buyer = await userByEmail(db3, 'buyer@example.com');
+  ok('...and the buyer is NOT stamped as a donor', buyer.donated_at == null && (buyer.donation_total_cents ?? 0) === 0);
+  // a PAYMENT-mode checkout still credits normally (regression guard).
+  await webhook({
+    request: signedWebhook(checkoutEvent('evt_paymode', { email: 'buyer@example.com', amount: 1500, mode: 'payment' })),
+    env: env3,
+  });
+  const donor = await userByEmail(db3, 'buyer@example.com');
+  ok('a payment-mode checkout still credits a donation', donor.donated_at != null && donor.donation_total_cents === 1500);
+}
+
 console.log('\nRecovery/verify token lifecycle (single-use, TTL, hash-only — S25):');
 {
   const db = mockDb();
@@ -792,6 +942,55 @@ console.log('\nRecovery re-enrollment (recover-verify) — issues a session-boun
   );
 }
 
+console.log('\nRate limiting on the email-send + recovery endpoints (A301) — 429 past 5/5min:');
+{
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ id: 'email_1' }), { status: 200 });
+  try {
+    // email-verify-send: check runs after the DB check → an authed, unverified user with RESEND bound
+    // gets a real 200 up to the limit, then 429. STATUS_KV shared → all 'anon' calls hit one bucket.
+    {
+      const db = mockDb();
+      const user = await createUser(db, 'rl-verify@example.com');
+      const { token: sess } = await createSession(db, user.id);
+      const env = { ACCOUNTS_DB: db, RESEND_API_KEY: 're_x', STATUS_KV: mockKv() };
+      const statuses = [];
+      for (let i = 0; i < 6; i++) {
+        const r = await emailVerifySend({ request: req('/api/account/email-verify-send', { cookie: cookieFor(sess) }), env });
+        statuses.push(r.status);
+      }
+      ok('email-verify-send: first 5 pass (200), the 6th is 429', statuses.slice(0, 5).every(s => s === 200) && statuses[5] === 429);
+    }
+    // recover-send: enumeration-safe 200 for the first 5, then 429 (limiter runs before the send).
+    {
+      const db = mockDb();
+      const env = { ACCOUNTS_DB: db, RESEND_API_KEY: 're_x', STATUS_KV: mockKv() };
+      const statuses = [];
+      for (let i = 0; i < 6; i++) {
+        const r = await recoverSend({ request: req('/api/account/recover-send', { body: { email: 'ghost@example.com' } }), env });
+        statuses.push(r.status);
+      }
+      ok('recover-send: first 5 pass (200), the 6th is 429', statuses.slice(0, 5).every(s => s === 200) && statuses[5] === 429);
+    }
+    // recover-verify: previously had NO limiter (A301). Bad tokens 400 up to the limit, then 429.
+    {
+      const db = mockDb();
+      const env = { ACCOUNTS_DB: db, STATUS_KV: mockKv() };
+      const statuses = [];
+      for (let i = 0; i < 6; i++) {
+        const r = await recoverVerify({ request: req('/api/account/recover-verify', { body: { token: 'x.y' } }), env });
+        statuses.push(r.status);
+      }
+      ok(
+        'recover-verify: throttled — first 5 reach 400, the 6th is 429',
+        statuses.slice(0, 5).every(s => s === 400) && statuses[5] === 429
+      );
+    }
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
 console.log('\nemail-verify-confirm — GET redirect + POST + fail modes:');
 {
   const db = mockDb();
@@ -832,6 +1031,168 @@ console.log('\nwebhook_events dedupe ledger — sweep-on-write bounds growth (A2
   ok(
     'an in-window event is NOT swept',
     db.tables.webhook_events.every(r => r.id !== 'evt_old') && db.tables.webhook_events.some(r => r.id === 'evt_new')
+  );
+}
+
+console.log('\nAuth hardening (A310) — race-safe createUser/insertCredential + user_verified persistence:');
+{
+  const db = mockDb();
+  // createUser is race-safe: first wins (returns the row), a duplicate email returns null (clean 409).
+  const first = await createUser(db, 'race@example.com');
+  ok('createUser returns the created row on first insert', first != null && first.email === 'race@example.com');
+  const second = await createUser(db, 'race@example.com');
+  ok('createUser returns null when the email is already taken (race → clean 409)', second === null);
+  ok('...and no duplicate user row is written', db.tables.users.filter(u => u.email === 'race@example.com').length === 1);
+
+  // insertCredential is race-safe + persists user_verified.
+  const ins1 = await insertCredential(db, {
+    id: 'cred-uv',
+    userId: first.id,
+    publicKey: 'pk',
+    counter: 0,
+    transports: ['internal'],
+    aaguid: null,
+    backedUp: true,
+    userVerified: true,
+  });
+  ok('insertCredential returns true when it inserts the credential', ins1 === true);
+  ok('...and persists user_verified = 1', (await credentialById(db, 'cred-uv')).user_verified === 1);
+  const ins2 = await insertCredential(db, {
+    id: 'cred-uv',
+    userId: first.id,
+    publicKey: 'pk2',
+    counter: 0,
+    transports: [],
+    aaguid: null,
+    backedUp: false,
+    userVerified: false,
+  });
+  ok('insertCredential returns false on a duplicate credential id (race → clean 409)', ins2 === false);
+  ok('...and does not overwrite the existing credential', (await credentialById(db, 'cred-uv')).public_key === 'pk');
+  const insUnverified = await insertCredential(db, {
+    id: 'cred-nouv',
+    userId: first.id,
+    publicKey: 'pk',
+    counter: 0,
+    transports: [],
+    aaguid: null,
+    backedUp: false,
+    userVerified: false,
+  });
+  ok(
+    'a non-UV enrollment persists user_verified = 0',
+    insUnverified === true && (await credentialById(db, 'cred-nouv')).user_verified === 0
+  );
+
+  // purgeUnverifiedUsers (A310): frees a squatted email held by a never-verified account past the TTL,
+  // while sparing verified accounts and fresh unverified ones.
+  const pdb = mockDb();
+  const now = Date.now();
+  await createUser(pdb, 'victim@example.com', now - UNVERIFIED_USER_TTL_MS - 1000); // old, unverified — the squatter
+  await createUser(pdb, 'new@example.com', now - 1000); // recent, unverified — spared
+  const legit = await createUser(pdb, 'legit@example.com', now - UNVERIFIED_USER_TTL_MS - 1000); // old but verified — spared
+  await setEmailVerified(pdb, legit.id);
+  const removed = await purgeUnverifiedUsers(pdb, now);
+  ok('purge removes exactly the aged never-verified squatter', removed === 1);
+  ok('...the squatted email is freed', (await userByEmail(pdb, 'victim@example.com')) == null);
+  ok('...a fresh unverified account is spared', (await userByEmail(pdb, 'new@example.com')) != null);
+  ok('...a verified account is spared regardless of age', (await userByEmail(pdb, 'legit@example.com')) != null);
+}
+
+console.log('\nSession revocation + absolute cap + passkey delete (A302):');
+{
+  const db = mockDb();
+  const user = await createUser(db, 'revoke@example.com');
+  const seedCred = (uid, id) =>
+    insertCredential(db, {
+      id,
+      userId: uid,
+      publicKey: 'pk',
+      counter: 0,
+      transports: [],
+      aaguid: null,
+      backedUp: true,
+      userVerified: true,
+    });
+  const lookup = t => sessionFromRequest(req('/api/me', { method: 'GET', cookie: cookieFor(t) }), db);
+
+  // (1) absolute session cap — a session older than the cap from created_at is invalid even when its
+  //     sliding TTL is fresh (as if it had been slid forward on use the whole time).
+  const { token } = await createSession(db, user.id);
+  ok('a fresh session resolves', (await lookup(token))?.user_id === user.id);
+  const row = db.tables.sessions.find(s => s.user_id === user.id);
+  row.created_at = Date.now() - SESSION_ABSOLUTE_MAX_MS - 1000;
+  row.expires_at = Date.now() + 5 * DAY;
+  ok('a session past the 90-day absolute cap is rejected', (await lookup(token)) === null);
+  ok('...and the capped session row is reaped', !db.tables.sessions.some(s => s.user_id === user.id));
+
+  // (2) deleteSessionsForUser revokes every session (the recovery-revocation primitive).
+  await createSession(db, user.id);
+  await createSession(db, user.id);
+  ok('two live sessions exist', db.tables.sessions.filter(s => s.user_id === user.id).length === 2);
+  await deleteSessionsForUser(db, user.id);
+  ok('deleteSessionsForUser revokes them all', db.tables.sessions.filter(s => s.user_id === user.id).length === 0);
+
+  // (3) passkey-delete — session-authed, Origin-checked, fail-closed, scoped + last-credential guard.
+  const { token: sess } = await createSession(db, user.id);
+  await seedCred(user.id, 'cred-A');
+  ok(
+    'passkey-delete 503 without ACCOUNTS_DB',
+    (await passkeyDelete({ request: req('/api/account/passkey-delete', { cookie: cookieFor(sess), body: { id: 'cred-A' } }), env: {} }))
+      .status === 503
+  );
+  ok(
+    'passkey-delete 401 without a session',
+    (await passkeyDelete({ request: req('/api/account/passkey-delete', { body: { id: 'cred-A' } }), env: { ACCOUNTS_DB: db } })).status ===
+      401
+  );
+  ok(
+    'passkey-delete cross-origin → 403',
+    (
+      await passkeyDelete({
+        request: req('/api/account/passkey-delete', { origin: 'https://evil.example', cookie: cookieFor(sess), body: { id: 'cred-A' } }),
+        env: { ACCOUNTS_DB: db },
+      })
+    ).status === 403
+  );
+  const lastGuard = await passkeyDelete({
+    request: req('/api/account/passkey-delete', { cookie: cookieFor(sess), body: { id: 'cred-A' } }),
+    env: { ACCOUNTS_DB: db },
+  });
+  ok(
+    'refuses to delete the LAST passkey (400, still present)',
+    lastGuard.status === 400 && (await credentialsForUser(db, user.id)).length === 1
+  );
+  await seedCred(user.id, 'cred-B');
+  const okDel = await passkeyDelete({
+    request: req('/api/account/passkey-delete', { cookie: cookieFor(sess), body: { id: 'cred-A' } }),
+    env: { ACCOUNTS_DB: db },
+  });
+  ok('deletes a non-last passkey (200)', okDel.status === 200 && !db.tables.credentials.some(c => c.id === 'cred-A'));
+  ok(
+    '...leaving the remaining passkey',
+    db.tables.credentials.some(c => c.id === 'cred-B')
+  );
+  const other = await createUser(db, 'other302@example.com');
+  await seedCred(other.id, 'cred-OTHER');
+  const notMine = await passkeyDelete({
+    request: req('/api/account/passkey-delete', { cookie: cookieFor(sess), body: { id: 'cred-OTHER' } }),
+    env: { ACCOUNTS_DB: db },
+  });
+  ok(
+    "cannot delete another account's passkey (404, not removed)",
+    notMine.status === 404 && db.tables.credentials.some(c => c.id === 'cred-OTHER')
+  );
+  // deleteCredentialForUser is itself owner-scoped (0 rows for a mismatched user).
+  ok('deleteCredentialForUser is owner-scoped (0 for a foreign user)', (await deleteCredentialForUser(db, user.id, 'cred-OTHER')) === 0);
+
+  // (4) a recovery-originated register challenge is flagged so register-verify revokes prior sessions.
+  await putChallenge(db, { type: 'register', challenge: 'rec-chal', userId: user.id, email: user.email, recovery: true });
+  ok('recovery register challenge persists recovery = 1', db.tables.challenges.find(c => c.challenge === 'rec-chal').recovery === 1);
+  await putChallenge(db, { type: 'register', challenge: 'add-chal', userId: user.id, email: user.email });
+  ok(
+    'a normal add-passkey challenge is not flagged',
+    (db.tables.challenges.find(c => c.challenge === 'add-chal').recovery ?? null) === null
   );
 }
 

@@ -17,6 +17,14 @@
 -- `subscribers` + `changelog_sends`), the owner MUST re-run the
 -- `wrangler d1 execute ... --file=functions/schema.sql` command above against the bound database so
 -- the new tables exist in prod. Existing rows are untouched.
+--
+-- ⚠ FK-ON-EXISTING-TABLE CAVEAT (A305): the ON DELETE CASCADE foreign keys added to donations.user_id,
+-- recovery_tokens.user_id, and sync_records.workspace_id take effect on FRESH installs (this file). SQLite
+-- cannot ALTER an existing table to add a FK, so a LIVE DB keeps its FK-less tables until a manual
+-- rebuild (CREATE new → INSERT SELECT → DROP → RENAME). Until then, /api/account/delete's EXPLICIT
+-- deletes (below) are what guarantee no orphans — the endpoint never relies on the DB cascade alone, so
+-- it is correct with or without the FK migration. (D1 also requires `PRAGMA foreign_keys=ON` per
+-- connection for cascades to fire at all.)
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,                        -- crypto.randomUUID()
@@ -36,10 +44,14 @@ CREATE TABLE IF NOT EXISTS credentials (      -- one row per passkey
   transports TEXT,                            -- JSON array of AuthenticatorTransport strings
   aaguid TEXT,                                -- authenticator model (→ "iCloud Keychain" nickname later)
   backed_up INTEGER,                          -- multi-device credential synced to a cloud keychain
+  user_verified INTEGER,                      -- 1 = the authenticator performed user verification (biometric/PIN) at enrollment (A310)
   nickname TEXT,
   created_at INTEGER NOT NULL,
   last_used_at INTEGER
 );
+-- ⚠ EXISTING DEPLOYMENTS: `user_verified` (A310) was added after first release. SQLite cannot add a
+--   column via CREATE TABLE IF NOT EXISTS, so a live DB needs a one-time, run-once migration:
+--     npx wrangler d1 execute blotterbook-accounts --remote --command "ALTER TABLE credentials ADD COLUMN user_verified INTEGER"
 CREATE INDEX IF NOT EXISTS idx_credentials_user ON credentials (user_id);
 
 -- Sessions: opaque cookie token `id.secret` — only SHA-256(secret) is stored, so a DB leak
@@ -62,8 +74,11 @@ CREATE TABLE IF NOT EXISTS challenges (
   user_id TEXT,                               -- set when an authed user adds another passkey
   email TEXT,                                 -- pending registration email (server-held, not re-trusted from the client)
   challenge TEXT NOT NULL,                    -- the base64url challenge the authenticator must sign
+  recovery INTEGER,                           -- 1 = this register challenge came from account recovery → revoke prior sessions on verify (A302)
   expires_at INTEGER NOT NULL
 );
+-- ⚠ EXISTING DEPLOYMENTS: `recovery` (A302) was added after first release. One-time migration:
+--     npx wrangler d1 execute blotterbook-accounts --remote --command "ALTER TABLE challenges ADD COLUMN recovery INTEGER"
 CREATE INDEX IF NOT EXISTS idx_challenges_challenge ON challenges (challenge);
 CREATE INDEX IF NOT EXISTS idx_challenges_expires ON challenges (expires_at);
 
@@ -75,7 +90,7 @@ CREATE INDEX IF NOT EXISTS idx_challenges_expires ON challenges (expires_at);
 -- S25: identity + payment metadata only — never any trade data.
 CREATE TABLE IF NOT EXISTS donations (
   id TEXT PRIMARY KEY,                        -- Stripe event id ⇒ replay-safe dedupe (S11)
-  user_id TEXT,                               -- NULL until claimed by a VERIFIED matching email
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE, -- NULL until claimed; FK cascades on account delete (A305)
   email TEXT,                                 -- lowercased checkout email (the claim key)
   amount_cents INTEGER,
   currency TEXT,
@@ -93,7 +108,7 @@ CREATE INDEX IF NOT EXISTS idx_donations_user ON donations (user_id);
 --   purpose 'recover' → magic-link passkey RE-enrollment (issues fresh WebAuthn register options)
 CREATE TABLE IF NOT EXISTS recovery_tokens (
   id TEXT PRIMARY KEY,                        -- random public half of the token (lookup key)
-  user_id TEXT,                               -- nullable; set for both purposes today
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE, -- nullable; FK cascades on account delete (A305)
   email TEXT NOT NULL,                        -- lowercased target email
   purpose TEXT NOT NULL,                      -- 'verify' | 'recover'
   token_hash TEXT NOT NULL,                   -- base64url(SHA-256(secret half)) — secret never stored
@@ -142,6 +157,11 @@ CREATE TABLE IF NOT EXISTS changelog_sends (
 --     npx wrangler d1 execute blotterbook-accounts --remote --command "ALTER TABLE subscriptions ADD COLUMN past_due_since INTEGER"
 --   (grantsCloud falls back to `updated` for rows written before the column existed, so the app is
 --   safe to deploy before the migration runs; run it once, then re-apply this file for fresh installs.)
+-- ⚠ EXISTING DEPLOYMENTS: `last_event_created` (A303 — out-of-order guard) was likewise added after
+--   first release. Same one-time migration is required on a live DB:
+--     npx wrangler d1 execute blotterbook-accounts --remote --command "ALTER TABLE subscriptions ADD COLUMN last_event_created INTEGER"
+--   (provisionSubscription treats a NULL as "no prior event" and always applies, so it is safe to
+--   deploy before the migration runs.)
 CREATE TABLE IF NOT EXISTS subscriptions (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, -- the account's current subscription
   stripe_subscription_id TEXT,               -- Stripe subscription id (resolves lifecycle events)
@@ -149,7 +169,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   status TEXT,                               -- Stripe status: active|trialing|past_due|canceled|unpaid|…
   current_period_end INTEGER,                -- ms epoch — the paid period end (Stripe sends SECONDS; the webhook converts)
   updated INTEGER NOT NULL,                   -- ms epoch of the last webhook update
-  past_due_since INTEGER                      -- ms epoch of the FIRST failure of the current past_due run (grace base; NULL when not past_due — A266)
+  past_due_since INTEGER,                     -- ms epoch of the FIRST failure of the current past_due run (grace base; NULL when not past_due — A266)
+  last_event_created INTEGER                  -- Stripe event.created (SECONDS) of the last APPLIED lifecycle event — older deliveries are dropped (out-of-order guard, A303)
 );
 CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe ON subscriptions (stripe_subscription_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions (stripe_customer_id);
@@ -212,7 +233,7 @@ CREATE INDEX IF NOT EXISTS idx_sync_wrapped_ik_user ON sync_wrapped_ik (user_id)
 -- itself lives in R2 (SYNC_BUCKET) at ciphertext_ref — large records (encrypted screenshots) never sit
 -- in a D1 row. deleted flags a tombstone (the delete half of LWW). Upsert is LWW by `updated`.
 CREATE TABLE IF NOT EXISTS sync_records (
-  workspace_id TEXT NOT NULL,                 -- REFERENCES sync_workspaces(workspace_id) — authorized per request
+  workspace_id TEXT NOT NULL REFERENCES sync_workspaces(workspace_id) ON DELETE CASCADE, -- FK: dropping a workspace cascades its index rows (A305); R2 blobs still need deleteWorkspacePage — a D1 cascade can't reach R2
   blinded_id TEXT NOT NULL,                   -- HMAC(workspaceKey, tradeId), never the raw hash (S25)
   seq INTEGER NOT NULL,                       -- monotonic per-workspace sequence (pull cursor)
   type TEXT NOT NULL,                         -- opaque record-kind label (never inspected)

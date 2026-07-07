@@ -81,8 +81,13 @@ function mockDb() {
     }
     if ((m = s.match(/^INSERT INTO (\w+) \(([^)]+)\) VALUES/i))) {
       const cols = m[2].split(',').map(c => c.trim());
-      tables[m[1]].push(Object.fromEntries(cols.map((c, i) => [c, args[i] ?? null])));
-      return [];
+      const row = Object.fromEntries(cols.map((c, i) => [c, args[i] ?? null]));
+      // `ON CONFLICT(<col>) DO NOTHING` — skip when the key exists; report affected rows via .changes
+      // so run() can surface D1's meta.changes (A310 race-safe createUser/insertCredential).
+      const conflict = s.match(/ON CONFLICT\((\w+)\) DO NOTHING/i);
+      if (conflict && tables[m[1]].some(r => r[conflict[1]] === row[conflict[1]])) return Object.assign([], { changes: 0 });
+      tables[m[1]].push(row);
+      return Object.assign([], { changes: 1 });
     }
     if ((m = s.match(/^SELECT \* FROM (\w+) WHERE (.+?)(?: ORDER BY (\w+)( DESC)?)?(?: LIMIT (\d+))?$/i))) {
       const conds = parseConds(m[2]);
@@ -114,7 +119,10 @@ function mockDb() {
       const api = args => ({
         bind: (...a) => api(a),
         first: async () => exec(sql, args)[0] ?? null,
-        run: async () => exec(sql, args),
+        run: async () => {
+          const r = exec(sql, args);
+          return { meta: { changes: (r && r.changes) || 0 } };
+        },
         all: async () => ({ results: exec(sql, args) }),
       });
       return api([]);
