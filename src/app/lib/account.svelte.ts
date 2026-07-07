@@ -47,6 +47,9 @@ export const account = $state({
   available: true,
   user: null as AccountUser | null,
   passkeys: [] as AccountPasskey[],
+  /** storage tier from /api/me — 'cloud' once an active/grace subscription grants it, else 'local'.
+   *  Gates the cloud-sync setup UI: only a 'cloud' user can set up keys / sync (F60/A253). */
+  tier: 'local',
 });
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -83,9 +86,11 @@ export async function refreshSession(): Promise<void> {
     const me = await api<MeResponse>('/api/me');
     account.user = me.user ?? null;
     account.passkeys = me.passkeys ?? [];
+    account.tier = me.tier === 'cloud' ? 'cloud' : 'local';
   } catch (_) {
     account.user = null;
     account.passkeys = [];
+    account.tier = 'local';
   } finally {
     account.loaded = true;
   }
@@ -160,6 +165,17 @@ export function logout(): Promise<boolean> {
     await api('/api/account/logout', {});
     account.user = null;
     account.passkeys = [];
+    account.tier = 'local';
+  });
+}
+
+/** Start a cloud-tier subscription checkout, then redirect to Stripe. The same-origin session cookie
+ *  rides along, so /api/checkout stamps client_reference_id (and subscription metadata, #120) and the
+ *  webhook links the subscription to THIS account — the reliable path to the 'cloud' tier. */
+export function subscribe(): Promise<boolean> {
+  return ceremony(async () => {
+    const { url } = await api<{ url?: string }>('/api/checkout', { plan: 'subscription' });
+    if (typeof url === 'string' && url) window.location.href = url;
   });
 }
 
