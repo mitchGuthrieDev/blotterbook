@@ -5034,6 +5034,17 @@
       "completedDate": "2026-07-07",
       "partial": false,
       "doneNote": "DONE (2026-07-07, #119) — Composite ${type}:${id} tombstone key so a trade and its trademeta no longer collide (edited-trade deletes now propagate)."
+    },
+    {
+      "id": "A280",
+      "title": "(decision + build) Marketing nav: adopt shadcn-svelte navigation-menu (evaluate a Product/Company mega-menu) — the 21st.dev header-3 half",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "CANCELLED (2026-07-07, owner decision) — not building the marketing nav mega-menu / shadcn-svelte navigation-menu primitive; the existing flat header stays untouched for now. The A274 homepage refresh shipped without touching the header/nav. Re-file if a nav redesign is revisited."
     }
   ]
 }
