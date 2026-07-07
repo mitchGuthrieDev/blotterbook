@@ -58,7 +58,8 @@ export async function onRequestPost(ctx: Ctx) {
     userName: user.email,
     attestationType: 'none',
     excludeCredentials: existing.map(c => ({ id: c.id, transports: parseTransports(c.transports) as AuthenticatorTransportFuture[] })),
-    authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
+    // A310: UV required — the recovery-enrolled passkey is also a cloud-sync PRF key (UV-capable).
+    authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
   });
   // Bind the new-passkey challenge to the recovered user → register-verify enrolls it + starts a session.
   await putChallenge(db, { type: 'register', challenge: options.challenge, userId: user.id, email: user.email });

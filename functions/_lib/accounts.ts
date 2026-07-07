@@ -68,6 +68,7 @@ export interface CredentialRow {
   transports: string | null; // JSON array
   aaguid: string | null;
   backed_up: number | null;
+  user_verified: number | null; // 1 = UV performed at enrollment (A310)
   nickname: string | null;
   created_at: number;
   last_used_at: number | null;
@@ -243,7 +244,15 @@ export async function sessionFromRequest(request: Request, db: AccountsDb, now =
   return { ...row, expires_at: expiresAt, last_seen_at: now };
 }
 
-/** Delete the session row named by the request's cookie (logout). No-op on a bad token. */
+/** Delete the session row named by the request's cookie (logout). No-op on a bad token.
+ *
+ * DECISION (A310): this deletes by session id WITHOUT verifying the cookie's secret. That is
+ * intentional and safe — this is a REVOCATION-ONLY primitive, never an authentication one. The worst
+ * an attacker who guesses/knows only a session id (not the secret) can do is destroy that session,
+ * i.e. log its owner out — a denial of convenience, never an escalation. It cannot read data, mint a
+ * session, or authenticate as anyone (that path is sessionFromRequest, which DOES constant-time
+ * compare the secret hash). Keeping it secret-free lets logout succeed even from a partially-corrupt
+ * cookie. Do NOT reuse destroySession as an auth check. */
 export async function destroySession(request: Request, db: AccountsDb): Promise<void> {
   const token = readSessionToken(request);
   const id = token?.split('.')[0];
@@ -294,7 +303,10 @@ export async function userByEmail(db: AccountsDb, email: string) {
 export async function userById(db: AccountsDb, id: string) {
   return db.prepare('SELECT * FROM users WHERE id = ?').bind(id).first<UserRow>();
 }
-export async function createUser(db: AccountsDb, email: string, now = Date.now()): Promise<UserRow> {
+/** Create a user, race-safe (A310): the INSERT is `ON CONFLICT(email) DO NOTHING`, so a concurrent
+ *  double-registration of the same email can't 500 on the UNIQUE constraint. Returns the created row,
+ *  or `null` when the email was already taken (the caller maps that to a clean 409). */
+export async function createUser(db: AccountsDb, email: string, now = Date.now()): Promise<UserRow | null> {
   const row: UserRow = {
     id: crypto.randomUUID(),
     email,
@@ -304,8 +316,13 @@ export async function createUser(db: AccountsDb, email: string, now = Date.now()
     donation_total_cents: 0,
     stripe_customer_id: null,
   };
-  await db.prepare('INSERT INTO users (id, email, email_verified, created_at) VALUES (?, ?, ?, ?)').bind(row.id, row.email, 0, now).run();
-  return row;
+  const res = (await db
+    .prepare('INSERT INTO users (id, email, email_verified, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(email) DO NOTHING')
+    .bind(row.id, row.email, 0, now)
+    .run()) as { meta?: { changes?: number } } | undefined;
+  // changes === 1 → we inserted; 0 → a concurrent registration already claimed this email → null
+  // (the caller returns a clean 409 instead of an uncaught UNIQUE-constraint 500).
+  return (res?.meta?.changes ?? 0) > 0 ? row : null;
 }
 
 export async function credentialById(db: AccountsDb, id: string) {
@@ -315,17 +332,33 @@ export async function credentialsForUser(db: AccountsDb, userId: string): Promis
   const { results } = await db.prepare('SELECT * FROM credentials WHERE user_id = ? ORDER BY created_at').bind(userId).all<CredentialRow>();
   return results;
 }
+/** Insert a passkey credential, race-safe (A310): `ON CONFLICT(id) DO NOTHING` so a concurrent
+ *  double-verify of the same credential can't 500 on the PK. Returns `true` when THIS call inserted
+ *  the row, `false` when a concurrent verify already registered it (the caller returns a clean 409).
+ *  Persists `user_verified` (A310) — whether the authenticator performed UV at enrollment. */
 export async function insertCredential(
   db: AccountsDb,
-  c: { id: string; userId: string; publicKey: string; counter: number; transports: string[]; aaguid: string | null; backedUp: boolean },
+  c: {
+    id: string;
+    userId: string;
+    publicKey: string;
+    counter: number;
+    transports: string[];
+    aaguid: string | null;
+    backedUp: boolean;
+    userVerified: boolean;
+  },
   now = Date.now()
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const res = (await db
     .prepare(
-      'INSERT INTO credentials (id, user_id, public_key, counter, transports, aaguid, backed_up, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO credentials (id, user_id, public_key, counter, transports, aaguid, backed_up, user_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING'
     )
-    .bind(c.id, c.userId, c.publicKey, c.counter, JSON.stringify(c.transports), c.aaguid, c.backedUp ? 1 : 0, now)
-    .run();
+    .bind(c.id, c.userId, c.publicKey, c.counter, JSON.stringify(c.transports), c.aaguid, c.backedUp ? 1 : 0, c.userVerified ? 1 : 0, now)
+    .run()) as { meta?: { changes?: number } } | undefined;
+  // changes === 1 → this call inserted; 0 → a concurrent verify already registered this credential id
+  // (the caller returns a clean 409 instead of an uncaught PK-constraint 500).
+  return (res?.meta?.changes ?? 0) > 0;
 }
 export async function touchCredential(db: AccountsDb, id: string, counter: number, now = Date.now()): Promise<void> {
   await db.prepare('UPDATE credentials SET counter = ?, last_used_at = ? WHERE id = ?').bind(counter, now, id).run();
@@ -342,6 +375,33 @@ export function parseTransports(text: string | null): string[] {
 
 export async function setEmailVerified(db: AccountsDb, userId: string): Promise<void> {
   await db.prepare('UPDATE users SET email_verified = ? WHERE id = ?').bind(1, userId).run();
+}
+
+// A310 — never-verified-account squatting mitigation. An anonymous registration binds ANY email with
+// no proof of ownership (register-verify), yet recovery only emails VERIFIED addresses — so an attacker
+// who registers victim@x first permanently blocks the real victim from BOTH signup (409) and recovery
+// (silent no-send). This TTL is the age past which a never-verified account is considered an abandoned
+// shell eligible for purge, freeing its email. 30 days is comfortably longer than the email-verify
+// token TTL, so a real user who intends to verify has ample time.
+export const UNVERIFIED_USER_TTL_MS = 30 * 24 * 3600 * 1000;
+
+/**
+ * Purge never-verified accounts older than {@link UNVERIFIED_USER_TTL_MS}, freeing their squatted
+ * emails. The FK cascades (credentials/sessions/subscriptions/sync_* — ON DELETE CASCADE) clean the
+ * child rows. Returns the number of users removed.
+ *
+ * NOTE (A310): this is a bounded helper, deliberately NOT auto-wired to any request path — automatic
+ * deletion of a real (if unverified) user's account is a product-policy call, and cloud-synced R2
+ * blobs need the account-delete pager (A305) to clean fully, not a bare D1 cascade. It is provided for
+ * a manual/admin sweep. The complementary proven-ownership (magic-link) RECLAIM flow — letting the real
+ * owner take over a squatted email before the TTL elapses — remains unimplemented (see the audit).
+ */
+export async function purgeUnverifiedUsers(db: AccountsDb, now = Date.now()): Promise<number> {
+  const cutoff = now - UNVERIFIED_USER_TTL_MS;
+  const res = (await db.prepare('DELETE FROM users WHERE email_verified = 0 AND created_at < ?').bind(cutoff).run()) as
+    | { meta?: { changes?: number } }
+    | undefined;
+  return res?.meta?.changes ?? 0;
 }
 
 /* ---- donations (Phase 2 — F54) --------------------------------------------------------------

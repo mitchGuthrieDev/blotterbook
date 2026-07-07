@@ -57,7 +57,11 @@ export async function onRequestPost(ctx: Ctx) {
       expectedChallenge: pending.challenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
-      requireUserVerification: false, // UV 'preferred' at options time — presence is still required
+      // A310: require user verification at enrollment. Every Blotterbook passkey doubles as the
+      // cloud-sync PRF enrollment key (the vault derives the KEK from the authenticator's PRF), and PRF
+      // implies a UV-capable authenticator — so enforce UV on the (single) registration path rather
+      // than accepting a presence-only roaming key that could be used for takeover.
+      requireUserVerification: true,
     });
     if (v.verified) info = v.registrationInfo;
   } catch (_) {
@@ -74,10 +78,15 @@ export async function onRequestPost(ctx: Ctx) {
     const email = (pending.email ?? '').toLowerCase();
     if (!email) return json({ error: 'This registration attempt is no longer valid — start over.' }, 400);
     if (await userByEmail(db, email)) return json({ error: 'An account with that email already exists — log in instead.' }, 409);
+    // A310: createUser is INSERT ... ON CONFLICT(email) DO NOTHING and returns null when a concurrent
+    // double-verify already claimed the email — a clean 409 instead of an uncaught UNIQUE-constraint 500.
     user = await createUser(db, email);
+    if (!user) return json({ error: 'An account with that email already exists — log in instead.' }, 409);
   }
 
-  await insertCredential(db, {
+  // A310: insertCredential is INSERT ... ON CONFLICT(id) DO NOTHING and returns false when a concurrent
+  // verify already registered this credential — a clean 409 instead of an uncaught PK-constraint 500.
+  const inserted = await insertCredential(db, {
     id: info.credential.id,
     userId: user.id,
     publicKey: b64u(info.credential.publicKey),
@@ -85,7 +94,9 @@ export async function onRequestPost(ctx: Ctx) {
     transports: info.credential.transports ?? [],
     aaguid: info.aaguid || null,
     backedUp: info.credentialBackedUp,
+    userVerified: info.userVerified,
   });
+  if (!inserted) return json({ error: 'That passkey is already registered.' }, 409);
 
   const { token } = await createSession(db, user.id);
   return json({ ok: true, user: publicUser(user) }, 200, { 'Set-Cookie': sessionSetCookie(token) });

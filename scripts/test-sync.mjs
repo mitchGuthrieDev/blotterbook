@@ -54,6 +54,9 @@ function mockDb() {
     '<=': (a, b) => a <= b,
   };
   const matches = (row, conds, args, off) => conds.every((c, i) => cmp[c.op](row[c.col], args[off + i]));
+  // A write result carrying the affected-row count (empty rows array tagged with `.changes`), so run()
+  // can surface D1's meta.changes (A310 race-safe createUser/insertCredential read it).
+  const changed = n => Object.assign([], { changes: n });
   // The atomic MAX(seq)+1 the write statement computes in-SQL (A261) — evaluated here so the mock
   // mirrors the real single-statement seq assignment.
   const nextSeq = ws => tables.sync_records.filter(r => r.workspace_id === ws).reduce((mx, r) => Math.max(mx, r.seq), 0) + 1;
@@ -92,9 +95,9 @@ function mockDb() {
       // `ON CONFLICT(<col>) DO NOTHING` — first-writer-wins: skip when a row with that key already
       // exists (A304 relies on this for the wrapped-DEK register).
       const conflict = s.match(/ON CONFLICT\((\w+)\) DO NOTHING/i);
-      if (conflict && tables[m[1]].some(r => r[conflict[1]] === row[conflict[1]])) return [];
+      if (conflict && tables[m[1]].some(r => r[conflict[1]] === row[conflict[1]])) return changed(0);
       tables[m[1]].push(row);
-      return [];
+      return changed(1);
     }
     if ((m = s.match(/^SELECT \* FROM (\w+) WHERE (.+?)(?: ORDER BY (\w+)( DESC)?)?(?: LIMIT (\d+))?$/i))) {
       const conds = parseConds(m[2]);
@@ -126,7 +129,10 @@ function mockDb() {
       const api = args => ({
         bind: (...a) => api(a),
         first: async () => exec(sql, args)[0] ?? null,
-        run: async () => exec(sql, args),
+        run: async () => {
+          const r = exec(sql, args);
+          return { meta: { changes: (r && r.changes) || 0 } };
+        },
         all: async () => ({ results: exec(sql, args) }),
       });
       return api([]);

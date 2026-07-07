@@ -19,6 +19,9 @@ import {
   sha256b64u,
   createUser,
   insertCredential,
+  credentialById,
+  purgeUnverifiedUsers,
+  UNVERIFIED_USER_TTL_MS,
   createRecoveryToken,
   consumeRecoveryToken,
   donationById,
@@ -74,6 +77,9 @@ function mockDb() {
     const conds = clause.split(/ AND /i).map(c => c.trim().match(/^(\w+) = \?$/)[1]);
     return rows.filter(r => conds.every((col, i) => r[col] === args[offset + i]));
   };
+  // A write result carrying the affected-row count (as an empty rows array with a `.changes` tag), so
+  // run() can surface D1's meta.changes while first()/all() still see an empty result set.
+  const changed = n => Object.assign([], { changes: n });
   const exec = (sql, args) => {
     const s = sql.trim().replace(/\s+/g, ' ');
     let m;
@@ -81,11 +87,16 @@ function mockDb() {
       const cols = m[2].split(',').map(c => c.trim());
       const row = Object.fromEntries(cols.map((c, i) => [c, args[i] ?? null]));
       const t = tables[m[1]];
+      // `ON CONFLICT(<col>) DO NOTHING` — first-writer-wins: skip silently when a row with that key
+      // already exists (A304 wrapped-DEK register; A310 race-safe createUser/insertCredential). Report
+      // 0 rows changed so the caller can detect the loser (mirrors D1's meta.changes).
+      const conflict = s.match(/ON CONFLICT\((\w+)\) DO NOTHING/i);
+      if (conflict && t.some(r => r[conflict[1]] === row[conflict[1]])) return changed(0);
       // Only enforce the `id` PK when the table actually has one (subscriptions is keyed by user_id).
       if (row.id !== undefined && t.some(r => r.id === row.id)) throw new Error(`UNIQUE constraint failed: ${m[1]}.id`);
       if (m[1] === 'users' && t.some(r => r.email === row.email)) throw new Error('UNIQUE constraint failed: users.email');
       t.push(row);
-      return [];
+      return changed(1);
     }
     if ((m = s.match(/^SELECT \* FROM (\w+) WHERE (.+?)(?: ORDER BY .+)?$/i))) return where(tables[m[1]], m[2], args);
     // Generalized to any single-column key (`WHERE <col> = ?`) — `id` still matches (F60 upserts by user_id).
@@ -95,6 +106,12 @@ function mockDb() {
       const row = tables[m[1]].find(r => r[keyCol] === args[cols.length]);
       if (row) cols.forEach((c, i) => (row[c] = args[i]));
       return [];
+    }
+    if ((m = s.match(/^DELETE FROM (\w+) WHERE email_verified = 0 AND created_at < \?$/i))) {
+      // A310 never-verified-account purge (purgeUnverifiedUsers) — reports the affected count.
+      const before = tables[m[1]].length;
+      tables[m[1]] = tables[m[1]].filter(r => !(r.email_verified === 0 && r.created_at < args[0]));
+      return changed(before - tables[m[1]].length);
     }
     if ((m = s.match(/^DELETE FROM (\w+) WHERE (\w+) < \?$/i))) {
       // TTL sweeps: challenges/recovery by expires_at, webhook_events by created_at (A265).
@@ -113,7 +130,10 @@ function mockDb() {
       const api = args => ({
         bind: (...a) => api(a),
         first: async () => exec(sql, args)[0] ?? null,
-        run: async () => exec(sql, args),
+        run: async () => {
+          const r = exec(sql, args);
+          return { meta: { changes: (r && r.changes) || 0 } };
+        },
         all: async () => ({ results: exec(sql, args) }),
       });
       return api([]);
@@ -366,6 +386,7 @@ console.log('\n/api/me shapes + logout:');
     transports: ['internal'],
     aaguid: 'aa',
     backedUp: true,
+    userVerified: true,
   });
   const { token } = await createSession(db, user.id);
   const me = await meGet({ request: req('/api/me', { method: 'GET', cookie: cookieFor(token) }), env });
@@ -977,6 +998,68 @@ console.log('\nwebhook_events dedupe ledger — sweep-on-write bounds growth (A2
     'an in-window event is NOT swept',
     db.tables.webhook_events.every(r => r.id !== 'evt_old') && db.tables.webhook_events.some(r => r.id === 'evt_new')
   );
+}
+
+console.log('\nAuth hardening (A310) — race-safe createUser/insertCredential + user_verified persistence:');
+{
+  const db = mockDb();
+  // createUser is race-safe: first wins (returns the row), a duplicate email returns null (clean 409).
+  const first = await createUser(db, 'race@example.com');
+  ok('createUser returns the created row on first insert', first != null && first.email === 'race@example.com');
+  const second = await createUser(db, 'race@example.com');
+  ok('createUser returns null when the email is already taken (race → clean 409)', second === null);
+  ok('...and no duplicate user row is written', db.tables.users.filter(u => u.email === 'race@example.com').length === 1);
+
+  // insertCredential is race-safe + persists user_verified.
+  const ins1 = await insertCredential(db, {
+    id: 'cred-uv',
+    userId: first.id,
+    publicKey: 'pk',
+    counter: 0,
+    transports: ['internal'],
+    aaguid: null,
+    backedUp: true,
+    userVerified: true,
+  });
+  ok('insertCredential returns true when it inserts the credential', ins1 === true);
+  ok('...and persists user_verified = 1', (await credentialById(db, 'cred-uv')).user_verified === 1);
+  const ins2 = await insertCredential(db, {
+    id: 'cred-uv',
+    userId: first.id,
+    publicKey: 'pk2',
+    counter: 0,
+    transports: [],
+    aaguid: null,
+    backedUp: false,
+    userVerified: false,
+  });
+  ok('insertCredential returns false on a duplicate credential id (race → clean 409)', ins2 === false);
+  ok('...and does not overwrite the existing credential', (await credentialById(db, 'cred-uv')).public_key === 'pk');
+  const insUnverified = await insertCredential(db, {
+    id: 'cred-nouv',
+    userId: first.id,
+    publicKey: 'pk',
+    counter: 0,
+    transports: [],
+    aaguid: null,
+    backedUp: false,
+    userVerified: false,
+  });
+  ok('a non-UV enrollment persists user_verified = 0', insUnverified === true && (await credentialById(db, 'cred-nouv')).user_verified === 0);
+
+  // purgeUnverifiedUsers (A310): frees a squatted email held by a never-verified account past the TTL,
+  // while sparing verified accounts and fresh unverified ones.
+  const pdb = mockDb();
+  const now = Date.now();
+  await createUser(pdb, 'victim@example.com', now - UNVERIFIED_USER_TTL_MS - 1000); // old, unverified — the squatter
+  await createUser(pdb, 'new@example.com', now - 1000); // recent, unverified — spared
+  const legit = await createUser(pdb, 'legit@example.com', now - UNVERIFIED_USER_TTL_MS - 1000); // old but verified — spared
+  await setEmailVerified(pdb, legit.id);
+  const removed = await purgeUnverifiedUsers(pdb, now);
+  ok('purge removes exactly the aged never-verified squatter', removed === 1);
+  ok('...the squatted email is freed', (await userByEmail(pdb, 'victim@example.com')) == null);
+  ok('...a fresh unverified account is spared', (await userByEmail(pdb, 'new@example.com')) != null);
+  ok('...a verified account is spared regardless of age', (await userByEmail(pdb, 'legit@example.com')) != null);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

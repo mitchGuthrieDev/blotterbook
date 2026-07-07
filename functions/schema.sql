@@ -36,10 +36,14 @@ CREATE TABLE IF NOT EXISTS credentials (      -- one row per passkey
   transports TEXT,                            -- JSON array of AuthenticatorTransport strings
   aaguid TEXT,                                -- authenticator model (→ "iCloud Keychain" nickname later)
   backed_up INTEGER,                          -- multi-device credential synced to a cloud keychain
+  user_verified INTEGER,                      -- 1 = the authenticator performed user verification (biometric/PIN) at enrollment (A310)
   nickname TEXT,
   created_at INTEGER NOT NULL,
   last_used_at INTEGER
 );
+-- ⚠ EXISTING DEPLOYMENTS: `user_verified` (A310) was added after first release. SQLite cannot add a
+--   column via CREATE TABLE IF NOT EXISTS, so a live DB needs a one-time, run-once migration:
+--     npx wrangler d1 execute blotterbook-accounts --remote --command "ALTER TABLE credentials ADD COLUMN user_verified INTEGER"
 CREATE INDEX IF NOT EXISTS idx_credentials_user ON credentials (user_id);
 
 -- Sessions: opaque cookie token `id.secret` — only SHA-256(secret) is stored, so a DB leak
