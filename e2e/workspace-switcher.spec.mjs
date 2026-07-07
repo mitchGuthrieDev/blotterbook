@@ -213,7 +213,12 @@ test('workspace switcher: shows a neutral "checking…" while the tier probe is 
       body: JSON.stringify({ tier: 'cloud', cloudSync: true, user: null, passkeys: [] }),
     });
   });
-  await bootDashboard(page);
+  // Boot WITHOUT waiting for network idle — `networkidle` would block on the held /api/me above, so by
+  // the time the menu opened the probe would already have resolved (tier='cloud') and the transient
+  // 'checking' window would be gone. The dashboard renders off the local Store, independent of the probe.
+  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
+  await page.goto(STAGING, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
   await trigger(page).click();
   await expect(page.getByTestId('sync-checking')).toBeVisible();
   await expect(page.getByText('cloud tier required')).toHaveCount(0);

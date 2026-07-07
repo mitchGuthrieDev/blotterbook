@@ -207,7 +207,9 @@ test('cloud sync (staging): A279/A299 state machine — enable → synced, contr
 }) => {
   test.setTimeout(90_000);
   installStubs(page); // /api/me (cloud) + the wrapped-IK blob store
-  const sync = installSyncTransport(page, { pushDelayMs: 1200 }); // slow push so 'pending' is observable
+  // Push starts INSTANT so the initial full reconcile (12-record batches over the seeded staging data,
+  // A253) settles fast; the delay is turned on only around the 'pending' observation below.
+  const sync = installSyncTransport(page, { pushDelayMs: 0 });
   await bootStaging(page);
   await setupAndUnlock(page);
 
@@ -239,7 +241,9 @@ test('cloud sync (staging): A279/A299 state machine — enable → synced, contr
   await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
 
   // A279 PENDING: a local write (a journal note) marks the workspace "pending upload" until the
-  // (slow) debounced push reaches the server, then settles back to 'synced'.
+  // (slow) debounced push reaches the server, then settles back to 'synced'. Slow the push down NOW
+  // (a single-record batch) so 'pending' is observable — the initial full reconcile above ran instant.
+  sync.pushDelayMs = 1200;
   await gotoScreen(page, 'Calendar');
   await page.locator('button:has(span.text-chart-2), button:has(span.text-destructive)').first().click();
   await expect(page.getByText('Journal note')).toBeVisible();
@@ -248,6 +252,7 @@ test('cloud sync (staging): A279/A299 state machine — enable → synced, contr
   await gotoAccount(page);
   await expect(panelPill).toHaveAttribute('data-status', 'pending', { timeout: 4000 });
   await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+  sync.pushDelayMs = 0; // Resume below does a full re-push — keep it instant so it settles fast.
 
   // PAUSE → the pill reads 'paused' (distinct from never-synced) and a Resume control appears.
   await page.getByTestId('cloud-pause').click();

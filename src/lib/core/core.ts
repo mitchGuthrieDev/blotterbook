@@ -105,7 +105,7 @@ export const PAGE_MODE = (typeof document !== 'undefined' && document.body && do
    app:ready, refdata:loaded, data:loaded, data:imported, note:saved,
    trade:deleted, backup:created, data:erased.
    ------------------------------------------------------------------ */
-export const BUS = new EventTarget();
+const BUS = new EventTarget(); // A314: module-private — only emit()/on() below use it, no external readers
 // A188: a small replay buffer — the boot events (app:ready, refdata:loaded, data:loaded) fire
 // BEFORE the Dashboard's ActivityTerminal mounts, and an EventTarget keeps no history, so the
 // terminal always looked dead. emit() records the last 50 events with a wall-clock stamp; a late
@@ -646,12 +646,12 @@ export const expiryCode = (e: ContractExpiry) => `${e.code}${pad2(e.year % 100)}
 export let EXCH: Record<string, number> = {}; // root -> exchange/clearing/NFA $ per side
 export let MICRO = new Set<string>(); // roots priced at the micro tier
 export let NOT_MICRO = new Set<string>(); // full-size roots the M-prefix heuristic would misprice (A171)
-export let EXCH_FALLBACK = { micro: 0.37, std: 1.5 };
+let EXCH_FALLBACK = { micro: 0.37, std: 1.5 }; // A314: module-private (loadRefData mutates it; no external readers)
 // F30: effective-dated fee periods (oldest first). Each entry holds the values that applied to
 // trades ON OR BEFORE its `until`; a root absent from an entry falls through to the next-newer
 // period and finally the current EXCH map. CME adjusts these roughly every February — the
 // documented changes live in exchange-fees.json `history` with citations.
-export let EXCH_HISTORY: FeeHistoryEntry[] = [];
+let EXCH_HISTORY: FeeHistoryEntry[] = []; // A314: module-private (loadRefData mutates it; no external readers)
 export let BROKERS: Record<string, Broker> = {}; // key -> {name, comm:{micro,std}}
 export let BROKER_ORDER: string[] = [];
 export let BROKER_FEEDS: Record<string, FeedGroups> = {}; // key -> {group: [[label,$/mo],...]}

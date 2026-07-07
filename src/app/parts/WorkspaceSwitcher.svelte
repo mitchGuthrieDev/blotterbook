@@ -143,7 +143,13 @@
   }
 </script>
 
-<DropdownMenu.Root onOpenChange={o => o && void refreshCloud()}>
+<DropdownMenu.Root
+  onOpenChange={o => {
+    if (!o) return;
+    refreshSyncStatus(); // keep the sync row current (e.g. after a first-time setup unlocked the IK elsewhere)
+    void refreshCloud();
+  }}
+>
   {#if collapsed}
     <!-- Icon-only trigger (desktop icon rail) — ambiguous without a label, so wrap it in a tooltip
          naming the active workspace (IconTip convention for icon-only controls). -->

@@ -596,7 +596,13 @@
         </Card.Content>
       </Card.Root>
 
-      <CloudSyncSetup bind:open={setupOpen} ondone={() => void refreshVault()} />
+      <CloudSyncSetup
+        bind:open={setupOpen}
+        ondone={() => {
+          void refreshVault();
+          onSyncUnlocked(); // first-time setup unlocks the IK too — refresh the shared sync status
+        }}
+      />
       <!-- A257: converge the controller's status when the vault is unlocked FROM this screen (matches
            WorkspaceSwitcher) — otherwise cloudSync.status stays stuck at 'locked'. -->
       <UnlockModal bind:open={unlockOpen} onunlocked={() => onSyncUnlocked()} />
