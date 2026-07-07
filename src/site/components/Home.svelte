@@ -292,7 +292,7 @@
       >
         <aside class="flex flex-col gap-[3px] border-r border-border bg-card p-3 max-[820px]:hidden" aria-hidden="true">
           <div class="flex items-center gap-2 px-[6px] pb-3 pt-1 text-[12.5px] font-semibold">
-            <span class="h-2 w-2 flex-none rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--chart-3))]"></span>Acme Trading
+            <span class="h-2 w-2 flex-none rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--chart-3))]"></span>Blotterbook
           </div>
           <span class="dnav on"
             ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -551,7 +551,7 @@
     >
       <li>
         <a
-          class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-tradingview"
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
@@ -563,7 +563,7 @@
       </li>
       <li>
         <a
-          class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-tradovate"
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
@@ -575,7 +575,7 @@
       </li>
       <li>
         <a
-          class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-quantower"
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
@@ -587,7 +587,7 @@
       </li>
       <li>
         <a
-          class="plat verified flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-atas"
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
@@ -599,7 +599,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-rithmic"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Rithmic R|Trader</b
@@ -608,7 +608,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-sierrachart"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Sierra Chart</b
@@ -617,7 +617,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-tradestation"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">TradeStation</b
@@ -626,7 +626,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-motivewave"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">MotiveWave</b
@@ -635,7 +635,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-webull"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Webull</b
@@ -644,7 +644,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-ibkr"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Interactive Brokers</b
@@ -653,7 +653,7 @@
       </li>
       <li>
         <a
-          class="plat flex w-full items-center gap-[11px] rounded-[12px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
+          class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
           href="howto.html#imp-schwab"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Schwab / thinkorswim</b
@@ -761,15 +761,19 @@
           </li>
         </ul>
         <div class="mt-auto flex flex-col gap-2">
+          <p class="text-[11px] leading-[1.4] text-muted-foreground">
+            A voluntary, non-refundable donation — not a purchase, and it grants no product access or entitlement.
+            <a href="legal.html#donations">See donation terms</a>.
+          </p>
           {#if DONATION_LINKS.once25}
             <a
-              class="inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
+              class="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
               href={DONATION_LINKS.once25}
               target="_blank"
               rel="noopener noreferrer">Back with $25 &rarr;</a
             >
           {:else}
-            <p class="text-[12px] leading-[1.5] text-muted-foreground">$25 one-time — donations open soon via Stripe.</p>
+            <p class="mt-auto text-[12px] leading-[1.5] text-muted-foreground">$25 one-time — donations open soon via Stripe.</p>
           {/if}
           {#if DONATION_LINKS.tier50}
             <a
@@ -779,10 +783,6 @@
               rel="noopener noreferrer">Back with $50 &rarr;</a
             >
           {/if}
-          <p class="text-[11px] leading-[1.4] text-muted-foreground">
-            A voluntary, non-refundable donation — not a purchase, and it grants no product access or entitlement.
-            <a href="legal.html#donations">See donation terms</a>.
-          </p>
         </div>
       </div>
 
@@ -822,11 +822,11 @@
           </li>
         </ul>
         <div class="mt-auto flex flex-col gap-2">
+          <p class="text-[11px] leading-[1.4] text-muted-foreground">Launch the app, sign in, and subscribe from your account.</p>
           <a
-            class="inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
+            class="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
             href="/app/#account">Get cloud sync in the app &rarr;</a
           >
-          <p class="text-[11px] leading-[1.4] text-muted-foreground">Launch the app, sign in, and subscribe from your account.</p>
         </div>
       </div>
     </div>
@@ -846,7 +846,7 @@
     <div class="faq-list mt-[30px] max-w-[840px] border-t border-border">
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -863,7 +863,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -881,7 +881,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -897,7 +897,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -913,7 +913,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -929,7 +929,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -945,7 +945,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
@@ -961,7 +961,7 @@
       </details>
       <details class="border-b border-border">
         <summary
-          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium text-foreground transition-colors duration-150 hover:text-white [&::-webkit-details-marker]:hidden"
+          class="flex cursor-pointer list-none items-center gap-[14px] px-1 py-5 text-[15.5px] font-medium rounded-[8px] text-foreground transition-colors duration-150 hover:bg-secondary/40 [&::-webkit-details-marker]:hidden"
           ><svg
             class="q-ico h-[18px] w-[18px] flex-none fill-none stroke-primary stroke-2 [stroke-linecap:round] transition-transform duration-[250ms]"
             viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg
