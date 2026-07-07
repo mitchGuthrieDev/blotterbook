@@ -406,6 +406,55 @@ console.log('\nnotify-changelog — deploy-freshness gate (?version=):');
   }
 }
 
+console.log('\nnotify-changelog — PUBLIC_ORIGIN brands user-facing links (A315, pages.dev routing):');
+{
+  const f = installFetch();
+  try {
+    const db = mockDb();
+    const { confirmToken } = await createSubscriber(db, 'branded@list.co');
+    await confirmSubscriber(db, confirmToken);
+
+    // Simulates the workflow invoking the Function at the bare pages.dev origin while
+    // PUBLIC_ORIGIN (a Pages env var) points at the branded custom domain.
+    const PAGES_DEV = 'https://blotterbook-abc.pages.dev';
+    const env = { ACCOUNTS_DB: db, ...RESEND_ENV, CHANGELOG_NOTIFY_SECRET: 'sekret', PUBLIC_ORIGIN: 'https://blotterbook.com' };
+    const r = await notify({
+      request: new Request(`${PAGES_DEV}/api/notify-changelog`, {
+        method: 'POST',
+        headers: { 'x-changelog-secret': 'sekret' },
+      }),
+      env,
+    });
+    ok('send succeeds when invoked at the pages.dev origin', r.status === 200);
+    const msg = f.sent.batch[0][0];
+    ok('unsubscribe link uses PUBLIC_ORIGIN, not the invoking pages.dev origin', msg.html.includes('https://blotterbook.com/api/unsubscribe?token='));
+    ok('...never leaks the pages.dev host into the link', !msg.html.includes('pages.dev'));
+    ok(
+      '...List-Unsubscribe header matches',
+      msg.headers['List-Unsubscribe'].startsWith('<https://blotterbook.com/api/unsubscribe?token=')
+    );
+  } finally {
+    f.restore();
+  }
+}
+
+console.log('\nnotify-changelog — PUBLIC_ORIGIN unset falls back to the request origin (unchanged behavior):');
+{
+  const f = installFetch();
+  try {
+    const db = mockDb();
+    const { confirmToken } = await createSubscriber(db, 'fallback@list.co');
+    await confirmSubscriber(db, confirmToken);
+    const env = { ACCOUNTS_DB: db, ...RESEND_ENV, CHANGELOG_NOTIFY_SECRET: 'sekret' }; // no PUBLIC_ORIGIN
+    const r = await notifyReq(env, 'sekret')();
+    ok('send succeeds', r.status === 200);
+    const msg = f.sent.batch[0][0];
+    ok('unsubscribe link falls back to the request origin', msg.html.includes(`${ORIGIN}/api/unsubscribe?token=`));
+  } finally {
+    f.restore();
+  }
+}
+
 console.log('\nnotify-changelog — 0 recipients still ledgers; fail-closed shapes:');
 {
   const f = installFetch();

@@ -43,6 +43,14 @@ export interface Env {
    *  Turnstile is skipped entirely (defense-in-depth only, S22 — the double opt-in + confirmed-only
    *  send rule are the real invariants, never this). */
   TURNSTILE_SECRET?: string;
+  /** Canonical user-facing origin (e.g. `https://blotterbook.com`), A315. The changelog-email send
+   *  trigger invokes /api/notify-changelog at the bare `<project>.pages.dev` origin (that hostname is
+   *  Cloudflare's own zone, so custom-domain Bot Fight Mode doesn't challenge the runner) — without
+   *  this override, links built from the request origin would leak the pages.dev host into a
+   *  subscriber's inbox. Set on the `blotterbook.com` Pages env so user-facing links (currently: the
+   *  unsubscribe URL) stay branded regardless of which origin invoked the Function. Unset → falls back
+   *  to the request origin (unchanged behavior). */
+  PUBLIC_ORIGIN?: string;
 }
 
 export type Ctx = EventContext<Env, string, Record<string, unknown>>;

@@ -15,6 +15,15 @@
  * Fail closed: 503 when CHANGELOG_NOTIFY_SECRET is unbound (endpoint disabled); 401 on a bad secret;
  * 503 (ACCOUNTS_DB shape) when the DB is unbound; 503 { error:'email unavailable' } when RESEND is
  * unbound. Content is changelog text only — never trade data (A141).
+ *
+ * A315: the send trigger invokes this endpoint at the bare `<project>.pages.dev` origin, not
+ * `blotterbook.com` — that hostname is Cloudflare's own zone, so the custom domain's Bot Fight Mode /
+ * Managed Challenge never sees the request. The internal changelog.json read below stays on the
+ * REQUEST origin (it's the same deployment either way). User-facing links must NOT follow — they use
+ * `env.PUBLIC_ORIGIN` when set (falls back to the request origin otherwise) so a subscriber's inbox
+ * always shows blotterbook.com, never the pages.dev host. `releaseEmail()`'s "full changelog" link is
+ * already hardcoded to https://blotterbook.com/changelog.html; only the unsubscribe URL is derived
+ * here, so it's the only link this env var affects.
  */
 import { json } from '../_lib/http.ts';
 import type { Ctx } from '../_lib/types.ts';
@@ -44,7 +53,8 @@ export async function onRequestPost(ctx: Ctx) {
   if (!env.RESEND_API_KEY) return emailUnavailable();
 
   // --- load the changelog + take the top prod release ---
-  const origin = new URL(request.url).origin;
+  const origin = new URL(request.url).origin; // internal fetch — same deployment regardless of host
+  const publicOrigin = env.PUBLIC_ORIGIN || origin; // user-facing links — always the branded origin
   let release: ReleaseJson | null;
   try {
     const res = await fetch(`${origin}/data/changelog.json`, { headers: { Accept: 'application/json' } });
@@ -75,7 +85,7 @@ export async function onRequestPost(ctx: Ctx) {
   const messages: BatchMessage[] = [];
   for (const sub of recipients) {
     const unsubToken = await rotateUnsubToken(db, sub); // fresh working one-click secret for this send
-    const unsubUrl = `${origin}/api/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
+    const unsubUrl = `${publicOrigin}/api/unsubscribe?token=${encodeURIComponent(unsubToken)}`;
     const { subject, html, text } = releaseEmail(release, unsubUrl);
     messages.push({
       to: sub.email,
