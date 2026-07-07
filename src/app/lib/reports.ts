@@ -7,6 +7,8 @@ import {
   compute,
   costModel,
   estimatedCommRoots,
+  advStatVals,
+  costLineVals,
   usd,
   money,
   num,
@@ -134,10 +136,11 @@ export function buildReportVM(
 
   const totalCost = c.totalComm + c.fixedPeriod;
   const estRoots = estimatedCommRoots(c);
+  const cv = costLineVals(c); // A288: single-sourced cost-line values (labels stay surface-specific)
   const costRows: [string, string, boolean][] = [
-    ['Gross P&L', usd(c.gross), false],
-    [`Commissions (all-in)${estRoots.length ? ' *' : ''}`, usd(-c.totalComm), false],
-    [`Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, usd(-c.fixedPeriod), false],
+    ['Gross P&L', cv.gross, false],
+    [`Commissions (all-in)${estRoots.length ? ' *' : ''}`, cv.commissions, false],
+    [`Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, cv.subscriptions, false],
     ['Total costs', usd(-totalCost), true],
   ];
   // A172: 'Net P&L (pre-tax)', not 'Net §1256 gain' — the base is net of subscriptions, which don't
@@ -148,13 +151,14 @@ export function buildReportVM(
     ['Est. 1256 tax (profit only)', usd(-c.tax), false],
     ['Est. take-home', usd(c.afterTax), true],
   ];
+  const av = advStatVals(m); // A289: single-sourced stat values (labels stay surface-specific)
   const advRows: [string, string][] = [
-    ['Payoff ratio', ratio(m.wl)],
-    ['Sortino', num(m.sortino)],
-    ['Recovery factor', ratio(m.recovery)],
-    ['Profit concentration', m.concPct == null ? '—' : `${Math.round(m.concPct)}%`],
-    ['Max consec. wins', `${m.mcw}`],
-    ['Max consec. losses', `${m.mcl}`],
+    ['Payoff ratio', av.payoff],
+    ['Sortino', av.sortino],
+    ['Recovery factor', av.recovery],
+    ['Profit concentration', av.concentration],
+    ['Max consec. wins', av.maxConsecWins],
+    ['Max consec. losses', av.maxConsecLosses],
   ];
 
   const rep = buildReport(m, c, {

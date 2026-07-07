@@ -15,6 +15,8 @@
     ratio,
     rateFor,
     feeForTrade,
+    advStatVals,
+    costLineVals,
     BROKERS,
     BROKER_ORDER,
     estimatedCommRoots,
@@ -259,6 +261,8 @@
   function statDetail(key: string): StatDetail {
     const m = dash.metricsActive;
     const c = dash.cost;
+    const cv = costLineVals(c); // A288/A289: single-sourced cost + stat values (labels kept local)
+    const av = advStatVals(m);
     const bar = (
       label: string,
       v: number,
@@ -282,9 +286,9 @@
           desc: 'Realized P&L as imported — before modeled costs. The waterfall below applies commissions, subscriptions and estimated Section 1256 tax.',
           bars: [bar('Gross', c.gross, mx, 'pos'), bar('Net (pre-tax)', c.netPreTax, mx, 'pos'), bar('Take-home', c.afterTax, mx, 'muted')],
           rows: [
-            { label: 'Gross P&L', value: usd(c.gross), tone: tone(c.gross) },
-            { label: 'Commissions (all-in)', value: usd(-c.totalComm), tone: 'neg' },
-            { label: `Subscriptions (${c.months} mo)`, value: usd(-c.fixedPeriod), tone: 'neg' },
+            { label: 'Gross P&L', value: cv.gross, tone: tone(c.gross) },
+            { label: 'Commissions (all-in)', value: cv.commissions, tone: 'neg' },
+            { label: `Subscriptions (${c.months} mo)`, value: cv.subscriptions, tone: 'neg' },
             { label: 'Est. 1256 tax', value: usd(-c.tax), tone: 'neg' },
             { label: 'Take-home', value: usd(c.afterTax), tone: tone(c.afterTax) },
           ],
@@ -332,7 +336,7 @@
           rows: [
             { label: 'Average win', value: usd(m.avgW), tone: 'pos' },
             { label: 'Average loss', value: usd(m.avgL), tone: 'neg' },
-            { label: 'Payoff ratio', value: ratio(m.wl) },
+            { label: 'Payoff ratio', value: av.payoff },
             { label: 'Per-trade std dev', value: money(m.tStd) },
           ],
         };
@@ -355,7 +359,7 @@
                   : '—',
             },
             { label: 'Duration', value: `${m.maxDDdur} trades` },
-            { label: 'Recovery factor', value: ratio(m.recovery) },
+            { label: 'Recovery factor', value: av.recovery },
           ],
         };
       case 'sharpe':
@@ -365,7 +369,7 @@
           desc: 'Daily mean P&L ÷ daily P&L std dev (illustrative — not annualized).',
           rows: [
             { label: 'Avg daily P&L', value: usd(m.avgDaily), tone: tone(m.avgDaily) },
-            { label: 'Sortino (daily)', value: num(m.sortino) },
+            { label: 'Sortino (daily)', value: av.sortino },
             { label: 'Active days', value: `${m.active}` },
             { label: 'Avg trades / day', value: m.avgTrades.toFixed(1) },
           ],
@@ -455,14 +459,15 @@
   });
   const dashCostRows = $derived.by(() => {
     const c = dash.cost;
+    const cv = costLineVals(c); // A288: single-sourced cost-line values (labels/markers stay here)
     return [
-      { label: 'Gross P&L', value: usd(c.gross), tone: tone(c.gross) },
+      { label: 'Gross P&L', value: cv.gross, tone: tone(c.gross) },
       {
         label: `Commissions (all-in)${dashEstRoots.length ? ' *' : ''}${c.actualCommTrades > 0 ? ' †' : ''}`,
-        value: usd(-c.totalComm),
+        value: cv.commissions,
         tone: 'neg' as const,
       },
-      { label: `Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, value: usd(-c.fixedPeriod), tone: 'neg' as const },
+      { label: `Subscriptions (${money(c.fixedMo)}/mo × ${c.months})`, value: cv.subscriptions, tone: 'neg' as const },
       { label: 'Est. 1256 tax', value: usd(-c.tax), tone: 'neg' as const },
       { label: 'Take-home', value: usd(c.afterTax), tone: tone(c.afterTax), total: true },
       { label: 'Break-even / trade', value: usd(c.bePer) },

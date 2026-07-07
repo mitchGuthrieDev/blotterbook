@@ -5199,6 +5199,50 @@
       "completedDate": "2026-07-07",
       "partial": false,
       "doneNote": "DONE (2026-07-07, R1). reconcileImport's fills-vs-closed authority pnl map (src/lib/core/intake.ts) keyed by time|symbol|side in a Map that kept only the LAST value, so two same-second identical-side same-symbol closed records (the A114 dup case) meant an incoming fills-derived trade matching the FIRST was dropped as a phantom. Fixed: the authority pnl is now a per-key multiset (number[]) with a membership check, so an incoming trade matching ANY authoritative copy is corroborated. Single-record behavior unchanged (a 1-element array is equivalent); adapters suite green. Kept the original lenient matching (no consumption) to avoid new drop behavior."
+    },
+    {
+      "id": "A294",
+      "title": "Remove the 'No Account Needed' copy from the homepage",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). Removed the 'No account needed' trust chip from the homepage hero trust row (src/site/components/Home.svelte) — the row now reads the live-status pill + 'Nothing leaves your browser'. Aligns with A293 introducing an Account entry point. CSP-clean, prerender unchanged; typecheck/lint/format + full e2e green."
+    },
+    {
+      "id": "A295",
+      "title": "Drop the '(.xlsx)' suffix from the ATAS X entry in the supported-platforms list",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). The ATAS X <b> label was already just 'ATAS X'; the '(.xlsx)' actually lived in that entry's status pill ('Verified · real exports (.xlsx)') — removed it there so it reads 'Verified · real exports'. Label-only: the .xlsx import path (F52 xlsx.ts/atasXlsxToCsv) is untouched, and the body-copy mentions of the .xlsx export (Home prose + Howto import steps) were intentionally left."
+    },
+    {
+      "id": "A288",
+      "title": "Cost-summary rows assembled three times from the same CostModel",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). The cost-summary lines (Gross / Commissions / Subscriptions) were assembled from the same CostModel in three surfaces (Reports costRows, dashboard dashCostRows, the stat-detail popover). On inspection the LABELS/markers differ BY DESIGN per surface (subscription '(N mo)' vs '(X/mo × Y)'; the dashboard's †/* markers), so a shared row-BUILDER would have altered labels — instead single-sourced the VALUES via a new costLineVals(c) helper in core.ts ({gross, commissions, subscriptions}). All three sites read the values from it and keep their own labels; output byte-identical (verified by npm test + full e2e)."
+    },
+    {
+      "id": "A289",
+      "title": "Advanced-stats Metrics→rows mapping duplicated across three surfaces",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07). The advanced-stats value expressions (payoff/sortino/recovery/concentration/max-consec) were duplicated across Analytics (statRows), Reports (advRows) and the App.svelte stat-detail popovers — including the profit-concentration ternary copied verbatim in 2+ places. Labels are intentionally worded differently per surface (e.g. 'Sortino' vs 'Sortino (daily)'), so extracted the shared VALUES into advStatVals(m) in core.ts; each surface reads values from it and keeps its own labels. Output unchanged; the concentration ternary now lives once. Companion to A288."
     }
   ]
 }

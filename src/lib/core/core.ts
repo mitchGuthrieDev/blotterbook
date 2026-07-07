@@ -975,3 +975,24 @@ export function costModel(m: Metrics, inputs: CostInputs = {}): CostModel {
 // UI marks these with an asterisk so estimated commissions aren't indistinguishable from table rates.
 // A208: a root whose trades ALL carry actual CSV commissions never used the fallback — don't flag it.
 export const estimatedCommRoots = (c: CostModel): string[] => c.bySym.filter(s => !s.known && s.actual < s.count).map(s => s.root);
+
+/* ---- shared display VALUES for multi-surface stat/cost lines (A288/A289) -------------------------
+   The Analytics grid, the Reports tables, and the dashboard cost module + stat-detail popovers each
+   render the same underlying figures. Their LABELS are intentionally worded differently per surface
+   (e.g. "Sortino" vs "Sortino (daily)"; the subscription line's "(N mo)" vs "(X/mo × Y)"; extra †/*
+   markers), so those stay at each call site — but the VALUE strings (the metric→formatter pairing,
+   incl. the profit-concentration ternary that had drifted across three copies) are single-sourced
+   here. Callers pick the values they show and supply their own labels. */
+export const advStatVals = (m: Metrics) => ({
+  payoff: ratio(m.wl),
+  sortino: num(m.sortino),
+  recovery: ratio(m.recovery),
+  concentration: m.concPct == null ? '—' : `${Math.round(m.concPct)}%`,
+  maxConsecWins: `${m.mcw}`,
+  maxConsecLosses: `${m.mcl}`,
+});
+export const costLineVals = (c: CostModel) => ({
+  gross: usd(c.gross),
+  commissions: usd(-c.totalComm),
+  subscriptions: usd(-c.fixedPeriod),
+});

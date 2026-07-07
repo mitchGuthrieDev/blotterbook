@@ -345,30 +345,6 @@
       "doneNote": null
     },
     {
-      "id": "A288",
-      "title": "Cost-summary rows assembled three times from the same CostModel",
-      "category": "ARCHITECTURE / DUPLICATION",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the R1 audit 2026-07-07 (docs/repo-audit-2026-07-07.md). The cost-summary rows (Gross P&L / Commissions (all-in) / Subscriptions / 1256 tax / Net / take-home) are assembled by hand in THREE places off the same CostModel — the stat-detail popover (src/app/App.svelte ~275), the dashboard dashCostRows (App.svelte ~449), and the report costRows (src/app/lib/reports.ts ~134) — with slightly different labels/signs. No behavior bug today (they agree), just three copies to keep in step. Extract ONE costRowsFrom(c: CostModel) builder in src/lib/core/report.ts (or core.ts) returning the canonical [label, value, negFlag] rows, and have the three callers use it, overriding only the labels a surface genuinely needs. This is dedup, NOT a redesign — verify each rendered label/sign is byte-identical to today. Done when: the three sites share one builder, output is unchanged, and npm test + e2e stay green.",
-      "doneNote": null
-    },
-    {
-      "id": "A289",
-      "title": "Advanced-stats Metrics→rows mapping duplicated across three surfaces",
-      "category": "ARCHITECTURE / DUPLICATION",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the R1 audit 2026-07-07 (docs/repo-audit-2026-07-07.md). The advanced-stats mapping (Metrics -> labeled rows: payoff m.wl, sortino m.sortino, recovery m.recovery, concentration m.concPct, max consecutive win/loss m.mcw/m.mcl, etc.) is duplicated across THREE surfaces — src/app/lib/analytics.ts (~134), src/app/lib/reports.ts (~148), and src/app/App.svelte (~322). Per-surface SELECTION differs (intentional), but the label+formatter pairs are copied. Extract a shared advStatRows(m: Metrics) menu (a canonical list of {key,label,value} the surfaces pick from) so each stat's label/formatter lives once. This is dedup, NOT a redesign — verify each surface renders the same rows/labels as today. Done when: the three sites pick from one shared menu, output is unchanged, and npm test + e2e stay green.",
-      "doneNote": null
-    },
-    {
       "id": "A293",
       "title": "Replace the 'Launch Blotterbook' header CTA with an 'Account' link → login/signup or a new Account Dashboard page",
       "category": "FEATURES",
@@ -378,30 +354,6 @@
       "completedDate": null,
       "partial": false,
       "prompt": "From the owner. Replace the marketing-site header CTA that currently reads 'Launch Blotterbook' with an 'Account' clickable link. Grep 'Launch Blotterbook' to locate it (site nav/header — likely src/site/lib/Nav.svelte + the Home hero CTA; the in-app onboarding LaunchGate button of the same name is SEPARATE — do not touch it unless intended). Behavior: if the visitor is NOT logged in, the 'Account' link takes them to a login/signup page; if they ARE logged in (or once they sign in through that flow), it takes them to a new dedicated ACCOUNT DASHBOARD page. IMPORTANT (owner): the Account Dashboard must be its OWN page — do NOT just redirect to the in-app Account screen (src/app/screens/Account.svelte). Build the Account Dashboard page FIRST: decide the surface (a new prerendered src/site page like /account or a small dedicated surface) and its IA (account summary, subscription/tier + billing status, cloud-sync status, passkeys/security, sign-out; NO trade data — S25), then wire the header link's logged-in-vs-out routing (reuse the F53 account session — /api/me / the account.svelte.ts session state) so the link resolves to login vs dashboard. Keep it CSP-clean + prerendered (A69) where it's a site page; update nav/footer/sitemap/_redirects for any new URL. DISCUSS the page IA + which surface before building. Done when: the header shows 'Account', logged-out routes to login/signup, logged-in routes to the new standalone Account Dashboard (not the app's Account screen), and the dashboard shows identity/subscription/sync/security (no trade data).",
-      "doneNote": null
-    },
-    {
-      "id": "A294",
-      "title": "Remove the 'No Account Needed' copy from the homepage",
-      "category": "LAYOUT (web vs mobile)",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the owner. Remove the 'No Account Needed' text/badge from the homepage (src/site/components/Home.svelte — grep the string). Delete the element + any now-empty wrapper/trust-row slot it sat in, and rebalance the surrounding layout so nothing looks orphaned. (Context: this aligns with A293 introducing an Account entry point, so the 'no account needed' claim is being retired.) Keep the page prerendered (A69) + CSP-clean; e2e/site checks stay green. Done when: the phrase is gone from the rendered homepage and the layout reads cleanly.",
-      "doneNote": null
-    },
-    {
-      "id": "A295",
-      "title": "Drop the '(.xlsx)' suffix from the ATAS X entry in the supported-platforms list",
-      "category": "LAYOUT (web vs mobile)",
-      "priority": "P3",
-      "effort": "small",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the owner. In the homepage Platforms section (src/site/components/Home.svelte; also check src/site/components/Howto.svelte) the ATAS X entry shows '(.xlsx)'. Remove that parenthetical so it reads just 'ATAS X'. Grep 'ATAS' / '.xlsx' in src/site. LABEL-ONLY: do NOT change the intake behavior — the ATAS X .xlsx import path (xlsx.ts / atasXlsxToCsv, F52) stays exactly as-is. Keep the page prerendered + CSP-clean. Done when: the platform label reads 'ATAS X' (no '(.xlsx)') and the .xlsx import still works.",
       "doneNote": null
     },
     {
