@@ -24,7 +24,9 @@ import { grantsCloud, subscriptionForUser, type AccountsDb } from './accounts.ts
 export interface SyncBucket {
   get(key: string): Promise<{ text(): Promise<string> } | null>;
   put(key: string, value: string): Promise<unknown>;
-  delete(key: string): Promise<void>;
+  // R2Bucket.delete accepts one key OR an array (bulk delete, ≤1000 keys) — a single operation either
+  // way. The A254/A265 sweeps pass an array so a whole page of blobs costs one subrequest.
+  delete(keys: string | string[]): Promise<void>;
 }
 
 export function getBucket(env: Env): SyncBucket | null {
@@ -227,4 +229,69 @@ export async function upsertRecord(
       .run();
   }
   return prevSeq + 1;
+}
+
+/* ---- A254: server-side erase of a purged workspace -----------------------------------------------
+   When the user runs "erase all data" on a synced workspace, the client calls POST /api/sync/delete so
+   the server drops the workspace's change-index rows AND their R2 ciphertext blobs — otherwise the
+   orphaned (still zero-knowledge, user-owned) ciphertext lingers server-side forever. Bounded per call
+   by DELETE_PAGE to respect the A15 subrequest cap: one SELECT + one R2 batch delete + one D1 delete
+   per page, so an arbitrarily large workspace pages across calls (the client loops until `done`). */
+export const DELETE_PAGE = 500;
+
+/** Delete one bounded page of a workspace's records + their ciphertext blobs (lowest seqs first).
+ *  Returns the count deleted and whether the workspace is now empty (`done`). Subrequests: 1 SELECT +
+ *  1 R2 batch delete + 1 D1 delete (only when a page is non-empty). */
+export async function deleteWorkspacePage(
+  db: AccountsDb,
+  bucket: SyncBucket,
+  workspaceId: string
+): Promise<{ deleted: number; done: boolean }> {
+  const { results } = await db
+    .prepare(`SELECT * FROM sync_records WHERE workspace_id = ? ORDER BY seq LIMIT ${DELETE_PAGE}`)
+    .bind(workspaceId)
+    .all<SyncRecordRow>();
+  if (!results.length) return { deleted: 0, done: true };
+  await bucket.delete(results.map(r => r.ciphertext_ref)); // batch R2 delete of opaque ciphertext — S25
+  // The page is the DELETE_PAGE lowest seqs, so every stored row with seq ≤ the page max IS in the page
+  // → deleting by that ceiling removes exactly this page (never a higher-seq row we haven't blob-deleted).
+  const maxSeqInPage = results.reduce((mx, r) => Math.max(mx, r.seq), 0);
+  await db.prepare('DELETE FROM sync_records WHERE workspace_id = ? AND seq <= ?').bind(workspaceId, maxSeqInPage).run();
+  return { deleted: results.length, done: results.length < DELETE_PAGE };
+}
+
+/** Drop the (now record-free) workspace's wrapped-DEK + registry rows — the final step of an erase so
+ *  no opaque key blob or ownership row survives the purge. */
+export async function deleteWorkspaceShell(db: AccountsDb, workspaceId: string): Promise<void> {
+  await db.prepare('DELETE FROM sync_workspace_keys WHERE workspace_id = ?').bind(workspaceId).run();
+  await db.prepare('DELETE FROM sync_workspaces WHERE workspace_id = ?').bind(workspaceId).run();
+}
+
+/* ---- A265: bounded compaction of stale tombstones (sweep-on-write; Pages has no cron) -------------
+   A per-record delete rides through sync as a tombstone (deleted = 1) so other devices learn to drop
+   the record; once every device has reconciled past it, the tombstone is dead weight. A time TTL bounds
+   growth without a per-device watermark the zero-knowledge server can't keep — a device offline past
+   the TTL simply re-adds the record on its next push, the same resurrection window the client already
+   tolerates. Swept opportunistically on push, bounded by COMPACT_PAGE so it never threatens the A15
+   budget: 1 SELECT + 1 R2 batch delete + 1 D1 delete when there is anything to sweep, else just the
+   SELECT. */
+export const TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // ~a quarter — far past any real reconcile gap
+export const COMPACT_PAGE = 200;
+
+/** Compact one bounded page of stale tombstones (deleted = 1, older than the TTL) for a workspace,
+ *  removing their R2 blobs + D1 rows. Returns how many were compacted. Best-effort maintenance. */
+export async function compactTombstones(db: AccountsDb, bucket: SyncBucket, workspaceId: string, now = Date.now()): Promise<number> {
+  const cutoff = now - TOMBSTONE_TTL_MS;
+  const { results } = await db
+    .prepare(`SELECT * FROM sync_records WHERE workspace_id = ? AND deleted = ? AND updated < ? ORDER BY seq LIMIT ${COMPACT_PAGE}`)
+    .bind(workspaceId, 1, cutoff)
+    .all<SyncRecordRow>();
+  if (!results.length) return 0;
+  await bucket.delete(results.map(r => r.ciphertext_ref));
+  const maxSeqInPage = results.reduce((mx, r) => Math.max(mx, r.seq), 0);
+  await db
+    .prepare('DELETE FROM sync_records WHERE workspace_id = ? AND deleted = ? AND updated < ? AND seq <= ?')
+    .bind(workspaceId, 1, cutoff, maxSeqInPage)
+    .run();
+  return results.length;
 }

@@ -5056,6 +5056,39 @@
       "completedDate": "2026-07-07",
       "partial": false,
       "doneNote": "DONE (2026-07-07, PR #124) — Homepage (src/site/components/Home.svelte) refreshed end-to-end, translating the 21st.dev 'Efferd' hero-3 reference into our stack (Svelte 5 + Tailwind v4 + tokens; no React port). Shipped: a left-aligned hero (value prop + announcement chip + dual CTAs + live-status trust row) with a device-framed SYNTHETIC P&L dashboard replacing banner.svg; Features de-chromed (dropped the purple gradient left-bars + chart-3 eyebrows) with a hover-lift; Pricing unified to the mono NEW-chip, a subtle primary ring on the featured card, tabular-num prices, and CTAs pinned to the card bottom so they align; Platforms split Tradovate/NinjaTrader into a uniform 4x3 grid; FAQ token-based row hover. Greyscale chrome with color reserved for the data layer (ADR-002), CSP-clean (no inline style=), single dark theme, prerendered SSG, prefers-reduced-motion honored; lint/typecheck/format/build/e2e(101) green; prod bumped 0.64.0->0.65.0. DEFERRED (re-file if wanted): the hero dashboard is a synthetic panel, not a real screenshot capture; no dedicated testimonials/trust-credibility section; footer left as-is. A280 (nav mega-menu) was cancelled separately per owner."
+    },
+    {
+      "id": "A277",
+      "title": "(audit) Verify no auth / entitlement enforcement is trusted client-side",
+      "category": "SECURITY",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07) — read-only audit delivered in docs/audit-a277-server-enforcement.md. Verdict CLEAN: every protected /functions surface re-checks identity/ownership/entitlement/origin server-side; nothing acting as a security boundary is trusted client-side (the F56 LaunchGate, isStaging/isDemo render guards, and the Entitlements tier probe are UX-only and cannot escalate access). All four attack cases confirmed closed: (1) free-tier session hitting cloud-sync → every mutating sync route (push, workspaces POST, wrapped-ik PUT) enforces callerHasCloud→grantsCloud server-side (402); reads are intentionally ungated but leak nothing (own-ciphertext only, 404 on non-owned, no key server-side). (2) unauth → every route resolves the hashed session cookie via sessionFromRequest (constant-time) → 401, fail-closed 503 when DB/bucket unbound. (3) cross-user → ownedWorkspace → uniform 404 (no existence leak); wrapped-ik/workspaces GET keyed by user_id. (4) wrong-origin/CSRF → checkOrigin 403 on all mutating routes, __Host-/HttpOnly/SameSite=Lax cookie, zero CORS headers, webhook raw-body HMAC verified before provisioning. The only follow-up was a non-security doc nit (push.ts JSDoc said MAX_PUSH_RECORDS 15 vs the enforced 12) — fixed inline in the A254/A265 commit."
+    },
+    {
+      "id": "A275",
+      "title": "(assessment) Evaluate migrating to a Tauri desktop shell — cross-platform expansion",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07) — assessment written to docs/tauri-shell-assessment.md (vault-assessment house style). Recommendation: keep the browser app primary — a Tauri shell is a DISTRIBUTION investment, not architecture, since compute is already 100% local and only identity/billing/sync are server-side (a shell buys durable storage + OS/app-store reach, not new product capability). If ever built, use Tauri (beats Electron on binary size/mobile/attack-surface, beats Capacitor for a desktop-leaning dashboard): the existing Vite dist/ embeds almost for free and the Store seam ports cleanly (IndexedDB works in-webview day one; a VaultStore over Tauri's FS is the additive Phase-3 win from the vault assessment). Two sharp gotchas: WebAuthn/passkeys DON'T work in Tauri's webview (need the non-official tauri-plugin-webauthn bridge + RP-ID/associated-domains work on the F53 account path), and Stripe Checkout/magic-link returns need custom-scheme deep-links; CSP ports intact bar a scoped connect-src widening to the API origin (backend stays a shared Cloudflare Functions API, never bundled). The real cost is a full second release pipeline (Rust toolchain, per-OS CI matrix, code signing + Apple notarization, an updater channel, store review) forfeiting the web app's 'deploy = shipped'. Phased: do the free PWA hardening (service worker + storage.persist()) now, a ~3-5 day desktop spike only when durable-storage/real-vault/app-store demand materializes, ~3-6 focused weeks to a signed desktop app with the native vault; mobile a separate multi-week initiative."
+    },
+    {
+      "id": "A265",
+      "title": "Sync API: TTL/compaction for webhook_events and tombstones (unbounded D1 growth)",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "DONE (2026-07-07) — bounded both unbounded ledgers via SWEEP-ON-WRITE (Cloudflare Pages Functions can't run a Cron Trigger, so the item's swept-on-write alternative was taken). (1) webhook_events: markWebhookEvent() (functions/_lib/accounts.ts) now DELETEs rows older than WEBHOOK_EVENT_TTL_MS (7d — Stripe's replay/retry window) after each insert — one extra statement on a low-frequency path. (2) sync_records tombstones: compactTombstones() (functions/_lib/sync.ts) drops deleted=1 rows older than TOMBSTONE_TTL_MS (90d) plus their R2 blobs, bounded by COMPACT_PAGE (200) and piggybacked on push() best-effort so it never threatens the A15 subrequest budget (a device offline past the TTL simply re-adds on its next push — the same resurrection window the client already tolerates). schema.sql comment updated from the A265 TODO to the as-built sweep. Tests: webhook_events sweep (test-accounts.mjs) + tombstone compaction incl. the push-piggyback (test-sync.mjs); the mock D1/R2 stubs were extended for < / <= conditions and array R2 delete. Full npm test green."
     }
   ]
 }

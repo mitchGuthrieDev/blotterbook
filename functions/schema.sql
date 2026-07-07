@@ -157,10 +157,11 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions (stripe_c
 -- Processed-webhook-event ledger (F60) — replay-safe dedupe for the subscription-lifecycle events,
 -- keyed by the Stripe EVENT id (the donation path dedupes via the donations PK the same way). A
 -- retried/duplicated delivery collides here and is a no-op.
--- TODO (A265 — future TTL/compaction job, NOT built here): this ledger grows unbounded. A periodic
--- cleanup can drop rows older than Stripe's replay/retry window (a few days) since dedupe only needs to
--- cover that span; the same job should compact `sync_records` tombstones (deleted = 1 rows) once every
--- device has reconciled past their seq. Neither is required for correctness — only to bound growth.
+-- A265 (bounded growth — SWEPT-ON-WRITE, since Pages Functions can't run a Cron Trigger): this ledger
+-- is pruned by markWebhookEvent() (functions/_lib/accounts.ts), which drops rows older than
+-- WEBHOOK_EVENT_TTL_MS (7d — Stripe's replay/retry window) after each insert. The sibling `sync_records`
+-- tombstones (deleted = 1) are likewise compacted on push by compactTombstones() (functions/_lib/sync.ts,
+-- TOMBSTONE_TTL_MS 90d). Neither sweep is required for correctness — only to bound growth.
 CREATE TABLE IF NOT EXISTS webhook_events (
   id TEXT PRIMARY KEY,                        -- Stripe event id
   type TEXT,                                  -- the event type processed

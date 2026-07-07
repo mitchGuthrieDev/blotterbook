@@ -43,10 +43,11 @@
 <Dialog.Root bind:open>
   <Dialog.Content class="max-w-md">
     <Dialog.Header>
-      <Dialog.Title class="flex items-center gap-2"><LockKeyhole class="size-4" /> Unlock cloud sync</Dialog.Title>
-      <Dialog.Description
-        >Unlock once per session to sync. Your key is held in memory only and cleared when you sign out or reload.</Dialog.Description
-      >
+      <Dialog.Title class="flex items-center gap-2"><LockKeyhole class="size-4" /> Unlock encryption</Dialog.Title>
+      <Dialog.Description>
+        This unlocks your end-to-end encryption for this session so this device can read your synced data — separate from the passkey that
+        signs you in. Your key is held in memory only and cleared when you sign out or reload.
+      </Dialog.Description>
     </Dialog.Header>
 
     <Tabs.Root bind:value={tab}>

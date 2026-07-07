@@ -17,8 +17,8 @@
  *    so concurrent pushes cannot collide on a seq; it stays monotonic and is never reused.
  *  - LWW: a record whose `updated` is not strictly newer than the stored row is DROPPED — a stale
  *    device cannot clobber a fresher row.
- *  - A15 subrequest cap: batches over MAX_PUSH_RECORDS (15) are rejected 413 so the client chunks
- *    (2 fixed + 3 per record ⇒ ≤ 47 < 50 subrequests).
+ *  - A15 subrequest cap: batches over MAX_PUSH_RECORDS (12) are rejected 413 so the client chunks
+ *    (6 fixed + 3 per record ⇒ ≤ 42 < 50 subrequests; the A265 tombstone sweep below adds ≤ 3 more).
  * S25: the server only ever handles blinded ids + opaque ciphertext + timestamps — never a symbol,
  * P&L, note, tag, or name. No response field carries a trade value.
  */
@@ -33,6 +33,7 @@ import {
   bucketUnavailable,
   callerHasCloud,
   cloudRequired,
+  compactTombstones,
   countRecords,
   getBucket,
   maxSeq,
@@ -92,6 +93,13 @@ export async function onRequestPost(ctx: Ctx) {
   const records = body.records as IncomingRecord[];
   for (const rec of records) {
     seq = await upsertRecord(db, bucket, workspaceId, rec, seq); // LWW inside; bumps seq iff written
+  }
+  // A265: piggyback a bounded sweep of this workspace's stale tombstones so the change-index stays
+  // bounded (Pages has no cron). Best-effort — a hiccup here must never fail the user's push.
+  try {
+    await compactTombstones(db, bucket, workspaceId);
+  } catch {
+    /* maintenance only — ignore */
   }
   // S25: cursor + count only — no record contents echoed back.
   return json({ ok: true, cursor: seq, count: records.length });

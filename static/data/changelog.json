@@ -4,6 +4,18 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.66.0",
+      "date": "2026-07-07",
+      "title": "Cloud sync is live — with a clearer sync experience",
+      "summary": "End-to-end-encrypted cloud sync is now available on the live app for supporter-tier subscribers: turn it on per workspace and your journal syncs across your devices, with only ciphertext we can't read ever leaving your browser. The sync controls were also reworked to be far clearer.",
+      "highlights": [
+        "Turn on sync per workspace from the workspace switcher — your trades, journal, and settings sync end-to-end encrypted across devices, and your local data is always untouched.",
+        "A new status pill tells you at a glance whether this device is in sync, with a clear \"Sync now\" plus explicit \"Pull from cloud\" and \"Push to cloud\" controls in Account → Cloud sync.",
+        "A plain-language explainer of how signing in (your passkey) differs from unlocking your encryption (your passphrase or recovery key) — so it's clear what each one does.",
+        "Demo mode never syncs, and sync is opt-in and off by default."
+      ]
+    },
+    {
       "version": "0.65.0",
       "date": "2026-07-07",
       "title": "A refreshed homepage",

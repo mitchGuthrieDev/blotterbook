@@ -6,8 +6,8 @@
  *   · the per-workspace opt-in (mint+register a DEK, or adopt the server's) and the in-memory
  *     per-workspace keys (derived from the DEK; never persisted — only the cursor + enabled flag are).
  *
- * STAGING-GATED + CLOUD-TIER + OPT-IN by construction: App.svelte only wraps the Store in a CloudStore
- * and calls configureCloudSync() on the staging surface; enabling sync needs `tier === 'cloud'` and an
+ * CLOUD-TIER + OPT-IN by construction (live on prod + staging — CH16, 2026-07-07): App.svelte wraps the
+ * Store in a CloudStore and calls configureCloudSync() on every NON-DEMO surface; enabling sync needs `tier === 'cloud'` and an
  * UNLOCKED account IK (F61b); demo never wraps the Store, so it never syncs. When the IK is locked or
  * the browser is offline, sync PAUSES gracefully — a local write never blocks and never throws.
  *
@@ -34,7 +34,7 @@ type SyncStatus = 'off' | 'syncing' | 'synced' | 'offline' | 'locked' | 'error';
 
 /** Shared reactive sync state for the ACTIVE workspace — read anywhere, mutate only via the actions. */
 export const cloudSync = $state({
-  /** configureCloudSync() has run (staging only) — gate the affordance on this. */
+  /** configureCloudSync() has run (every non-demo surface — prod + staging) — gate the affordance on this. */
   configured: false,
   /** entitlement tier from /api/me ('' until probed). Enabling sync needs 'cloud'. */
   tier: '' as '' | Tier,
@@ -47,12 +47,30 @@ export const cloudSync = $state({
   unlocked: false,
   online: true,
   status: 'off' as SyncStatus,
+  /** local edits made since the last successful push (A279 parity pill: "Pending upload"). Set on
+   *  every local write to an enabled workspace, cleared when a push/sync completes — so the pill can
+   *  say the cloud is behind this device even while offline/locked. */
+  pending: false,
   /** epoch ms of the last successful pull-merge (0 = never this session). */
   lastPull: 0,
   /** an enable/sync op is in flight. */
   busy: false,
   error: '',
 });
+
+/** A279: the parity state the status pill renders for the ACTIVE workspace, derived from the reactive
+ *  fields above. Surfaces call this inside a `$derived` so it re-settles automatically. Tier gating
+ *  ('cloud tier required' / subscribe) is handled by the surface BEFORE the pill is shown. */
+export type SyncPill = 'off' | 'needs-unlock' | 'offline' | 'syncing' | 'pending' | 'synced' | 'error';
+export function syncPillState(): SyncPill {
+  if (!cloudSync.enabled) return 'off';
+  if (cloudSync.status === 'error') return 'error';
+  if (cloudSync.status === 'syncing') return 'syncing';
+  if (!cloudSync.unlocked) return 'needs-unlock';
+  if (!cloudSync.online) return 'offline';
+  if (cloudSync.pending) return 'pending';
+  return 'synced';
+}
 
 const DEBOUNCE_MS = 1500;
 
@@ -134,19 +152,34 @@ const transport: SyncTransport = {
     if (!res.ok) throw new Error(`Pull failed (${res.status}).`);
     return (await res.json()) as PullPage;
   },
+  async deleteWorkspace(workspaceId) {
+    const res = await fetch('/api/sync/delete', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ workspace_id: workspaceId }),
+    });
+    if (!res.ok) throw new Error(`Could not erase the synced copy (${res.status}).`);
+    return (await res.json()) as { done: boolean };
+  },
 };
+
+/** A254: cap the server-erase paging loop. DELETE_PAGE is 500 server-side, so this covers a workspace
+ *  of up to 500·ERASE_MAX_PAGES records — far past MAX_RECORDS_PER_WORKSPACE — before giving up. */
+const ERASE_MAX_PAGES = 200;
 
 /* ── CloudStore wiring (called at App.svelte module init, staging only) ────────────────────────── */
 
-/** Wrap the local Store so writes schedule a debounced push. Called ONLY on staging; demo/prod use
- *  the plain Store and never reach this. */
+/** Wrap the local Store so writes schedule a debounced push. Called on every non-demo surface (app +
+ *  staging); demo mounts the in-memory DemoStore and is never wrapped, so it never syncs. Inert until a
+ *  cloud-tier user opts a workspace in + unlocks. */
 export function wrapStore(local: StoreLike): StoreLike {
   localStore = local;
   return createCloudStore(local, onLocalWrite);
 }
 
-/** Configure the controller after boot (staging only): probe the tier, wire connectivity/focus
- *  listeners, and settle the active workspace's status. Never throws. */
+/** Configure the controller after boot (every non-demo surface — prod + staging): probe the tier, wire
+ *  connectivity/focus listeners, and settle the active workspace's status. Never throws. */
 export function configureCloudSync(opts: { localStore: StoreLike; dash: { reload(): Promise<void> } }): void {
   localStore = opts.localStore;
   dashRef = opts.dash;
@@ -175,9 +208,10 @@ export function configureCloudSync(opts: { localStore: StoreLike; dash: { reload
 }
 
 /** A254: after a local purge of the active workspace, stop it re-downloading on the next reconcile —
- *  DISABLE sync for it and reset its cursor + pushed-watermark. This is the safe client-side stop;
- *  propagating the erase to the server as record deletions (so OTHER devices also drop the data) is a
- *  filed follow-up, out of `src/` scope here. */
+ *  DISABLE sync for it and reset its cursor + pushed-watermark — AND propagate the erase to the server
+ *  so the cloud ciphertext is deleted too (else the orphaned E2E blobs linger server-side). The local
+ *  opt-out is the guaranteed stop for THIS device; the server erase is best-effort (it needs a live
+ *  session + network) and safely retries on the next purge if it can't reach the server now. */
 function onErased(): void {
   if (!localStore) return;
   syncGeneration++; // abort any in-flight run + neutralize a pending debounced push for this workspace
@@ -187,12 +221,28 @@ function onErased(): void {
   }
   dirtyDuringPush = false;
   const id = localStore.activeWorkspace().id;
+  const wasEnabled = isEnabled(id); // only a workspace that was actually syncing has a server copy
   localStore.local.set(enabledKey(id), false); // opt-out: no reconcile until the user re-enables
   localStore.local.remove(cursorKey(id));
   localStore.local.remove(pushedKey(id));
   sessions.delete(id);
   reconciled.delete(id);
   refreshSyncStatus();
+  if (wasEnabled) void eraseServerCopy(id);
+}
+
+/** A254: page through the server erase until the workspace's records + blobs are gone. Best-effort —
+ *  a failure (offline / lapsed session) leaves the cloud copy for the next purge attempt while the
+ *  local opt-out above already protects this device from re-downloading it. */
+async function eraseServerCopy(id: string): Promise<void> {
+  try {
+    for (let i = 0; i < ERASE_MAX_PAGES; i++) {
+      const { done } = await transport.deleteWorkspace(id);
+      if (done) break;
+    }
+  } catch {
+    /* best-effort — retried on the next erase */
+  }
 }
 
 /* ── status ────────────────────────────────────────────────────────────────────────────────────── */
@@ -298,9 +348,19 @@ export async function enableCloudSync(): Promise<boolean> {
   }
 }
 
-/* ── sync (pull-then-push) ─────────────────────────────────────────────────────────────────────── */
-async function runSync(opts: { full?: boolean; id?: string }): Promise<void> {
+/* ── sync (pull-then-push; A279 adds one-directional variants) ─────────────────────────────────────
+   `direction` drives what the run does: 'both' (default reconcile — pull then push), 'pull' (pull +
+   merge only — the A279 "Pull from cloud" action), or 'push' (push only — the "Push to cloud" action).
+   Either direction still merges by LWW/content-hash under the hood; the one-directional variants are a
+   legibility/control affordance (the newest edit of each record wins regardless of who initiated). */
+async function runSync(opts: {
+  full?: boolean;
+  id?: string;
+  direction?: 'both' | 'pull' | 'push';
+  forceFullPush?: boolean;
+}): Promise<void> {
   const id = opts.id ?? activeId();
+  const direction = opts.direction ?? 'both';
   if (!localStore || !isEnabled(id)) return;
   // A251: capture the sync generation + workspace id up front. `aborted()` is true once a switch is
   // pending (generation bumped) OR the active workspace no longer matches — it gates every store
@@ -326,20 +386,28 @@ async function runSync(opts: { full?: boolean; id?: string }): Promise<void> {
     if (aborted()) return;
     if (id === activeId()) cloudSync.status = 'syncing';
     try {
-      // PULL first — a full since=0 reconcile closes F62's concurrent-push seq race; steady-state is
-      // incremental from the persisted cursor.
-      const since = opts.full ? 0 : Number(store.local.get(cursorKey(id), 0)) || 0;
-      const { cursor, merged } = await pullAndMerge(store, keys, transport, id, since, aborted);
-      if (aborted()) return; // a switch landed — leave the cursor unadvanced
-      store.local.set(cursorKey(id), cursor);
-      // PUSH write-behind. The watermark is -1 until the first push completes (so a freshly-enabled
-      // workspace uploads everything), then the last cutoff — always incremental, independent of `full`.
-      const watermark = Number(store.local.get(pushedKey(id), -1));
-      const newWatermark = await pushChanges(store, keys, transport, id, watermark, aborted);
-      if (aborted()) return; // a switch landed mid-push — leave the watermark unadvanced
-      store.local.set(pushedKey(id), newWatermark);
+      let merged = 0; // record count from the pull (truthy → a merge landed → reload the dashboard)
+      if (direction !== 'push') {
+        // PULL — a full since=0 reconcile closes F62's concurrent-push seq race; steady-state is
+        // incremental from the persisted cursor.
+        const since = opts.full ? 0 : Number(store.local.get(cursorKey(id), 0)) || 0;
+        const res = await pullAndMerge(store, keys, transport, id, since, aborted);
+        if (aborted()) return; // a switch landed — leave the cursor unadvanced
+        store.local.set(cursorKey(id), res.cursor);
+        merged = res.merged;
+      }
+      if (direction !== 'pull') {
+        // PUSH write-behind. The watermark is -1 until the first push completes (so a freshly-enabled
+        // workspace uploads everything), then the last cutoff. `forceFullPush` re-uploads everything
+        // (the "Push to cloud" action) without discarding remote — LWW still applies per record.
+        const watermark = opts.forceFullPush ? -1 : Number(store.local.get(pushedKey(id), -1));
+        const newWatermark = await pushChanges(store, keys, transport, id, watermark, aborted);
+        if (aborted()) return; // a switch landed mid-push — leave the watermark unadvanced
+        store.local.set(pushedKey(id), newWatermark);
+      }
       reconciled.add(id);
       cloudSync.lastPull = Date.now();
+      cloudSync.pending = false; // everything up to this cutoff is now on the server
       if (merged && dashRef && id === activeId()) await dashRef.reload();
       if (id === activeId()) cloudSync.status = 'synced';
     } catch (e) {
@@ -363,6 +431,41 @@ export async function syncActiveWorkspace(opts: { full?: boolean } = {}): Promis
   await runSync({ full, id });
 }
 
+/** A279 "Pull from cloud" — pull the cloud copy down and merge it into local (no push). LWW: the
+ *  newest edit of each record wins, so this never blindly overwrites newer local edits. */
+export async function pullFromCloud(): Promise<void> {
+  if (!cloudSync.configured || !localStore) return;
+  const id = activeId();
+  if (!isEnabled(id)) return;
+  await runSync({ full: true, id, direction: 'pull' });
+}
+
+/** A279 "Push to cloud" — re-upload every local record (no pull). LWW: a record the cloud has a newer
+ *  edit of is still kept newest-wins; this is the legible "send my version up" control, not a wipe. */
+export async function pushToCloud(): Promise<void> {
+  if (!cloudSync.configured || !localStore) return;
+  const id = activeId();
+  if (!isEnabled(id)) return;
+  await runSync({ full: true, id, direction: 'push', forceFullPush: true });
+}
+
+/** A279 "Pause sync" — stop syncing the active workspace WITHOUT erasing its cloud copy (that's the
+ *  separate A254 purge path). Reversible: re-enable adopts the same server DEK. Local data untouched. */
+export function pauseCloudSync(): void {
+  if (!localStore) return;
+  const id = activeId();
+  syncGeneration++; // abort any in-flight run for this workspace
+  if (pushTimer) {
+    clearTimeout(pushTimer);
+    pushTimer = null;
+  }
+  localStore.local.set(enabledKey(id), false);
+  sessions.delete(id);
+  reconciled.delete(id);
+  cloudSync.pending = false;
+  refreshSyncStatus();
+}
+
 /* ── write-behind (debounced push scheduled by the CloudStore) ─────────────────────────────────── */
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pushing = false;
@@ -372,9 +475,12 @@ function canSyncActive(): boolean {
   return cloudSync.configured && onLine() && getIK() !== null && isEnabled(activeId()) && sessions.has(activeId());
 }
 
-/** Called by the CloudStore after every local write. Debounces an incremental push; a no-op unless
- *  the active workspace is enabled + unlocked + online (so demo/paused writes never touch the net). */
+/** Called by the CloudStore after every local write. Debounces an incremental push; the push itself is
+ *  a no-op unless the active workspace is enabled + unlocked + online (so demo/paused writes never
+ *  touch the net). A279: mark the workspace "pending upload" for the parity pill even when it can't
+ *  push right now (offline / locked) — the edit is real and still owed to the cloud. */
 function onLocalWrite(): void {
+  if (localStore && isEnabled(activeId())) cloudSync.pending = true;
   if (!canSyncActive()) return;
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => void runPush(), DEBOUNCE_MS);
@@ -407,6 +513,7 @@ async function runPush(): Promise<void> {
       if (aborted()) return;
       store.local.set(pushedKey(id), newWatermark);
       cloudSync.lastPull = cloudSync.lastPull || 0;
+      cloudSync.pending = false; // the debounced write-behind push reached the server
       cloudSync.status = 'synced';
     } catch (e) {
       if (!aborted()) {

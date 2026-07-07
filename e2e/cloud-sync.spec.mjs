@@ -134,8 +134,13 @@ test('cloud sync (staging): lock, then unlock the IK with the passphrase', async
   await page.getByTestId('cloud-finish').click();
   await expect(page.getByTestId('cloud-unlocked')).toBeVisible({ timeout: 15_000 });
 
+  // A279: unlocked → the reworked card shows the parity sync panel (staging runs the sync engine) and
+  // the passkey-vs-passphrase explainer — replacing the old bare lock/unlock framing.
+  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible();
+  await expect(page.getByText('How sign-in and encryption relate')).toBeVisible();
+
   // Lock → the in-memory IK is cleared, the card offers to unlock again.
-  await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await page.getByTestId('cloud-lock').click();
   await expect(page.getByTestId('cloud-unlock-open')).toBeVisible();
   await expect(page.getByTestId('cloud-unlocked')).toHaveCount(0);
 
@@ -197,6 +202,19 @@ test('cloud sync (prod): renders the cloud-sync card for a logged-in user (CH16-
   await gotoAccount(page);
   await expect(page.getByTestId('cloud-sync-card')).toBeVisible({ timeout: 8000 });
   await expect(page.getByTestId('cloud-setup-open')).toBeVisible();
+
+  // A279/CH16 (2026-07-07): cloud sync is LIVE on prod, not just staging — the CloudStore wraps every
+  // non-demo Store (A256) and configureCloudSync runs on prod, so cloudSync.configured is true here.
+  // Complete setup + unlock and confirm the reworked parity panel + passkey/passphrase explainer render
+  // on the PROD surface (the same UI staging gets).
+  await page.getByTestId('cloud-setup-open').click();
+  await page.getByTestId('cloud-generate').click();
+  await expect(page.getByTestId('recovery-key')).toBeVisible({ timeout: 8000 });
+  await page.getByTestId('recovery-saved').click();
+  await page.getByTestId('cloud-finish').click();
+  await expect(page.getByTestId('cloud-unlocked')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible();
+  await expect(page.getByText('How sign-in and encryption relate')).toBeVisible();
 
   await page.evaluate(() => indexedDB.deleteDatabase('blotterbook')); // leave the surface clean
 });
