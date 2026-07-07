@@ -86,4 +86,75 @@ ok(
   ) === J([{ key: 'perf', size: 'lg' }])
 );
 
+// ── A271 slice: makeLayoutKit + the Analytics domain ─────────────────────────────────────────────
+const { makeLayoutKit, analyticsKit, analyticsDefaultSizeFor, ANALYTICS_DEFAULT_KEYS } = m;
+
+// analyticsDefaultSizeFor preserves today's Analytics layout: full-width (dist/sym/tag/stats) → lg,
+// the paired half-width cards (dd/ls/hour/wday) → md.
+ok(
+  'analyticsDefaultSizeFor: full-width dist/sym/tag/stats → lg',
+  ['dist', 'sym', 'tag', 'stats'].every(k => analyticsDefaultSizeFor(k) === 'lg')
+);
+ok(
+  'analyticsDefaultSizeFor: paired dd/ls/hour/wday → md',
+  ['dd', 'ls', 'hour', 'wday'].every(k => analyticsDefaultSizeFor(k) === 'md')
+);
+
+// analyticsKit.migrateLayout upgrades a v1 string[] with the layout-preserving default sizes.
+ok(
+  'analyticsKit.migrateLayout(v1 string[]) → v2 with default sizes (LAYOUT PRESERVED)',
+  J(analyticsKit.migrateLayout(['dist', 'dd', 'sym'])) ===
+    J({
+      v: 2,
+      mods: [
+        { key: 'dist', size: 'lg' },
+        { key: 'dd', size: 'md' },
+        { key: 'sym', size: 'lg' },
+      ],
+    })
+);
+
+// analyticsKit drops keys the analytics domain doesn't know (incl. dashboard-only keys).
+ok(
+  'analyticsKit.migrateLayout drops unknown/foreign keys',
+  J(analyticsKit.migrateLayout(['dist', 'perf', 'bogus', 'wday']).mods.map(e => e.key)) === J(['dist', 'wday'])
+);
+
+// analyticsKit honors an explicit supported size + clamps garbage to the domain default.
+ok(
+  'analyticsKit.migrateLayout(v2) honors md and clamps garbage on a full-width key',
+  analyticsKit.migrateLayout({ v: 2, mods: [{ key: 'dist', size: 'md' }] }).mods[0].size === 'md' &&
+    analyticsKit.migrateLayout({ v: 2, mods: [{ key: 'dist', size: 'sm' }] }).mods[0].size === 'lg'
+);
+
+// analyticsKit.defaultLayout / validLayout round-trip the full analytics set at default sizes.
+ok(
+  'analyticsKit.defaultLayout keys === ANALYTICS_DEFAULT_KEYS',
+  J(keysOf(analyticsKit.defaultLayout().mods)) === J(ANALYTICS_DEFAULT_KEYS)
+);
+ok(
+  'analyticsKit.validLayout(undefined) → the full default analytics layout',
+  J(keysOf(analyticsKit.validLayout(undefined))) === J(ANALYTICS_DEFAULT_KEYS)
+);
+
+// makeLayoutKit is a general factory — an ad-hoc single-key domain migrates/validates on its own terms.
+const kit = makeLayoutKit({
+  keys: ['a', 'b'],
+  defaultKeys: ['a', 'b'],
+  defaultSizeFor: () => 'md',
+  supportedSizes: () => ['sm', 'md', 'lg'],
+});
+ok('makeLayoutKit: ad-hoc domain honors its own supported sizes', kit.clampSize('a', 'sm') === 'sm' && kit.clampSize('a', 'x') === 'md');
+ok(
+  'makeLayoutKit: ad-hoc domain drops keys outside its own set',
+  J(kit.migrateLayout(['a', 'perf', 'b']).mods.map(e => e.key)) === J(['a', 'b'])
+);
+
+// The dashboard exports are UNCHANGED by the refactor — a dashboard-only key still round-trips, and an
+// analytics key is foreign to the dashboard kit (proves the two domains are isolated).
+ok(
+  'dashboard migrateLayout unchanged: perf survives, dist is foreign',
+  J(migrateLayout(['perf', 'dist']).mods.map(e => e.key)) === J(['perf'])
+);
+
 console.log(`\n${pass} assertions passed.`);

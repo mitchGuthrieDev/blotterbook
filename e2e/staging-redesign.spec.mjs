@@ -298,6 +298,32 @@ test('staging redesign: Dashboard modules hide/reorder and persist across reload
   await expect(page.locator('#dashmod-perf')).toBeVisible(); // the add-back persisted too
 });
 
+test('staging redesign: Analytics module size (⋯ menu) resizes the grid span + persists (A271 slice)', async ({ page }) => {
+  await bootDashboard(page);
+  await gotoScreen(page, 'Analytics');
+  // The Drawdown module defaults to Medium (half-width, lg:col-span-6).
+  const dd = page.locator('[data-mod]').filter({ hasText: 'Drawdown (underwater)' });
+  await expect(dd).toHaveClass(/lg:col-span-6/);
+  // ⋯ menu → Size: Large → the module widens to full (lg:col-span-12).
+  await dd.getByRole('button', { name: 'Module menu' }).click();
+  await page.getByRole('menuitem', { name: 'Large' }).click();
+  await expect(dd).toHaveClass(/lg:col-span-12/);
+  // Analytics persists immediately (no staged Save) — the size survives a reload via Store.local.
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+  await gotoScreen(page, 'Analytics');
+  await expect(page.locator('[data-mod]').filter({ hasText: 'Drawdown (underwater)' })).toHaveClass(/lg:col-span-12/);
+});
+
+test('staging redesign: the Calendar month grid carries the viewport-fill class (A272)', async ({ page }) => {
+  await bootDashboard(page);
+  await gotoScreen(page, 'Calendar');
+  // A272: the month Card fills the viewport (its permanent Large state) via a class-based min-height —
+  // the card wrapping the day-cell grid must carry it (CSP-clean; no inline style).
+  const monthCard = page.locator('div[data-slot="card"]').filter({ has: page.getByTestId('cal-day').first() });
+  await expect(monthCard).toHaveClass(/lg:min-h-\[70vh\]/);
+});
+
 test('staging redesign: the Blotter paginates (50/page)', async ({ page }) => {
   await bootDashboard(page);
   await gotoScreen(page, 'Blotter');

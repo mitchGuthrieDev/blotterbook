@@ -20,8 +20,14 @@
   import { cn } from '$lib/utils';
   import { usd, usdWhole, DOW_LABEL } from '../../lib/core/core.ts';
   import { decimateMinMax } from '../../lib/core/curveseries.ts';
-  import { X, ChevronUp, ArrowUpDown } from '@lucide/svelte';
+  import { X, ChevronUp, ArrowUpDown, MoreHorizontal, Maximize2, Check } from '@lucide/svelte';
   import * as Card from '$lib/components/ui/card';
+  import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+  import IconTip from '$lib/components/IconTip.svelte';
+  import { flip } from 'svelte/animate';
+  import { MediaQuery } from 'svelte/reactivity';
+  import { dur } from '../lib/motion.ts';
+  import { analyticsKit, spanFor, ANALYTICS_DEFAULT_KEYS, type ModEntry, type ModSize } from '../lib/modlayout.ts';
   import StatCardRow, { type StatItem } from '../parts/StatCardRow.svelte';
   import InfoTip from '../parts/InfoTip.svelte';
   import type { Kpi, DistBar, SignedBar, SymbolRow, TagRow, StatRow } from '../lib/analytics.ts';
@@ -60,6 +66,12 @@
     /** A197 drill-down: resolves a histogram bucket's [lo, hi) bounds to its matching trades
      *  (computed lazily by the app from the active trade list — only on click). */
     bucketTrades?: (lo: number | null, hi: number | null) => BucketTrade[];
+    /** A271 slice: per-module size (md ↔ lg) for the analytics module grid, persisted to Store.local
+     *  by App.svelte (mirrors the Dashboard `modules` prop). Undefined = the default layout. */
+    modules?: ModEntry[];
+    onmoduleschange?: (mods: ModEntry[]) => void;
+    /** A271 slice: staging-gate the corner drag-resize handle (the ⋯ menu Size radio ships everywhere). */
+    isStaging?: boolean;
   }
   let {
     kpis,
@@ -83,7 +95,108 @@
     filterModel,
     holdCoverage = 1,
     bucketTrades,
+    modules,
+    onmoduleschange,
+    isStaging = false,
   }: Props = $props();
+
+  // ── A271 slice: module SIZE model (md ↔ lg on the 12-track grid) — mirrors Dashboard.svelte's
+  // sizing, minus reorder/hide/add (Analytics is a fixed curated set, so only size is editable and
+  // the order is constant). Persisted to Store.local by App.svelte via the ModEntry[] `modules` prop
+  // + `onmoduleschange`, migrated losslessly through analyticsKit (v1 string[] → v2 {key,size}[]). ──
+  const ANALYTICS_LABEL: Record<string, string> = {
+    dist: 'P&L distribution (per trade)',
+    dd: 'Drawdown (underwater)',
+    ls: 'Long vs short',
+    hour: 'Avg P&L by hour',
+    wday: 'Avg P&L by weekday',
+    sym: 'Performance by symbol',
+    tag: 'Performance by tag',
+    stats: 'Advanced statistics',
+  };
+  const MOD_ORDER = ANALYTICS_DEFAULT_KEYS; // fixed order — Analytics has no reorder/hide
+  const supportedSizes = analyticsKit.supportedSizes;
+  const SIZE_LABEL: Record<ModSize, string> = { sm: 'Small', md: 'Medium', lg: 'Large' };
+  // 12-track grid span as a STATIC Tailwind class (media-query-aware: no span below lg → mobile stacks;
+  // literal strings so the JIT generates them). md = span 6 (half), lg = span 12 (full).
+  const spanClass = (size: ModSize): string => (size === 'sm' ? 'lg:col-span-2' : size === 'md' ? 'lg:col-span-6' : 'lg:col-span-12');
+  const sizesOfProp = (mm?: ModEntry[]): Record<string, ModSize> => Object.fromEntries((mm ?? []).map(e => [e.key, e.size]));
+  // svelte-ignore state_referenced_locally — initial read only; the reseed effect below re-syncs.
+  let modSizes = $state<Record<string, ModSize>>(sizesOfProp(modules));
+  // svelte-ignore state_referenced_locally
+  let lastModKey = modules ? JSON.stringify(modules) : '';
+  $effect(() => {
+    // Re-seed from the prop when App supplies a persisted layout (first load after boot / workspace switch).
+    const key = modules ? JSON.stringify(modules) : '';
+    if (key !== lastModKey) {
+      lastModKey = key;
+      modSizes = sizesOfProp(modules);
+    }
+  });
+  const sizeOf = (key: string): ModSize => modSizes[key] ?? analyticsKit.defaultSizeFor(key);
+  const sizeIndex = (key: string) => supportedSizes(key).indexOf(sizeOf(key));
+  function emitLayout(sizes: Record<string, ModSize>) {
+    const mods = MOD_ORDER.map(k => ({ key: k, size: sizes[k] ?? analyticsKit.defaultSizeFor(k) }));
+    lastModKey = JSON.stringify(mods); // keep the echo-guard in sync so the persisted prop doesn't reseed
+    onmoduleschange?.(mods);
+  }
+  function setModuleSize(key: string, size: ModSize) {
+    if (!supportedSizes(key).includes(size) || sizeOf(key) === size) return;
+    modSizes = { ...modSizes, [key]: size };
+    emitLayout(modSizes);
+  }
+
+  // ── Corner drag-resize (staging-gated; pointer path). Snap to the nearest supported span [6,12] on
+  // the measured 12-track width — rAF-throttled, live-previewed via the span class, committed on
+  // release. The keyboard path is arrow keys on the role="slider" handle + the ⋯ menu Size radio.
+  // Not active on narrow (mobile stacks; size is ignored there). ──
+  const isNarrow = new MediaQuery('(max-width: 639px)');
+  let gridEl = $state<HTMLElement>();
+  let resizing = $state<{ key: string; size: ModSize } | null>(null);
+  let rafPending = 0;
+  const previewSize = (key: string): ModSize => (resizing?.key === key ? resizing.size : sizeOf(key));
+  const nearestSize = (key: string, spanGuess: number): ModSize =>
+    supportedSizes(key).reduce((best, s) => (Math.abs(spanFor(s) - spanGuess) < Math.abs(spanFor(best) - spanGuess) ? s : best));
+  function startResize(e: PointerEvent, key: string) {
+    if (isNarrow.current) return;
+    const handle = e.currentTarget as HTMLElement;
+    const card = handle.closest('[data-mod]') as HTMLElement | null;
+    if (!card || !gridEl) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    const trackW = gridEl.getBoundingClientRect().width / 12;
+    const cardLeft = card.getBoundingClientRect().left;
+    const onMove = (ev: PointerEvent) => {
+      if (rafPending) return;
+      rafPending = requestAnimationFrame(() => {
+        rafPending = 0;
+        resizing = { key, size: nearestSize(key, (ev.clientX - cardLeft) / Math.max(1, trackW)) };
+      });
+    };
+    const onUp = () => {
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', onUp);
+      if (rafPending) {
+        cancelAnimationFrame(rafPending);
+        rafPending = 0;
+      }
+      if (resizing) setModuleSize(resizing.key, resizing.size);
+      resizing = null;
+    };
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', onUp);
+  }
+  function onResizeKey(e: KeyboardEvent, key: string) {
+    const sizes = supportedSizes(key);
+    const i = sizes.indexOf(sizeOf(key));
+    if ((e.key === 'ArrowRight' || e.key === 'ArrowUp') && i < sizes.length - 1) {
+      e.preventDefault();
+      setModuleSize(key, sizes[i + 1]);
+    } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowDown') && i > 0) {
+      e.preventDefault();
+      setModuleSize(key, sizes[i - 1]);
+    }
+  }
 
   const winShare = $derived(wins + losses ? Math.round((wins / (wins + losses)) * 100) : 0);
   const longShare = $derived(long.n + short.n ? Math.round((long.n / (long.n + short.n)) * 100) : 0);
@@ -312,8 +425,52 @@
   const ddTroughDate = $derived(dd ? ddDate(dd.troughIdx) : '');
 </script>
 
-{#snippet head(title: string)}
-  <div class="border-b border-border px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</div>
+{#snippet moduleHeader(key: string)}
+  <!-- A271 slice: the shared module header — the label + the ⋯ Size menu (the discoverable, keyboard-
+       friendly path to change size; the corner drag handle is the pointer path). The Drawdown module
+       keeps its "Reading this chart" explainer here, beside the menu. -->
+  <div class="flex items-center gap-2 border-b border-border px-4 py-2.5">
+    <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{ANALYTICS_LABEL[key]}</span>
+    <div class="ml-auto flex items-center gap-1">
+      {#if key === 'dd'}
+        <InfoTip title="Reading this chart" align="end">
+          This is an underwater chart: it plots how far your equity sits <strong>below its highest prior peak</strong>, in dollars, at each
+          closed trade. The top line (0) means you’re at a new high; the curve dips as losses pull you under that peak and climbs back as
+          you recover. Computed on the filtered working set, so it narrows with your active filters. The shaded band marks the deepest
+          peak-to-trough stretch — your max drawdown.
+        </InfoTip>
+      {/if}
+      <DropdownMenu.Root>
+        <IconTip label="Module size">
+          {#snippet button(tip)}
+            <DropdownMenu.Trigger {...tip}>
+              {#snippet child({ props })}
+                <button
+                  {...props}
+                  type="button"
+                  class="grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                  aria-label="Module menu"
+                >
+                  <MoreHorizontal class="size-4" />
+                </button>
+              {/snippet}
+            </DropdownMenu.Trigger>
+          {/snippet}
+        </IconTip>
+        <DropdownMenu.Content align="end" class="min-w-[150px]">
+          <DropdownMenu.Group>
+            <DropdownMenu.Label class="text-xs font-normal text-muted-foreground">Size</DropdownMenu.Label>
+            {#each supportedSizes(key) as sz (sz)}
+              <DropdownMenu.Item onSelect={() => setModuleSize(key, sz)}>
+                <Check class={['size-4', sizeOf(key) === sz ? 'opacity-100' : 'opacity-0']} />
+                {SIZE_LABEL[sz]}
+              </DropdownMenu.Item>
+            {/each}
+          </DropdownMenu.Group>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+    </div>
+  </div>
 {/snippet}
 
 {#snippet countBars(items: DistBar[], onbar?: (i: number) => void, activeBar?: number | null)}
@@ -467,425 +624,431 @@
        parity with the Dashboard). Distinct carousel label so locators don't collide with Dashboard's. -->
   <StatCardRow stats={kpiStats} label="Analytics stats" gridClass="grid gap-4 sm:grid-cols-3 lg:grid-cols-6" detail={statDetail} />
 
-  <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-    <!-- Distribution -->
-    <Card.Root class="lg:col-span-2">
-      {@render head('P&L distribution (per trade)')}
-      <Card.Content>
-        {@render countBars(dist, bucketTrades ? i => (bucketSel = bucketSel === i ? null : i) : undefined, bucketSel)}
-        {#if bucketSel != null}
-          <!-- A197 drill-down: the clicked bucket's matching trades (live — re-narrows with the filter set) -->
-          <div class="mt-3 rounded-md border border-border bg-background p-3">
-            <div class="flex items-center justify-between text-xs">
-              <span class="font-semibold">
-                {dist[bucketSel].label} — {bucketRows.length} trade{bucketRows.length === 1 ? '' : 's'}
-              </span>
-              <button
-                type="button"
-                class="relative grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
-                aria-label="Close bucket detail"
-                onclick={() => (bucketSel = null)}><X class="size-3" /></button
-              >
+  {#snippet distBody()}
+    <Card.Content>
+      {@render countBars(dist, bucketTrades ? i => (bucketSel = bucketSel === i ? null : i) : undefined, bucketSel)}
+      {#if bucketSel != null}
+        <!-- A197 drill-down: the clicked bucket's matching trades (live — re-narrows with the filter set) -->
+        <div class="mt-3 rounded-md border border-border bg-background p-3">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold">
+              {dist[bucketSel].label} — {bucketRows.length} trade{bucketRows.length === 1 ? '' : 's'}
+            </span>
+            <button
+              type="button"
+              class="relative grid size-5 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:before:absolute pointer-coarse:before:-inset-2 pointer-coarse:before:content-['']"
+              aria-label="Close bucket detail"
+              onclick={() => (bucketSel = null)}><X class="size-3" /></button
+            >
+          </div>
+          {#if bucketRows.length}
+            <div class="mt-2 space-y-0.5">
+              {#each bucketRows.slice(0, BUCKET_ROW_CAP) as t, i (i)}
+                <div class="flex items-center gap-3 text-xs tabular-nums">
+                  <span class="w-20 text-muted-foreground">{t.date}</span>
+                  <span class="w-10 text-muted-foreground">{t.time}</span>
+                  <span class="w-12 font-medium">{t.sym}</span>
+                  <span class="w-12 text-muted-foreground">{t.side}</span>
+                  <span class="w-10 text-right text-muted-foreground">×{t.qty}</span>
+                  <span class={cn('flex-1 text-right font-semibold', t.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}>{usd(t.pnl)}</span>
+                </div>
+              {/each}
             </div>
-            {#if bucketRows.length}
-              <div class="mt-2 space-y-0.5">
-                {#each bucketRows.slice(0, BUCKET_ROW_CAP) as t, i (i)}
-                  <div class="flex items-center gap-3 text-xs tabular-nums">
-                    <span class="w-20 text-muted-foreground">{t.date}</span>
-                    <span class="w-10 text-muted-foreground">{t.time}</span>
-                    <span class="w-12 font-medium">{t.sym}</span>
-                    <span class="w-12 text-muted-foreground">{t.side}</span>
-                    <span class="w-10 text-right text-muted-foreground">×{t.qty}</span>
-                    <span class={cn('flex-1 text-right font-semibold', t.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}>{usd(t.pnl)}</span
-                    >
-                  </div>
-                {/each}
-              </div>
-              {#if bucketRows.length > BUCKET_ROW_CAP}
-                <p class="mt-2 text-[11px] text-muted-foreground">
-                  …and {bucketRows.length - BUCKET_ROW_CAP} more — the Blotter shows the full list (filter it to match).
-                </p>
+            {#if bucketRows.length > BUCKET_ROW_CAP}
+              <p class="mt-2 text-[11px] text-muted-foreground">
+                …and {bucketRows.length - BUCKET_ROW_CAP} more — the Blotter shows the full list (filter it to match).
+              </p>
+            {/if}
+          {:else}
+            <p class="mt-2 text-[11px] text-muted-foreground">No trades in this bucket under the current filters.</p>
+          {/if}
+        </div>
+      {/if}
+      <div class="mt-3 flex items-center gap-4 text-xs">
+        <span class="text-muted-foreground">Win / loss</span>
+        <div class="flex h-2 flex-1 overflow-hidden rounded-full">
+          <svg viewBox="0 0 100 8" class="h-2 w-full" preserveAspectRatio="none" aria-hidden="true">
+            <rect x="0" y="0" width={winShare} height="8" class="fill-chart-2" />
+            <rect x={winShare} y="0" width={100 - winShare} height="8" class="fill-destructive" />
+          </svg>
+        </div>
+        <span class="tabular-nums text-chart-2">{wins}W</span>
+        <span class="tabular-nums text-destructive">{losses}L</span>
+      </div>
+      {#if scratch > 0}
+        <p class="mt-2 text-[11px] text-muted-foreground">
+          {scratch} scratch trade{scratch === 1 ? '' : 's'} ($0) excluded from the chart and the win/loss bar; the Win rate stat counts them in
+          its denominator.
+        </p>
+      {/if}
+    </Card.Content>
+  {/snippet}
+
+  {#snippet ddBody()}
+    <Card.Content>
+      {#if dd}
+        <div class="flex gap-2">
+          <!-- y-axis: 0 (at peak) at top → the deepest drawdown at the bottom -->
+          <div class="flex w-14 shrink-0 flex-col justify-between py-0.5 text-right text-[9px] tabular-nums text-muted-foreground">
+            <span>$0</span>
+            <span class="text-destructive">{ddMoney(dd.maxd)}</span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+            <svg
+              viewBox="0 0 100 50"
+              class="h-32 w-full cursor-crosshair touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              preserveAspectRatio="none"
+              role="img"
+              aria-label="Drawdown-from-peak curve — hover, tap, or use arrow keys to read the drawdown at any point"
+              tabindex="0"
+              onpointerdown={moveDdCursor}
+              onpointermove={moveDdCursor}
+              onpointerleave={() => (ddCursor = null)}
+              onkeydown={ddKey}
+            >
+              <!-- gridlines: the 0/peak line (solid) + a dashed mid reference -->
+              <line x1="0" y1="0.5" x2="100" y2="0.5" class="stroke-border" stroke-width="0.5" vector-effect="non-scaling-stroke" />
+              <line
+                x1="0"
+                y1="25"
+                x2="100"
+                y2="25"
+                class="stroke-border"
+                stroke-width="0.5"
+                stroke-dasharray="1.5 1.5"
+                vector-effect="non-scaling-stroke"
+              />
+              <!-- max-drawdown peak→trough span shading -->
+              {#if dd.troughIdx > dd.peakIdx}
+                <rect x={dd.X(dd.peakIdx)} y="0" width={dd.X(dd.troughIdx) - dd.X(dd.peakIdx)} height="50" class="fill-destructive/10" />
               {/if}
+              <path d={dd.area} class="fill-destructive/20" />
+              <path d={dd.line} fill="none" class="stroke-destructive" stroke-width="0.7" vector-effect="non-scaling-stroke" />
+              <!-- trough marker (deepest point) -->
+              <line
+                x1={dd.X(dd.troughIdx)}
+                y1="0"
+                x2={dd.X(dd.troughIdx)}
+                y2="50"
+                class="stroke-destructive"
+                stroke-width="0.5"
+                stroke-dasharray="1.5 1.5"
+                vector-effect="non-scaling-stroke"
+              />
+              <!-- hover/tap/keyboard crosshair (SVG geometry — CSP-safe, no CSS) -->
+              {#if ddCursor != null}
+                <line
+                  x1={dd.X(ddCursor)}
+                  y1="0"
+                  x2={dd.X(ddCursor)}
+                  y2="50"
+                  class="stroke-foreground"
+                  stroke-width="0.6"
+                  vector-effect="non-scaling-stroke"
+                />
+                <rect x={dd.X(ddCursor) - 0.7} y={dd.Y(dd.depth[ddCursor]) - 1} width="1.4" height="2" class="fill-foreground" />
+              {/if}
+            </svg>
+            <!-- x-axis: first → last point (dates when wired, else generic) -->
+            <div class="mt-1 flex justify-between text-[9px] text-muted-foreground tabular-nums">
+              <span>{ddDate(1) || 'start'}</span>
+              <span>{ddDate(dd.len - 1) || 'latest'}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nearest-point readout -->
+        {#if ddReadout}
+          <div class="mt-2 text-xs tabular-nums">
+            <span class="text-muted-foreground">At {ddReadout.date || `trade ${ddReadout.idx}`}:</span>
+            <span class="ml-1 font-semibold text-destructive">{ddMoney(ddReadout.depth)}</span>
+            <span class="text-muted-foreground">below peak</span>
+          </div>
+        {:else}
+          <p class="mt-2 text-[11px] text-muted-foreground">Hover, tap, or press ←/→ on the chart to read the drawdown at any point.</p>
+        {/if}
+
+        <!-- Max-drawdown callout with its date/trade range -->
+        <div class="mt-3 rounded-md border border-border bg-background p-2.5 text-xs">
+          <div class="flex items-center justify-between">
+            <span class="text-muted-foreground">Max drawdown</span>
+            <span class="font-semibold tabular-nums text-destructive">
+              <!-- A290: dollar figure from the compute-derived `maxDD` prop (matches the stat grid);
+                     the local `dd` walk stays only for the chart geometry + peak/trough indices. -->
+              {ddMoney(maxDD)}{maxDDpct != null ? ` · ${maxDDpct.toFixed(1)}% of peak` : ''}
+            </span>
+          </div>
+          <div class="mt-1 text-[11px] text-muted-foreground">
+            {#if ddPeakDate && ddTroughDate}
+              Peak {ddPeakDate} → trough {ddTroughDate}{dd.troughIdx > dd.peakIdx
+                ? ` · ${dd.troughIdx - dd.peakIdx} trade${dd.troughIdx - dd.peakIdx === 1 ? '' : 's'}`
+                : ''}
+            {:else if dd.troughIdx > dd.peakIdx}
+              Over {dd.troughIdx - dd.peakIdx} trade{dd.troughIdx - dd.peakIdx === 1 ? '' : 's'} from the prior equity peak to the trough{maxDDpct ==
+              null
+                ? ' (no positive prior peak)'
+                : ''}
             {:else}
-              <p class="mt-2 text-[11px] text-muted-foreground">No trades in this bucket under the current filters.</p>
+              No drawdown yet — equity is at its high.
             {/if}
           </div>
-        {/if}
-        <div class="mt-3 flex items-center gap-4 text-xs">
-          <span class="text-muted-foreground">Win / loss</span>
-          <div class="flex h-2 flex-1 overflow-hidden rounded-full">
-            <svg viewBox="0 0 100 8" class="h-2 w-full" preserveAspectRatio="none" aria-hidden="true">
-              <rect x="0" y="0" width={winShare} height="8" class="fill-chart-2" />
-              <rect x={winShare} y="0" width={100 - winShare} height="8" class="fill-destructive" />
-            </svg>
-          </div>
-          <span class="tabular-nums text-chart-2">{wins}W</span>
-          <span class="tabular-nums text-destructive">{losses}L</span>
         </div>
-        {#if scratch > 0}
-          <p class="mt-2 text-[11px] text-muted-foreground">
-            {scratch} scratch trade{scratch === 1 ? '' : 's'} ($0) excluded from the chart and the win/loss bar; the Win rate stat counts them
-            in its denominator.
-          </p>
-        {/if}
-      </Card.Content>
-    </Card.Root>
+      {:else}
+        <p class="text-xs text-muted-foreground">Not enough trades to chart a drawdown yet.</p>
+      {/if}
+    </Card.Content>
+  {/snippet}
 
-    <!-- Drawdown — A240: interactive underwater chart. Explainer popover, hover/tap/keyboard readout
-         (CSP-safe SVG-geometry crosshair), a shaded max-drawdown span, its dated callout, and axes. -->
-    <Card.Root>
-      <div class="flex items-center justify-between border-b border-border pr-2 pl-4">
-        <span class="py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Drawdown (underwater)</span>
-        <InfoTip title="Reading this chart" align="end">
-          This is an underwater chart: it plots how far your equity sits <strong>below its highest prior peak</strong>, in dollars, at each
-          closed trade. The top line (0) means you’re at a new high; the curve dips as losses pull you under that peak and climbs back as
-          you recover. Computed on the filtered working set, so it narrows with your active filters. The shaded band marks the deepest
-          peak-to-trough stretch — your max drawdown.
-        </InfoTip>
+  {#snippet lsBody()}
+    <Card.Content>
+      <!-- A197: the cards toggle the app-wide side filter -->
+      <div class="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          class={cn(
+            'rounded-md border border-border bg-background px-3 py-2 text-left hover:border-ring hover:bg-accent',
+            filterModel?.side === 'long' && 'border-ring bg-secondary'
+          )}
+          aria-pressed={filterModel?.side === 'long'}
+          onclick={() => toggleSide('long')}
+        >
+          <div class="text-[11px] text-muted-foreground">Long · {long.n}</div>
+          <div class={cn('mt-0.5 text-sm font-semibold tabular-nums', long.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}>
+            {usdWhole(long.pnl)}
+          </div>
+        </button>
+        <button
+          type="button"
+          class={cn(
+            'rounded-md border border-border bg-background px-3 py-2 text-left hover:border-ring hover:bg-accent',
+            filterModel?.side === 'short' && 'border-ring bg-secondary'
+          )}
+          aria-pressed={filterModel?.side === 'short'}
+          onclick={() => toggleSide('short')}
+        >
+          <div class="text-[11px] text-muted-foreground">Short · {short.n}</div>
+          <div class={cn('mt-0.5 text-sm font-semibold tabular-nums', short.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}>
+            {usdWhole(short.pnl)}
+          </div>
+        </button>
       </div>
-      <Card.Content>
-        {#if dd}
-          <div class="flex gap-2">
-            <!-- y-axis: 0 (at peak) at top → the deepest drawdown at the bottom -->
-            <div class="flex w-14 shrink-0 flex-col justify-between py-0.5 text-right text-[9px] tabular-nums text-muted-foreground">
-              <span>$0</span>
-              <span class="text-destructive">{ddMoney(dd.maxd)}</span>
-            </div>
-            <div class="min-w-0 flex-1">
-              <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-              <svg
-                viewBox="0 0 100 50"
-                class="h-32 w-full cursor-crosshair touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                preserveAspectRatio="none"
-                role="img"
-                aria-label="Drawdown-from-peak curve — hover, tap, or use arrow keys to read the drawdown at any point"
-                tabindex="0"
-                onpointerdown={moveDdCursor}
-                onpointermove={moveDdCursor}
-                onpointerleave={() => (ddCursor = null)}
-                onkeydown={ddKey}
-              >
-                <!-- gridlines: the 0/peak line (solid) + a dashed mid reference -->
-                <line x1="0" y1="0.5" x2="100" y2="0.5" class="stroke-border" stroke-width="0.5" vector-effect="non-scaling-stroke" />
-                <line
-                  x1="0"
-                  y1="25"
-                  x2="100"
-                  y2="25"
-                  class="stroke-border"
-                  stroke-width="0.5"
-                  stroke-dasharray="1.5 1.5"
-                  vector-effect="non-scaling-stroke"
-                />
-                <!-- max-drawdown peak→trough span shading -->
-                {#if dd.troughIdx > dd.peakIdx}
-                  <rect x={dd.X(dd.peakIdx)} y="0" width={dd.X(dd.troughIdx) - dd.X(dd.peakIdx)} height="50" class="fill-destructive/10" />
-                {/if}
-                <path d={dd.area} class="fill-destructive/20" />
-                <path d={dd.line} fill="none" class="stroke-destructive" stroke-width="0.7" vector-effect="non-scaling-stroke" />
-                <!-- trough marker (deepest point) -->
-                <line
-                  x1={dd.X(dd.troughIdx)}
-                  y1="0"
-                  x2={dd.X(dd.troughIdx)}
-                  y2="50"
-                  class="stroke-destructive"
-                  stroke-width="0.5"
-                  stroke-dasharray="1.5 1.5"
-                  vector-effect="non-scaling-stroke"
-                />
-                <!-- hover/tap/keyboard crosshair (SVG geometry — CSP-safe, no CSS) -->
-                {#if ddCursor != null}
-                  <line
-                    x1={dd.X(ddCursor)}
-                    y1="0"
-                    x2={dd.X(ddCursor)}
-                    y2="50"
-                    class="stroke-foreground"
-                    stroke-width="0.6"
-                    vector-effect="non-scaling-stroke"
-                  />
-                  <rect x={dd.X(ddCursor) - 0.7} y={dd.Y(dd.depth[ddCursor]) - 1} width="1.4" height="2" class="fill-foreground" />
-                {/if}
-              </svg>
-              <!-- x-axis: first → last point (dates when wired, else generic) -->
-              <div class="mt-1 flex justify-between text-[9px] text-muted-foreground tabular-nums">
-                <span>{ddDate(1) || 'start'}</span>
-                <span>{ddDate(dd.len - 1) || 'latest'}</span>
-              </div>
-            </div>
-          </div>
+      <svg viewBox="0 0 100 8" class="mt-3 h-2 w-full" preserveAspectRatio="none" aria-hidden="true">
+        <rect x="0" y="0" width={longShare} height="8" class="fill-chart-2" />
+        <rect x={longShare} y="0" width={100 - longShare} height="8" class="fill-chart-1" />
+      </svg>
+      <div class="mt-1 flex justify-between text-[11px] text-muted-foreground">
+        <span>{longShare}% long</span><span>{100 - longShare}% short</span>
+      </div>
+      {#if unknownSide > 0}
+        <p class="mt-2 text-[11px] text-muted-foreground">
+          {unknownSide} trade{unknownSide === 1 ? '' : 's'} without side info excluded from this split.
+        </p>
+      {/if}
+    </Card.Content>
+  {/snippet}
 
-          <!-- Nearest-point readout -->
-          {#if ddReadout}
-            <div class="mt-2 text-xs tabular-nums">
-              <span class="text-muted-foreground">At {ddReadout.date || `trade ${ddReadout.idx}`}:</span>
-              <span class="ml-1 font-semibold text-destructive">{ddMoney(ddReadout.depth)}</span>
-              <span class="text-muted-foreground">below peak</span>
-            </div>
-          {:else}
-            <p class="mt-2 text-[11px] text-muted-foreground">Hover, tap, or press ←/→ on the chart to read the drawdown at any point.</p>
-          {/if}
+  {#snippet hourBody()}
+    <Card.Content>
+      {#if hours.length}
+        {@render signedBars(hours, filterModel ? toggleHour : undefined, filterModel?.hours)}
+      {:else}
+        <!-- A176-class capability note: name what unlocks the missing data instead of an empty chart -->
+        <p class="text-xs text-muted-foreground">
+          No time-of-day data in this dataset — fills-based exports carry trade timestamps (e.g. TradingView’s order-history export; balance
+          history has P&L only). Import one alongside your existing files and overlapping trades merge.
+        </p>
+      {/if}
+    </Card.Content>
+  {/snippet}
 
-          <!-- Max-drawdown callout with its date/trade range -->
-          <div class="mt-3 rounded-md border border-border bg-background p-2.5 text-xs">
-            <div class="flex items-center justify-between">
-              <span class="text-muted-foreground">Max drawdown</span>
-              <span class="font-semibold tabular-nums text-destructive">
-                <!-- A290: dollar figure from the compute-derived `maxDD` prop (matches the stat grid);
-                     the local `dd` walk stays only for the chart geometry + peak/trough indices. -->
-                {ddMoney(maxDD)}{maxDDpct != null ? ` · ${maxDDpct.toFixed(1)}% of peak` : ''}
-              </span>
-            </div>
-            <div class="mt-1 text-[11px] text-muted-foreground">
-              {#if ddPeakDate && ddTroughDate}
-                Peak {ddPeakDate} → trough {ddTroughDate}{dd.troughIdx > dd.peakIdx
-                  ? ` · ${dd.troughIdx - dd.peakIdx} trade${dd.troughIdx - dd.peakIdx === 1 ? '' : 's'}`
-                  : ''}
-              {:else if dd.troughIdx > dd.peakIdx}
-                Over {dd.troughIdx - dd.peakIdx} trade{dd.troughIdx - dd.peakIdx === 1 ? '' : 's'} from the prior equity peak to the trough{maxDDpct ==
-                null
-                  ? ' (no positive prior peak)'
-                  : ''}
-              {:else}
-                No drawdown yet — equity is at its high.
-              {/if}
-            </div>
-          </div>
-        {:else}
-          <p class="text-xs text-muted-foreground">Not enough trades to chart a drawdown yet.</p>
-        {/if}
-      </Card.Content>
-    </Card.Root>
+  {#snippet wdayBody()}
+    <Card.Content>{@render signedBars(wdays, filterModel ? toggleDow : undefined, filterModel?.dows)}</Card.Content>
+  {/snippet}
 
-    <!-- Long vs Short -->
-    <Card.Root>
-      {@render head('Long vs short')}
-      <Card.Content>
-        <!-- A197: the cards toggle the app-wide side filter -->
-        <div class="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            class={cn(
-              'rounded-md border border-border bg-background px-3 py-2 text-left hover:border-ring hover:bg-accent',
-              filterModel?.side === 'long' && 'border-ring bg-secondary'
-            )}
-            aria-pressed={filterModel?.side === 'long'}
-            onclick={() => toggleSide('long')}
+  {#snippet symBody()}
+    <Card.Content class="space-y-1">
+      <!-- A197: sortable columns — default is the builder's impact (|P&L|) order -->
+      <div class="-mx-1 flex items-center gap-3 px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+        {@render sortBtn('Sym', 'name', symSort, () => (symSort = applySort(symSort, 'name')), 'w-10')}
+        <span class="flex w-28 items-center gap-2">
+          {@render sortBtn('Trades', 'trades', symSort, () => (symSort = applySort(symSort, 'trades')))}
+          {@render sortBtn('Win', 'win', symSort, () => (symSort = applySort(symSort, 'win')))}
+        </span>
+        <span class="flex-1"></span>
+        {@render sortBtn('P&L', 'pnl', symSort, () => (symSort = applySort(symSort, 'pnl')), 'w-20 justify-end')}
+      </div>
+      {#each symShown as s (s.sym)}
+        <button
+          type="button"
+          class={cn(
+            '-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-3 rounded px-1 py-0.5 text-xs hover:bg-accent',
+            filterModel?.root === s.sym && 'bg-secondary'
+          )}
+          aria-pressed={filterModel?.root === s.sym}
+          title={filterModel?.root === s.sym ? 'Clear the symbol filter' : `Filter every screen to ${s.sym}`}
+          onclick={() => toggleRoot(s.sym)}
+        >
+          <span class="w-10 text-left font-medium">{s.sym}</span>
+          <span class="w-28 text-left text-muted-foreground">{s.trades} tr · {s.win}%</span>
+          <svg viewBox="0 0 100 8" class="h-2 flex-1" preserveAspectRatio="none" aria-hidden="true">
+            <rect x="0" y="0" width="100" height="8" class="fill-secondary" />
+            <rect
+              x="0"
+              y="0"
+              width={Math.round((Math.abs(s.pnl) / maxSym) * 100)}
+              height="8"
+              class={s.pnl >= 0 ? 'fill-chart-2' : 'fill-destructive'}
+            />
+          </svg>
+          <span class={cn('w-20 text-right font-semibold tabular-nums', s.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}
+            >{usdWhole(s.pnl)}</span
           >
-            <div class="text-[11px] text-muted-foreground">Long · {long.n}</div>
-            <div class={cn('mt-0.5 text-sm font-semibold tabular-nums', long.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}>
-              {usdWhole(long.pnl)}
-            </div>
-          </button>
-          <button
-            type="button"
-            class={cn(
-              'rounded-md border border-border bg-background px-3 py-2 text-left hover:border-ring hover:bg-accent',
-              filterModel?.side === 'short' && 'border-ring bg-secondary'
-            )}
-            aria-pressed={filterModel?.side === 'short'}
-            onclick={() => toggleSide('short')}
-          >
-            <div class="text-[11px] text-muted-foreground">Short · {short.n}</div>
-            <div class={cn('mt-0.5 text-sm font-semibold tabular-nums', short.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}>
-              {usdWhole(short.pnl)}
-            </div>
-          </button>
-        </div>
-        <svg viewBox="0 0 100 8" class="mt-3 h-2 w-full" preserveAspectRatio="none" aria-hidden="true">
-          <rect x="0" y="0" width={longShare} height="8" class="fill-chart-2" />
-          <rect x={longShare} y="0" width={100 - longShare} height="8" class="fill-chart-1" />
-        </svg>
-        <div class="mt-1 flex justify-between text-[11px] text-muted-foreground">
-          <span>{longShare}% long</span><span>{100 - longShare}% short</span>
-        </div>
-        {#if unknownSide > 0}
-          <p class="mt-2 text-[11px] text-muted-foreground">
-            {unknownSide} trade{unknownSide === 1 ? '' : 's'} without side info excluded from this split.
-          </p>
-        {/if}
-      </Card.Content>
-    </Card.Root>
+        </button>
+      {/each}
+      {#if symbols.length > SYM_CUT}
+        <button
+          type="button"
+          class="pt-1 text-[11px] text-muted-foreground underline hover:text-foreground"
+          onclick={() => (allSyms = !allSyms)}
+        >
+          {allSyms ? `Show top ${SYM_CUT}` : `Show all ${symbols.length} symbols`}
+        </button>
+      {/if}
+    </Card.Content>
+  {/snippet}
 
-    <!-- Time of day (A197: labels toggle the hour filter; coverage-gated per A176) -->
-    <Card.Root>
-      {@render head('Avg P&L by hour')}
-      <Card.Content>
-        {#if hours.length}
-          {@render signedBars(hours, filterModel ? toggleHour : undefined, filterModel?.hours)}
-        {:else}
-          <!-- A176-class capability note: name what unlocks the missing data instead of an empty chart -->
-          <p class="text-xs text-muted-foreground">
-            No time-of-day data in this dataset — fills-based exports carry trade timestamps (e.g. TradingView’s order-history export;
-            balance history has P&L only). Import one alongside your existing files and overlapping trades merge.
-          </p>
-        {/if}
-      </Card.Content>
-    </Card.Root>
-
-    <!-- Day of week (A197: labels toggle the weekday filter) -->
-    <Card.Root>
-      {@render head('Avg P&L by weekday')}
-      <Card.Content>{@render signedBars(wdays, filterModel ? toggleDow : undefined, filterModel?.dows)}</Card.Content>
-    </Card.Root>
-
-    <!-- Per-symbol (A197: rows toggle the symbol filter; show-all past the top cut) -->
-    <Card.Root class="lg:col-span-2">
-      {@render head('Performance by symbol')}
-      <Card.Content class="space-y-1">
+  {#snippet tagBody()}
+    <Card.Content class="space-y-2">
+      {#if byTag.length}
         <!-- A197: sortable columns — default is the builder's impact (|P&L|) order -->
-        <div class="-mx-1 flex items-center gap-3 px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-          {@render sortBtn('Sym', 'name', symSort, () => (symSort = applySort(symSort, 'name')), 'w-10')}
+        <div class="-mx-1 flex items-center gap-3 px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+          {@render sortBtn('Tag', 'name', tagSort, () => (tagSort = applySort(tagSort, 'name')), 'w-24')}
           <span class="flex w-28 items-center gap-2">
-            {@render sortBtn('Trades', 'trades', symSort, () => (symSort = applySort(symSort, 'trades')))}
-            {@render sortBtn('Win', 'win', symSort, () => (symSort = applySort(symSort, 'win')))}
+            {@render sortBtn('Trades', 'trades', tagSort, () => (tagSort = applySort(tagSort, 'trades')))}
+            {@render sortBtn('Win', 'win', tagSort, () => (tagSort = applySort(tagSort, 'win')))}
           </span>
           <span class="flex-1"></span>
-          {@render sortBtn('P&L', 'pnl', symSort, () => (symSort = applySort(symSort, 'pnl')), 'w-20 justify-end')}
+          {@render sortBtn('P&L', 'pnl', tagSort, () => (tagSort = applySort(tagSort, 'pnl')), 'w-20 justify-end')}
         </div>
-        {#each symShown as s (s.sym)}
+        {#each tagShown as r (r.tag)}
           <button
             type="button"
             class={cn(
               '-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-3 rounded px-1 py-0.5 text-xs hover:bg-accent',
-              filterModel?.root === s.sym && 'bg-secondary'
+              filterModel?.tag === r.tag && 'bg-secondary'
             )}
-            aria-pressed={filterModel?.root === s.sym}
-            title={filterModel?.root === s.sym ? 'Clear the symbol filter' : `Filter every screen to ${s.sym}`}
-            onclick={() => toggleRoot(s.sym)}
+            aria-pressed={filterModel?.tag === r.tag}
+            title={filterModel?.tag === r.tag ? 'Clear the tag filter' : `Filter every screen to “${r.tag}”`}
+            onclick={() => toggleTag(r.tag)}
           >
-            <span class="w-10 text-left font-medium">{s.sym}</span>
-            <span class="w-28 text-left text-muted-foreground">{s.trades} tr · {s.win}%</span>
+            <span class="w-24 truncate text-left font-medium" title={r.tag}>{r.tag}</span>
+            <span class="w-28 text-left text-muted-foreground">{r.trades} tr · {r.win}%</span>
             <svg viewBox="0 0 100 8" class="h-2 flex-1" preserveAspectRatio="none" aria-hidden="true">
               <rect x="0" y="0" width="100" height="8" class="fill-secondary" />
               <rect
                 x="0"
                 y="0"
-                width={Math.round((Math.abs(s.pnl) / maxSym) * 100)}
+                width={Math.round((Math.abs(r.pnl) / maxTag) * 100)}
                 height="8"
-                class={s.pnl >= 0 ? 'fill-chart-2' : 'fill-destructive'}
+                class={r.pnl >= 0 ? 'fill-chart-2' : 'fill-destructive'}
               />
             </svg>
-            <span class={cn('w-20 text-right font-semibold tabular-nums', s.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}
-              >{usdWhole(s.pnl)}</span
+            <span class={cn('w-20 text-right font-semibold tabular-nums', r.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}
+              >{usdWhole(r.pnl)}</span
             >
           </button>
         {/each}
-        {#if symbols.length > SYM_CUT}
+        {#if byTag.length > TAG_CUT}
           <button
             type="button"
-            class="pt-1 text-[11px] text-muted-foreground underline hover:text-foreground"
-            onclick={() => (allSyms = !allSyms)}
+            class="text-[11px] text-muted-foreground underline hover:text-foreground"
+            onclick={() => (allTags = !allTags)}
           >
-            {allSyms ? `Show top ${SYM_CUT}` : `Show all ${symbols.length} symbols`}
+            {allTags ? `Show top ${TAG_CUT}` : `Show all ${byTag.length} tags`}
           </button>
         {/if}
-      </Card.Content>
-    </Card.Root>
-
-    <!-- Per-tag (R17/A165) — the untagged bucket doubles as tag coverage -->
-    <Card.Root class="lg:col-span-2">
-      {@render head('Performance by tag')}
-      <Card.Content class="space-y-2">
-        {#if byTag.length}
-          <!-- A197: sortable columns — default is the builder's impact (|P&L|) order -->
-          <div class="-mx-1 flex items-center gap-3 px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            {@render sortBtn('Tag', 'name', tagSort, () => (tagSort = applySort(tagSort, 'name')), 'w-24')}
-            <span class="flex w-28 items-center gap-2">
-              {@render sortBtn('Trades', 'trades', tagSort, () => (tagSort = applySort(tagSort, 'trades')))}
-              {@render sortBtn('Win', 'win', tagSort, () => (tagSort = applySort(tagSort, 'win')))}
-            </span>
-            <span class="flex-1"></span>
-            {@render sortBtn('P&L', 'pnl', tagSort, () => (tagSort = applySort(tagSort, 'pnl')), 'w-20 justify-end')}
+        {#if untagged}
+          <div class="flex items-center gap-3 border-t border-border pt-2 text-xs">
+            <span class="w-24 truncate text-muted-foreground">untagged</span>
+            <span class="w-28 text-muted-foreground">{untagged.trades} tr · {untagged.win}%</span>
+            <svg viewBox="0 0 100 8" class="h-2 flex-1" preserveAspectRatio="none" aria-hidden="true">
+              <rect x="0" y="0" width="100" height="8" class="fill-secondary" />
+              <rect x="0" y="0" width={Math.round((Math.abs(untagged.pnl) / maxTag) * 100)} height="8" class="fill-chart-1" />
+            </svg>
+            <span class="w-20 text-right font-semibold tabular-nums text-muted-foreground">{usdWhole(untagged.pnl)}</span>
           </div>
-          {#each tagShown as r (r.tag)}
-            <button
-              type="button"
-              class={cn(
-                '-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-3 rounded px-1 py-0.5 text-xs hover:bg-accent',
-                filterModel?.tag === r.tag && 'bg-secondary'
-              )}
-              aria-pressed={filterModel?.tag === r.tag}
-              title={filterModel?.tag === r.tag ? 'Clear the tag filter' : `Filter every screen to “${r.tag}”`}
-              onclick={() => toggleTag(r.tag)}
-            >
-              <span class="w-24 truncate text-left font-medium" title={r.tag}>{r.tag}</span>
-              <span class="w-28 text-left text-muted-foreground">{r.trades} tr · {r.win}%</span>
-              <svg viewBox="0 0 100 8" class="h-2 flex-1" preserveAspectRatio="none" aria-hidden="true">
-                <rect x="0" y="0" width="100" height="8" class="fill-secondary" />
-                <rect
-                  x="0"
-                  y="0"
-                  width={Math.round((Math.abs(r.pnl) / maxTag) * 100)}
-                  height="8"
-                  class={r.pnl >= 0 ? 'fill-chart-2' : 'fill-destructive'}
-                />
-              </svg>
-              <span class={cn('w-20 text-right font-semibold tabular-nums', r.pnl >= 0 ? 'text-chart-2' : 'text-destructive')}
-                >{usdWhole(r.pnl)}</span
-              >
-            </button>
-          {/each}
-          {#if byTag.length > TAG_CUT}
-            <button
-              type="button"
-              class="text-[11px] text-muted-foreground underline hover:text-foreground"
-              onclick={() => (allTags = !allTags)}
-            >
-              {allTags ? `Show top ${TAG_CUT}` : `Show all ${byTag.length} tags`}
-            </button>
-          {/if}
-          {#if untagged}
-            <div class="flex items-center gap-3 border-t border-border pt-2 text-xs">
-              <span class="w-24 truncate text-muted-foreground">untagged</span>
-              <span class="w-28 text-muted-foreground">{untagged.trades} tr · {untagged.win}%</span>
-              <svg viewBox="0 0 100 8" class="h-2 flex-1" preserveAspectRatio="none" aria-hidden="true">
-                <rect x="0" y="0" width="100" height="8" class="fill-secondary" />
-                <rect x="0" y="0" width={Math.round((Math.abs(untagged.pnl) / maxTag) * 100)} height="8" class="fill-chart-1" />
-              </svg>
-              <span class="w-20 text-right font-semibold tabular-nums text-muted-foreground">{usdWhole(untagged.pnl)}</span>
-            </div>
-          {/if}
-          <p class="text-[11px] text-muted-foreground">
-            A trade with several tags counts once per tag; “untagged” is the disjoint remainder — your tag coverage.
-          </p>
-        {:else}
-          <p class="text-xs text-muted-foreground">
-            No tags yet — tag trades in the Blotter or Trade Editor to see per-tag performance{untagged
-              ? ` (${untagged.trades} trades untagged)`
-              : ''}.
-          </p>
         {/if}
-      </Card.Content>
-    </Card.Root>
+        <p class="text-[11px] text-muted-foreground">
+          A trade with several tags counts once per tag; “untagged” is the disjoint remainder — your tag coverage.
+        </p>
+      {:else}
+        <p class="text-xs text-muted-foreground">
+          No tags yet — tag trades in the Blotter or Trade Editor to see per-tag performance{untagged
+            ? ` (${untagged.trades} trades untagged)`
+            : ''}.
+        </p>
+      {/if}
+    </Card.Content>
+  {/snippet}
 
-    <!-- Full advanced stats grid -->
-    <Card.Root class="lg:col-span-2">
-      {@render head('Advanced statistics')}
-      <Card.Content>
-        <div class="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-x-6 gap-y-0">
-          {#each statRows as r (r.k)}
-            <div class="flex items-baseline justify-between gap-3 border-b border-border py-[7px]">
-              <span class="text-xs text-muted-foreground">{r.k}</span>
-              <span
-                class={cn(
-                  'text-[13px] font-bold tabular-nums whitespace-nowrap',
-                  r.tone === 'pos' ? 'text-chart-2' : r.tone === 'neg' ? 'text-destructive' : 'text-foreground'
-                )}>{r.v}</span
-              >
-            </div>
-          {/each}
-        </div>
-        {#if holdCoverage < 0.995}
-          <!-- A176: dataset-level capability note — name what unlocks the missing data -->
-          <p class="mt-2 text-[11px] text-muted-foreground">
-            {holdCoverage <= 0.005 ? 'No hold-time data in this dataset' : `Hold times cover ${Math.round(holdCoverage * 100)}% of trades`} —
-            fills-based exports provide them (e.g. TradingView’s order-history export; balance history carries P&L only). Importing one alongside
-            your existing files fills the gap: overlapping trades merge.
-          </p>
-        {/if}
-      </Card.Content>
-    </Card.Root>
+  {#snippet statsBody()}
+    <Card.Content>
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-x-6 gap-y-0">
+        {#each statRows as r (r.k)}
+          <div class="flex items-baseline justify-between gap-3 border-b border-border py-[7px]">
+            <span class="text-xs text-muted-foreground">{r.k}</span>
+            <span
+              class={cn(
+                'text-[13px] font-bold tabular-nums whitespace-nowrap',
+                r.tone === 'pos' ? 'text-chart-2' : r.tone === 'neg' ? 'text-destructive' : 'text-foreground'
+              )}>{r.v}</span
+            >
+          </div>
+        {/each}
+      </div>
+      {#if holdCoverage < 0.995}
+        <!-- A176: dataset-level capability note — name what unlocks the missing data -->
+        <p class="mt-2 text-[11px] text-muted-foreground">
+          {holdCoverage <= 0.005 ? 'No hold-time data in this dataset' : `Hold times cover ${Math.round(holdCoverage * 100)}% of trades`} — fills-based
+          exports provide them (e.g. TradingView’s order-history export; balance history carries P&L only). Importing one alongside your existing
+          files fills the gap: overlapping trades merge.
+        </p>
+      {/if}
+    </Card.Content>
+  {/snippet}
+
+  <!-- A271 slice: the module grid — a 12-track grid on lg (mirrors the Dashboard). Each module spans
+       per its size (md = span 6 half, lg = span 12 full); md/lg reproduce today's 2-column layout
+       exactly. Below lg it stacks (single column). Order is fixed (Analytics has no reorder/hide/add);
+       only per-module size is user-editable — via the ⋯ menu Size radio (everywhere) or the corner
+       drag handle (staging). animate:flip re-snaps the neighbours when a module resizes. -->
+  <div bind:this={gridEl} class="grid grid-cols-1 gap-4 lg:grid-cols-12">
+    {#each MOD_ORDER as key (key)}
+      <div data-mod class={['min-w-0', spanClass(previewSize(key))]} animate:flip={{ duration: dur(180) }}>
+        <Card.Root class="relative h-full">
+          {@render moduleHeader(key)}
+          {#if isStaging}
+            <!-- Corner drag-resize handle (staging). Pointer drag snaps to Medium/Large; role=slider +
+                 arrow keys are the keyboard path (the ⋯ menu Size radio is the other). -->
+            <button
+              type="button"
+              class="absolute right-1 bottom-1 z-10 hidden size-5 cursor-nwse-resize touch-none place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring lg:grid"
+              role="slider"
+              aria-label="Resize {ANALYTICS_LABEL[key]} module"
+              aria-valuemin={0}
+              aria-valuemax={supportedSizes(key).length - 1}
+              aria-valuenow={sizeIndex(key)}
+              aria-valuetext={SIZE_LABEL[sizeOf(key)]}
+              onpointerdown={e => startResize(e, key)}
+              onkeydown={e => onResizeKey(e, key)}
+            >
+              <Maximize2 class="size-3" />
+            </button>
+          {/if}
+          {#if key === 'dist'}{@render distBody()}{:else if key === 'dd'}{@render ddBody()}{:else if key === 'ls'}{@render lsBody()}{:else if key === 'hour'}{@render hourBody()}{:else if key === 'wday'}{@render wdayBody()}{:else if key === 'sym'}{@render symBody()}{:else if key === 'tag'}{@render tagBody()}{:else if key === 'stats'}{@render statsBody()}{/if}
+        </Card.Root>
+      </div>
+    {/each}
   </div>
 </div>
