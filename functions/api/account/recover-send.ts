@@ -22,7 +22,7 @@ export async function onRequestPost(ctx: Ctx) {
   const db = getDb(env);
   if (!db) return dbUnavailable();
   if (!env.RESEND_API_KEY) return emailUnavailable(); // config-level, identical for any email
-  await rateLimited(env, 'acct-recover-send', request, 5, 300);
+  if (await rateLimited(env, 'acct-recover-send', request, 5, 300)) return json({ error: 'Too many attempts — try again shortly.' }, 429);
 
   const body = await readJson<{ email?: unknown }>(request);
   const email = String(body?.email ?? '')

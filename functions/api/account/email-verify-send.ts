@@ -20,7 +20,7 @@ export async function onRequestPost(ctx: Ctx) {
   if (!checkOrigin(request)) return badOrigin();
   const db = getDb(env);
   if (!db) return dbUnavailable();
-  await rateLimited(env, 'acct-verify-send', request, 5, 300);
+  if (await rateLimited(env, 'acct-verify-send', request, 5, 300)) return json({ error: 'Too many attempts — try again shortly.' }, 429);
 
   const session = await sessionFromRequest(request, db);
   const user = session ? await userById(db, session.user_id) : null;

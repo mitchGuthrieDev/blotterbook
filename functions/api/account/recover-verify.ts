@@ -13,7 +13,7 @@
  */
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import type { AuthenticatorTransportFuture } from '@simplewebauthn/server';
-import { json } from '../../_lib/http.ts';
+import { json, rateLimited } from '../../_lib/http.ts';
 import type { Ctx } from '../../_lib/types.ts';
 import {
   badOrigin,
@@ -36,6 +36,7 @@ export async function onRequestPost(ctx: Ctx) {
   if (!checkOrigin(request)) return badOrigin();
   const db = getDb(env);
   if (!db) return dbUnavailable();
+  if (await rateLimited(env, 'acct-recover-verify', request, 5, 300)) return json({ error: 'Too many attempts — try again shortly.' }, 429);
 
   const body = await readJson<{ token?: unknown }>(request);
   const token = typeof body?.token === 'string' ? body.token : '';

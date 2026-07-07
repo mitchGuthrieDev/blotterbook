@@ -121,6 +121,21 @@ function mockDb() {
   };
 }
 
+// In-memory KV stub for the defense-in-depth rate limiter (functions/_lib/http.ts rateLimited).
+// get/put over a Map; expirationTtl is ignored (tests never advance the clock past a window).
+function mockKv() {
+  const store = new Map();
+  return {
+    store,
+    async get(key) {
+      return store.has(key) ? store.get(key) : null;
+    },
+    async put(key, value) {
+      store.set(key, value);
+    },
+  };
+}
+
 const ORIGIN = 'https://bb.test';
 const req = (path, { method = 'POST', origin = ORIGIN, cookie = null, body = {} } = {}) =>
   new Request(ORIGIN + path, {
@@ -790,6 +805,52 @@ console.log('\nRecovery re-enrollment (recover-verify) — issues a session-boun
     (await recoverVerify({ request: req('/api/account/recover-verify', { origin: 'https://evil.example', body: { token: 'x.y' } }), env }))
       .status === 403
   );
+}
+
+console.log('\nRate limiting on the email-send + recovery endpoints (A301) — 429 past 5/5min:');
+{
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ id: 'email_1' }), { status: 200 });
+  try {
+    // email-verify-send: check runs after the DB check → an authed, unverified user with RESEND bound
+    // gets a real 200 up to the limit, then 429. STATUS_KV shared → all 'anon' calls hit one bucket.
+    {
+      const db = mockDb();
+      const user = await createUser(db, 'rl-verify@example.com');
+      const { token: sess } = await createSession(db, user.id);
+      const env = { ACCOUNTS_DB: db, RESEND_API_KEY: 're_x', STATUS_KV: mockKv() };
+      const statuses = [];
+      for (let i = 0; i < 6; i++) {
+        const r = await emailVerifySend({ request: req('/api/account/email-verify-send', { cookie: cookieFor(sess) }), env });
+        statuses.push(r.status);
+      }
+      ok('email-verify-send: first 5 pass (200), the 6th is 429', statuses.slice(0, 5).every(s => s === 200) && statuses[5] === 429);
+    }
+    // recover-send: enumeration-safe 200 for the first 5, then 429 (limiter runs before the send).
+    {
+      const db = mockDb();
+      const env = { ACCOUNTS_DB: db, RESEND_API_KEY: 're_x', STATUS_KV: mockKv() };
+      const statuses = [];
+      for (let i = 0; i < 6; i++) {
+        const r = await recoverSend({ request: req('/api/account/recover-send', { body: { email: 'ghost@example.com' } }), env });
+        statuses.push(r.status);
+      }
+      ok('recover-send: first 5 pass (200), the 6th is 429', statuses.slice(0, 5).every(s => s === 200) && statuses[5] === 429);
+    }
+    // recover-verify: previously had NO limiter (A301). Bad tokens 400 up to the limit, then 429.
+    {
+      const db = mockDb();
+      const env = { ACCOUNTS_DB: db, STATUS_KV: mockKv() };
+      const statuses = [];
+      for (let i = 0; i < 6; i++) {
+        const r = await recoverVerify({ request: req('/api/account/recover-verify', { body: { token: 'x.y' } }), env });
+        statuses.push(r.status);
+      }
+      ok('recover-verify: throttled — first 5 reach 400, the 6th is 429', statuses.slice(0, 5).every(s => s === 400) && statuses[5] === 429);
+    }
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 }
 
 console.log('\nemail-verify-confirm — GET redirect + POST + fail modes:');
