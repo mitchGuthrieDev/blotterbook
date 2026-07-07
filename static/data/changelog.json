@@ -4,6 +4,16 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.64.0",
+      "date": "2026-07-07",
+      "title": "Subscribe to cloud sync from the app",
+      "summary": "Cloud sync is now something you can turn on yourself — subscribe to the supporter tier right inside the app, and the encrypted-sync setup appears once your subscription is active.",
+      "highlights": [
+        "Subscribe in-app: a “Subscribe — $5/month” button in Account → Cloud sync opens a secure Stripe checkout linked to your account, then unlocks the end-to-end-encrypted sync setup.",
+        "Clearer gating: the cloud-sync key setup now only appears for subscribers, so it is obvious what the tier includes — and your local data is always unaffected either way."
+      ]
+    },
+    {
       "version": "0.63.0",
       "date": "2026-07-06",
       "title": "Named workspaces and end-to-end-encrypted cloud sync",
