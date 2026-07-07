@@ -30,9 +30,11 @@ export const defaultSizeFor = (key: string): ModSize => (PAIRED_MODULE_KEYS.has(
 /** 12-track grid span per size — sm six-per-row, md half, lg full. */
 export const spanFor = (size: ModSize): number => (size === 'sm' ? 2 : size === 'md' ? 6 : 12);
 
-/** Which sizes a module supports. All three today (the render contract degrades content per size); kept
- *  as a seam so a module can later pin out a size. */
-export const supportedSizes = (_key: string): ModSize[] => [...SIZES];
+/** Which sizes a module supports. The current dashboard modules are rich (tables/charts), so they
+ *  support Medium ↔ Large (half ↔ full width; the two states that render well) — a span-2 "Small"
+ *  would cram their content. `sm` stays in the model (grid + migration understand it) for future
+ *  glanceable KPI-card modules + the carousel group; no current module opts into it yet. */
+export const supportedSizes = (_key: string): ModSize[] => ['md', 'lg'];
 
 /** Validate a stored size for a key, else fall back to the layout-preserving default. */
 export const clampSize = (key: string, size: unknown): ModSize =>

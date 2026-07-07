@@ -46,10 +46,10 @@ ok(
 // v1 drops unknown keys.
 ok('migrateLayout(v1) drops unknown keys', J(migrateLayout(['perf', 'bogus', 'cal']).mods.map(e => e.key)) === J(['perf', 'cal']));
 
-// v2 passes through, honoring an explicit stored size.
+// v2 passes through, honoring an explicit (supported) stored size.
 ok(
-  'migrateLayout(v2) honors an explicit size',
-  J(migrateLayout({ v: 2, mods: [{ key: 'perf', size: 'sm' }] })) === J({ v: 2, mods: [{ key: 'perf', size: 'sm' }] })
+  'migrateLayout(v2) honors an explicit supported size',
+  J(migrateLayout({ v: 2, mods: [{ key: 'perf', size: 'md' }] })) === J({ v: 2, mods: [{ key: 'perf', size: 'md' }] })
 );
 
 // v2 clamps an unsupported/garbage size to the module default; drops unknown keys.
@@ -65,8 +65,11 @@ ok(
   migrateLayout('nope') === undefined && migrateLayout({ v: 1 }) === undefined && migrateLayout(42) === undefined
 );
 
-// clampSize direct.
-ok('clampSize: valid passes, invalid → default', clampSize('perf', 'sm') === 'sm' && clampSize('perf', 'x') === 'lg');
+// clampSize direct: a supported size passes; an unsupported (sm today) or garbage size → the default.
+ok(
+  'clampSize: supported passes, unsupported/invalid → default',
+  clampSize('perf', 'md') === 'md' && clampSize('perf', 'sm') === 'lg' && clampSize('perf', 'x') === 'lg'
+);
 
 // defaultLayout / keysOf round-trip the default order.
 ok('defaultLayout keys === DEFAULT_MODULE_KEYS', J(keysOf(defaultLayout().mods)) === J(DEFAULT_MODULE_KEYS));
