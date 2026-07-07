@@ -115,8 +115,8 @@ cross-user or nonexistent workspace answers **404**, so existence never leaks ac
   `GET` returns every wrapped-IK blob for the caller (unlock on a fresh device).
 - `POST /api/sync/push` — `{ workspace_id, records: [{ blinded_id, type, ciphertext, updated, deleted? }] }`.
   Stores each ciphertext in R2, upserts the D1 index row under a **monotonic per-workspace `seq`**, and
-  honors **LWW** (a stale `updated` never clobbers a fresher row). Batches over 15 records → **413** (A15
-  subrequest cap; the client chunks).
+  honors **LWW** (a stale `updated` never clobbers a fresher row). Batches over 12 records → **413** (A281,
+  lowered from 15 for headroom under the A15 subrequest cap; the client chunks).
 - `GET /api/sync/pull?workspace_id=&since=<seq>` — returns records with `seq > since` (≤ 25 per page) with
   their ciphertext, plus a `nextSince` cursor + `more` flag for incremental paging.
 

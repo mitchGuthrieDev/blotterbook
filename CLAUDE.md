@@ -420,14 +420,19 @@ conforms to the rules below; keep it that way.
   _middleware.ts        key-gates /app/staging.html
   _lib/                 accounts.ts (D1 users/credentials/sessions/challenges/donations/recovery_tokens +
                         session cookie), auth.ts (admin token + Stripe sig verify), sync.ts (F62 sync
-                        helpers — R2 bucket, ownership, LWW upsert), http.ts, types.ts
+                        helpers — R2 bucket, ownership, LWW upsert), email.ts (Resend sender, F55),
+                        subscribers.ts (F44 changelog-subscriber store), http.ts, types.ts
   api/{geo,status,config,admin-key}.ts  geo · status · feature flags · admin token
   api/{me,checkout,webhook}.ts   storage tier — grants `cloud` on active/grace subscription (F60) · Stripe
                         donations + subscription-lifecycle webhook (checkout + customer.subscription.*, F54/F60)
   api/account/*.ts      passkey register/login/logout + email-verify + recovery endpoints (F53/F55)
   api/sync/*.ts         F62 encrypted-blob transport (workspaces · wrapped-ik · push · pull) over R2 + D1
+  api/{subscribe,confirm,unsubscribe,notify-changelog}.ts  F44 changelog (Blotterlog) email
+                        subscriptions — double opt-in signup/confirm/unsubscribe + the send-trigger
+                        broadcast endpoint
   schema.sql             D1 schema — accounts tables + subscriptions/webhook_events (F60) +
-                        sync_records/sync_wrapped_ik/sync_workspace_keys/sync_workspaces (F62); apply via wrangler
+                        sync_records/sync_wrapped_ik/sync_workspace_keys/sync_workspaces (F62) +
+                        subscribers/changelog_sends (F44); apply via wrangler
 /scripts/
   build-manifest.mjs    regenerates static/data/manifest.json content hashes
   build-econ-events.mjs regenerates static/data/econ-events.json — the curated economic-release calendar (R14/R14a)
