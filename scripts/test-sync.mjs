@@ -88,7 +88,12 @@ function mockDb() {
     }
     if ((m = s.match(/^INSERT INTO (\w+) \(([^)]+)\) VALUES/i))) {
       const cols = m[2].split(',').map(c => c.trim());
-      tables[m[1]].push(Object.fromEntries(cols.map((c, i) => [c, args[i] ?? null])));
+      const row = Object.fromEntries(cols.map((c, i) => [c, args[i] ?? null]));
+      // `ON CONFLICT(<col>) DO NOTHING` — first-writer-wins: skip when a row with that key already
+      // exists (A304 relies on this for the wrapped-DEK register).
+      const conflict = s.match(/ON CONFLICT\((\w+)\) DO NOTHING/i);
+      if (conflict && tables[m[1]].some(r => r[conflict[1]] === row[conflict[1]])) return [];
+      tables[m[1]].push(row);
       return [];
     }
     if ((m = s.match(/^SELECT \* FROM (\w+) WHERE (.+?)(?: ORDER BY (\w+)( DESC)?)?(?: LIMIT (\d+))?$/i))) {
@@ -274,19 +279,25 @@ console.log('\nWorkspace register + list (idempotent, owned-by-caller):');
     'register 200 with workspace_id + created_at',
     reg.status === 200 && regJson.workspace_id === 'w1' && typeof regJson.created_at === 'number'
   );
-  ok('S25: register response carries no name/trade field', !('name' in regJson) && !('wrapped_dek' in regJson));
+  // A304: the response now echoes the STORED wrapped DEK (so a concurrent loser adopts the winner's).
+  ok('register echoes the stored wrapped DEK (first write)', regJson.wrapped_dek === 'DEK-1');
+  ok('S25: register response carries no name/trade field', !('name' in regJson));
 
   const list1 = await (await wsList({ request: req('/api/sync/workspaces', { method: 'GET', cookie: cookieFor(t1) }), env })).json();
   ok('list returns the workspace with its wrapped DEK', list1.workspaces.length === 1 && list1.workspaces[0].wrapped_dek === 'DEK-1');
 
-  // Idempotent re-register by the owner updates the DEK, no duplicate row.
-  await wsRegister({
+  // A304 FIRST-WRITER-WINS: a second register (e.g. a concurrent second device) with a DIFFERENT DEK
+  // must NOT overwrite the first — it returns the EXISTING (first) blob and leaves the stored row unchanged.
+  const reReg = await wsRegister({
     request: req('/api/sync/workspaces', { cookie: cookieFor(t1), body: { workspace_id: 'w1', wrapped_dek: 'DEK-2' } }),
     env,
   });
+  const reRegJson = await reReg.json();
   ok('re-register is idempotent (one workspace row)', db.tables.sync_workspaces.filter(w => w.workspace_id === 'w1').length === 1);
+  ok('re-register returns the FIRST DEK, not the new one (adopt-existing)', reReg.status === 200 && reRegJson.wrapped_dek === 'DEK-1');
+  ok('...and the STORED wrapped DEK is unchanged (never overwritten)', db.tables.sync_workspace_keys.find(k => k.workspace_id === 'w1').wrapped_dek === 'DEK-1');
   const list2 = await (await wsList({ request: req('/api/sync/workspaces', { method: 'GET', cookie: cookieFor(t1) }), env })).json();
-  ok('re-register updated the wrapped DEK', list2.workspaces[0].wrapped_dek === 'DEK-2');
+  ok('list still shows the first DEK after a divergent re-register', list2.workspaces[0].wrapped_dek === 'DEK-1');
 
   // A different user cannot claim the same workspace_id.
   const steal = await wsRegister({
@@ -294,7 +305,7 @@ console.log('\nWorkspace register + list (idempotent, owned-by-caller):');
     env,
   });
   ok('cross-user register of an existing workspace_id → 409', steal.status === 409);
-  ok("...and did not change the owner's DEK", db.tables.sync_workspace_keys.find(k => k.workspace_id === 'w1').wrapped_dek === 'DEK-2');
+  ok("...and did not change the owner's DEK", db.tables.sync_workspace_keys.find(k => k.workspace_id === 'w1').wrapped_dek === 'DEK-1');
 
   const list2b = await (await wsList({ request: req('/api/sync/workspaces', { method: 'GET', cookie: cookieFor(t2) }), env })).json();
   ok("u2's workspace list does not include u1's workspace", list2b.workspaces.length === 0);
@@ -303,7 +314,7 @@ console.log('\nWorkspace register + list (idempotent, owned-by-caller):');
   await wsRegister({
     request: req('/api/sync/workspaces', {
       cookie: cookieFor(t1),
-      body: { workspace_id: 'w1', wrapped_dek: 'DEK-2', name: rec('name-blind', 'ENC-NAME', 5, { type: 'workspace-name' }) },
+      body: { workspace_id: 'w1', wrapped_dek: 'DEK-1', name: rec('name-blind', 'ENC-NAME', 5, { type: 'workspace-name' }) },
     }),
     env,
   });

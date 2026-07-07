@@ -80,19 +80,19 @@ export async function onRequestPost(ctx: Ctx) {
       .run();
   }
 
-  // Upsert the per-workspace wrapped DEK (idempotent create → keep it current on re-register).
+  // FIRST-WRITER-WINS wrapped-DEK registration (A304). The account IK never rotates, so there is NO
+  // legitimate wrapped-DEK update path. Two devices enabling the SAME workspace concurrently both see
+  // no key row and both POST a DEK; an unconditional UPDATE would let the second overwrite the first's
+  // wrap, stranding the first device's already-pushed ciphertext undecryptable by everyone. So we
+  // INSERT only when absent (ON CONFLICT DO NOTHING under the workspace_id PK — race-safe even if two
+  // requests interleave), then read the STORED blob back and return it. The loser adopts the winner's
+  // DEK (mirrors the client's adopt-existing-blob branch) instead of clobbering it.
+  await db
+    .prepare('INSERT INTO sync_workspace_keys (workspace_id, owner_user_id, wrapped_dek, updated) VALUES (?, ?, ?, ?) ON CONFLICT(workspace_id) DO NOTHING')
+    .bind(workspaceId, session.user_id, wrappedDek, now)
+    .run();
   const key = await db.prepare('SELECT * FROM sync_workspace_keys WHERE workspace_id = ?').bind(workspaceId).first<SyncWorkspaceKeyRow>();
-  if (key) {
-    await db
-      .prepare('UPDATE sync_workspace_keys SET wrapped_dek = ?, updated = ? WHERE workspace_id = ?')
-      .bind(wrappedDek, now, workspaceId)
-      .run();
-  } else {
-    await db
-      .prepare('INSERT INTO sync_workspace_keys (workspace_id, owner_user_id, wrapped_dek, updated) VALUES (?, ?, ?, ?)')
-      .bind(workspaceId, session.user_id, wrappedDek, now)
-      .run();
-  }
+  const storedDek = key?.wrapped_dek ?? wrappedDek;
 
   // Optional encrypted workspace-name record — stored like any other record (ciphertext only, S25).
   // RESERVED (A268): the current client does not send `name` yet, so this branch is presently unreached.
@@ -105,8 +105,9 @@ export async function onRequestPost(ctx: Ctx) {
     await upsertRecord(db, bucket, workspaceId, body.name as IncomingRecord, await maxSeq(db, workspaceId));
   }
 
-  // S25: identity/ownership metadata only — no name, no trade field.
-  return json({ workspace_id: workspaceId, created_at: createdAt });
+  // S25: identity/ownership metadata + the opaque wrapped DEK blob only — no name, no trade field.
+  // wrapped_dek is the STORED (winning) blob so a concurrent loser adopts it instead of its own (A304).
+  return json({ workspace_id: workspaceId, created_at: createdAt, wrapped_dek: storedDek });
 }
 
 export async function onRequestGet(ctx: Ctx) {
