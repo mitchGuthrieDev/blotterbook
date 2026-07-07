@@ -59,7 +59,13 @@ cap (100k/day) is untouched at this traffic.
   fires on the version bump while the curated changelog entry lands in a separate hand-authored commit
   (per CLAUDE.md), and its `[skip ci]` release commit + retry loop shouldn't gain email side effects.
   The workflow POSTs `/api/notify-changelog` with a shared secret (GH secret ↔ Pages env var,
-  constant-time compare via `_lib/auth.ts` patterns — real auth, per S22). The Function reads
+  constant-time compare via `_lib/auth.ts` patterns — real auth, per S22). _As built the workflow is
+  `changelog-email.yml`, and per A315 (2026-07-07) it targets the canonical
+  `https://<project>.pages.dev` origin rather than the custom domain (whose Bot Fight Mode
+  challenge-blocked the GitHub runner); the Function's `PUBLIC_ORIGIN` env var keeps the
+  unsubscribe link branded `blotterbook.com`, and a `?version=` deploy-freshness gate returns 425
+  until Pages serves the just-committed release. Repo secrets + Pages env vars were configured on
+  prod 2026-07-07._ The Function reads
   `/data/changelog.json`, takes the top release, checks the `sends` table (dedupe), renders text+HTML
   from `title/summary/highlights`, and batch-sends via Resend with per-recipient unsubscribe links.
   A Cron Trigger diffing changelog.json was considered and rejected: Pages Functions don't take cron

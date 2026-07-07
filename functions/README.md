@@ -159,7 +159,13 @@ closed (503) when `ACCOUNTS_DB` / `RESEND_API_KEY` is unbound.
   the A15 50-subrequest cap) to confirmed subscribers with per-recipient unsubscribe links. Called by
   [`.github/workflows/changelog-email.yml`](../.github/workflows/changelog-email.yml) (paths-filtered
   on `static/data/changelog.json`; set the `CHANGELOG_NOTIFY_URL` + `CHANGELOG_NOTIFY_SECRET` repo
-  secrets — unset ⇒ the workflow no-ops).
+  secrets — unset ⇒ the workflow no-ops). **A315:** the workflow targets the canonical
+  `https://<project>.pages.dev` origin (NOT `blotterbook.com` — the custom-domain zone's Bot Fight
+  Mode challenges the GitHub runner with a 403 interstitial; the pages.dev hostname is Cloudflare's
+  own zone and isn't governed by it). Supports an optional `?version=<v>` deploy-freshness gate
+  (425 while Pages still serves the previous release, so the workflow retries instead of
+  broadcasting stale). User-facing links (the unsubscribe URL) are built off `PUBLIC_ORIGIN` when
+  set, so the branded domain — not the pages.dev host — reaches subscriber inboxes.
 
 ## Admin auth (shipped)
 
@@ -223,8 +229,15 @@ audMatches:true, expired:false`.
 - `CHANGELOG_NOTIFY_SECRET` — **(F44)** shared secret the changelog-email send trigger presents to
   `POST /api/notify-changelog` (constant-time compared). **Unbound → the endpoint is disabled (503)**
   so no one can trigger a broadcast on a deploy that isn't wired for it. Also set the matching
-  `CHANGELOG_NOTIFY_URL` (deployed origin) + `CHANGELOG_NOTIFY_SECRET` **repo secrets** for the
-  workflow.
+  `CHANGELOG_NOTIFY_URL` + `CHANGELOG_NOTIFY_SECRET` **repo secrets** for the workflow —
+  `CHANGELOG_NOTIFY_URL` must be the canonical `https://<project>.pages.dev` origin, not the custom
+  domain (A315 — Bot Fight Mode on the custom-domain zone blocks the GitHub runner; a trailing
+  slash is tolerated, the workflow strips it). _Configured on prod 2026-07-07._
+- `PUBLIC_ORIGIN` — **(F44/A315)** the branded origin (`https://blotterbook.com`, no trailing
+  slash) used by `/api/notify-changelog` to build user-facing links (the unsubscribe URL) when the
+  workflow invokes it at the pages.dev origin. Falls back to the request origin when unset — which
+  would leak the pages.dev host into subscriber inboxes, so keep it set. _Configured on prod
+  2026-07-07._
 - `TURNSTILE_SECRET` — **(F44, optional)** Cloudflare Turnstile secret for the changelog signup form.
   **Unbound → Turnstile is skipped** (defense-in-depth only, S22 — never the security boundary; the
   double opt-in + confirmed-only send are the real invariants). Fails open when the service is down.
