@@ -62,7 +62,11 @@ interface StripeSubObject {
   subscription?: unknown; // subscription id (on the invoice object)
   customer?: unknown;
   status?: unknown;
-  current_period_end?: unknown; // Stripe UNIX SECONDS
+  current_period_end?: unknown; // Stripe UNIX SECONDS — top-level on older API versions
+  // API versions ~2025+ moved the billing period off the top-level subscription object onto the
+  // subscription ITEMS (items.data[].current_period_end). Read both so the period survives whichever
+  // version the webhook endpoint is pinned to.
+  items?: { data?: Array<{ current_period_end?: unknown }> } | null;
   client_reference_id?: unknown;
   metadata?: { client_reference_id?: unknown; user_id?: unknown } | null;
 }
@@ -188,10 +192,11 @@ async function provisionSubscription(db: AccountsDb, eventId: string, type: stri
 
   const now = Date.now();
   const existing = await subscriptionForUser(db, user.id);
-  // Stripe sends current_period_end in SECONDS → store ms. The invoice object (payment_failed) carries
-  // no period end, so keep whatever the last subscription event recorded.
-  const periodEndSec =
-    typeof obj.current_period_end === 'number' && Number.isFinite(obj.current_period_end) ? obj.current_period_end : null;
+  // Stripe sends current_period_end in SECONDS → store ms. Read the top-level field (older API
+  // versions) OR the subscription-item field (newer versions moved it there). The invoice object
+  // (payment_failed) carries neither, so keep whatever the last subscription event recorded.
+  const finiteSec = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const periodEndSec = finiteSec(obj.current_period_end) ?? finiteSec(obj.items?.data?.[0]?.current_period_end);
   const currentPeriodEnd = periodEndSec != null ? periodEndSec * 1000 : (existing?.current_period_end ?? null);
 
   if (customerId) await linkStripeCustomer(db, user, customerId); // future events resolve by customer id

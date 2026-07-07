@@ -32,6 +32,7 @@ import { onRequestPost as loginOptions } from '../functions/api/account/login-op
 import { onRequestPost as loginVerify } from '../functions/api/account/login-verify.ts';
 import { onRequestPost as logout } from '../functions/api/account/logout.ts';
 import { onRequestPost as webhook } from '../functions/api/webhook.ts';
+import { onRequestPost as checkout } from '../functions/api/checkout.ts';
 import { onRequestPost as emailVerifySend } from '../functions/api/account/email-verify-send.ts';
 import {
   onRequestGet as emailVerifyConfirmGet,
@@ -577,6 +578,71 @@ console.log('\nSubscription lifecycle (F60) — cloud entitlement grants + perio
   db.tables.subscriptions[0].past_due_since = Date.now() - (SUBSCRIPTION_GRACE_MS + 1000); // grace elapsed from the first failure
   const cutoff = await me();
   ok('past_due beyond grace (measured from the first failure) drops to local', cutoff.tier === 'local' && cutoff.cloudSync === false);
+}
+
+console.log('\nSubscription linkage robustness (checkout metadata + items[].current_period_end):');
+{
+  // (a) The customer.subscription.* events don't carry client_reference_id, so /api/checkout must
+  //     stamp it into subscription_data.metadata for a subscription — else the webhook can't resolve
+  //     the account order-independently (and $0/trial signups never link via the donation path).
+  const db = mockDb();
+  const user = await createUser(db, 'link@example.com');
+  const { token } = await createSession(db, user.id);
+  const captured = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    captured.push({ url: String(url), body: String(init?.body ?? '') });
+    return new Response(JSON.stringify({ url: 'https://checkout.stripe.test/s' }), { status: 200 });
+  };
+  try {
+    const env = {
+      ACCOUNTS_DB: db,
+      STRIPE_SECRET_KEY: 'sk_test',
+      STRIPE_PRICE_SUBSCRIPTION: 'price_sub',
+      STRIPE_PRICE_ONE_TIME: 'price_ot',
+    };
+    const res = await checkout({ request: req('/api/checkout', { cookie: cookieFor(token), body: { plan: 'subscription' } }), env });
+    ok('subscription checkout returns a url (200)', res.status === 200 && (await res.json()).url?.startsWith('https://'));
+    const subBody = decodeURIComponent(captured.at(-1)?.body ?? '');
+    ok(
+      'checkout stamps subscription_data[metadata][client_reference_id] = user id',
+      subBody.includes('subscription_data[metadata][client_reference_id]=' + user.id)
+    );
+    ok('subscription checkout uses mode=subscription', subBody.includes('mode=subscription'));
+    // a one_time checkout must NOT stamp subscription metadata
+    captured.length = 0;
+    await checkout({ request: req('/api/checkout', { cookie: cookieFor(token), body: { plan: 'one_time' } }), env });
+    ok(
+      'one_time checkout does NOT set subscription metadata',
+      !decodeURIComponent(captured.at(-1)?.body ?? '').includes('subscription_data[metadata]')
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  // (b) Stripe API versions ~2025+ moved current_period_end onto the subscription ITEMS. The webhook
+  //     must fall back to items.data[0].current_period_end when the top-level field is absent.
+  const db2 = mockDb();
+  const u2 = await createUser(db2, 'period@example.com');
+  const env2 = { ACCOUNTS_DB: db2, STRIPE_WEBHOOK_SECRET: WH_SECRET };
+  const periodEnd = Date.now() + 20 * DAY;
+  await webhook({
+    request: subEvent('evt_items_pe', 'customer.subscription.created', {
+      id: 'sub_pe',
+      customer: 'cus_pe',
+      status: 'active',
+      // NO top-level current_period_end — only on the item (the newer API shape)
+      items: { data: [{ current_period_end: secs(periodEnd) }] },
+      metadata: { client_reference_id: u2.id },
+    }),
+    env: env2,
+  });
+  ok(
+    'current_period_end read from items[].current_period_end when top-level is absent',
+    db2.tables.subscriptions.length === 1 &&
+      db2.tables.subscriptions[0].current_period_end > Date.now() &&
+      Math.abs(db2.tables.subscriptions[0].current_period_end - periodEnd) < 2000
+  );
 }
 
 console.log('\nRecovery/verify token lifecycle (single-use, TTL, hash-only — S25):');
