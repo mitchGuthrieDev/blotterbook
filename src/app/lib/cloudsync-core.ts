@@ -176,17 +176,29 @@ export async function collectChanges(store: StoreLike, sinceWatermark: number): 
   return out;
 }
 
-/** Encrypt + blind one change into a WireRecord (opaque ciphertext + blinded id only — S25). */
+/** A308 — the canonical GCM AAD that binds a v2 record's index metadata to its ciphertext. It must be
+ *  BYTE-IDENTICAL on push (from the Change) and pull (from the wire row) or GCM auth fails, so it is a
+ *  fixed field order with a stable `deleted` encoding. Authenticated, not secret: the server already
+ *  sees every field here — binding them just stops a WRITE-capable server forging `deleted`/`updated`/
+ *  `type` (which would force a fleet delete or skew LWW) without the tag failing. */
+function recordAad(workspaceId: string, type: string, blindedId: string, updated: number, deleted: boolean): string {
+  return `${workspaceId}|${type}|${blindedId}|${updated}|${deleted ? 1 : 0}`;
+}
+
+/** Encrypt + blind one change into a WireRecord (opaque ciphertext + blinded id only — S25). A308:
+ *  writes a v2 envelope binding this row's index metadata as AAD. */
 async function toWire(
   keys: WsKeys,
   c: Change,
+  workspaceId: string,
   enc2: {
     encryptRecord: typeof import('../../lib/core/crypto.ts').encryptRecord;
     blindId: typeof import('../../lib/core/crypto.ts').blindId;
   }
 ): Promise<WireRecord> {
   const blinded_id = await enc2.blindId(keys.blindKey, `${c.type}:${c.key}`);
-  const rec = await enc2.encryptRecord(keys.recordKey, c.plain);
+  const aad = recordAad(workspaceId, c.type, blinded_id, c.updated, c.deleted);
+  const rec = await enc2.encryptRecord(keys.recordKey, c.plain, aad);
   return { blinded_id, type: c.type, ciphertext: JSON.stringify(rec), updated: c.updated, deleted: c.deleted || undefined };
 }
 
@@ -215,7 +227,7 @@ export async function pushChanges(
   if (!changes.length) return Math.max(watermark, cutoff);
   if (shouldAbort()) return watermark; // re-check after the async read, before anything is pushed
   const { encryptRecord, blindId } = await cryptoCore();
-  const wire = await Promise.all(changes.map(c => toWire(keys, c, { encryptRecord, blindId })));
+  const wire = await Promise.all(changes.map(c => toWire(keys, c, workspaceId, { encryptRecord, blindId })));
   for (let i = 0; i < wire.length; i += MAX_PUSH_RECORDS) {
     if (shouldAbort()) return watermark; // a switch landed mid-push — stop, leave the watermark unadvanced
     await transport.push(workspaceId, wire.slice(i, i + MAX_PUSH_RECORDS));
@@ -260,6 +272,7 @@ export async function mergeRecords(
   store: StoreLike,
   keys: WsKeys,
   records: PulledRecord[],
+  workspaceId: string = '',
   shouldAbort: () => boolean = () => false
 ): Promise<boolean> {
   if (!records.length) return true;
@@ -276,7 +289,11 @@ export async function mergeRecords(
     if (!WIRE_TYPES.has(r.type)) continue; // ignore an unknown/legacy record type defensively
     let obj: Record<string, unknown>;
     try {
-      obj = JSON.parse(dec.decode(await decryptRecord(keys.recordKey, JSON.parse(r.ciphertext)))) as Record<string, unknown>;
+      // A308: rebuild the AAD from the wire row. A v2 record's GCM tag was bound to
+      // `workspaceId|type|blinded_id|updated|deleted`; a forged field makes decrypt throw → skipped
+      // (A263). A v1 record ignores the AAD (no additionalData), so legacy ciphertext still decrypts.
+      const aad = recordAad(workspaceId, r.type, r.blinded_id, r.updated, r.deleted);
+      obj = JSON.parse(dec.decode(await decryptRecord(keys.recordKey, JSON.parse(r.ciphertext), aad))) as Record<string, unknown>;
     } catch {
       skipped++;
       continue;
@@ -389,7 +406,7 @@ export async function pullAndMerge(
   if (shouldAbort()) return { cursor: since, merged: 0 }; // bail before writing the merge into the store
   // A307: mergeRecords re-checks the barrier before its own write phase; if it aborted (a switch
   // landed during decrypt/snapshot), it wrote nothing → leave the cursor UNADVANCED for a re-read.
-  const merged = await mergeRecords(store, keys, all, shouldAbort);
+  const merged = await mergeRecords(store, keys, all, workspaceId, shouldAbort);
   if (!merged) return { cursor: since, merged: 0 };
   return { cursor, merged: all.length };
 }

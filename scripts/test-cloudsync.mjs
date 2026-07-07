@@ -534,19 +534,57 @@ const stB = { cursor: 0, pushed: -1 };
   const D = memStore();
   const page = await transport.pull(WS, 0);
   ok('A307: the server has records to attempt a merge', page.records.length > 0);
-  const wrote = await mergeRecords(D, keysB, page.records, () => true);
+  const wrote = await mergeRecords(D, keysB, page.records, WS, () => true);
   ok('A307: an aborted merge returns false (write phase skipped)', wrote === false);
   ok('A307: an aborted merge writes nothing into the switched-away store', (await D.getAllTrades()).length === 0);
 
   // (2) a merge with no abort still lands (the guard is inert when the workspace never changes).
   const E = memStore();
-  const wrote2 = await mergeRecords(E, keysB, page.records, () => false);
+  const wrote2 = await mergeRecords(E, keysB, page.records, WS, () => false);
   ok('A307: a non-aborted merge still writes (guard inert)', wrote2 === true && (await E.getAllTrades()).length > 0);
 
   // (3) pullAndMerge under a pending switch bails with the cursor UNADVANCED.
   const F = memStore();
   const res = await pullAndMerge(F, keysB, transport, WS, 0, () => true);
   ok('A307: pullAndMerge aborts with the cursor unadvanced', res.cursor === 0 && res.merged === 0 && (await F.getAllTrades()).length === 0);
+}
+
+// ── A308: the v2 envelope binds index metadata as AAD — forging it fails GCM auth (record skipped),
+// while a v1 record (no AAD) still decrypts (already-synced prod ciphertext stays readable) ─────────
+{
+  const t8 = trade('2025-09-09 09:00:00', 'ZZZU2025', 'long', 8);
+  const id8 = tradeId(t8);
+  const updated8 = Date.now();
+  const blinded8 = await blindId(keysA.blindKey, `trade:${id8}`);
+  const aad8 = `${WS}|trade|${blinded8}|${updated8}|0`; // the canonical AAD mergeRecords rebuilds
+  const rec8 = await encryptRecord(keysA.recordKey, JSON.stringify({ ...t8, id: id8, updated: updated8 }), aad8);
+  ok('A308: passing aad yields a v2 envelope', rec8.v === 2);
+  const wireRow = { blinded_id: blinded8, seq: 1, type: 'trade', updated: updated8, deleted: false, ciphertext: JSON.stringify(rec8) };
+
+  // untampered → decrypts + merges.
+  const G = memStore();
+  await mergeRecords(G, keysB, [{ ...wireRow }], WS, () => false);
+  ok('A308: an untampered v2 record decrypts + merges', (await G.getAllTrades()).some(t => t.pnl === 8));
+
+  // forged `deleted` → AAD mismatch → GCM auth fails → skipped (neither added nor applied as a delete).
+  const H = memStore();
+  await mergeRecords(H, keysB, [{ ...wireRow, deleted: true }], WS, () => false);
+  ok(
+    'A308: a v2 record with a forged `deleted` is rejected',
+    (await H.getAllTrades()).length === 0 && (await H.getTombstones()).length === 0
+  );
+
+  // forged `updated` → AAD mismatch → skipped (can't skew LWW).
+  const I = memStore();
+  await mergeRecords(I, keysB, [{ ...wireRow, updated: updated8 + 1 }], WS, () => false);
+  ok('A308: a v2 record with a forged `updated` is rejected', (await I.getAllTrades()).length === 0);
+
+  // v1 (no AAD) still decrypts — backward compatible with already-synced prod data.
+  const recV1 = await encryptRecord(keysA.recordKey, JSON.stringify({ ...t8, id: id8, updated: updated8 }));
+  ok('A308: omitting aad yields a v1 envelope', recV1.v === 1);
+  const J = memStore();
+  await mergeRecords(J, keysB, [{ ...wireRow, ciphertext: JSON.stringify(recV1) }], WS, () => false);
+  ok('A308: a v1 record still decrypts (legacy, no AAD)', (await J.getAllTrades()).some(t => t.pnl === 8));
 }
 
 console.log(`\n${pass} assertions passed.`);
