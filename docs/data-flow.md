@@ -15,10 +15,11 @@ normalized into the internal trade shape, delta-merged into IndexedDB **with its
 alongside**, and from there every view is a pure recomputation: reference data (broker/fee/tax JSON) +
 the active trade set → `applyFilters` → `compute()` → `costModel()` → Svelte renders. **Compute never
 touches the network on any tier.** The one path by which trade data leaves the browser is the
-**staging-gated** cloud-sync branch (§7a, F58–F63): a `cloud`-tier user can opt a *workspace* into
-end-to-end-encrypted sync, in which case only ciphertext the server can't decrypt is pushed/pulled.
-On prod/demo and for `local`-tier or un-synced workspaces, nothing leaves — the Cloudflare Functions
-otherwise handle keys/flags/geo/payments/identity, never plaintext trade data.
+cloud-sync branch (§7a, F58–F63) — **live on prod + staging, opt-in `cloud`-tier, never demo**: a
+`cloud`-tier user can opt a *workspace* into end-to-end-encrypted sync, in which case only ciphertext
+the server can't decrypt is pushed/pulled. On demo and for `local`-tier or un-synced workspaces on any
+surface, nothing leaves — the Cloudflare Functions otherwise handle keys/flags/geo/payments/identity,
+never plaintext trade data.
 
 ## 1 · Intake (A177/A178)
 
@@ -149,12 +150,12 @@ screens/parts (no `context()` seam):
   is `isDemo`-guarded and write controls are disabled (belt and suspenders — e2e asserts no
   Blotterbook IndexedDB exists on demo).
 
-## 7a · Cloud sync — the write-behind branch (staging-gated, F58–F63)
+## 7a · Cloud sync — the write-behind branch (live on prod + staging, F58–F63)
 
-The one path by which trade data leaves the browser. **Staging-gated today** (prod/demo never construct
-a `CloudStore`; the CH16 promote is deferred). On staging, `App.svelte` wraps the local `Store` in a
-`CloudStore` (`src/app/lib/cloudstore.ts`) selected conceptually by the `cloud` tier
-(`Entitlements`/`/api/me`, F60):
+The one path by which trade data leaves the browser. **Live on prod + staging, opt-in `cloud`-tier**
+(CH16, 2026-07-07; demo never constructs a `CloudStore`). On every non-demo surface, `App.svelte`
+wraps the local `Store` in a `CloudStore` (`src/app/lib/cloudstore.ts`) — inert until a `cloud`-tier
+user opts a workspace in + unlocks, selected via `Entitlements`/`/api/me` (F60):
 
 - **Reads** delegate straight to IndexedDB — compute stays 100% local, offline-first.
 - **Writes** delegate to IndexedDB, then fire a debounced (~1.5 s) incremental **push**: changed
@@ -179,7 +180,7 @@ the server's deliberately-dumb encrypted-blob role.
 
 **Compute is 100% local on every tier**, and trade data lives in the user's IndexedDB + their own backup
 downloads — plus, *only* for a `cloud`-tier user who opted a workspace into sync, an **end-to-end-encrypted
-copy the server cannot decrypt** (§7a; staging-gated today). The network calls in the data path are
+copy the server cannot decrypt** (§7a; live on prod + staging, opt-in). The network calls in the data path are
 same-origin fetches of static reference JSON, and — on the opt-in sync path only — ciphertext + blinded
 ids over `/api/sync/*`; the edge functions otherwise see keys, flags, coarse geo, and identity — never a
 plaintext trade. That's the refined moat, and every layer is designed so it stays true mechanically (Store

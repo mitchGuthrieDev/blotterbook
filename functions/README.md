@@ -1,10 +1,11 @@
 # Pages Functions — accounts, payments, storage tiers
 
-> **Status: live (accounts phases 1–2; synced-workspaces backend F60/F62 landed, staging-gated).**
+> **Status: live (accounts phases 1–2; synced-workspaces backend F60/F62 live on prod + staging).**
 > Passkey accounts (F53), donation provisioning via the verified Stripe webhook (F54), recovery email +
 > magic-link re-enrollment (F55), the **subscription lifecycle → `cloud`-tier grant** (F60), and the
 > **`/api/sync/*` encrypted-blob transport** (F62) are implemented; the Account screen + the whole
-> cloud-sync client are staging-gated in the app (CH16 promote deferred). **Compute stays 100% local on
+> cloud-sync client are live on prod + staging, opt-in `cloud`-tier (CH16, 2026-07-07; never demo).
+> **Compute stays 100% local on
 > every tier**, and these functions hold identity + entitlements + **ciphertext-only** synced blobs — the
 > server can never read a symbol, P&L, note, tag, or workspace name (guardrail S25, refined not dropped;
 > see [`docs/synced-workspaces.md`](../docs/synced-workspaces.md)).
@@ -19,7 +20,7 @@ subscription tier) cloud-hosted storage.
 | Tier    | How it's bought          | Where trade data lives                          | Status                    |
 |---------|--------------------------|-------------------------------------------------|---------------------------|
 | `local` | one-time payment         | IndexedDB (this browser only)                   | shipped                   |
-| `cloud` | recurring subscription   | IndexedDB **+** E2E-encrypted server copy (R2)  | built, **staging-gated**  |
+| `cloud` | recurring subscription   | IndexedDB **+** E2E-encrypted server copy (R2)  | **live on prod + staging, opt-in**  |
 
 The client never branches on the tier when reading/writing data — it goes
 through `Store` (`src/lib/core/store.ts`). The `CloudStore` write-behind wrapper

@@ -42,8 +42,8 @@ app* becomes trivial in a shell:
 
 Most "why go native" arguments are about escaping the browser sandbox for compute or storage. **We
 already escaped the important half.** Per ADR-001 and `architecture.md`, *compute is 100% local on
-every tier and never touches the network*; the only egress is the staging-gated, ciphertext-only
-cloud-sync path. So a shell buys us **storage durability + OS reach**, not "unlock the product." That
+every tier and never touches the network*; the only egress is the opt-in, `cloud`-tier, ciphertext-only
+cloud-sync path (live on prod + staging, never demo). So a shell buys us **storage durability + OS reach**, not "unlock the product." That
 reframes the whole decision: this is a *distribution* investment, not an *architecture* one. The
 core (`src/lib/core/`) and the `Store` seam were built for exactly this kind of swap and don't move.
 
