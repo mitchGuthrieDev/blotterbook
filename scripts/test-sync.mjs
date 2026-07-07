@@ -12,6 +12,7 @@ import { onRequestGet as ikGet, onRequestPut as ikPut } from '../functions/api/s
 import { onRequestPost as push } from '../functions/api/sync/push.ts';
 import { onRequestGet as pull } from '../functions/api/sync/pull.ts';
 import { onRequestPost as del } from '../functions/api/sync/delete.ts';
+import { onRequestPost as accountDelete } from '../functions/api/account/delete.ts';
 import { DELETE_PAGE, TOMBSTONE_TTL_MS, compactTombstones, deleteWorkspacePage } from '../functions/_lib/sync.ts';
 
 let pass = 0,
@@ -35,6 +36,10 @@ function mockDb() {
     users: [],
     sessions: [],
     subscriptions: [], // A253 — callerHasCloud() reads this to gate the mutating routes
+    credentials: [], // A305 — deleteUserAccount cleans these
+    donations: [],
+    recovery_tokens: [],
+    challenges: [],
     sync_workspaces: [],
     sync_workspace_keys: [],
     sync_wrapped_ik: [],
@@ -807,6 +812,81 @@ console.log('\nTombstone compaction (A265) — stale tombstones swept, live + re
     env,
   });
   ok('push piggybacks the tombstone sweep (ancient tombstone gone)', !db.tables.sync_records.some(r => r.blinded_id === 'old-tomb'));
+}
+
+console.log('\nAccount deletion (A305) — clears R2 + all D1 rows, resumable, fail-closed:');
+{
+  const db = mockDb();
+  const bucket = mockBucket();
+  const env = { ACCOUNTS_DB: db, SYNC_BUCKET: bucket };
+  const user = await createUser(db, 'gone@example.com');
+  const { token } = await createSession(db, user.id);
+  grantCloud(db, user.id);
+
+  // fail-closed shapes
+  ok('account-delete 503 without ACCOUNTS_DB', (await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env: { SYNC_BUCKET: bucket } })).status === 503);
+  ok('account-delete 503 without SYNC_BUCKET', (await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env: { ACCOUNTS_DB: db } })).status === 503);
+  ok('account-delete 401 without a session', (await accountDelete({ request: req('/api/account/delete'), env })).status === 401);
+  ok('account-delete cross-origin → 403', (await accountDelete({ request: req('/api/account/delete', { origin: 'https://evil.example', cookie: cookieFor(token) }), env })).status === 403);
+
+  // seed a full account: two workspaces with pushed records (R2 blobs), + credential/subscription/
+  // wrapped-ik/donation/recovery rows.
+  for (const w of ['wa', 'wb']) {
+    await wsRegister({ request: req('/api/sync/workspaces', { cookie: cookieFor(token), body: { workspace_id: w, wrapped_dek: 'D-' + w } }), env });
+    await push({ request: req('/api/sync/push', { cookie: cookieFor(token), body: { workspace_id: w, records: [rec(w + '-b1', w + '-c1', 100), rec(w + '-b2', w + '-c2', 100)] } }), env });
+    db.tables.sync_wrapped_ik.push({ user_id: user.id, method: 'prf', key_id: w, wrapped_ik: 'IK', updated: 100 });
+  }
+  db.tables.credentials.push({ id: 'cred-1', user_id: user.id, public_key: 'pk', counter: 0, created_at: 100 });
+  db.tables.donations.push({ id: 'don-1', user_id: user.id, email: 'gone@example.com', amount_cents: 500, created_at: 100, claimed_at: 100 });
+  db.tables.recovery_tokens.push({ id: 'rt-1', user_id: user.id, email: 'gone@example.com', purpose: 'verify', token_hash: 'h', created_at: 100, expires_at: 200 });
+  db.tables.challenges.push({ id: 'ch-1', type: 'register', user_id: user.id, email: 'gone@example.com', challenge: 'x', expires_at: 200 });
+  const blobsBefore = bucket.store.size;
+  ok('R2 holds the pushed ciphertext blobs before delete', blobsBefore === 4);
+
+  const res = await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env });
+  const rj = await res.json();
+  ok('account-delete 200 done:true', res.status === 200 && rj.done === true && rj.deleted === true);
+  ok('...clears the session cookie', /Max-Age=0/.test(res.headers.get('Set-Cookie') || ''));
+
+  // every trace of the user is gone
+  ok('all R2 ciphertext blobs removed', bucket.store.size === 0);
+  ok('sync_records emptied', db.tables.sync_records.length === 0);
+  ok('sync_workspaces + keys dropped', db.tables.sync_workspaces.length === 0 && db.tables.sync_workspace_keys.length === 0);
+  ok('sync_wrapped_ik removed', db.tables.sync_wrapped_ik.length === 0);
+  ok('credentials removed', db.tables.credentials.length === 0);
+  ok('sessions removed', db.tables.sessions.length === 0);
+  ok('subscriptions removed', db.tables.subscriptions.length === 0);
+  ok('donations removed', db.tables.donations.length === 0);
+  ok('recovery_tokens removed', db.tables.recovery_tokens.length === 0);
+  ok('challenges removed', db.tables.challenges.length === 0);
+  ok('the user row itself is gone', db.tables.users.length === 0);
+
+  // a second delete with the (now invalid) session → 401 (session was revoked)
+  ok('a repeat delete after removal → 401 (session gone)', (await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env })).status === 401);
+
+  // Resumable: a workspace larger than the per-call page budget returns done:false and keeps the user
+  // until a follow-up call finishes the job.
+  const bdb = mockDb();
+  const bbk = mockBucket();
+  const benv = { ACCOUNTS_DB: bdb, SYNC_BUCKET: bbk };
+  const bu = await createUser(bdb, 'big@example.com');
+  const { token: bt } = await createSession(bdb, bu.id);
+  bdb.tables.sync_workspaces.push({ workspace_id: 'big', owner_user_id: bu.id, created_at: 100 });
+  bdb.tables.sync_workspace_keys.push({ workspace_id: 'big', owner_user_id: bu.id, wrapped_dek: 'D', updated: 100 });
+  const TOTAL = 5001; // > MAX_PAGES_PER_CALL(10) × DELETE_PAGE(500) → needs two invocations
+  for (let i = 1; i <= TOTAL; i++) {
+    bdb.tables.sync_records.push({ workspace_id: 'big', blinded_id: 'b' + i, seq: i, type: 'trade', ciphertext_ref: 'ref' + i, updated: 100, deleted: 0 });
+    bbk.store.set('ref' + i, 'x');
+  }
+  const first = await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(bt) }), env: benv });
+  const fj = await first.json();
+  ok('a large account pages: first call returns done:false', first.status === 200 && fj.done === false);
+  ok('...the user still exists mid-delete', bdb.tables.users.length === 1);
+  ok('...and only the budgeted pages were cleared so far', bdb.tables.sync_records.length === TOTAL - 10 * 500);
+  const second = await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(bt) }), env: benv });
+  ok('the follow-up call finishes (done:true)', (await second.json()).done === true);
+  ok('...all records + blobs gone', bdb.tables.sync_records.length === 0 && bbk.store.size === 0);
+  ok('...and the user is deleted', bdb.tables.users.length === 0);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

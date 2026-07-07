@@ -17,6 +17,14 @@
 -- `subscribers` + `changelog_sends`), the owner MUST re-run the
 -- `wrangler d1 execute ... --file=functions/schema.sql` command above against the bound database so
 -- the new tables exist in prod. Existing rows are untouched.
+--
+-- ⚠ FK-ON-EXISTING-TABLE CAVEAT (A305): the ON DELETE CASCADE foreign keys added to donations.user_id,
+-- recovery_tokens.user_id, and sync_records.workspace_id take effect on FRESH installs (this file). SQLite
+-- cannot ALTER an existing table to add a FK, so a LIVE DB keeps its FK-less tables until a manual
+-- rebuild (CREATE new → INSERT SELECT → DROP → RENAME). Until then, /api/account/delete's EXPLICIT
+-- deletes (below) are what guarantee no orphans — the endpoint never relies on the DB cascade alone, so
+-- it is correct with or without the FK migration. (D1 also requires `PRAGMA foreign_keys=ON` per
+-- connection for cascades to fire at all.)
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,                        -- crypto.randomUUID()
@@ -82,7 +90,7 @@ CREATE INDEX IF NOT EXISTS idx_challenges_expires ON challenges (expires_at);
 -- S25: identity + payment metadata only — never any trade data.
 CREATE TABLE IF NOT EXISTS donations (
   id TEXT PRIMARY KEY,                        -- Stripe event id ⇒ replay-safe dedupe (S11)
-  user_id TEXT,                               -- NULL until claimed by a VERIFIED matching email
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE, -- NULL until claimed; FK cascades on account delete (A305)
   email TEXT,                                 -- lowercased checkout email (the claim key)
   amount_cents INTEGER,
   currency TEXT,
@@ -100,7 +108,7 @@ CREATE INDEX IF NOT EXISTS idx_donations_user ON donations (user_id);
 --   purpose 'recover' → magic-link passkey RE-enrollment (issues fresh WebAuthn register options)
 CREATE TABLE IF NOT EXISTS recovery_tokens (
   id TEXT PRIMARY KEY,                        -- random public half of the token (lookup key)
-  user_id TEXT,                               -- nullable; set for both purposes today
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE, -- nullable; FK cascades on account delete (A305)
   email TEXT NOT NULL,                        -- lowercased target email
   purpose TEXT NOT NULL,                      -- 'verify' | 'recover'
   token_hash TEXT NOT NULL,                   -- base64url(SHA-256(secret half)) — secret never stored
@@ -225,7 +233,7 @@ CREATE INDEX IF NOT EXISTS idx_sync_wrapped_ik_user ON sync_wrapped_ik (user_id)
 -- itself lives in R2 (SYNC_BUCKET) at ciphertext_ref — large records (encrypted screenshots) never sit
 -- in a D1 row. deleted flags a tombstone (the delete half of LWW). Upsert is LWW by `updated`.
 CREATE TABLE IF NOT EXISTS sync_records (
-  workspace_id TEXT NOT NULL,                 -- REFERENCES sync_workspaces(workspace_id) — authorized per request
+  workspace_id TEXT NOT NULL REFERENCES sync_workspaces(workspace_id) ON DELETE CASCADE, -- FK: dropping a workspace cascades its index rows (A305); R2 blobs still need deleteWorkspacePage — a D1 cascade can't reach R2
   blinded_id TEXT NOT NULL,                   -- HMAC(workspaceKey, tradeId), never the raw hash (S25)
   seq INTEGER NOT NULL,                       -- monotonic per-workspace sequence (pull cursor)
   type TEXT NOT NULL,                         -- opaque record-kind label (never inspected)

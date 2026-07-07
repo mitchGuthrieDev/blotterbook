@@ -294,6 +294,25 @@ export async function deleteSessionsForUser(db: AccountsDb, userId: string): Pro
   await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
 }
 
+/** Delete a user and EVERY D1 row keyed to them (A305). Explicit child-row deletes — never relies on a
+ *  D1 ON DELETE CASCADE (the foreign_keys pragma may be off, and live DBs predate the A305 FK migration),
+ *  so this is correct with or without the FKs. The caller (/api/account/delete) MUST first clear the
+ *  user's R2 ciphertext + sync_records via deleteWorkspacePage — a D1 delete can't reach R2. Workspace
+ *  rows (sync_workspaces/sync_workspace_keys) are also dropped by owner here as a backstop in case a
+ *  shell was orphaned. Ordered children-first. */
+export async function deleteUserAccount(db: AccountsDb, userId: string): Promise<void> {
+  await db.prepare('DELETE FROM sync_wrapped_ik WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM sync_workspace_keys WHERE owner_user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM sync_workspaces WHERE owner_user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM subscriptions WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM credentials WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM donations WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM recovery_tokens WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM challenges WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
+}
+
 /** Look up a pending challenge by its value + type and DELETE it (single-use — a second
  *  consume, or an expired row, returns null). */
 export async function consumeChallenge(
