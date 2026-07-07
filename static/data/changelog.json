@@ -4,6 +4,19 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.68.0",
+      "date": "2026-07-07",
+      "title": "Resizable modules come to Analytics, and the calendar fills your screen",
+      "summary": "The module-sizing controls introduced on the dashboard now extend to the Analytics screen, the Calendar screen's month view grows to use your whole display instead of leaving empty space, and the How-To import guides got a major accuracy pass.",
+      "highlights": [
+        "Analytics modules are now resizable: switch any panel between half and full width from its ⋯ menu, and your layout is remembered per device.",
+        "The Calendar screen's month grid now fills the viewport — day cells grow taller to use the space, so a month at a glance is easier to read.",
+        "Dashboard modules keep their size controls from the last release, now backed by the same layout engine across screens.",
+        "The How-To import guides were corrected platform by platform — including where each export actually lives (TradingView's visible-columns gotcha, Tradovate's Account Reports, Quantower's right-click export) and an accurate commission-data table.",
+        "Under the hood: a documentation-wide accuracy pass and a new auth-flow architecture diagram for the curious."
+      ]
+    },
+    {
       "version": "0.66.0",
       "date": "2026-07-07",
       "title": "Cloud sync is live — with a clearer sync experience",
