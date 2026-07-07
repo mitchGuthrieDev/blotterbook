@@ -466,7 +466,10 @@ async function runSync(opts: { full?: boolean; id?: string; direction?: 'both' |
       runningByWs.delete(id);
     }
   })();
-  inFlight = run.catch(() => {});
+  // A307: CHAIN, don't overwrite — two runs can overlap (a `focus` and an `online` both fire), and a
+  // bare `inFlight = run` would let cancelActiveSync await only the LAST, leaving the earlier run
+  // writing after the switch flipped. allSettled awaits BOTH (run never rejects — its IIFE swallows).
+  inFlight = Promise.allSettled([inFlight, run]).then(() => {});
   await run;
 }
 
@@ -575,7 +578,7 @@ async function runPush(): Promise<void> {
       runningByWs.delete(id);
     }
   })();
-  inFlight = run.catch(() => {});
+  inFlight = Promise.allSettled([inFlight, run]).then(() => {}); // A307: chain so cancelActiveSync awaits every overlapping run
   try {
     await run;
   } finally {

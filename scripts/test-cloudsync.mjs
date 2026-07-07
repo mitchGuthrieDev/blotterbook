@@ -22,7 +22,7 @@ import { onRequestGet as pullFn } from '../functions/api/sync/pull.ts';
 import { recordKey } from '../functions/_lib/sync.ts';
 import { tradeId } from '../src/lib/core/store.ts';
 import { genIdentityKey, genWorkspaceDek, dekBytesOf, wrapDek, unwrapDekBytes, encryptRecord, blindId } from '../src/lib/core/crypto.ts';
-import { deriveWsKeys, pushChanges, pullAndMerge, syncPlan, collectChanges } from '../src/app/lib/cloudsync-core.ts';
+import { deriveWsKeys, pushChanges, pullAndMerge, syncPlan, collectChanges, mergeRecords } from '../src/app/lib/cloudsync-core.ts';
 
 let pass = 0;
 const ok = (name, cond) => {
@@ -521,6 +521,32 @@ const stB = { cursor: 0, pushed: -1 };
     "A297: a concurrent stale re-push does not resurrect A's deleted trade",
     !(await Adel.getAllTrades()).some(t => t.id === gId)
   );
+}
+
+// ── A307: the workspace-switch barrier covers the MERGE write phase, not just the pull ────────────
+// The controller (cloudsync.svelte.ts) is a rune module we can't import here; the overlap-then-switch
+// path (a `focus` + `online` reconcile racing a workspace switch) is asserted end-to-end in the e2e
+// specs. Here we lock down the pure primitive that makes that safe: `shouldAbort` threaded into
+// mergeRecords is honoured BEFORE the write phase, so a switch that lands mid-merge writes nothing and
+// pullAndMerge leaves the cursor unadvanced.
+{
+  // (1) mergeRecords aborts after decrypt, before the first store mutation → nothing written.
+  const D = memStore();
+  const page = await transport.pull(WS, 0);
+  ok('A307: the server has records to attempt a merge', page.records.length > 0);
+  const wrote = await mergeRecords(D, keysB, page.records, () => true);
+  ok('A307: an aborted merge returns false (write phase skipped)', wrote === false);
+  ok('A307: an aborted merge writes nothing into the switched-away store', (await D.getAllTrades()).length === 0);
+
+  // (2) a merge with no abort still lands (the guard is inert when the workspace never changes).
+  const E = memStore();
+  const wrote2 = await mergeRecords(E, keysB, page.records, () => false);
+  ok('A307: a non-aborted merge still writes (guard inert)', wrote2 === true && (await E.getAllTrades()).length > 0);
+
+  // (3) pullAndMerge under a pending switch bails with the cursor UNADVANCED.
+  const F = memStore();
+  const res = await pullAndMerge(F, keysB, transport, WS, 0, () => true);
+  ok('A307: pullAndMerge aborts with the cursor unadvanced', res.cursor === 0 && res.merged === 0 && (await F.getAllTrades()).length === 0);
 }
 
 console.log(`\n${pass} assertions passed.`);

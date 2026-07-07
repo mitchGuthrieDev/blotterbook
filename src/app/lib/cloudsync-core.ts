@@ -248,9 +248,21 @@ function realKey(type: WireType, obj: Record<string, unknown>): string {
  *   · journal / trademeta / meta / file → store.importAll ONLY when strictly newer than local (LWW)
  *   · deletes → the store's delete methods (which write a local tombstone), gated + idempotent so a
  *               remote delete never ping-pongs (skip when already absent AND already tombstoned).
+ *
+ * A307: `shouldAbort` is re-checked AFTER the (async) decrypt/resolve pass and BEFORE the write phase.
+ * pullAndMerge's last barrier check runs before this call, but the decrypt loop awaits, so a workspace
+ * switch can land in that window; without this re-check the merge would write one workspace's records
+ * into another's now-active DB. On abort it writes NOTHING and returns `false`, so pullAndMerge leaves
+ * the cursor UNADVANCED and the next reconcile re-reads it. Returns `true` when the merge completed
+ * (whether or not any record actually landed).
  */
-export async function mergeRecords(store: StoreLike, keys: WsKeys, records: PulledRecord[]): Promise<void> {
-  if (!records.length) return;
+export async function mergeRecords(
+  store: StoreLike,
+  keys: WsKeys,
+  records: PulledRecord[],
+  shouldAbort: () => boolean = () => false
+): Promise<boolean> {
+  if (!records.length) return true;
   const { decryptRecord } = await cryptoCore();
 
   // Resolve to the latest record per (type:key) by `updated` (LWW within the batch).
@@ -277,6 +289,10 @@ export async function mergeRecords(store: StoreLike, keys: WsKeys, records: Pull
     if (!prev || r.updated >= prev.updated) latest.set(id, { type, key, updated: r.updated, deleted: r.deleted, obj });
   }
   if (skipped) console.warn(`cloudsync: skipped ${skipped} undecryptable record(s) during merge`);
+
+  // A307: the decrypt/resolve loop above awaited — re-check the switch barrier BEFORE reading or
+  // writing the store, so a switch that landed mid-decrypt can't merge into the wrong workspace's DB.
+  if (shouldAbort()) return false;
 
   // Snapshot local `updated` per record + the local tombstones, for the LWW gate.
   const [trades, journal, trademeta, meta, tombs] = await Promise.all([
@@ -327,6 +343,10 @@ export async function mergeRecords(store: StoreLike, keys: WsKeys, records: Pull
     else if (r.type === 'meta') payload.meta.push({ key: String(r.obj.key), value: r.obj.value, updated: r.updated });
   }
 
+  // A307: the local snapshot above awaited too — final barrier check immediately before the first
+  // store mutation, so nothing is written into a workspace that was switched away mid-merge.
+  if (shouldAbort()) return false;
+
   // Apply deletes first (independent keys from the upserts), then the upserts through importAll —
   // the same hardened trust boundary a backup restore flows through (S15/S17/S20/A154).
   for (const d of deletes) {
@@ -336,6 +356,7 @@ export async function mergeRecords(store: StoreLike, keys: WsKeys, records: Pull
   }
   const hasUpserts = payload.trades.length || payload.journal.length || payload.trademeta.length || payload.meta.length;
   if (hasUpserts) await store.importAll(payload as unknown as Record<string, unknown>);
+  return true;
 }
 
 /**
@@ -366,7 +387,10 @@ export async function pullAndMerge(
     if (!page.more || !page.records.length) break;
   }
   if (shouldAbort()) return { cursor: since, merged: 0 }; // bail before writing the merge into the store
-  await mergeRecords(store, keys, all);
+  // A307: mergeRecords re-checks the barrier before its own write phase; if it aborted (a switch
+  // landed during decrypt/snapshot), it wrote nothing → leave the cursor UNADVANCED for a re-read.
+  const merged = await mergeRecords(store, keys, all, shouldAbort);
+  if (!merged) return { cursor: since, merged: 0 };
   return { cursor, merged: all.length };
 }
 
