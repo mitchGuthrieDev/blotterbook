@@ -64,7 +64,7 @@
   import BootSplash from './parts/BootSplash.svelte';
   import LaunchGate from './parts/LaunchGate.svelte';
   import WorkspaceSwitcher from './parts/WorkspaceSwitcher.svelte';
-  import { account, refreshSession } from './lib/account.svelte.ts';
+  import { account, refreshSession, completeRecovery } from './lib/account.svelte.ts';
   import { wrapStore, configureCloudSync } from './lib/cloudsync.svelte.ts';
   import { loadFlags, APP_FLAGS, accountGateEnabled, type AppFlags } from './lib/flags.ts';
   import { pickFlavor } from './lib/flavor.ts';
@@ -111,7 +111,7 @@
     trades: () => import('./screens/TradeEditor.svelte'),
     reports: () => import('./screens/Reports.svelte'),
     csv: () => import('./screens/CsvLibrary.svelte'),
-    account: () => import('./screens/Account.svelte'), // F53 — staging-gated route below
+    account: () => import('./screens/Account.svelte'),
   };
 
   // F53/CH16: passkey accounts, promoted to every surface (demo renders it read-only via isDemo).
@@ -917,7 +917,20 @@
     });
     // F56: only when the gate is armed (staging + flag) do we probe /api/me — prod/demo issue no
     // account traffic at all. refreshSession never throws; account.loaded flips when it settles.
-    if (gateArmed) void refreshSession();
+    if (gateArmed) {
+      void refreshSession();
+      // A300: a lost-passkey recovery link (`?recover=<token>`) lands here BEHIND the login gate —
+      // Account.svelte (which normally handles it) never mounts while the gate blocks, so the 15-min
+      // token used to just expire. Run the re-enrollment ceremony pre-gate; on success account.user
+      // flips and the gate falls through. Scrub the token so a reload can't reuse a spent link.
+      const recoverToken = new URLSearchParams(location.search).get('recover');
+      if (recoverToken) {
+        const url = new URL(location.href);
+        url.searchParams.delete('recover');
+        history.replaceState(null, '', url.pathname + url.search + url.hash);
+        void completeRecovery(recoverToken);
+      }
+    }
     // A256/F63: initialize cloud sync on every NON-DEMO surface (probes the tier, wires focus/
     // connectivity, settles per-workspace status). It stays inert on local tier — no /api/sync
     // (write-behind) traffic until a cloud-tier user enables + unlocks a workspace. Demo never calls
