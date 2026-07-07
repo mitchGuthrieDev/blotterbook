@@ -1,6 +1,6 @@
 # Data flow & data management — the end-to-end prose overview (A110)
 
-*2026-07-04. One narrative pass over how data moves through Blotterbook, stitching together what the
+*2026-07-07. One narrative pass over how data moves through Blotterbook, stitching together what the
 [architecture diagrams](architecture-diagrams/README.md) show piecewise — read this first, then the
 diagrams for the boxes-and-arrows view ([csv-import-adapters](architecture-diagrams/csv-import-adapters.md),
 [compute-costmodel-render](architecture-diagrams/compute-costmodel-render.md),
@@ -71,7 +71,7 @@ persisted verbatim (next section) — the parse is repeatable.
 
 All persistence goes through the `Store` interface (guardrail A4): components never touch
 `indexedDB` directly, so the `CloudStore` write-behind wrapper (F63) drops in behind the same async
-methods. The IndexedDB database (v4) holds **seven** object stores:
+methods. The IndexedDB database (v5) holds **seven** object stores:
 
 | store | keyed by | holds |
 |---|---|---|
@@ -81,7 +81,7 @@ methods. The IndexedDB database (v4) holds **seven** object stores:
 | `meta` | key | setup, saved filters, migration flags |
 | `files` | file id (content hash) | imported-CSV metadata records (F37) |
 | `filetext` | file id | the raw CSV text, stored verbatim (F37) |
-| `tombstones` | record id | delete-log `{id, type, updated}` (F58) |
+| `tombstones` | composite `${type}:${id}` (A269) | delete-log `{key, id, type, updated}` (F58) |
 
 **Named workspaces (F59).** The store is now workspace-scoped: each named workspace is its **own**
 IndexedDB database (`blotterbook:<uuid>`; the pre-F59 **Default** workspace keeps the legacy
@@ -162,7 +162,7 @@ user opts a workspace in + unlocks, selected via `Entitlements`/`/api/me` (F60):
   records are encrypted client-side (`src/lib/core/crypto.ts` — per-workspace AES-GCM DEK) and sent to
   `POST /api/sync/push`; the server assigns a monotonic per-workspace `seq` and stores only ciphertext
   (R2) + a blinded-id change-index (D1).
-- **On connect / unlock / focus**, a **pull** (`GET /api/sync/pull?since=<seq>`; a full `since=0`
+- **On connect / unlock / focus**, a **pull** (`GET /api/sync/pull?workspace_id=<id>&since=<seq>`; a full `since=0`
   reconcile on connect closes F62's concurrent-push seq race) decrypts remote records and re-merges them
   through the **existing** `importAll` trust boundary — same gate as a backup restore: trades union by
   content hash (F58 tombstones suppress resurrection), journal/trade-meta/meta LWW by `updated`, deletes

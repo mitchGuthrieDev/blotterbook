@@ -50,6 +50,12 @@ semantic set** in `:root` from Blotterbook's palette and maps it into Tailwind's
   `accent` keeps its shadcn meaning (hover surface for menu items, etc.). Don't reach for `accent` to
   mean "the blue."
 
+  > **Superseded (greyscale UI redesign, CH16-era):** `primary` is no longer the brand blue — it's a
+  > near-white neutral (`--primary: #fafafa` in `src/styles/tailwind.css`), part of the greyscale UI
+  > chrome (`ring` is mid-grey too; there is no brand blue in the chrome). Blue survives only in the
+  > data layer as `chart-1` (`--chart-1: #6aa0ff`). The accent/primary distinction above is otherwise
+  > still accurate — `accent` is still the hover surface, not a color role.
+
 - **Trading-domain hues live in `chart-1..5`.** Several Blotterbook colors have no shadcn semantic
   equivalent, so they ride the chart palette: **chart-1** brand-blue, **chart-2** P&L-up (green),
   **chart-3** take-home (purple), **chart-4** warning (amber), **chart-5** P&L-down (red). Hence
@@ -75,7 +81,7 @@ semantic set** in `:root` from Blotterbook's palette and maps it into Tailwind's
 The core `tsc` (tsconfig.json) checks `src/lib/**/*.ts` **except** `src/lib/components` — the
 component `.ts` barrels import `.svelte`, which plain `tsc` can't resolve. `svelte-check`
 (tsconfig.svelte.json) covers `src/app` + `src/site` + `src/lib/components`. App-only glue stays at
-`src/app/lib/` (actions/files/flags/modules). `tsconfig.functions.json` covers `functions/`.
+`src/app/lib/` (actions/files/flags/nav). `tsconfig.functions.json` covers `functions/`.
 
 ### CSP still holds
 

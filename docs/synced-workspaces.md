@@ -47,6 +47,8 @@ Everything below is in service of keeping that sentence true.
 - **Identity + billing plumbing is live:** passkey sessions, `/api/me` returning `{ tier }`, the
   signature-verified Stripe webhook provisioning subscriptions. `me.ts` simply never *grants* a
   non-local tier yet. **R2** is already the named blob store in the plan.
+  **Shipped (F60):** `me.ts` now grants `cloud` while a subscription is active or within its dunning
+  grace window — see *Entitlement wiring* below.
 
 The genuinely new work: **(a)** tombstones in the local store, **(b)** the workspace dimension,
 **(c)** cloud-entitlement wiring, **(d)** the E2E crypto layer, **(e)** `/api/sync`, **(f)** `CloudStore`.
@@ -180,6 +182,8 @@ server), and it can land first and independently.
 
 - `me.ts` grants `{ tier:'cloud', cloudSync:true }` when the user has an **active subscription**
   (extend the existing donation/subscription bookkeeping; today it returns `local` unconditionally).
+  **Shipped (F60):** this is now live — `me.ts` grants `cloud` on an active subscription or within its
+  dunning grace window, per the lapse policy below.
 - **Lapse policy (owner decision, 2026-07-06): period-end + grace.** A cancellation keeps `cloud` until
   the paid period ends; a failed payment gets a dunning grace window before cutoff. This means the
   webhook (F54 handles `checkout.session.completed` only) must also handle
@@ -191,6 +195,11 @@ server), and it can land first and independently.
 - `Entitlements.current()` (scaffold, currently unloaded) starts calling `/api/me`; `storeFor('cloud')`
   returns `CloudStore`, `storeFor('local')` returns `Store`. `App.svelte` already resolves and
   prop-drills one `Store` — it resolves it through `Entitlements` instead of importing `Store` directly.
+  **As built (see "F63 as built" below), this changed shape:** `Entitlements.storeFor(tier)` always
+  returns the **base local** `Store` regardless of tier — core code deliberately doesn't reach up into
+  the app-level wrapper (`src/lib/core/entitlements.ts`). The `CloudStore` wrap is applied one layer up,
+  at the App boundary, via `wrapStore` on **every non-demo surface**, and is gated to the `cloud` tier
+  **at runtime** by the sync controller (A256) — not by `storeFor`.
 
 ## Build sequence
 
@@ -218,7 +227,8 @@ Landed on staging 2026-07-06 and promoted to prod via CH16 on 2026-07-07 (opt-in
 demo never syncs). NB: the store-wrap was already non-demo (A256) — the CH16 promote was a GA
 declaration + doc/comment alignment, not a gate flip. Key decisions:
 
-- **Layering.** `src/app/lib/cloudsync-core.ts` is the pure (rune-free, node-testable) engine
+- **Layering.** `src/lib/core/cloudsync-core.ts` (relocated from `src/app/lib` by A314 for strict
+  `tsc` coverage) is the pure (rune-free, node-testable) engine
   (`collectChanges`/`pushChanges`/`pullAndMerge`/`mergeRecords`); `cloudstore.ts` is the `StoreLike`
   wrapper (reads delegate, writes delegate + fire `onWrite`); `cloudsync.svelte.ts` is the reactive
   controller (status, debounce, enable, the fetch transport). `crypto.ts` (and its Argon2 wasm) is

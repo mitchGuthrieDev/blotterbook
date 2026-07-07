@@ -19,8 +19,9 @@ differently:
 - **Layout / structure** — the sidebar `AppShell` + `SidebarNav` and the per-screen screens
   (originally mocked in `src/dev/screens/*`) — has now **shipped to the real app** via the CH16
   cutover: the live `/app/`, demo, and staging all mount the redesigned sidebar-shell `App.svelte`
-  (`AppShell` + hash router over `src/app/screens/*`). The `/dev/` sandbox remains as the ongoing
-  design preview.
+  (`AppShell` + hash router over `src/app/screens/*`). `/dev` remains the token + component
+  styleguide reference (`/dev/components.html`); screen design happens directly in
+  `src/app/screens/`.
 
 > **In one line:** both the new *look* and the new *layout* are now shipped globally — the cutover
 > is complete; `/dev` remains a design sandbox.

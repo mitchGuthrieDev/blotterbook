@@ -352,13 +352,15 @@ Trade data and day-notes are stored in **IndexedDB** via `src/lib/core/store.ts`
 the `local` tier nothing is uploaded; the opt-in `cloud`-tier sync path egresses only ciphertext
 (see [Storage tiers, sync & the refined moat](#storage-tiers-sync--the-refined-moat)).
 
-- **Stores (DB v4):** `trades` (keyed by the dedupe id), `journal` (per-day notes
+- **Stores (DB v5):** `trades` (keyed by the dedupe id), `journal` (per-day notes
   keyed by date — each a `{text, tags, shots}` annotation), `meta` (setup + saved
   filters), `trademeta` (per-trade tags/note/screenshots, keyed by trade id; added
   in DB v2), `files`/`filetext` (per-file CSV provenance — metadata and the
   raw text stored in separate stores so listing the library never loads
-  megabytes; added in DB v3, F37), and `tombstones` (a delete-log `{id, type, updated}`
-  written by every delete path; added in DB v4, F58).
+  megabytes; added in DB v3, F37), and `tombstones` (a delete-log `{key, id, type,
+  updated}` written by every delete path, keyed by the composite `${type}:${id}`
+  since v5/A269 — a trade and its per-trade meta share a bare id, which used to
+  collide; introduced in DB v4, F58).
 - **Named workspaces (F59).** The store is workspace-scoped: each named workspace is its **own**
   IndexedDB database (`blotterbook:<uuid>`), while the pre-F59 **Default** workspace keeps the legacy
   `blotterbook`/`blotterbookStaging` name (zero migration — the existing DB *is* the Default). The
@@ -366,8 +368,13 @@ the `local` tier nothing is uploaded; the opt-in `cloud`-tier sync path egresses
 - **Delta merge:** `Store.addTrades()` skips ids already present (and consults `tombstones` so a
   re-import can't resurrect a deleted trade — F58), so re-imports only add genuinely new trades.
 - **Demo data is never persisted** — it lives in memory only, and `DemoStore` never syncs.
-- **Erase all local data** (Manage data → Danger zone) calls `Store.purge()` to
-  wipe all stores (tombstones included) after a confirm.
+- **Erase all local data** (CSV Library screen → data management → **Erase all data**,
+  `src/app/screens/CsvLibrary.svelte`) calls `Store.purge()` to wipe all stores (tombstones
+  included) after a confirm. For a **synced** workspace, the purge also disables its sync and
+  best-effort erases the server-side ciphertext (A254; `onErased()` in
+  `src/app/lib/cloudsync.svelte.ts` → `functions/api/sync/delete.ts`) — the local opt-out is the
+  guaranteed stop for this device, the server erase retries on the next purge if it can't reach
+  the network now.
 
 The app never touches `indexedDB` directly — it goes through the `Store`
 interface. The `CloudStore` write-behind wrapper (F63) implements the same interface, so cloud sync
@@ -381,8 +388,8 @@ layers on without touching the rest of the app. The manager added `deleteTrade`,
 
 ## Storage tiers, sync & the refined moat
 
-> **New with synced workspaces (F58–F63, 2026-07-06; STAGING-GATED — CH16 promote deferred).** Design
-> record: [`docs/synced-workspaces.md`](synced-workspaces.md).
+> **New with synced workspaces (F58–F63; live on prod + staging since the 2026-07-07 CH16 GA — opt-in
+> cloud-tier, never demo).** Design record: [`docs/synced-workspaces.md`](synced-workspaces.md).
 
 The original moat — *no trade data ever leaves the browser* — is **refined, not dropped**:
 
@@ -391,8 +398,9 @@ The original moat — *no trade data ever leaves the browser* — is **refined, 
 > cannot decrypt.** `local`-tier and un-synced workspaces egress nothing.
 
 - **Two tiers, one interface.** `Entitlements` (`src/lib/core/entitlements.ts`, wired in F60) calls
-  `/api/me` and resolves the tier; `storeFor('local')` returns the IndexedDB `Store`. On staging,
-  `App.svelte` additionally wraps the store in a `CloudStore` for opt-in encrypted sync. Every consumer
+  `/api/me` and resolves the tier; `storeFor('local')` returns the IndexedDB `Store`. On every
+  non-demo surface (app + staging), `App.svelte` wraps the store in a `CloudStore` for opt-in
+  encrypted sync (inert until a cloud-tier user opts a workspace in + unlocks). Every consumer
   depends only on the `StoreLike` interface (guardrail A4), so this is transparent to screens.
 - **Write-behind topology.** IndexedDB stays the primary store on every browser and tier; reads are
   local (offline-first). Each write also enqueues a debounced encrypted **push**; connect/unlock/focus
@@ -420,8 +428,9 @@ release automation: `store.ts` `DB_VERSION` (IndexedDB schema), the backup-file
 launched from the admin page (**Launch staging env**) to trial changes before they
 reach the main app. It uses an **isolated IndexedDB** (`blotterbookStaging`, set in
 `store.ts`) so testing never touches real data, and **seeds the sample dataset
-once** so it opens in the loaded state. It has the full top bar including **Manage
-data** and the **Load CSV** landing; notes/tags/filters persist to its own DB.
+once** so it opens in the loaded state. It ships the full redesigned sidebar shell (the same
+`AppShell` + screens as prod, including the CSV Library screen's data-management controls and
+the CSV import flow); notes/tags/filters persist to its own DB.
 
 **Staging is key-gated.** `functions/_middleware.ts` gates `/app/staging.html`: it
 requires the `ADMIN_KEY` via an `x-admin-key` header or a `bb_staging` cookie (if
@@ -549,9 +558,11 @@ set an **`ADMIN_KEY`** secret. Detailed click-paths and the admin-auth model
 
 `functions/api/geo.ts` returns the visitor's coarse region from Cloudflare's edge
 metadata (`request.cf`) — no IP or third-party service, nothing stored. **The endpoint is
-deployed but currently unwired**: nothing in `src/` calls `/api/geo` since the CH16 cutover
-(the legal page's outbound-call inventory reflects this — A181). Re-wiring it to pre-select
-the tax state is a candidate future enhancement; it must never override a chosen/saved state.
+wired (A201):** at boot, on any non-demo surface, `dashboard.svelte.ts`'s `prefillStateFromGeo()`
+fetches `/api/geo` once — but only when no tax state is set yet (a user's saved/chosen state is
+never overridden) — and silently no-ops on any failure (offline, non-US, unknown region, or a dev
+server without functions). It's convenience-only: the guessed state lives in memory until the
+user's next setup save.
 
 ## Marketing & info site
 
@@ -588,7 +599,8 @@ release notes), and `legal.html` (disclaimers, terms, privacy summary).
   CME session day; RTH/ETH assumes the timestamp's clock time.
 - **Sharpe is illustrative** — daily PnL, population std, not annualized.
 - **Local storage is per-browser** — on `local`-tier or an un-synced workspace, data is not synced
-  across devices and is cleared if you clear site data. Use **Manage data → Download backup** for a
+  across devices and is cleared if you clear site data. Use the CSV Library screen's **Download
+  backup** control for a
   portable JSON snapshot. (Cross-device sync is the `cloud`-tier **synced-workspaces** feature,
   F58–F63 — **live on prod + staging**, opt-in `cloud`-tier, never demo; see
   [Storage tiers, sync & the refined moat](#storage-tiers-sync--the-refined-moat).)

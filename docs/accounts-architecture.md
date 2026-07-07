@@ -13,6 +13,14 @@
 > `recover-send`/`-verify`) even though F54/F55 show as open in the backlog at time of writing — treat
 > `functions/schema.sql` and `functions/api/account/*` as ground truth over the SQL/API sketch below,
 > which records the original design intent and rationale (still valid) rather than the final shape.
+> **Later deltas (still `functions/schema.sql` as ground truth):** `credentials` gained
+> `user_verified` (A310, one-time `ALTER TABLE` on existing deployments); `challenges` gained
+> `recovery` (A302, flags a register challenge as account-recovery so verify revokes prior sessions);
+> `donations.user_id`/`recovery_tokens.user_id` gained `ON DELETE CASCADE` (A305, backs the account-
+> deletion endpoint on fresh installs — SQLite can't add a CASCADE FK to an existing table, so
+> pre-A305 deployments rely on `deleteUserAccount`'s explicit deletes instead). A305 also added
+> `functions/api/account/passkey-delete.ts` (passkey removal) and `functions/api/account/delete.ts`
+> (full account deletion).
 
 ## Recommendation (up front)
 
@@ -103,6 +111,17 @@ Entitlements later hang off `users` (a `tier` column or table) — `functions/RE
   never depends on it). New env/bindings: `DB` (D1), `RESEND_API_KEY` (or equivalent) for the two
   transactional mails, `RP_ID`/`ORIGIN` consts.
 
+> **As built:** the ceremony/recovery/passkey routes above are flat and hyphenated, not nested —
+> `register-options`/`register-verify`, `login-options`/`login-verify`,
+> `recover-send`/`recover-verify` (not `recovery/request`/`recovery/verify`). Passkey **listing**
+> rides on `GET /api/me`'s `passkeys` array — there is no separate `GET /api/account/passkeys`.
+> Deletion is `POST /api/account/passkey-delete` (A302); there is **no rename endpoint**, and the
+> last-passkey guard is **unconditional** (refuses regardless of recovery-email status — passwordless
+> login has no fallback). `/api/me`'s `user` shape also carries `emailVerified` and `createdAt`. A305
+> additionally added `POST /api/account/delete` — session-authed, two-phase, resumable account
+> deletion that clears owned sync workspaces (D1 change-index rows + R2 ciphertext) before deleting
+> every D1 row keyed to the user.
+
 ## Session mechanism
 
 Cookie, not bearer token: `__Host-bb_session` = opaque random 256-bit value; `HttpOnly; Secure;
@@ -145,11 +164,21 @@ a hard gate contradicts "no sign-up, local-first" (Howto.svelte says so verbatim
 "Continue without an account" escape hatch, or at minimum an explicit owner sign-off on retiring
 that copy (see Open questions).
 
+> **As built (F56, live on prod + staging):** the owner resolved this the hard way — the gate
+> (`ACCOUNT_GATE` in `src/app/lib/flags.ts`) is **unconditionally armed** on every non-demo surface
+> (`gateArmed` in `src/app/App.svelte`), not staging-only, and there is **no** "continue without an
+> account" path — `src/app/parts/LaunchGate.svelte` has no skip affordance. Demo remains the
+> exempt, no-signup try-it surface.
+
 **Phase 4 — workspace scaffolding.** Activate the Workspaces section: name/list workspaces
 (D1 metadata only — **trade data itself never goes server-side until the owner explicitly approves
 a CloudStore tier**, and R2 blobs should be client-side encrypted per `functions/README.md`).
 Wire `Entitlements.current()` → `/api/me` tier and `storeFor()`. **Hard-gated on A16** (Workers
 Paid before any paying sync tier) and on the CloudStore initiative being real.
+
+> **As built:** this shipped as F58–F63 (synced workspaces), GA on prod 2026-07-07 via the CH16
+> promote — opt-in, `cloud`-tier only, never demo. See
+> [`docs/synced-workspaces.md`](synced-workspaces.md) for the as-built architecture.
 
 ## Open questions for the owner
 
@@ -165,18 +194,24 @@ Paid before any paying sync tier) and on the CloudStore initiative being real.
 
 ## Proposed backlog items
 
+**As built:** F53–F56 have all shipped and archived done. F56 in particular is no longer
+staging-only or gated on Open question 1 — the login gate (`ACCOUNT_GATE`, `src/app/lib/flags.ts:26`)
+is `true` and armed (`gateArmed`, `src/app/App.svelte:754`) on **every non-demo surface** (app +
+staging); demo stays exempt by construction.
+
 - **F53 (P2, large)** — Accounts Phase 1: D1 schema + passkey register/login/logout endpoints
   (`@simplewebauthn/server` v13) + session cookie (`__Host-`, hashed in D1, Origin-checked) +
   extended `/api/me`; sidebar Login→Account screen with passkey management + donation badge +
   Workspaces stub; demo-safe (disabled), staged behind `isStaging`; unit-test ceremonies in
-  `scripts/test-accounts.mjs`.
+  `scripts/test-accounts.mjs`. **SHIPPED.**
 - **F54 (P2, medium)** — Accounts Phase 2: webhook donation provisioning after S11 verification
   (dedupe on event id, email claim at verified-email time only), `client_reference_id` via
-  `/api/checkout`, post-donation account prompt.
+  `/api/checkout`, post-donation account prompt. **SHIPPED.**
 - **F55 (P3, medium)** — Recovery: mandatory recovery email + magic-link re-enrollment flow +
-  second-passkey nudge; pick the email vendor (Open question 3).
+  second-passkey nudge; pick the email vendor (Open question 3). **SHIPPED.**
 - **F56 (P3, medium)** — Phase 3 login-gated launch module (Log in + Create account), behind a
-  config flag + staging; resolve Open question 1 before promoting.
+  config flag + staging; resolve Open question 1 before promoting. **SHIPPED — live (hard gate,
+  no "continue without account" escape hatch) on prod + staging, all non-demo surfaces.**
 - **A236 (P3, small)** — Export v3: fold the `Store.local` seam (dashboard layouts/tabs/workspace
   templates) into `exportAll`/`importAll` + add a plain SHA-256 payload checksum to the envelope.
   Independent of accounts; explicitly **no** account-hash lock (R24 verdict).
@@ -209,9 +244,10 @@ should we add a phone/email MFA factor?
   machine's platform authenticator is a footgun; the usual guidance (don't save your passkey on a
   shared device) applies and is a support/education cost, not a code one.
 - **Signup abandonment.** "Create a passkey" is still unfamiliar; some users bounce at the OS prompt.
-  Blotterbook softens this because **accounts are optional** — the app is fully usable logged-out, so
-  a failed passkey ceremony never blocks the core product (unlike the Phase 3 hard-gate tension,
-  still unresolved — Open question 1).
+  At the time of this review accounts were still optional, so a failed ceremony never blocked the
+  core product — that has since changed: **as built (F56), the login gate is live and hard** on
+  every non-demo surface (`ACCOUNT_GATE`/`gateArmed`), with no logged-out path on app/staging; only
+  the demo surface remains signup-free.
 
 **Phone/email MFA recommendation.** F55's magic link **is already an email possession factor** — it
 gates account recovery and donation claiming, so we have a second factor without new PII. SMS OTP
