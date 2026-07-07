@@ -116,6 +116,7 @@ export interface SubscriptionRow {
   current_period_end: number | null; // ms epoch (Stripe seconds converted at the webhook boundary)
   updated: number; // ms epoch of the last webhook update
   past_due_since: number | null; // ms epoch of the FIRST failure of the current past_due run (grace base; NULL when not past_due — A266)
+  last_event_created: number | null; // Stripe event.created (SECONDS) of the last APPLIED lifecycle event (out-of-order guard — A303)
 }
 
 /* ---- encoding / crypto -------------------------------------------------------------------- */
@@ -455,7 +456,11 @@ export function grantsCloud(sub: SubscriptionRow | null, now: number): boolean {
   // Grace runs from the first failure of this past_due run (A266 clamp); fall back to `updated` for
   // legacy rows written before past_due_since existed.
   if (sub.status === 'past_due' && now < (sub.past_due_since ?? sub.updated) + SUBSCRIPTION_GRACE_MS) return true;
-  if (sub.current_period_end != null && now < sub.current_period_end) return true;
+  // Ride out the already-paid period ONLY after a clean cancel — a user who cancels keeps cloud until
+  // the period they paid for ends. Do NOT extend this to past_due/unpaid: Stripe advances
+  // current_period_end into the new (unpaid) period on a failed renewal, so an ungated fallback would
+  // hand a delinquent account a free unpaid month and silently defeat the dunning grace above (A303).
+  if (sub.status === 'canceled' && sub.current_period_end != null && now < sub.current_period_end) return true;
   return false;
 }
 
@@ -486,6 +491,7 @@ export async function upsertSubscription(
     stripeCustomerId: string | null;
     status: string | null;
     currentPeriodEnd: number | null;
+    eventCreated?: number | null; // Stripe event.created (SECONDS) driving this update — persisted for the out-of-order guard (A303)
   },
   now = Date.now()
 ): Promise<void> {
@@ -496,19 +502,21 @@ export async function upsertSubscription(
   const isPastDue = s.status === 'past_due';
   const wasPastDue = existing?.status === 'past_due';
   const pastDueSince = isPastDue ? (wasPastDue ? (existing?.past_due_since ?? now) : now) : null;
+  // A303: carry the applied event.created forward (keep the prior stamp when this update didn't carry one).
+  const lastEventCreated = s.eventCreated ?? existing?.last_event_created ?? null;
   if (existing) {
     await db
       .prepare(
-        'UPDATE subscriptions SET stripe_subscription_id = ?, stripe_customer_id = ?, status = ?, current_period_end = ?, updated = ?, past_due_since = ? WHERE user_id = ?'
+        'UPDATE subscriptions SET stripe_subscription_id = ?, stripe_customer_id = ?, status = ?, current_period_end = ?, updated = ?, past_due_since = ?, last_event_created = ? WHERE user_id = ?'
       )
-      .bind(s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince, s.userId)
+      .bind(s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince, lastEventCreated, s.userId)
       .run();
   } else {
     await db
       .prepare(
-        'INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, status, current_period_end, updated, past_due_since) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, status, current_period_end, updated, past_due_since, last_event_created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
       )
-      .bind(s.userId, s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince)
+      .bind(s.userId, s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince, lastEventCreated)
       .run();
   }
 }

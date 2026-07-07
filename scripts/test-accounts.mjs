@@ -161,12 +161,13 @@ const signedWebhook = (rawBody, { secret = WH_SECRET, t = Math.floor(Date.now() 
     body: rawBody,
   });
 };
-const checkoutEvent = (id, { email, ref, amount = 2500, currency = 'usd', customer = 'cus_1' } = {}) =>
+const checkoutEvent = (id, { email, ref, amount = 2500, currency = 'usd', customer = 'cus_1', mode } = {}) =>
   JSON.stringify({
     id,
     type: 'checkout.session.completed',
     data: {
       object: {
+        ...(mode ? { mode } : {}),
         amount_total: amount,
         currency,
         customer,
@@ -176,7 +177,9 @@ const checkoutEvent = (id, { email, ref, amount = 2500, currency = 'usd', custom
     },
   });
 // F60 subscription-lifecycle event (customer.subscription.* / invoice.payment_failed).
-const subEvent = (id, type, obj) => signedWebhook(JSON.stringify({ id, type, data: { object: obj } }));
+// `created` (Stripe UNIX SECONDS) drives the A303 out-of-order guard; omitted → not sent.
+const subEvent = (id, type, obj, created) =>
+  signedWebhook(JSON.stringify({ id, type, ...(created != null ? { created } : {}), data: { object: obj } }));
 const secs = ms => Math.floor(ms / 1000); // Stripe current_period_end is UNIX SECONDS
 
 console.log('Session token hash/verify round-trip:');
@@ -662,6 +665,86 @@ console.log('\nSubscription linkage robustness (checkout metadata + items[].curr
       db2.tables.subscriptions[0].current_period_end > Date.now() &&
       Math.abs(db2.tables.subscriptions[0].current_period_end - periodEnd) < 2000
   );
+}
+
+console.log('\nSubscription-lifecycle hardening (A303) — grace over-grant, out-of-order, sub-as-donation:');
+{
+  // (a) grantsCloud: a past_due account PAST the grace must NOT keep cloud via the current_period_end
+  //     fallback, even though Stripe advances current_period_end into the new UNPAID period.
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db, STRIPE_WEBHOOK_SECRET: WH_SECRET };
+  const user = await createUser(db, 'grace@example.com');
+  const { token } = await createSession(db, user.id);
+  const me = async () => (await meGet({ request: req('/api/me', { method: 'GET', cookie: cookieFor(token) }), env })).json();
+  await webhook({
+    request: subEvent('evt_g_created', 'customer.subscription.created', {
+      id: 'sub_g',
+      customer: 'cus_g',
+      status: 'active',
+      current_period_end: secs(Date.now() + 30 * DAY),
+      metadata: { client_reference_id: user.id },
+    }),
+    env,
+  });
+  await webhook({ request: subEvent('evt_g_pf', 'invoice.payment_failed', { subscription: 'sub_g', customer: 'cus_g' }), env });
+  // Stripe advanced current_period_end into the NEXT (unpaid) period on the failed renewal.
+  db.tables.subscriptions[0].current_period_end = Date.now() + 25 * DAY;
+  db.tables.subscriptions[0].past_due_since = Date.now() - (SUBSCRIPTION_GRACE_MS + 1000); // grace elapsed
+  const past = await me();
+  ok('past_due past grace with a FUTURE current_period_end drops to local (grace no longer dead)', past.tier === 'local' && past.cloudSync === false);
+  // canceled with a still-future period keeps cloud (the ONE legitimate fallback path).
+  db.tables.subscriptions[0].status = 'canceled';
+  db.tables.subscriptions[0].current_period_end = Date.now() + 5 * DAY;
+  ok('a clean cancel still rides out the already-paid period (cloud)', (await me()).tier === 'cloud');
+
+  // (b) out-of-order guard: a delayed subscription.updated(active) with an OLDER event.created arriving
+  //     AFTER subscription.deleted must NOT resurrect the canceled sub.
+  const db2 = mockDb();
+  const env2 = { ACCOUNTS_DB: db2, STRIPE_WEBHOOK_SECRET: WH_SECRET };
+  const u2 = await createUser(db2, 'order@example.com');
+  const t0 = 1_700_000_000; // base event.created (seconds)
+  await webhook({
+    request: subEvent(
+      'evt_o_created',
+      'customer.subscription.created',
+      { id: 'sub_o', customer: 'cus_o', status: 'active', current_period_end: secs(Date.now() + 30 * DAY), metadata: { client_reference_id: u2.id } },
+      t0
+    ),
+    env: env2,
+  });
+  await webhook({
+    request: subEvent('evt_o_deleted', 'customer.subscription.deleted', { id: 'sub_o', customer: 'cus_o', status: 'canceled' }, t0 + 100),
+    env: env2,
+  });
+  ok('subscription.deleted applied (canceled)', db2.tables.subscriptions[0].status === 'canceled');
+  // A STALE updated(active) that Stripe generated BEFORE the delete but delivered after it.
+  const stale = await webhook({
+    request: subEvent('evt_o_stale', 'customer.subscription.updated', { id: 'sub_o', customer: 'cus_o', status: 'active' }, t0 + 50),
+    env: env2,
+  });
+  ok('an out-of-order (older) updated is dropped as stale', (await stale.json()).stale === true);
+  ok('...and the subscription stays canceled (no resurrection)', db2.tables.subscriptions[0].status === 'canceled');
+  // A genuinely NEWER event still applies.
+  await webhook({
+    request: subEvent('evt_o_new', 'customer.subscription.updated', { id: 'sub_o', customer: 'cus_o', status: 'active', current_period_end: secs(Date.now() + 30 * DAY) }, t0 + 200),
+    env: env2,
+  });
+  ok('a newer updated still applies (status active)', db2.tables.subscriptions[0].status === 'active');
+
+  // (c) a subscription-mode checkout.session.completed must NOT be credited as a donation.
+  const db3 = mockDb();
+  const env3 = { ACCOUNTS_DB: db3, STRIPE_WEBHOOK_SECRET: WH_SECRET };
+  const u3 = await createUser(db3, 'buyer@example.com');
+  await setEmailVerified(db3, u3.id);
+  const r = await webhook({ request: signedWebhook(checkoutEvent('evt_submode', { email: 'buyer@example.com', amount: 500, mode: 'subscription' })), env: env3 });
+  ok('subscription-mode checkout is ignored (not a donation)', (await r.json()).ignored === 'subscription_checkout');
+  ok('...no donation row written', db3.tables.donations.length === 0);
+  const buyer = await userByEmail(db3, 'buyer@example.com');
+  ok('...and the buyer is NOT stamped as a donor', buyer.donated_at == null && (buyer.donation_total_cents ?? 0) === 0);
+  // a PAYMENT-mode checkout still credits normally (regression guard).
+  await webhook({ request: signedWebhook(checkoutEvent('evt_paymode', { email: 'buyer@example.com', amount: 1500, mode: 'payment' })), env: env3 });
+  const donor = await userByEmail(db3, 'buyer@example.com');
+  ok('a payment-mode checkout still credits a donation', donor.donated_at != null && donor.donation_total_cents === 1500);
 }
 
 console.log('\nRecovery/verify token lifecycle (single-use, TTL, hash-only — S25):');
