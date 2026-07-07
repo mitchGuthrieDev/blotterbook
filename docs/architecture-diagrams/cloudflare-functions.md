@@ -1,9 +1,9 @@
 # Cloudflare Pages Functions (edge API)
 
 The edge layer: the staging gate middleware, the public/admin API endpoints, the
-passkey-accounts + Stripe donations/subscriptions backend, and the F62 encrypted-blob **sync**
-transport (R2 + D1) — all TypeScript functions pinned at the repo root and deployed automatically by
-Pages.
+passkey-accounts + Stripe donations/subscriptions backend, the F44 changelog-email subscriptions
+subsystem, and the F62 encrypted-blob **sync** transport (R2 + D1) — all TypeScript functions
+pinned at the repo root and deployed automatically by Pages.
 
 **Source of truth:** [`functions/_middleware.ts`](../../functions/_middleware.ts) ·
 [`functions/api/`](../../functions/api/) · [`functions/_lib/`](../../functions/_lib/) ·
@@ -29,12 +29,21 @@ flowchart TD
         WH["POST /api/webhook<br/>verify Stripe sig (S11) → credit donation (F54)<br/>+ customer.subscription.* / invoice.payment_failed → subscriptions (F60)"]
     end
 
+    subgraph CHLOG["functions/api/{subscribe,confirm,unsubscribe,notify-changelog}.ts — changelog email (F44)"]
+        direction TB
+        SUB["POST /api/subscribe<br/>same-origin double opt-in signup · enumeration-safe"]
+        CONF["GET/POST /api/confirm?token=<br/>single-use link: pending → confirmed"]
+        UNSUB["GET/POST /api/unsubscribe?token=<br/>one-click, no login · HARD-DELETES the row"]
+        NOTIFY["POST /api/notify-changelog<br/>CHANGELOG_NOTIFY_SECRET trigger →<br/>reads changelog.json, batch-sends via Resend"]
+    end
+
     subgraph SYNC["functions/api/sync/* — E2E encrypted-blob transport (F62)"]
         direction TB
         SWS["POST/GET /api/sync/workspaces<br/>register + wrapped DEK · list"]
         SIK["PUT/GET /api/sync/wrapped-ik<br/>account IK wrapped per unlock method"]
         SPU["POST /api/sync/push<br/>≤15 ciphertext records → R2 + monotonic seq (D1)"]
         SPL["GET /api/sync/pull?workspace_id&since<br/>records since seq cursor (ciphertext only)"]
+        SDEL["POST /api/sync/delete<br/>erase a workspace's R2 blobs + D1 change-index ·<br/>paged · never paywalled (A254)"]
     end
 
     subgraph ACCT["functions/api/account/* (passkeys — F53/F55)"]
@@ -44,6 +53,8 @@ flowchart TD
         OUT["POST logout"]
         EVS["POST email-verify-send / GET|POST email-verify-confirm<br/>verify recovery token → email_verified=1 + claims donations"]
         REC["POST recover-send / recover-verify<br/>lost-passkey magic link → fresh registration options"]
+        PKD["POST passkey-delete<br/>remove a passkey · last-credential lockout guard (A302)"]
+        DEL["POST delete<br/>two-phase resumable account deletion:<br/>clear owned sync workspaces, then D1 rows (A305, GDPR)"]
     end
 
     subgraph LIB["functions/_lib/"]
@@ -51,10 +62,13 @@ flowchart TD
         HTTPL["http.ts — json · cachedJson · purgeCached · rateLimited"]
         ACCTL["accounts.ts — D1 (ACCOUNTS_DB) users/credentials/sessions/challenges/<br/>donations/recovery_tokens/subscriptions · session cookie issue/verify · Origin checks"]
         SYNCL["sync.ts — R2 bucket · workspace ownership · LWW upsert · seq (F62)"]
+        SUBL["subscribers.ts — D1 (ACCOUNTS_DB) subscribers/changelog_sends queries (F44)"]
+        EMAILL["email.ts — Resend API wrapper (send/batch), shared by accounts + F44"]
     end
 
     ROUTES --- LIB
     ACCT --- LIB
+    CHLOG --- LIB
     STAT -. "purge on POST" .-> KV[("STATUS_KV")]
     CFG -. "purge on POST" .-> KV
     STAT --- KV
@@ -62,9 +76,11 @@ flowchart TD
     ACCT -. "reads/writes" .-> D1[("ACCOUNTS_DB (D1)")]
     WH -. "reads/writes" .-> D1
     ME -. "reads" .-> D1
+    CHLOG -. "reads/writes subscribers/changelog_sends" .-> D1
     SYNC --- LIB
     SYNC -. "change-index + wrapped keys" .-> D1
     SYNC -. "record ciphertext blobs" .-> R2[("SYNC_BUCKET (R2)")]
+    DEL -. "clears owned workspaces first (A305)" .-> SYNC
 ```
 
 ## Endpoints
@@ -83,10 +99,17 @@ flowchart TD
 | `POST /api/account/recover-send`, `recover-verify` | public | "Lost your passkey?" magic-link recovery → fresh WebAuthn registration options, no account enumeration |
 | `POST /api/checkout` | Origin-checked | Creates a Stripe Checkout session over the REST API (no SDK); `501 not_configured` until `STRIPE_SECRET_KEY`/price env vars are set |
 | `POST /api/webhook` | Stripe signature (S11) | Verifies the raw-body signature, then on `checkout.session.completed` credits/claims a donation, and on `customer.subscription.created/updated/deleted` + `invoice.payment_failed` upserts a `subscriptions` row with `status` + `current_period_end` (F60); dedup on the Stripe event id (`webhook_events`); `501` until `STRIPE_WEBHOOK_SECRET` is set |
+| `POST /api/subscribe` | public (same-origin) | Changelog-email double opt-in signup — writes a `pending` row + emails a confirm link; one generic 200 for new/pending/confirmed (enumeration-safe, F44) |
+| `GET\|POST /api/confirm` | token (query) | Consumes the single-use confirm link (`pending → confirmed`); GET redirects to `/changelog.html?subscribed=1` (F44) |
+| `GET\|POST /api/unsubscribe` | token (query) | One-click, no-login hard delete of the subscriber row; also sent via `List-Unsubscribe(-Post)` headers (F44) |
+| `POST /api/notify-changelog` | `CHANGELOG_NOTIFY_SECRET` (const-time compare) | Send trigger — reads `/data/changelog.json`, dedupes via `changelog_sends`, batch-sends (Resend) to confirmed subscribers; called by `changelog-email.yml` (F44) |
+| `POST /api/account/passkey-delete` | session cookie · Origin | Remove one of the caller's passkeys, scoped to the caller; refuses to delete the last remaining credential (lockout guard, A302) |
+| `POST /api/account/delete` | session cookie · Origin | Permanently delete the caller's account + all data — two-phase resumable: page-clear owned sync workspaces (R2 + D1) first, then explicit D1 deletes of every user-keyed row; no cloud-tier gate (A305, GDPR) |
 | `POST/GET /api/sync/workspaces` | session cookie · Origin (POST) | Register (owned upsert) a workspace + its wrapped DEK + optional encrypted name / list the caller's workspaces (F62). Fail-closed 503 without `ACCOUNTS_DB`+`SYNC_BUCKET` |
 | `PUT/GET /api/sync/wrapped-ik` | session cookie · Origin (PUT) | Store/fetch the account IK wrapped per unlock method (`prf`/`passphrase`/`recovery`) — opaque blobs (F62) |
 | `POST /api/sync/push` | session cookie · Origin | Store ≤15 ciphertext records in R2, upsert the D1 change-index under a monotonic per-workspace `seq`, LWW; cross-user/nonexistent workspace → 404; over-cap → 413 (F62) |
 | `GET /api/sync/pull` | session cookie | Return records with `seq > since` (≤25/page) + `nextSince`/`more` — ciphertext + blinded ids only, never a plaintext trade field or name (F62) |
+| `POST /api/sync/delete` | session cookie · Origin | Erase a caller-owned workspace's synced copy — pages R2 blobs + D1 change-index, then drops the wrapped-DEK + registry rows; client loops while `done:false`; never paywalled (A254) |
 
 ## Notes
 
@@ -107,7 +130,12 @@ flowchart TD
   wrapped keys): session-gated, Origin-checked on mutations, **fails closed (503)** without either
   binding, and a cross-user/nonexistent workspace answers 404. It stores/returns **only** ciphertext +
   blinded ids + timestamps — never a symbol, P&L, note, tag, or workspace name (S25, strengthened).
-- The **Account screen + the whole cloud-sync client** (`CloudStore`, key setup/unlock UI) are
-  **staging-gated** (`isStaging` in `src/app/App.svelte`) pending the owner's D1/R2/Stripe setup and a
-  `promote-staging` (CH16) pass. See `functions/README.md` for the operational setup steps.
+- **Cloud sync is GA on prod** (2026-07-07): the Account screen ships on every surface (demo
+  read-only) and the whole cloud-sync client (`CloudStore`, key setup/unlock UI) wraps every
+  non-demo `Store` unconditionally — the `cloud`-tier opt-in is a runtime check inside the sync
+  controller, not a surface gate. See `functions/README.md` for the operational setup steps.
+- **The changelog-email subsystem (F44)** shares `ACCOUNTS_DB` (D1) with the accounts backend but is
+  a separate, single-purpose `subscribers`/`changelog_sends` pair of tables — email address +
+  changelog content only, never trade data (S25/A141). All four endpoints fail closed (503) without
+  `ACCOUNTS_DB`/`RESEND_API_KEY`.
 - Functions **fail soft** when `STATUS_KV` is unbound (GET falls back to defaults; admin POST → 500).

@@ -20,7 +20,8 @@ flowchart TD
 
     COMPUTE --> CURVE["dailySeries(metrics) → DailyPoint[]<br/>cumulative gross / net / take per day<br/>(endpoint reconciles to costModel)"]
     COMPUTE --> REPORT["buildReport(m, cost, labels)<br/>headline tiles + costRows + statsRows +<br/>commRows → reportText / reportMd / mailto"]
-    REPORT --> HTMLDOC["reportHtmlDoc()<br/>standalone HTML · CSS via CSSOM (CSP-safe)"]
+    REPORT --> REPORTSCREEN["Reports.svelte renders the report VM<br/>(buildReportVM, reports.ts)"]
+    REPORTSCREEN -->|"onexport('pdf')"| PRINT["onReportExport() → window.print()<br/>(App.svelte) — no standalone HTML doc builder"]
 
     COMPUTE --> RENDER["Svelte screens (reactive $derived)<br/>Dashboard · Analytics · Reports · Calendar"]
     COST --> RENDER
@@ -39,3 +40,7 @@ flowchart TD
 - **`dailySeries()`** shares the same commission/subscription/tax math so the curve's endpoint
   reconciles exactly with `costModel.netPreTax`/`afterTax` (guarded by the `curveandreport` suite).
 - Screens hold **no business logic** — they render `$derived` views of these pure outputs.
+- **`report.ts` exports only `buildReport()`** — there is no `reportHtmlDoc()`/standalone-HTML builder
+  in the pure core. PDF export is `window.print()` on the already-rendered `Reports` screen
+  (`Reports.svelte` → `buildReportVM` in `src/app/lib/reports.ts` → `App.svelte`'s `onReportExport`,
+  invoked via the `onexport` callback with `kind === 'pdf'`).

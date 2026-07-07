@@ -26,6 +26,7 @@ build/UI platform decisions. These diagrams are the pictures that go with that t
 | Diagram | What it shows |
 | --- | --- |
 | [`cloudflare-functions.md`](cloudflare-functions.md) | Edge API surface, the staging gate middleware, and the passkey-accounts + Stripe-donations backend |
+| [`auth-flow.md`](auth-flow.md) | Passkey (WebAuthn) ceremonies, the session model, email verify + recovery, and how sign-in relates to the E2E encryption vault |
 
 ### Build / deploy / CI
 

@@ -30,21 +30,20 @@ flowchart TD
 
     APP --> SWAP{"isDemo ?"}
     SWAP -->|"yes · demo"| DEMOSTORE["createDemoStore()<br/>demostore.ts"]
-    SWAP -->|"no · app / staging"| ENT["Entitlements.storeFor('local')<br/>entitlements.ts → Store (IndexedDB)"]
+    SWAP -->|"no · app / staging"| ENT["Entitlements.storeFor('local')<br/>entitlements.ts → Store (IndexedDB)<br/>(both tiers resolve to the same base Store)"]
 
-    %% ---- Staging wraps the real Store in a CloudStore (opt-in E2E sync, F63) ----
-    ENT --> WRAP{"isStaging ?"}
-    WRAP -->|"staging"| CLOUD["CloudStore (wrapStore)<br/>write-behind: reads local, writes enqueue<br/>encrypted push → /api/sync/* (F63)"]
-    WRAP -->|"app · prod"| REALSTORE["Store<br/>store.ts (IndexedDB) — no sync"]
-    CLOUD --> REALSTORE
+    %% ---- Every non-demo surface wraps the real Store in a CloudStore (App.svelte:94-95) ----
+    %% the cloud-tier opt-in is a RUNTIME check inside the sync controller, not a mode branch (A256)
+    ENT --> CLOUD["CloudStore (wrapStore)<br/>write-behind: reads local, writes enqueue<br/>encrypted push → /api/sync/* (F63)<br/>inert until cloud-tier opt-in + unlock (A256 runtime gate)"]
+    CLOUD --> REALSTORE["Store<br/>store.ts (IndexedDB)"]
 
     %% ---- Real IndexedDB backend: separated by DB name, then per-workspace DB (F59) ----
     REALSTORE --> DBNAME{"active workspace DB<br/>mode === 'staging' ?"}
     DBNAME -->|"staging"| STGDB[("IndexedDB<br/>blotterbookStaging (Default)<br/>or blotterbookStaging:&lt;uuid&gt;<br/>seeded with sample data")]
     DBNAME -->|"app · default"| PRODDB[("IndexedDB<br/>blotterbook (Default)<br/>or blotterbook:&lt;uuid&gt; per workspace<br/>empty → first-run onboarding")]
 
-    subgraph STORES["object stores — same schema in every workspace DB (DB_VERSION 4)"]
-        OS["trades · journal · meta · trademeta · files · filetext · tombstones (F58)"]
+    subgraph STORES["object stores — same schema in every workspace DB (DB_VERSION 5)"]
+        OS["trades · journal · meta · trademeta · files · filetext ·<br/>tombstones (F58, composite-keyed `${type}:${id}` — v5/A269)"]
     end
     STGDB --- STORES
     PRODDB --- STORES
@@ -81,9 +80,11 @@ Two *different* mechanisms — not one shared switch:
   itself (admin credential required; **fails closed with 403** if `ADMIN_KEY` is unset). This is
   access control, orthogonal to the data isolation above. Prod and demo are public.
 - **All access funnels through the `Store` interface** — the app never touches `indexedDB` directly,
-  so the `CloudStore` write-behind wrapper (F63, `cloud` subscription tier) drops in behind the same
-  async methods. On **staging only** `App.svelte` resolves the store through `Entitlements.storeFor()`
-  and wraps it in `CloudStore` (`wrapStore`) for opt-in E2E sync; prod/demo never construct one.
+  so the `CloudStore` write-behind wrapper (F63) drops in behind the same async methods. `App.svelte`
+  resolves the store through `Entitlements.storeFor()` and wraps it in `CloudStore` (`wrapStore`) for
+  **every non-demo surface** (app + staging, unconditionally — `App.svelte:94-95`); demo never
+  constructs one. The wrapper stays inert — no `/api/sync/*` traffic — until the sync controller's
+  runtime check (A256) sees a `cloud`-tier user who has opted a workspace in and unlocked it.
 - **Named workspaces (F59):** the store is now workspace-scoped — each named workspace is its **own**
   IndexedDB DB (`blotterbook:<uuid>`), while the pre-F59 **Default** keeps the legacy DB name
   (`blotterbook`/`blotterbookStaging`) so existing data is used in place. The `DB_NAME` seam that
@@ -92,5 +93,6 @@ Two *different* mechanisms — not one shared switch:
 - **Dedupe & tombstones:** `trades` are keyed by a content hash (`tradeId`, FNV-1a over
   `time|symbol|side|pnl`), so re-uploading an overlapping CSV only inserts genuinely new rows — and a
   `tombstones` store (F58) stops a re-import from resurrecting a deleted trade.
-- **The sync branch is staging-gated** and detailed in [`docs/synced-workspaces.md`](../synced-workspaces.md) +
-  [`docs/data-flow.md`](../data-flow.md) §7a — only ciphertext + blinded ids ever reach `/api/sync/*`.
+- **The sync branch is live on prod + staging (opt-in, `cloud`-tier only; never demo)** and detailed
+  in [`docs/synced-workspaces.md`](../synced-workspaces.md) + [`docs/data-flow.md`](../data-flow.md)
+  §7a — only ciphertext + blinded ids ever reach `/api/sync/*`.
