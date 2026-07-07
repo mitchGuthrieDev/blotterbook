@@ -723,7 +723,10 @@ console.log('\nSubscription-lifecycle hardening (A303) — grace over-grant, out
   db.tables.subscriptions[0].current_period_end = Date.now() + 25 * DAY;
   db.tables.subscriptions[0].past_due_since = Date.now() - (SUBSCRIPTION_GRACE_MS + 1000); // grace elapsed
   const past = await me();
-  ok('past_due past grace with a FUTURE current_period_end drops to local (grace no longer dead)', past.tier === 'local' && past.cloudSync === false);
+  ok(
+    'past_due past grace with a FUTURE current_period_end drops to local (grace no longer dead)',
+    past.tier === 'local' && past.cloudSync === false
+  );
   // canceled with a still-future period keeps cloud (the ONE legitimate fallback path).
   db.tables.subscriptions[0].status = 'canceled';
   db.tables.subscriptions[0].current_period_end = Date.now() + 5 * DAY;
@@ -739,7 +742,13 @@ console.log('\nSubscription-lifecycle hardening (A303) — grace over-grant, out
     request: subEvent(
       'evt_o_created',
       'customer.subscription.created',
-      { id: 'sub_o', customer: 'cus_o', status: 'active', current_period_end: secs(Date.now() + 30 * DAY), metadata: { client_reference_id: u2.id } },
+      {
+        id: 'sub_o',
+        customer: 'cus_o',
+        status: 'active',
+        current_period_end: secs(Date.now() + 30 * DAY),
+        metadata: { client_reference_id: u2.id },
+      },
       t0
     ),
     env: env2,
@@ -758,7 +767,12 @@ console.log('\nSubscription-lifecycle hardening (A303) — grace over-grant, out
   ok('...and the subscription stays canceled (no resurrection)', db2.tables.subscriptions[0].status === 'canceled');
   // A genuinely NEWER event still applies.
   await webhook({
-    request: subEvent('evt_o_new', 'customer.subscription.updated', { id: 'sub_o', customer: 'cus_o', status: 'active', current_period_end: secs(Date.now() + 30 * DAY) }, t0 + 200),
+    request: subEvent(
+      'evt_o_new',
+      'customer.subscription.updated',
+      { id: 'sub_o', customer: 'cus_o', status: 'active', current_period_end: secs(Date.now() + 30 * DAY) },
+      t0 + 200
+    ),
     env: env2,
   });
   ok('a newer updated still applies (status active)', db2.tables.subscriptions[0].status === 'active');
@@ -768,13 +782,19 @@ console.log('\nSubscription-lifecycle hardening (A303) — grace over-grant, out
   const env3 = { ACCOUNTS_DB: db3, STRIPE_WEBHOOK_SECRET: WH_SECRET };
   const u3 = await createUser(db3, 'buyer@example.com');
   await setEmailVerified(db3, u3.id);
-  const r = await webhook({ request: signedWebhook(checkoutEvent('evt_submode', { email: 'buyer@example.com', amount: 500, mode: 'subscription' })), env: env3 });
+  const r = await webhook({
+    request: signedWebhook(checkoutEvent('evt_submode', { email: 'buyer@example.com', amount: 500, mode: 'subscription' })),
+    env: env3,
+  });
   ok('subscription-mode checkout is ignored (not a donation)', (await r.json()).ignored === 'subscription_checkout');
   ok('...no donation row written', db3.tables.donations.length === 0);
   const buyer = await userByEmail(db3, 'buyer@example.com');
   ok('...and the buyer is NOT stamped as a donor', buyer.donated_at == null && (buyer.donation_total_cents ?? 0) === 0);
   // a PAYMENT-mode checkout still credits normally (regression guard).
-  await webhook({ request: signedWebhook(checkoutEvent('evt_paymode', { email: 'buyer@example.com', amount: 1500, mode: 'payment' })), env: env3 });
+  await webhook({
+    request: signedWebhook(checkoutEvent('evt_paymode', { email: 'buyer@example.com', amount: 1500, mode: 'payment' })),
+    env: env3,
+  });
   const donor = await userByEmail(db3, 'buyer@example.com');
   ok('a payment-mode checkout still credits a donation', donor.donated_at != null && donor.donation_total_cents === 1500);
 }
@@ -961,7 +981,10 @@ console.log('\nRate limiting on the email-send + recovery endpoints (A301) — 4
         const r = await recoverVerify({ request: req('/api/account/recover-verify', { body: { token: 'x.y' } }), env });
         statuses.push(r.status);
       }
-      ok('recover-verify: throttled — first 5 reach 400, the 6th is 429', statuses.slice(0, 5).every(s => s === 400) && statuses[5] === 429);
+      ok(
+        'recover-verify: throttled — first 5 reach 400, the 6th is 429',
+        statuses.slice(0, 5).every(s => s === 400) && statuses[5] === 429
+      );
     }
   } finally {
     globalThis.fetch = realFetch;
@@ -1056,7 +1079,10 @@ console.log('\nAuth hardening (A310) — race-safe createUser/insertCredential +
     backedUp: false,
     userVerified: false,
   });
-  ok('a non-UV enrollment persists user_verified = 0', insUnverified === true && (await credentialById(db, 'cred-nouv')).user_verified === 0);
+  ok(
+    'a non-UV enrollment persists user_verified = 0',
+    insUnverified === true && (await credentialById(db, 'cred-nouv')).user_verified === 0
+  );
 
   // purgeUnverifiedUsers (A310): frees a squatted email held by a never-verified account past the TTL,
   // while sparing verified accounts and fresh unverified ones.
@@ -1078,7 +1104,16 @@ console.log('\nSession revocation + absolute cap + passkey delete (A302):');
   const db = mockDb();
   const user = await createUser(db, 'revoke@example.com');
   const seedCred = (uid, id) =>
-    insertCredential(db, { id, userId: uid, publicKey: 'pk', counter: 0, transports: [], aaguid: null, backedUp: true, userVerified: true });
+    insertCredential(db, {
+      id,
+      userId: uid,
+      publicKey: 'pk',
+      counter: 0,
+      transports: [],
+      aaguid: null,
+      backedUp: true,
+      userVerified: true,
+    });
   const lookup = t => sessionFromRequest(req('/api/me', { method: 'GET', cookie: cookieFor(t) }), db);
 
   // (1) absolute session cap — a session older than the cap from created_at is invalid even when its
@@ -1103,11 +1138,13 @@ console.log('\nSession revocation + absolute cap + passkey delete (A302):');
   await seedCred(user.id, 'cred-A');
   ok(
     'passkey-delete 503 without ACCOUNTS_DB',
-    (await passkeyDelete({ request: req('/api/account/passkey-delete', { cookie: cookieFor(sess), body: { id: 'cred-A' } }), env: {} })).status === 503
+    (await passkeyDelete({ request: req('/api/account/passkey-delete', { cookie: cookieFor(sess), body: { id: 'cred-A' } }), env: {} }))
+      .status === 503
   );
   ok(
     'passkey-delete 401 without a session',
-    (await passkeyDelete({ request: req('/api/account/passkey-delete', { body: { id: 'cred-A' } }), env: { ACCOUNTS_DB: db } })).status === 401
+    (await passkeyDelete({ request: req('/api/account/passkey-delete', { body: { id: 'cred-A' } }), env: { ACCOUNTS_DB: db } })).status ===
+      401
   );
   ok(
     'passkey-delete cross-origin → 403',
@@ -1122,21 +1159,30 @@ console.log('\nSession revocation + absolute cap + passkey delete (A302):');
     request: req('/api/account/passkey-delete', { cookie: cookieFor(sess), body: { id: 'cred-A' } }),
     env: { ACCOUNTS_DB: db },
   });
-  ok('refuses to delete the LAST passkey (400, still present)', lastGuard.status === 400 && (await credentialsForUser(db, user.id)).length === 1);
+  ok(
+    'refuses to delete the LAST passkey (400, still present)',
+    lastGuard.status === 400 && (await credentialsForUser(db, user.id)).length === 1
+  );
   await seedCred(user.id, 'cred-B');
   const okDel = await passkeyDelete({
     request: req('/api/account/passkey-delete', { cookie: cookieFor(sess), body: { id: 'cred-A' } }),
     env: { ACCOUNTS_DB: db },
   });
   ok('deletes a non-last passkey (200)', okDel.status === 200 && !db.tables.credentials.some(c => c.id === 'cred-A'));
-  ok('...leaving the remaining passkey', db.tables.credentials.some(c => c.id === 'cred-B'));
+  ok(
+    '...leaving the remaining passkey',
+    db.tables.credentials.some(c => c.id === 'cred-B')
+  );
   const other = await createUser(db, 'other302@example.com');
   await seedCred(other.id, 'cred-OTHER');
   const notMine = await passkeyDelete({
     request: req('/api/account/passkey-delete', { cookie: cookieFor(sess), body: { id: 'cred-OTHER' } }),
     env: { ACCOUNTS_DB: db },
   });
-  ok("cannot delete another account's passkey (404, not removed)", notMine.status === 404 && db.tables.credentials.some(c => c.id === 'cred-OTHER'));
+  ok(
+    "cannot delete another account's passkey (404, not removed)",
+    notMine.status === 404 && db.tables.credentials.some(c => c.id === 'cred-OTHER')
+  );
   // deleteCredentialForUser is itself owner-scoped (0 rows for a mismatched user).
   ok('deleteCredentialForUser is owner-scoped (0 for a foreign user)', (await deleteCredentialForUser(db, user.id, 'cred-OTHER')) === 0);
 
@@ -1144,7 +1190,10 @@ console.log('\nSession revocation + absolute cap + passkey delete (A302):');
   await putChallenge(db, { type: 'register', challenge: 'rec-chal', userId: user.id, email: user.email, recovery: true });
   ok('recovery register challenge persists recovery = 1', db.tables.challenges.find(c => c.challenge === 'rec-chal').recovery === 1);
   await putChallenge(db, { type: 'register', challenge: 'add-chal', userId: user.id, email: user.email });
-  ok('a normal add-passkey challenge is not flagged', (db.tables.challenges.find(c => c.challenge === 'add-chal').recovery ?? null) === null);
+  ok(
+    'a normal add-passkey challenge is not flagged',
+    (db.tables.challenges.find(c => c.challenge === 'add-chal').recovery ?? null) === null
+  );
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

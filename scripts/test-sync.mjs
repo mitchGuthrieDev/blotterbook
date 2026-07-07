@@ -306,7 +306,10 @@ console.log('\nWorkspace register + list (idempotent, owned-by-caller):');
   const reRegJson = await reReg.json();
   ok('re-register is idempotent (one workspace row)', db.tables.sync_workspaces.filter(w => w.workspace_id === 'w1').length === 1);
   ok('re-register returns the FIRST DEK, not the new one (adopt-existing)', reReg.status === 200 && reRegJson.wrapped_dek === 'DEK-1');
-  ok('...and the STORED wrapped DEK is unchanged (never overwritten)', db.tables.sync_workspace_keys.find(k => k.workspace_id === 'w1').wrapped_dek === 'DEK-1');
+  ok(
+    '...and the STORED wrapped DEK is unchanged (never overwritten)',
+    db.tables.sync_workspace_keys.find(k => k.workspace_id === 'w1').wrapped_dek === 'DEK-1'
+  );
   const list2 = await (await wsList({ request: req('/api/sync/workspaces', { method: 'GET', cookie: cookieFor(t1) }), env })).json();
   ok('list still shows the first DEK after a divergent re-register', list2.workspaces[0].wrapped_dek === 'DEK-1');
 
@@ -824,21 +827,56 @@ console.log('\nAccount deletion (A305) — clears R2 + all D1 rows, resumable, f
   grantCloud(db, user.id);
 
   // fail-closed shapes
-  ok('account-delete 503 without ACCOUNTS_DB', (await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env: { SYNC_BUCKET: bucket } })).status === 503);
-  ok('account-delete 503 without SYNC_BUCKET', (await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env: { ACCOUNTS_DB: db } })).status === 503);
+  ok(
+    'account-delete 503 without ACCOUNTS_DB',
+    (await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env: { SYNC_BUCKET: bucket } })).status ===
+      503
+  );
+  ok(
+    'account-delete 503 without SYNC_BUCKET',
+    (await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env: { ACCOUNTS_DB: db } })).status === 503
+  );
   ok('account-delete 401 without a session', (await accountDelete({ request: req('/api/account/delete'), env })).status === 401);
-  ok('account-delete cross-origin → 403', (await accountDelete({ request: req('/api/account/delete', { origin: 'https://evil.example', cookie: cookieFor(token) }), env })).status === 403);
+  ok(
+    'account-delete cross-origin → 403',
+    (await accountDelete({ request: req('/api/account/delete', { origin: 'https://evil.example', cookie: cookieFor(token) }), env }))
+      .status === 403
+  );
 
   // seed a full account: two workspaces with pushed records (R2 blobs), + credential/subscription/
   // wrapped-ik/donation/recovery rows.
   for (const w of ['wa', 'wb']) {
-    await wsRegister({ request: req('/api/sync/workspaces', { cookie: cookieFor(token), body: { workspace_id: w, wrapped_dek: 'D-' + w } }), env });
-    await push({ request: req('/api/sync/push', { cookie: cookieFor(token), body: { workspace_id: w, records: [rec(w + '-b1', w + '-c1', 100), rec(w + '-b2', w + '-c2', 100)] } }), env });
+    await wsRegister({
+      request: req('/api/sync/workspaces', { cookie: cookieFor(token), body: { workspace_id: w, wrapped_dek: 'D-' + w } }),
+      env,
+    });
+    await push({
+      request: req('/api/sync/push', {
+        cookie: cookieFor(token),
+        body: { workspace_id: w, records: [rec(w + '-b1', w + '-c1', 100), rec(w + '-b2', w + '-c2', 100)] },
+      }),
+      env,
+    });
     db.tables.sync_wrapped_ik.push({ user_id: user.id, method: 'prf', key_id: w, wrapped_ik: 'IK', updated: 100 });
   }
   db.tables.credentials.push({ id: 'cred-1', user_id: user.id, public_key: 'pk', counter: 0, created_at: 100 });
-  db.tables.donations.push({ id: 'don-1', user_id: user.id, email: 'gone@example.com', amount_cents: 500, created_at: 100, claimed_at: 100 });
-  db.tables.recovery_tokens.push({ id: 'rt-1', user_id: user.id, email: 'gone@example.com', purpose: 'verify', token_hash: 'h', created_at: 100, expires_at: 200 });
+  db.tables.donations.push({
+    id: 'don-1',
+    user_id: user.id,
+    email: 'gone@example.com',
+    amount_cents: 500,
+    created_at: 100,
+    claimed_at: 100,
+  });
+  db.tables.recovery_tokens.push({
+    id: 'rt-1',
+    user_id: user.id,
+    email: 'gone@example.com',
+    purpose: 'verify',
+    token_hash: 'h',
+    created_at: 100,
+    expires_at: 200,
+  });
   db.tables.challenges.push({ id: 'ch-1', type: 'register', user_id: user.id, email: 'gone@example.com', challenge: 'x', expires_at: 200 });
   const blobsBefore = bucket.store.size;
   ok('R2 holds the pushed ciphertext blobs before delete', blobsBefore === 4);
@@ -862,7 +900,10 @@ console.log('\nAccount deletion (A305) — clears R2 + all D1 rows, resumable, f
   ok('the user row itself is gone', db.tables.users.length === 0);
 
   // a second delete with the (now invalid) session → 401 (session was revoked)
-  ok('a repeat delete after removal → 401 (session gone)', (await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env })).status === 401);
+  ok(
+    'a repeat delete after removal → 401 (session gone)',
+    (await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(token) }), env })).status === 401
+  );
 
   // Resumable: a workspace larger than the per-call page budget returns done:false and keeps the user
   // until a follow-up call finishes the job.
@@ -875,7 +916,15 @@ console.log('\nAccount deletion (A305) — clears R2 + all D1 rows, resumable, f
   bdb.tables.sync_workspace_keys.push({ workspace_id: 'big', owner_user_id: bu.id, wrapped_dek: 'D', updated: 100 });
   const TOTAL = 5001; // > MAX_PAGES_PER_CALL(10) × DELETE_PAGE(500) → needs two invocations
   for (let i = 1; i <= TOTAL; i++) {
-    bdb.tables.sync_records.push({ workspace_id: 'big', blinded_id: 'b' + i, seq: i, type: 'trade', ciphertext_ref: 'ref' + i, updated: 100, deleted: 0 });
+    bdb.tables.sync_records.push({
+      workspace_id: 'big',
+      blinded_id: 'b' + i,
+      seq: i,
+      type: 'trade',
+      ciphertext_ref: 'ref' + i,
+      updated: 100,
+      deleted: 0,
+    });
     bbk.store.set('ref' + i, 'x');
   }
   const first = await accountDelete({ request: req('/api/account/delete', { cookie: cookieFor(bt) }), env: benv });

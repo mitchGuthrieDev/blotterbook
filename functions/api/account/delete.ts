@@ -27,7 +27,14 @@ import {
   sessionClearCookie,
   sessionFromRequest,
 } from '../../_lib/accounts.ts';
-import { authRequired, bucketUnavailable, deleteWorkspacePage, deleteWorkspaceShell, getBucket, type SyncWorkspaceRow } from '../../_lib/sync.ts';
+import {
+  authRequired,
+  bucketUnavailable,
+  deleteWorkspacePage,
+  deleteWorkspaceShell,
+  getBucket,
+  type SyncWorkspaceRow,
+} from '../../_lib/sync.ts';
 
 // Each cleared page costs ~3 subrequests (SELECT + R2 batch delete + D1 delete); cap the per-invocation
 // budget well under Cloudflare's 50-subrequest limit, leaving headroom for the final user-row deletes.

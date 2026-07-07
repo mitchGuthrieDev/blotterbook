@@ -401,8 +401,7 @@ export async function touchCredential(db: AccountsDb, id: string, counter: numbe
  *  another account's passkey. Returns the number of rows deleted (0 = not found / not theirs). */
 export async function deleteCredentialForUser(db: AccountsDb, userId: string, id: string): Promise<number> {
   const res = (await db.prepare('DELETE FROM credentials WHERE id = ? AND user_id = ?').bind(id, userId).run()) as
-    | { meta?: { changes?: number } }
-    | undefined;
+    { meta?: { changes?: number } } | undefined;
   return res?.meta?.changes ?? 0;
 }
 
@@ -441,8 +440,7 @@ export const UNVERIFIED_USER_TTL_MS = 30 * 24 * 3600 * 1000;
 export async function purgeUnverifiedUsers(db: AccountsDb, now = Date.now()): Promise<number> {
   const cutoff = now - UNVERIFIED_USER_TTL_MS;
   const res = (await db.prepare('DELETE FROM users WHERE email_verified = 0 AND created_at < ?').bind(cutoff).run()) as
-    | { meta?: { changes?: number } }
-    | undefined;
+    { meta?: { changes?: number } } | undefined;
   return res?.meta?.changes ?? 0;
 }
 

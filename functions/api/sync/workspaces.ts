@@ -88,7 +88,9 @@ export async function onRequestPost(ctx: Ctx) {
   // requests interleave), then read the STORED blob back and return it. The loser adopts the winner's
   // DEK (mirrors the client's adopt-existing-blob branch) instead of clobbering it.
   await db
-    .prepare('INSERT INTO sync_workspace_keys (workspace_id, owner_user_id, wrapped_dek, updated) VALUES (?, ?, ?, ?) ON CONFLICT(workspace_id) DO NOTHING')
+    .prepare(
+      'INSERT INTO sync_workspace_keys (workspace_id, owner_user_id, wrapped_dek, updated) VALUES (?, ?, ?, ?) ON CONFLICT(workspace_id) DO NOTHING'
+    )
     .bind(workspaceId, session.user_id, wrappedDek, now)
     .run();
   const key = await db.prepare('SELECT * FROM sync_workspace_keys WHERE workspace_id = ?').bind(workspaceId).first<SyncWorkspaceKeyRow>();

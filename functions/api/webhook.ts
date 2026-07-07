@@ -120,7 +120,8 @@ export async function onRequestPost({ request, env }: Ctx) {
   if (type === 'checkout.session.completed') return provisionDonation(db, eventId, (event.data?.object ?? {}) as CheckoutSession);
 
   // ── Subscription lifecycle (F60) — status + current_period_end drive the cloud tier in me.ts. ──
-  if (SUBSCRIPTION_EVENTS.has(type)) return provisionSubscription(db, eventId, type, eventCreated, (event.data?.object ?? {}) as StripeSubObject);
+  if (SUBSCRIPTION_EVENTS.has(type))
+    return provisionSubscription(db, eventId, type, eventCreated, (event.data?.object ?? {}) as StripeSubObject);
 
   // Ack (200) unrelated events so Stripe stops retrying — we only provision on the events above.
   return json({ received: true, ignored: type });
