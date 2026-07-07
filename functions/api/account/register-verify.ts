@@ -23,6 +23,7 @@ import {
   createUser,
   credentialById,
   dbUnavailable,
+  deleteSessionsForUser,
   getDb,
   insertCredential,
   publicUser,
@@ -97,6 +98,11 @@ export async function onRequestPost(ctx: Ctx) {
     userVerified: info.userVerified,
   });
   if (!inserted) return json({ error: 'That passkey is already registered.' }, 409);
+
+  // A302: a recovery-originated enrollment (e.g. after a lost/stolen device) must REVOKE the user's
+  // prior sessions before minting the new one — otherwise the thief's still-valid session survives the
+  // recovery. Ordered before createSession so the new session (created after) is not swept.
+  if (pending.recovery) await deleteSessionsForUser(db, user.id);
 
   const { token } = await createSession(db, user.id);
   return json({ ok: true, user: publicUser(user) }, 200, { 'Set-Cookie': sessionSetCookie(token) });

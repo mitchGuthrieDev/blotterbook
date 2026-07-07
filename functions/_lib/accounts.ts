@@ -22,6 +22,10 @@ import { json } from './http.ts';
 
 export const SESSION_COOKIE = '__Host-bb_session';
 export const SESSION_TTL_MS = 30 * 24 * 3600 * 1000; // 30-day sliding window
+// A302: hard ABSOLUTE cap measured from created_at. The sliding TTL alone lets an exfiltrated cookie
+// live forever if used at least monthly (each use + each /api/me probe re-issues Max-Age). This ceiling
+// forces re-authentication (a fresh passkey ceremony) after 90 days no matter how often it's used.
+export const SESSION_ABSOLUTE_MAX_MS = 90 * 24 * 3600 * 1000;
 export const CHALLENGE_TTL_MS = 5 * 60 * 1000; // pending WebAuthn ceremonies live ~5 min
 export const RECOVERY_TTL_MS = 15 * 60 * 1000; // verify / recovery magic-link tokens live ~15 min (F55)
 
@@ -87,6 +91,7 @@ export interface ChallengeRow {
   user_id: string | null;
   email: string | null;
   challenge: string;
+  recovery: number | null; // 1 = recovery-originated register challenge (A302)
   expires_at: number;
 }
 export interface DonationRow {
@@ -234,7 +239,10 @@ export async function sessionFromRequest(request: Request, db: AccountsDb, now =
   const secret = token.slice(dot + 1);
   const row = await db.prepare('SELECT * FROM sessions WHERE id = ?').bind(id).first<SessionRow>();
   if (!row) return null;
-  if (row.expires_at <= now) {
+  // Expired by the sliding TTL, OR past the A302 absolute cap from created_at — either way it's dead.
+  // (created_at can be null on legacy rows written before the column existed → the cap is skipped.)
+  const pastAbsoluteCap = row.created_at != null && now >= row.created_at + SESSION_ABSOLUTE_MAX_MS;
+  if (row.expires_at <= now || pastAbsoluteCap) {
     await db.prepare('DELETE FROM sessions WHERE id = ?').bind(id).run();
     return null;
   }
@@ -270,14 +278,20 @@ export function sessionClearCookie(): string {
 
 export async function putChallenge(
   db: AccountsDb,
-  ch: { type: 'register' | 'login'; challenge: string; userId?: string | null; email?: string | null },
+  ch: { type: 'register' | 'login'; challenge: string; userId?: string | null; email?: string | null; recovery?: boolean },
   now = Date.now()
 ): Promise<void> {
   await db.prepare('DELETE FROM challenges WHERE expires_at < ?').bind(now).run(); // opportunistic sweep
   await db
-    .prepare('INSERT INTO challenges (id, type, user_id, email, challenge, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(randomB64u(16), ch.type, ch.userId ?? null, ch.email ?? null, ch.challenge, now + CHALLENGE_TTL_MS)
+    .prepare('INSERT INTO challenges (id, type, user_id, email, challenge, recovery, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(randomB64u(16), ch.type, ch.userId ?? null, ch.email ?? null, ch.challenge, ch.recovery ? 1 : null, now + CHALLENGE_TTL_MS)
     .run();
+}
+
+/** Revoke ALL sessions for a user (A302) — used on recovery re-enrollment so a stolen device's
+ *  sessions can't outlive a recovery, and available as a general "sign out everywhere" primitive. */
+export async function deleteSessionsForUser(db: AccountsDb, userId: string): Promise<void> {
+  await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
 }
 
 /** Look up a pending challenge by its value + type and DELETE it (single-use — a second
@@ -362,6 +376,15 @@ export async function insertCredential(
 }
 export async function touchCredential(db: AccountsDb, id: string, counter: number, now = Date.now()): Promise<void> {
   await db.prepare('UPDATE credentials SET counter = ?, last_used_at = ? WHERE id = ?').bind(counter, now, id).run();
+}
+
+/** Delete a credential OWNED BY the given user (A302). Scoped by user_id so a caller can never delete
+ *  another account's passkey. Returns the number of rows deleted (0 = not found / not theirs). */
+export async function deleteCredentialForUser(db: AccountsDb, userId: string, id: string): Promise<number> {
+  const res = (await db.prepare('DELETE FROM credentials WHERE id = ? AND user_id = ?').bind(id, userId).run()) as
+    | { meta?: { changes?: number } }
+    | undefined;
+  return res?.meta?.changes ?? 0;
 }
 
 export function parseTransports(text: string | null): string[] {

@@ -62,6 +62,8 @@ export async function onRequestPost(ctx: Ctx) {
     authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
   });
   // Bind the new-passkey challenge to the recovered user → register-verify enrolls it + starts a session.
-  await putChallenge(db, { type: 'register', challenge: options.challenge, userId: user.id, email: user.email });
+  // recovery:true marks it so register-verify REVOKES the user's prior sessions (A302) — a recovery
+  // (e.g. after a lost/stolen device) must not leave the old device's sessions alive.
+  await putChallenge(db, { type: 'register', challenge: options.challenge, userId: user.id, email: user.email, recovery: true });
   return json({ options });
 }

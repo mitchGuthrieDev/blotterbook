@@ -8,9 +8,13 @@
 import { createHmac } from 'node:crypto';
 import {
   SESSION_COOKIE,
+  SESSION_ABSOLUTE_MAX_MS,
   createSession,
   sessionFromRequest,
   destroySession,
+  deleteSessionsForUser,
+  deleteCredentialForUser,
+  credentialsForUser,
   sessionSetCookie,
   sessionClearCookie,
   putChallenge,
@@ -46,6 +50,7 @@ import {
 } from '../functions/api/account/email-verify-confirm.ts';
 import { onRequestPost as recoverSend } from '../functions/api/account/recover-send.ts';
 import { onRequestPost as recoverVerify } from '../functions/api/account/recover-verify.ts';
+import { onRequestPost as passkeyDelete } from '../functions/api/account/passkey-delete.ts';
 
 let pass = 0,
   fail = 0;
@@ -111,6 +116,12 @@ function mockDb() {
       // A310 never-verified-account purge (purgeUnverifiedUsers) — reports the affected count.
       const before = tables[m[1]].length;
       tables[m[1]] = tables[m[1]].filter(r => !(r.email_verified === 0 && r.created_at < args[0]));
+      return changed(before - tables[m[1]].length);
+    }
+    if ((m = s.match(/^DELETE FROM (\w+) WHERE id = \? AND user_id = \?$/i))) {
+      // A302 scoped credential delete (deleteCredentialForUser) — reports the affected count.
+      const before = tables[m[1]].length;
+      tables[m[1]] = tables[m[1]].filter(r => !(r.id === args[0] && r.user_id === args[1]));
       return changed(before - tables[m[1]].length);
     }
     if ((m = s.match(/^DELETE FROM (\w+) WHERE (\w+) < \?$/i))) {
@@ -1060,6 +1071,80 @@ console.log('\nAuth hardening (A310) — race-safe createUser/insertCredential +
   ok('...the squatted email is freed', (await userByEmail(pdb, 'victim@example.com')) == null);
   ok('...a fresh unverified account is spared', (await userByEmail(pdb, 'new@example.com')) != null);
   ok('...a verified account is spared regardless of age', (await userByEmail(pdb, 'legit@example.com')) != null);
+}
+
+console.log('\nSession revocation + absolute cap + passkey delete (A302):');
+{
+  const db = mockDb();
+  const user = await createUser(db, 'revoke@example.com');
+  const seedCred = (uid, id) =>
+    insertCredential(db, { id, userId: uid, publicKey: 'pk', counter: 0, transports: [], aaguid: null, backedUp: true, userVerified: true });
+  const lookup = t => sessionFromRequest(req('/api/me', { method: 'GET', cookie: cookieFor(t) }), db);
+
+  // (1) absolute session cap — a session older than the cap from created_at is invalid even when its
+  //     sliding TTL is fresh (as if it had been slid forward on use the whole time).
+  const { token } = await createSession(db, user.id);
+  ok('a fresh session resolves', (await lookup(token))?.user_id === user.id);
+  const row = db.tables.sessions.find(s => s.user_id === user.id);
+  row.created_at = Date.now() - SESSION_ABSOLUTE_MAX_MS - 1000;
+  row.expires_at = Date.now() + 5 * DAY;
+  ok('a session past the 90-day absolute cap is rejected', (await lookup(token)) === null);
+  ok('...and the capped session row is reaped', !db.tables.sessions.some(s => s.user_id === user.id));
+
+  // (2) deleteSessionsForUser revokes every session (the recovery-revocation primitive).
+  await createSession(db, user.id);
+  await createSession(db, user.id);
+  ok('two live sessions exist', db.tables.sessions.filter(s => s.user_id === user.id).length === 2);
+  await deleteSessionsForUser(db, user.id);
+  ok('deleteSessionsForUser revokes them all', db.tables.sessions.filter(s => s.user_id === user.id).length === 0);
+
+  // (3) passkey-delete — session-authed, Origin-checked, fail-closed, scoped + last-credential guard.
+  const { token: sess } = await createSession(db, user.id);
+  await seedCred(user.id, 'cred-A');
+  ok(
+    'passkey-delete 503 without ACCOUNTS_DB',
+    (await passkeyDelete({ request: req('/api/account/passkey-delete', { cookie: cookieFor(sess), body: { id: 'cred-A' } }), env: {} })).status === 503
+  );
+  ok(
+    'passkey-delete 401 without a session',
+    (await passkeyDelete({ request: req('/api/account/passkey-delete', { body: { id: 'cred-A' } }), env: { ACCOUNTS_DB: db } })).status === 401
+  );
+  ok(
+    'passkey-delete cross-origin → 403',
+    (
+      await passkeyDelete({
+        request: req('/api/account/passkey-delete', { origin: 'https://evil.example', cookie: cookieFor(sess), body: { id: 'cred-A' } }),
+        env: { ACCOUNTS_DB: db },
+      })
+    ).status === 403
+  );
+  const lastGuard = await passkeyDelete({
+    request: req('/api/account/passkey-delete', { cookie: cookieFor(sess), body: { id: 'cred-A' } }),
+    env: { ACCOUNTS_DB: db },
+  });
+  ok('refuses to delete the LAST passkey (400, still present)', lastGuard.status === 400 && (await credentialsForUser(db, user.id)).length === 1);
+  await seedCred(user.id, 'cred-B');
+  const okDel = await passkeyDelete({
+    request: req('/api/account/passkey-delete', { cookie: cookieFor(sess), body: { id: 'cred-A' } }),
+    env: { ACCOUNTS_DB: db },
+  });
+  ok('deletes a non-last passkey (200)', okDel.status === 200 && !db.tables.credentials.some(c => c.id === 'cred-A'));
+  ok('...leaving the remaining passkey', db.tables.credentials.some(c => c.id === 'cred-B'));
+  const other = await createUser(db, 'other302@example.com');
+  await seedCred(other.id, 'cred-OTHER');
+  const notMine = await passkeyDelete({
+    request: req('/api/account/passkey-delete', { cookie: cookieFor(sess), body: { id: 'cred-OTHER' } }),
+    env: { ACCOUNTS_DB: db },
+  });
+  ok("cannot delete another account's passkey (404, not removed)", notMine.status === 404 && db.tables.credentials.some(c => c.id === 'cred-OTHER'));
+  // deleteCredentialForUser is itself owner-scoped (0 rows for a mismatched user).
+  ok('deleteCredentialForUser is owner-scoped (0 for a foreign user)', (await deleteCredentialForUser(db, user.id, 'cred-OTHER')) === 0);
+
+  // (4) a recovery-originated register challenge is flagged so register-verify revokes prior sessions.
+  await putChallenge(db, { type: 'register', challenge: 'rec-chal', userId: user.id, email: user.email, recovery: true });
+  ok('recovery register challenge persists recovery = 1', db.tables.challenges.find(c => c.challenge === 'rec-chal').recovery === 1);
+  await putChallenge(db, { type: 'register', challenge: 'add-chal', userId: user.id, email: user.email });
+  ok('a normal add-passkey challenge is not flagged', (db.tables.challenges.find(c => c.challenge === 'add-chal').recovery ?? null) === null);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

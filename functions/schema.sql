@@ -66,8 +66,11 @@ CREATE TABLE IF NOT EXISTS challenges (
   user_id TEXT,                               -- set when an authed user adds another passkey
   email TEXT,                                 -- pending registration email (server-held, not re-trusted from the client)
   challenge TEXT NOT NULL,                    -- the base64url challenge the authenticator must sign
+  recovery INTEGER,                           -- 1 = this register challenge came from account recovery → revoke prior sessions on verify (A302)
   expires_at INTEGER NOT NULL
 );
+-- ⚠ EXISTING DEPLOYMENTS: `recovery` (A302) was added after first release. One-time migration:
+--     npx wrangler d1 execute blotterbook-accounts --remote --command "ALTER TABLE challenges ADD COLUMN recovery INTEGER"
 CREATE INDEX IF NOT EXISTS idx_challenges_challenge ON challenges (challenge);
 CREATE INDEX IF NOT EXISTS idx_challenges_expires ON challenges (expires_at);
 
