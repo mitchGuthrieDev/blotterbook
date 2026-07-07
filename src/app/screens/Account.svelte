@@ -43,6 +43,7 @@
     recoverSend,
     completeRecovery,
     registerPrfPasskey,
+    subscribe,
   } from '../lib/account.svelte.ts';
   import {
     vault,
@@ -173,9 +174,10 @@
     else void refreshSession();
   });
 
-  // Probe cloud-sync key state + PRF support once the account session resolves (prod + staging).
+  // Probe cloud-sync key state + PRF support once a CLOUD-tier session resolves (prod + staging).
+  // Local-tier users see the subscribe CTA instead, so we don't hit /api/sync for them.
   $effect(() => {
-    if (cloudSyncOn && !vault.loaded && !vault.busy) {
+    if (cloudSyncOn && account.tier === 'cloud' && !vault.loaded && !vault.busy) {
       void refreshVault();
       void prfSupported().then(ok => (prfOk = ok));
     }
@@ -388,7 +390,18 @@
             stores ciphertext it can't read.
           </p>
 
-          {#if !vault.loaded}
+          {#if account.tier !== 'cloud'}
+            <!-- LOCAL tier — cloud sync is the $5/mo supporter subscription. Setup is tier-gated so a
+                 free user never generates keys the server (A253 entitlement gate) would reject on write. -->
+            <div class="rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-sm text-muted-foreground">
+              Cloud sync is part of the <span class="font-medium text-foreground">$5/month</span> supporter tier — sync your journal across your
+              devices, still end-to-end encrypted. Your local data is unaffected either way.
+            </div>
+            <Button data-testid="cloud-subscribe" disabled={account.busy} onclick={() => void subscribe()} class="self-start">
+              <Cloud class="size-4" />
+              Subscribe — $5/month
+            </Button>
+          {:else if !vault.loaded}
             <Skeleton class="h-9 w-48" />
           {:else if !vault.setUp}
             <!-- not set up yet -->

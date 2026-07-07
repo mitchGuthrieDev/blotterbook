@@ -17,13 +17,17 @@ const gotoAccount = async page => {
 };
 
 // Stub the account session (logged in) + the F62 wrapped-IK blob store (an in-memory upsert map).
-function installStubs(page) {
+// `tier` defaults to 'cloud' (the entitled path that reaches key setup); pass 'local' to exercise
+// the subscribe-CTA gate.
+function installStubs(page, { tier = 'cloud' } = {}) {
   const blobs = []; // { method, key_id, wrapped_ik, updated } — opaque ciphertext
   page.route('**/api/me', route =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
+        tier,
+        cloudSync: tier === 'cloud',
         user: {
           email: 'e2e@blotterbook.test',
           emailVerified: true,
@@ -88,6 +92,31 @@ test('cloud sync (staging): setup blocks finishing until the recovery key is con
   await expect(finish).toBeEnabled();
   await finish.click();
   await expect(page.getByTestId('cloud-unlocked')).toBeVisible({ timeout: 15_000 });
+});
+
+test('cloud sync (staging): a LOCAL-tier user sees the subscribe CTA, not the key-setup form', async ({ page }) => {
+  installStubs(page, { tier: 'local' });
+  await page.route('**/api/checkout', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ url: '/app/app.html#account' }) })
+  );
+  await bootStaging(page);
+  await gotoAccount(page);
+
+  const card = page.getByTestId('cloud-sync-card');
+  await expect(card).toBeVisible();
+  // The tier gate: a local-tier account gets the subscribe CTA, and the key-setup entry point is absent
+  // (so a free user can't generate keys the server's A253 entitlement gate would reject on write).
+  await expect(page.getByTestId('cloud-subscribe')).toBeVisible();
+  await expect(page.getByTestId('cloud-setup-open')).toHaveCount(0);
+
+  // Subscribing kicks off a subscription checkout (plan: 'subscription' → /api/checkout links it to
+  // this account via the session cookie + subscription metadata, #120). Register the request wait
+  // BEFORE the click — the fetch fires during the click, so an after-the-fact wait would race.
+  const [checkoutReq] = await Promise.all([
+    page.waitForRequest(r => r.url().includes('/api/checkout') && r.method() === 'POST'),
+    page.getByTestId('cloud-subscribe').click(),
+  ]);
+  expect(checkoutReq.postDataJSON()?.plan).toBe('subscription');
 });
 
 test('cloud sync (staging): lock, then unlock the IK with the passphrase', async ({ page }) => {

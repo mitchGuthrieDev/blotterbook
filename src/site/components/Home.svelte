@@ -621,16 +621,16 @@
         </div>
       </div>
 
-      <div class="plan flex flex-col rounded-[14px] border border-border bg-card p-[26px] opacity-[0.62]">
+      <div class="plan flex flex-col rounded-[14px] border border-border bg-card p-[26px]">
         <span
-          class="mb-[14px] self-start rounded-[6px] border border-border px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground"
-          >Planned</span
+          class="ribbon mb-[14px] self-start rounded-[6px] bg-primary/12 px-[10px] py-1 font-mono text-[11px] uppercase tracking-[0.1em] text-primary"
+          >Available now</span
         >
         <h3 class="mb-1 text-[18px] font-semibold">Synced workspaces</h3>
         <p class="mb-[18px] text-[13px] leading-[1.5] text-muted-foreground">
           End-to-end-encrypted sync of your trades, notes, tags &amp; saved filters across devices.
         </p>
-        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em] text-muted-foreground">
+        <div class="mb-1 font-mono text-[30px] font-bold tracking-[-0.02em] text-foreground">
           $5 <small class="text-[14px] font-normal text-muted-foreground">/ month</small>
         </div>
         <ul class="my-4 mb-[22px] flex list-none flex-col gap-[10px] p-0">
@@ -656,7 +656,13 @@
             >No more re-uploading CSVs per device
           </li>
         </ul>
-        <p class="mt-auto text-[12px] leading-[1.5] text-muted-foreground">Not ready yet — on the roadmap.</p>
+        <div class="mt-auto flex flex-col gap-2">
+          <a
+            class="inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
+            href="/app/#account">Get cloud sync in the app &rarr;</a
+          >
+          <p class="text-[11px] leading-[1.4] text-muted-foreground">Launch the app, sign in, and subscribe from your account.</p>
+        </div>
       </div>
     </div>
   </div>
