@@ -5448,6 +5448,17 @@
       "completedDate": "2026-07-07",
       "partial": false,
       "doneNote": "DONE (2026-07-07). Repo hygiene: relocated cloudsync-core.ts into src/lib/core/ (now under strict standalone tsc), moved phosphor-svelte to devDependencies, removed the dead format.ts versionsReady export + fixed its stale comment, made BUS/EXCH_FALLBACK/EXCH_HISTORY module-private in core.ts (no external readers), and rewrote the e2e/staging-redesign.spec.mjs header to the post-CH16 world."
+    },
+    {
+      "id": "A315",
+      "title": "Fix the changelog-email GitHub Actions job (Cloudflare bot challenge blocks the runner)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "Fixed via the owner-chosen pages.dev bypass and CONFIRMED end-to-end 2026-07-07. Code: .github/workflows/changelog-email.yml targets the canonical <project>.pages.dev origin (Cloudflare's own zone — the custom domain's Bot Fight Mode had 403-challenged the GitHub runner; free plan can't WAF-exempt it), all Pro-tier WAF-skip messaging removed, secrets documented in the workflow header; functions/api/notify-changelog.ts gained PUBLIC_ORIGIN (functions/_lib/types.ts) so the unsubscribe link stays branded blotterbook.com when invoked at pages.dev (falls back to the request origin); the earlier kj77tb hardening (challenge-detect fail-fast, browser UA, ?version= 425 deploy-freshness gate) turned out to be already merged via PR #123 and was kept. Tests: scripts/test-email.mjs covers the branded-link + fallback-origin cases (70/70). Infra (owner, 2026-07-07): CHANGELOG_NOTIFY_URL=https://trading-journal-4tn.pages.dev/ + CHANGELOG_NOTIFY_SECRET repo secrets; CHANGELOG_NOTIFY_SECRET + PUBLIC_ORIGIN=https://blotterbook.com Pages Production env vars. PROOF: workflow run #6 (commit e5741c8, the 0.68.0 changelog entry) — the first-ever green run — waited out the deploy via three 425 retries then got HTTP 200 {ok:true,version:'0.68.0',recipients:1,sent:1,failed:0}. Runs #1-#5 had never sent (no-op/challenge-blocked). Docs: functions/README.md env-var section + the A141 design doc + the cloudflare-functions diagram record the as-built routing."
     }
   ]
 }
