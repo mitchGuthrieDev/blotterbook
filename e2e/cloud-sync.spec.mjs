@@ -203,5 +203,18 @@ test('cloud sync (prod): renders the cloud-sync card for a logged-in user (CH16-
   await expect(page.getByTestId('cloud-sync-card')).toBeVisible({ timeout: 8000 });
   await expect(page.getByTestId('cloud-setup-open')).toBeVisible();
 
+  // A279/CH16 (2026-07-07): cloud sync is LIVE on prod, not just staging — the CloudStore wraps every
+  // non-demo Store (A256) and configureCloudSync runs on prod, so cloudSync.configured is true here.
+  // Complete setup + unlock and confirm the reworked parity panel + passkey/passphrase explainer render
+  // on the PROD surface (the same UI staging gets).
+  await page.getByTestId('cloud-setup-open').click();
+  await page.getByTestId('cloud-generate').click();
+  await expect(page.getByTestId('recovery-key')).toBeVisible({ timeout: 8000 });
+  await page.getByTestId('recovery-saved').click();
+  await page.getByTestId('cloud-finish').click();
+  await expect(page.getByTestId('cloud-unlocked')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible();
+  await expect(page.getByText('How sign-in and encryption relate')).toBeVisible();
+
   await page.evaluate(() => indexedDB.deleteDatabase('blotterbook')); // leave the surface clean
 });

@@ -431,8 +431,9 @@
               </Button>
             </div>
 
-            <!-- A279: active-workspace sync parity + explicit direction controls (staging only — the
-                 sync engine runs behind cloudSync.configured; on prod the keys set up but don't sync). -->
+            <!-- A279: active-workspace sync parity + explicit direction controls. Rendered on every
+                 non-demo surface once encryption is unlocked (the sync engine runs behind
+                 cloudSync.configured, true on prod + staging — CH16). -->
             {#if cloudSync.configured}
               <div class="flex flex-col gap-2 rounded-md border border-border p-3" data-testid="cloud-sync-panel">
                 <div class="flex flex-wrap items-center justify-between gap-2">

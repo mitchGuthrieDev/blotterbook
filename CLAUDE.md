@@ -15,8 +15,8 @@ performance / calendar / cost / tax / stats views. **Compute stays 100% local on
 every tier; the moat is refined, not absolute** — trade data leaves the browser
 *only* for a `cloud`-tier user who opts a workspace into sync, and *only as
 ciphertext the server cannot decrypt* (E2E, zero-knowledge). `local`-tier and
-un-synced workspaces egress nothing. Cloud sync is **staging-gated** today (not
-yet promoted to prod/demo). See
+un-synced workspaces egress nothing. Cloud sync is **live on prod** (opt-in,
+`cloud`-tier only; demo never syncs by construction — CH16, 2026-07-07). See
 [`docs/synced-workspaces.md`](docs/synced-workspaces.md). It's a Vite-built
 Svelte 5 SPA (ADR-001) that deploys to Cloudflare Pages (build → `dist/`) plus
 `/functions/*` edge functions.
@@ -40,8 +40,9 @@ genuine invariants remain:
   IndexedDB/localStorage by construction) and disables/guards every write path. `DemoStore` is never
   a `cloud` store and never syncs.
 - **Egress is ciphertext-only and opt-in.** Compute never touches the network on any tier. Trade data
-  leaves the browser *only* through the **staging-gated** cloud-sync path (F58–F63), *only* for a
-  `cloud`-tier user who opted a workspace in, and *only as E2E ciphertext the server can't decrypt*.
+  leaves the browser *only* through the **opt-in, `cloud`-tier** cloud-sync path (F58–F63; live on prod
+  + staging, never demo), *only* for a `cloud`-tier user who opted a workspace in, and *only as E2E
+  ciphertext the server can't decrypt*.
   Don't add a network read/write to the compute path or send any plaintext trade field to `/functions`.
 - **CSP `script-src` gained `'wasm-unsafe-eval'`** (owner-approved 2026-07-06) so the Argon2id **wasm**
   (`hash-wasm`, F61a) can compile — this is wasm-specific and does **not** re-enable `'unsafe-inline'`/
@@ -63,10 +64,10 @@ re-platform), and [`docs/architecture.md`](docs/architecture.md).
   CsvLibrary/TradeEditor/Reports/Account — Account is staging-gated, F53) + `parts/` (BootSplash/
   CostSetup/Onboarding/ActivityTerminal/Definitions/StatusBanner/DashTabs/DatePickerPopover/
   DetectionStatus/EditableCellPopover/FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/
-  ScreenshotLightbox/SegmentedControl/SymbolSelect/TagInput + the staging-gated synced-workspaces
-  parts WorkspaceSwitcher/CloudSyncSetup/UnlockModal, A132/F61b/F63) +
+  ScreenshotLightbox/SegmentedControl/SymbolSelect/TagInput + the synced-workspaces
+  parts WorkspaceSwitcher/CloudSyncSetup/UnlockModal/SyncStatusPill, A132/F61b/F63/A279) +
   `lib/{dashboard.svelte.ts,dashtabs.svelte.ts,account.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports}`
-  plus the staging-gated cloud-sync glue `{vault.svelte.ts` (in-memory key session, F61b)`,cloudstore.ts` (write-behind `StoreLike` wrapper, F63)`,cloudsync-core.ts` (pure push/pull/merge engine, F63)`,cloudsync.svelte.ts` (reactive sync controller, F63)`}`.
+  plus the cloud-sync glue `{vault.svelte.ts` (in-memory key session, F61b)`,cloudstore.ts` (write-behind `StoreLike` wrapper, F63)`,cloudsync-core.ts` (pure push/pull/merge engine, F63)`,cloudsync.svelte.ts` (reactive sync controller, F63)`}`.
   It reuses the **pure-logic core** in `src/lib/core/` (A29, native TS per A61): `adapters` (+ `xlsx`
   for the ATAS X .xlsx path, F52) / `intake` (CSV gates + cross-export reconciliation, A177/A219) /
   `compute`+`costModel` in `core` / `store` (now with delete tombstones + named workspaces, F58/F59) /
@@ -76,8 +77,9 @@ re-platform), and [`docs/architecture.md`](docs/architecture.md).
   Svelte runes (`$state`/`$derived`), not a
   shared globals object. `App.svelte` resolves the mode-aware `Store` (real IndexedDB for app/staging
   via `Entitlements.storeFor()`, the in-memory `DemoStore` for demo, so **demo persists nothing** — by
-  construction) once at the top and — **on staging only** — wraps it in a `CloudStore` (`wrapStore`,
-  F63) for opt-in encrypted sync, then **prop-drills** the resulting store into
+  construction) once at the top and — **on every non-demo surface (app + staging)** — wraps it in a
+  `CloudStore` (`wrapStore`, F63) for opt-in encrypted sync (inert until a `cloud`-tier user opts a
+  workspace in + unlocks; demo is never wrapped, so it never syncs), then **prop-drills** the resulting store into
   `createDashboard`/`createDashTabs` and down through screens/parts — there is no `context('bb:store')`
   seam (a dead `setContext` call was removed in A224; nothing ever read it). The `CloudStore` is itself
   a `StoreLike`, so every consumer depends only on the interface, not on how the instance is threaded.
@@ -358,14 +360,14 @@ conforms to the rules below; keep it that way.
     parts/              cross-screen pieces: BootSplash/CostSetup/Onboarding/ActivityTerminal/Definitions/
                         StatusBanner/DashTabs/DatePickerPopover/DetectionStatus/EditableCellPopover/
                         FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/ScreenshotLightbox/
-                        SegmentedControl/SymbolSelect/TagInput + staging-gated synced-workspaces UI:
-                        WorkspaceSwitcher (A132), CloudSyncSetup + UnlockModal (F61b)
+                        SegmentedControl/SymbolSelect/TagInput + synced-workspaces UI (opt-in, cloud-tier):
+                        WorkspaceSwitcher (A132), CloudSyncSetup + UnlockModal (F61b), SyncStatusPill (A279)
     lib/                app-only glue (TS): dashboard.svelte.ts (dashboard state factory + workspace
                         switch/reload), account.svelte.ts (F53 auth/session state + PRF passkey enroll),
                         pagination.svelte.ts, actions.ts (styleProps), batch.ts
                         (multi-file import queue, F47), files.ts (readImage/downloadBlob — ex util.js, A76),
                         flags.ts (APP_FLAGS), flavor.ts, motion.ts, nav.ts, analytics.ts + reports.ts
-                        (Analytics / Reports view-model builders) + staging-gated cloud-sync glue:
+                        (Analytics / Reports view-model builders) + cloud-sync glue (opt-in, cloud-tier):
                         vault.svelte.ts (in-memory key session, F61b), cloudstore.ts (write-behind
                         StoreLike wrapper), cloudsync-core.ts (pure push/pull/merge engine),
                         cloudsync.svelte.ts (reactive sync controller) — all F63
@@ -460,7 +462,8 @@ it) adapts per surface. Boot: `loadRefData()` → `Store.init()` → `restoreSes
 (app seeds nothing → empty state shows first-run onboarding; demo seeds in-memory; staging seeds its
 DB first) → `mount()`.
 
-**The sync branch (staging-gated, F58–F63).** On staging, `CloudStore` wraps the local `Store`:
+**The sync branch (F58–F63; live on prod + staging, opt-in `cloud`-tier — never demo).** On every
+non-demo surface, `CloudStore` wraps the local `Store`:
 **reads** stay local (compute never touches the network); each **write** delegates to IndexedDB then
 enqueues a debounced encrypted **push** (`crypto` encrypt → `/api/sync/push`); on connect/unlock/focus a
 **pull** decrypts remote records and re-merges them through the *existing* `importAll` trust boundary

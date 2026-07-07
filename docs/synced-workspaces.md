@@ -204,7 +204,7 @@ exists.** Steps 4–6 concentrate the E2E work.
 4. **F61 — E2E crypto layer**, split for reviewability: **F61a** — the crypto core (`crypto.ts`: IK
    gen, AES-KW wrap/unwrap per method, HKDF-from-PRF, **Argon2id-wasm** passphrase KDF, `blinded_id`
    HMAC) — pure + node-tested in isolation; **F61b** — the setup/unlock UI (recovery-key download,
-   passphrase entry, PRF probe + enroll-a-PRF-passkey guidance, unlock modal), staging-gated in the
+   passphrase entry, PRF probe + enroll-a-PRF-passkey guidance, unlock modal) in the
    Account screen. Passphrase KDF = **Argon2id via wasm** (owner decision 2026-07-06): memory-hard,
    ~30–50 KiB against the ~125 KiB bundle headroom; the full-entropy escrow key stays the real root.
 5. **F62 — `/api/sync`** over R2 + a D1 change-index (encrypted-blob store, `seq` cursor, session-gated,
@@ -212,16 +212,19 @@ exists.** Steps 4–6 concentrate the E2E work.
 6. **F63 — `CloudStore` write-behind** wrapping `Store`, selected by `storeFor('cloud')`; push/pull +
    client-side merge. Promote staging→prod via the normal CH16 path.
 
-### F63 as built (2026-07-06 — STAGING-GATED; CH16 promote deferred)
+### F63 as built (2026-07-06; CH16 prod promote 2026-07-07)
 
-Landed staging-only; the CH16 prod promote is intentionally **not** done yet. Key decisions:
+Landed on staging 2026-07-06 and promoted to prod via CH16 on 2026-07-07 (opt-in, `cloud`-tier only;
+demo never syncs). NB: the store-wrap was already non-demo (A256) — the CH16 promote was a GA
+declaration + doc/comment alignment, not a gate flip. Key decisions:
 
 - **Layering.** `src/app/lib/cloudsync-core.ts` is the pure (rune-free, node-testable) engine
   (`collectChanges`/`pushChanges`/`pullAndMerge`/`mergeRecords`); `cloudstore.ts` is the `StoreLike`
   wrapper (reads delegate, writes delegate + fire `onWrite`); `cloudsync.svelte.ts` is the reactive
   controller (status, debounce, enable, the fetch transport). `crypto.ts` (and its Argon2 wasm) is
   **dynamically imported** on every path, so it stays out of the /app boot bundle (A96). App.svelte
-  wraps the Store in a `CloudStore` **only on staging**; prod/demo never construct one → never sync.
+  wraps the Store in a `CloudStore` on **every non-demo surface** (A256; inert until a cloud-tier user
+  opts a workspace in + unlocks); **demo** never constructs one → never syncs.
 - **Blinding key derivation.** `blindId`'s per-workspace HMAC key is derived from the **DEK bytes**
   via HKDF-SHA256 with the fixed label `blotterbook/e2e/blind-key/v1` (`crypto.blindKeyFromDekBytes`),
   and the record key is the DEK re-imported non-extractable (`crypto.importDek`). Both come from the

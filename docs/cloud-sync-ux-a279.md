@@ -1,7 +1,8 @@
 # Cloud-sync UX rework (A279)
 
-_Design note — 2026-07-07. Staging-gated (the sync engine runs behind `cloudSync.configured`, which is
-true only on the staging surface). Reference model: Obsidian Sync's status-pill + explicit sync._
+_Design note — 2026-07-07. Live on prod + staging (opt-in, `cloud`-tier; the sync engine runs behind
+`cloudSync.configured`, true on every non-demo surface — CH16, 2026-07-07). Demo never syncs. Reference
+model: Obsidian Sync's status-pill + explicit sync._
 
 ## Problem
 

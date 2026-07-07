@@ -168,9 +168,9 @@
       <Trash2 class="size-4" /> Delete…
     </DropdownMenu.Item>
     <DropdownMenu.Separator />
-    <!-- A279: cloud-sync PARITY row (staging only) — a status pill + a clear "Sync now" instead of the
-         old lock/unlock framing. Direction controls (Pull/Push/Pause) + the passkey-vs-passphrase
-         explainer live on the Account screen's cloud-sync card. -->
+    <!-- A279: cloud-sync PARITY row (prod + staging, not demo) — a status pill + a clear "Sync now"
+         instead of the old lock/unlock framing. Direction controls (Pull/Push/Pause) + the
+         passkey-vs-passphrase explainer live on the Account screen's cloud-sync card. -->
     <div class="flex flex-col gap-1.5 px-2 py-1.5" data-testid="sync-status">
       {#if !cloudSync.enabled}
         {#if cloudSync.tier === 'cloud'}

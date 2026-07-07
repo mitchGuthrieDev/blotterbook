@@ -6,8 +6,8 @@
  *   · the per-workspace opt-in (mint+register a DEK, or adopt the server's) and the in-memory
  *     per-workspace keys (derived from the DEK; never persisted — only the cursor + enabled flag are).
  *
- * STAGING-GATED + CLOUD-TIER + OPT-IN by construction: App.svelte only wraps the Store in a CloudStore
- * and calls configureCloudSync() on the staging surface; enabling sync needs `tier === 'cloud'` and an
+ * CLOUD-TIER + OPT-IN by construction (live on prod + staging — CH16, 2026-07-07): App.svelte wraps the
+ * Store in a CloudStore and calls configureCloudSync() on every NON-DEMO surface; enabling sync needs `tier === 'cloud'` and an
  * UNLOCKED account IK (F61b); demo never wraps the Store, so it never syncs. When the IK is locked or
  * the browser is offline, sync PAUSES gracefully — a local write never blocks and never throws.
  *
@@ -34,7 +34,7 @@ type SyncStatus = 'off' | 'syncing' | 'synced' | 'offline' | 'locked' | 'error';
 
 /** Shared reactive sync state for the ACTIVE workspace — read anywhere, mutate only via the actions. */
 export const cloudSync = $state({
-  /** configureCloudSync() has run (staging only) — gate the affordance on this. */
+  /** configureCloudSync() has run (every non-demo surface — prod + staging) — gate the affordance on this. */
   configured: false,
   /** entitlement tier from /api/me ('' until probed). Enabling sync needs 'cloud'. */
   tier: '' as '' | Tier,
@@ -170,15 +170,16 @@ const ERASE_MAX_PAGES = 200;
 
 /* ── CloudStore wiring (called at App.svelte module init, staging only) ────────────────────────── */
 
-/** Wrap the local Store so writes schedule a debounced push. Called ONLY on staging; demo/prod use
- *  the plain Store and never reach this. */
+/** Wrap the local Store so writes schedule a debounced push. Called on every non-demo surface (app +
+ *  staging); demo mounts the in-memory DemoStore and is never wrapped, so it never syncs. Inert until a
+ *  cloud-tier user opts a workspace in + unlocks. */
 export function wrapStore(local: StoreLike): StoreLike {
   localStore = local;
   return createCloudStore(local, onLocalWrite);
 }
 
-/** Configure the controller after boot (staging only): probe the tier, wire connectivity/focus
- *  listeners, and settle the active workspace's status. Never throws. */
+/** Configure the controller after boot (every non-demo surface — prod + staging): probe the tier, wire
+ *  connectivity/focus listeners, and settle the active workspace's status. Never throws. */
 export function configureCloudSync(opts: { localStore: StoreLike; dash: { reload(): Promise<void> } }): void {
   localStore = opts.localStore;
   dashRef = opts.dash;
