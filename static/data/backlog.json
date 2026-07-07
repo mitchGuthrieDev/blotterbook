@@ -245,19 +245,7 @@
       "status": "open",
       "completedDate": null,
       "partial": true,
-      "prompt": "PARTIAL — the client-side resurrection fix shipped (#119): purging/erasing a synced workspace disables its sync + resets its cursor/watermark so a reconcile cannot resurrect. REMAINING: propagate the erase to the SERVER — when a synced workspace is purged, delete its sync_records rows + R2 ciphertext blobs (a new owner-authorized /api/sync delete endpoint) so \"erase all data\" clears the cloud copy too. Today the orphaned E2E-ciphertext lingers server-side (still zero-knowledge + user-owned) until this lands. Done when: purging a synced workspace deletes its server records + blobs (verified), and other devices see the erase.",
-      "doneNote": null
-    },
-    {
-      "id": "A265",
-      "title": "Sync API: TTL/compaction for webhook_events and tombstones (unbounded D1 growth)",
-      "category": "CHORE / REFACTOR",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": true,
-      "prompt": "PARTIAL — a schema.sql comment noting the future job was added (#119). REMAINING: implement TTL/compaction for the unbounded webhook_events ledger and deleted (deleted=1) sync_records tombstones — a bounded scheduled cleanup (Cloudflare Cron Trigger or swept-on-write) so neither grows without limit. Done when: old webhook_events + tombstoned sync_records are pruned on a bounded schedule.",
+      "prompt": "PARTIAL — two of three parts shipped. (1) Client resurrection fix (#119): purging a synced workspace disables its sync + resets its cursor/watermark so a reconcile can't resurrect. (2) SERVER ERASE (2026-07-07): a new session-authed, owner-only POST /api/sync/delete deletes the workspace's sync_records rows + R2 ciphertext blobs (paged by DELETE_PAGE within the A15 subrequest budget) then drops the wrapped-DEK + registry shell; the cloudsync controller's onErased now propagates a local purge to it best-effort (transport.deleteWorkspace, looped until done), so 'erase all data' clears the cloud copy — no orphaned ciphertext. Delete is never paywalled (a lapsed account can always erase its own data). Verified by scripts/test-sync.mjs (owner-only, cross-user 404, 401, cross-origin 403, fail-closed, paging, not-paywalled). REMAINING: cross-device auto-drop — the server erase is a HARD delete (no tombstone), so a SECOND device that has not yet reconciled keeps its local copy (its next listWorkspaces simply omits the now-deleted workspace and its pull 404s, rather than cleanly wiping local). To make other devices actively drop the data, either tombstone-then-compact the records instead of hard-deleting (aligns with the A265 compaction that shipped alongside this), or add a client handler that treats a vanished owned-workspace as an erase signal. Done when: an erase on one device also clears the data on other reconciling devices.",
       "doneNote": null
     },
     {
@@ -281,7 +269,7 @@
       "status": "open",
       "completedDate": null,
       "partial": false,
-      "prompt": "The big resizable-modules refactor (expands/supersedes F29 phase-1; the R20 verdict in docs/grid-eval-r20.md was CUSTOM — no gridstack). Give every dashboard module (Dashboard / Analytics / Calendar screens) three SIZE STATES — Small / Medium / Large — each with its own content density/layout, and drive the state from the module's rendered size so a drag-resize SNAPS to the nearest state and stays on the grid. Reference states: the carousel modules (main dash + analytics) = Small; the half-width dashboard modules (trading calendar / break-even / advanced / activity) = Medium; the Calendar-screen calendar + the main-dashboard performance graph = Large. Add a 'carousel' GROUPED state applied when six Small modules sit horizontally in a row. Scope: define the S/M/L contract each module implements (what shows per state), a snap-to-state grid, and corner drag-resize handles that snap to the three states. RESEARCH the build approach first — re-evaluate a UI dependency vs custom against the R20 findings (gridstack / muuri / etc. vs the current keyed-each + styleProps substrate and the A96/A223 bundle budget) and record a short recommendation before the refactor. Constraints: CSP-clean geometry via the styleProps CSSOM action (no inline style=, A55); mobile degrades to a single column; compute() untouched (sizing is layout, not data); persist per-tab layout (extend the modKeyFor payload, migrate the old shape); demo non-mutating; keyboard/a11y resize fallback. Staging-gate. BLOCKS A272. Done when: modules render correctly in S/M/L, resize snaps to the three states + the carousel group, layout persists per tab, mobile degrades, and the build-approach recommendation is recorded.",
+      "prompt": "The big resizable-modules refactor (expands/supersedes F29 phase-1; the R20 verdict in docs/grid-eval-r20.md was CUSTOM — no gridstack). Give every dashboard module (Dashboard / Analytics / Calendar screens) three SIZE STATES — Small / Medium / Large — each with its own content density/layout, and drive the state from the module's rendered size so a drag-resize SNAPS to the nearest state and stays on the grid. Reference states: the carousel modules (main dash + analytics) = Small; the half-width dashboard modules (trading calendar / break-even / advanced / activity) = Medium; the Calendar-screen calendar + the main-dashboard performance graph = Large. Add a 'carousel' GROUPED state applied when six Small modules sit horizontally in a row. Scope: define the S/M/L contract each module implements (what shows per state), a snap-to-state grid, and corner drag-resize handles that snap to the three states. RESEARCH the build approach first — re-evaluate a UI dependency vs custom against the R20 findings (gridstack / muuri / etc. vs the current keyed-each + styleProps substrate and the A96/A223 bundle budget) and record a short recommendation before the refactor. Constraints: CSP-clean geometry via the styleProps CSSOM action (no inline style=, A55); mobile degrades to a single column; compute() untouched (sizing is layout, not data); persist per-tab layout (extend the modKeyFor payload, migrate the old shape); demo non-mutating; keyboard/a11y resize fallback. Staging-gate. BLOCKS A272. Done when: modules render correctly in S/M/L, resize snaps to the three states + the carousel group, layout persists per tab, mobile degrades, and the build-approach recommendation is recorded.\n\n— RECOMMENDATION RECORDED 2026-07-07 (docs/module-sizing-approach-a271.md): the build-approach research sub-deliverable is DONE; the refactor build is UNBLOCKED and this item stays OPEN for it. Verdict CUSTOM (again) — extend the existing keyed-{#each} + animate:flip + styleProps (CSSOM, CSP-clean) substrate rather than adopt gridstack (~83 KiB) / muuri (~28 KiB) / interact.js (~50 KiB), all of which either own the DOM (fighting Svelte's keyed render) or spend real bundle to replace ~60 lines of Pointer Events, while custom adds only ~4-8 KiB against the 840 KiB ceiling — and A271's snap-to-three-discrete-states is SIMPLER than R20's continuous 1-12 span drag, so it needs none of their 2-D packing engines. The doc fixes: the S/M/L content contract (Small = glanceable carousel cards, Medium = today's half-width paired modules, Large = full-width tall calendar/perf-graph — the A272 fill-viewport target); the persistence migration (versioned {key,size}[] with a lossless read-time upgrade from the current string[] order that preserves existing layouts); and the snap/grid mechanics (12-track grid with span 2/6/12, rAF-throttled snap-to-nearest-of-three, ModuleCarousel reuse for the six-Small grouped state, mobile single-column degrade, DropdownMenu size radio + role=slider keyboard fallback, demo non-mutating, staging-gated).",
       "doneNote": null
     },
     {
@@ -309,18 +297,6 @@
       "doneNote": null
     },
     {
-      "id": "A275",
-      "title": "(assessment) Evaluate migrating to a Tauri desktop shell — cross-platform expansion",
-      "category": "ARCHITECTURE / DUPLICATION",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Written assessment (docs/, in the style of docs/vault-storage-assessment.md) on wrapping/migrating Blotterbook in a TAURI shell to distribute cross-platform (desktop, maybe mobile) beyond the browser site. Cover: (1) the upside — a real filesystem (unlocks the Phase-3 native VAULT from vault-storage-assessment.md), OS integration, offline packaging, an app-store presence, no browser storage-eviction; (2) pros/cons vs staying a pure PWA/browser app, and vs Capacitor / Electron; (3) implementation difficulty — how the Vite/Svelte SPA embeds in Tauri's webview and what changes (the Store seam / IndexedDB vs native FS, the /functions edge layer vs the same remote API vs a bundled backend, CSP inside a webview, WebAuthn/passkeys in a webview, deep-links for the Stripe return); (4) how dev/build/release/CI change (Rust toolchain, code signing, notarization, auto-update, per-OS builds) and the maintenance cost of a second target; (5) a phased recommendation (browser stays primary; ship a shell only if/when it earns it). The owner is unfamiliar with Tauri — be concrete and decision-oriented. Done when: the assessment is written with a clear recommendation + rough effort.",
-      "doneNote": null
-    },
-    {
       "id": "A276",
       "title": "(discuss + build) Admin: paginated user table to view/edit per-user entitlements (+ audit the entitlement model)",
       "category": "FEATURES",
@@ -330,18 +306,6 @@
       "completedDate": null,
       "partial": false,
       "prompt": "Add a paginated USER table to the admin panel (src/site/components/Admin.svelte + a new admin /functions endpoint, Cloudflare-Access-gated + noindex like the rest of admin) that lists accounts and lets the owner VIEW and EDIT per-user entitlements — e.g. grant the owner (or a comped user) the CLOUD tier WITHOUT a Stripe subscription. FIRST audit + document how entitlements work today (F60: /api/me derives the tier from the D1 `subscriptions` row via grantsCloud; there is no manual-grant path) and decide the model change: add a manual override (e.g. an `entitlement_override` / `comped` field or a synthetic subscription row) that grantsCloud honors, with an audit trail of who set it and when. Server-side + admin-authed only (NEVER a client-trusted grant — see A277). Paginate the D1 query (never load all users at once). Constraints: admin endpoints behind Access + the admin token (S3/S4), fail-closed without ACCOUNTS_DB, and NO trade data ever surfaced (S25 — identity + entitlement only). Done when: the admin table paginates real users, the owner can grant/revoke the cloud entitlement server-side (reflected by /api/me), the override is audited, and the current-vs-new entitlement model is documented.",
-      "doneNote": null
-    },
-    {
-      "id": "A277",
-      "title": "(audit) Verify no auth / entitlement enforcement is trusted client-side",
-      "category": "SECURITY",
-      "priority": "P2",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Focused security audit proving that NO authentication or entitlement/paywall enforcement is trusted CLIENT-side — every gate must be independently enforced server-side in /functions. Sweep every protected surface: /api/sync/* (session + Origin + owner-authorization + the A253 cloud-tier gate + quota), /api/me tier derivation, /api/account/* ceremonies + the session-cookie handling, /api/checkout, the admin endpoints (Access JWT + admin token), the staging _middleware key-gate, and the F56 account launch gate. For each, confirm the server re-checks identity/ownership/entitlement and that removing or spoofing the client-side gate cannot escalate access, read another user's data (even ciphertext), bypass the paywall, or reach admin. Explicitly exercise the 'attacker holding a valid FREE-tier session cookie hits the endpoints directly' case, plus unauth + cross-user + wrong-origin. Distinguish client checks that exist only for UX (fine) from ones acting as the security boundary (must ALSO be server-side). Complements R1 pass 9 (which fixed A253's client-only entitlement gap) — go broader. Read-only; deliver a written report (docs/) and file any gaps as new items. Done when: every protected route is confirmed server-enforced (or a gap is filed), with the direct-request attack cases exercised.",
       "doneNote": null
     },
     {
