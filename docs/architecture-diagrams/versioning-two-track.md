@@ -20,7 +20,7 @@ flowchart TD
     VB --> SURFACE{"changed paths → surface"}
     SURFACE -->|"src/app · src/lib · styles · assets ·<br/>static/data* · app/app+demo.html"| BOTH["bump prod + staging"]
     SURFACE -->|"app/staging.html"| STG["bump staging only"]
-    SURFACE -->|"index/howto/roadmap/legal · site non-admin"| PRD["bump prod only"]
+    SURFACE -->|"index/howto/roadmap/legal/changelog · site non-admin"| PRD["bump prod only"]
     SURFACE -->|"admin · README · scripts · functions ·<br/>.github · versions/backlog/changelog json"| NONE["no bump"]
 
     MAJ --> WRITE

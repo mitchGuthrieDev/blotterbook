@@ -19,7 +19,9 @@ calendar, commission and subscription breakdowns, a Section 1256 tax estimate, a
 your notes, tags, and screenshots.
 
 The catch is that there is no catch: **your trade data never leaves your browser.** Everything is
-parsed, computed, and stored locally. No accounts, no uploads, no tracking.
+parsed, computed, and stored locally — no accounts needed for local use. An optional passkey
+account unlocks paid extras, and the only "upload" is opt-in, end-to-end-encrypted cloud sync,
+which sends ciphertext we can't read — never plaintext trades, and never by default.
 
 ## Why Blotterbook
 
@@ -55,7 +57,7 @@ parsed, computed, and stored locally. No accounts, no uploads, no tracking.
 1. **Open the app.** From the homepage, click **Launch Blotterbook** — or run it locally:
 
    ```bash
-   npm install      # one-time: install the pinned deps from the lockfile
+   npm ci           # one-time: install the pinned deps from the lockfile
    npm run dev      # Vite dev server (HMR) — open the printed URL, then /app/app.html
    ```
 
@@ -88,20 +90,24 @@ Your CSV ─▶ parsed & platform-detected in the browser
          ─▶ rendered: cards · equity curve · calendar · cost waterfall · stats
 ```
 
-The only network calls Blotterbook ever makes are for its *own* static reference data
-(broker/fee/tax tables, version + release notes) and a tiny same-host feature-flag/status
-endpoint — never your trades. The full privacy statement is on the **Legal** page (`legal.html`).
+Compute stays 100% local on every tier; the moat is refined, not absolute. Blotterbook's network
+calls are its *own* static reference data (broker/fee/tax tables, version + release notes), a tiny
+same-host feature-flag/status endpoint, and — only if you create an account — the account endpoints
+(`/api/account/*`, `/api/me`) for sign-in and storage-tier lookup. The one opt-in exception is cloud
+sync: a `cloud`-tier user who turns it on for a workspace sends only **end-to-end-encrypted
+ciphertext the server cannot decrypt** — never a plaintext trade field, and never unless you opt in.
+The full privacy statement is on the **Legal** page (`legal.html`).
 
 ## Pricing
 
 An **Obsidian-style** model: the app is **free for everyone** and stays free. Support is optional,
-and the only planned paid feature is cross-device sync.
+and the only paid feature is cross-device sync.
 
 | Tier | Price | What | Status |
 | --- | --- | --- | --- |
 | **Blotterbook** | Free | the full app — CSV import, journal, cost/tax model | shipped |
-| **Back the project** | $25 one-time *or* $50/year | optional donation that keeps it free & funds features | planned |
-| **Synced workspaces** | ~$5/mo | end-to-end-encrypted cross-device sync of trades/notes/tags/filters | planned |
+| **Back the project** | $25 one-time *or* $50/year | optional donation that keeps it free & funds features | shipped |
+| **Synced workspaces** | ~$5/mo | end-to-end-encrypted cross-device sync of trades/notes/tags/filters | shipped |
 
 ## Documentation
 
@@ -121,8 +127,9 @@ Highlights, roughly in priority order (the live version is `roadmap.html`):
   on a schedule from authoritative sources.
 - **Validate & harden the beta adapters** against real exports; widen the futures point-value map.
 - **Journal feature parity** — setups, R-multiple & risk tracking, MAE/MFE.
-- **Accounts + zero-knowledge cross-device sync** — end-to-end-encrypted, so your data moves
-  between devices without us ever seeing it.
+- **A self-serve Help hub** — an Obsidian-style docs/support site that folds in the How-To wiki
+  and adds cloud-sync docs.
+- **A Symbols dashboard** — per-symbol info cards with an expandable detail view.
 
 ## License
 

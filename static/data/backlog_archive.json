@@ -1630,7 +1630,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "From the full-project R1 audit (4 agents; security came back clean — no new items, only the tracked S18/A55 debt). TWO P1 RELEASE BLOCKERS introduced by the A33 deletion, both fixed: (1) scripts/bump-version.mjs syncBakedBadges() read/wrote the deleted partials/app-topbar.html — removed it (version badges are no longer baked into markup; the Svelte app reads /data/versions.json at runtime, so versions.json is the single source); (2) .github/workflows/version-bump.yml `git add` listed the deleted partial + the now-badge-less app HTML — reduced to `git add data/versions.json`, and bumped its node-version 20→22 to match .node-version. Also cheap cleanups: added \"type\":\"module\" to package.json (silences the MODULE_TYPELESS warning; no CJS files), refreshed the stale vite.config comment, gave ActivityTerminal stable per-line keys (was index-keyed ring buffer), and switched EquityCurve's `enabled` to $derived.by (no double-filter). build/npm test (34)/e2e (14) green."
     },
     {
@@ -1642,7 +1641,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": true,
-      "prompt": null,
       "doneNote": "Removed the exports orphaned by the A33 vanilla deletion: SVGNS, the DOM helpers $/on (a dead pair), feedName, and the DOM-input cost helpers curBroker/numIn/feedCost/stateRate/blendedRate. Simplified costModel(m, inputs) to inputs-only (dropped the legacy no-inputs DOM-fallback branch — verified all 3 callers pass inputs and no test uses the bare form). Kept rateFor/tierOf/exchOf (used by curveseries) + blendedRateFor. build/typecheck/34 unit/14 e2e green (cost-panel takehome + $/RT unchanged). REMAINING (low priority, left open): the isoWeek DST/year-boundary robustness tweak (verbatim/pre-existing behavior) and the 2-use sortedStates/HH:MM-slice dedup (only worth extracting on a 3rd use) — keep for the A30 reorg."
     },
     {
@@ -1654,7 +1652,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "S18 complete — _headers CSP flipped to style-src 'self' (dropped 'unsafe-inline'). (1) Added app/staging-svelte/actions.js with a styleProps use:action that applies dynamic styles via element.style.setProperty() (CSSOM — NOT gated by style-src); converted EquityCurve (--sw swatch + fill end-label) and StatCardModal (.seg flex/background + two .fill width/background) to it. (2) report.js reportHtmlDoc now returns {html, css} with NO inline <style>; ExportReport.svelte injects the CSS via a constructable stylesheet (adoptedStyleSheets) on iframe load, and the PNG/JPEG rasterizer embeds the same CSS string in its SVG foreignObject (image context, not page style-src). (3) Extracted the static inline <style> blocks on the marketing/admin pages into linked CSS — index.html→home.css (NEW), admin.html→admin.css (NEW); the few remaining style= attrs (soon-badge, year amount, admin dots, howto narrow field) became utility classes in home.css/admin.css/site.css. (4) Flipped _headers to style-src 'self' and updated its comment block. Verified: built dist HTML has ZERO inline <style>/style= (grep), and a Playwright CSP-injection check (route adds the prod CSP header, listens for securitypolicyviolation) across index/admin/howto/app/demo/staging — exercising the styleProps overlays, stat-card modal, and export-report iframe — reported NONE. build + npm test (lint/typecheck/format/unit 34) + e2e (14) + drift gate all green. — A128 CLARIFICATION (2026-06-30): the Tailwind v4 + shadcn-svelte/bits-ui adoption does NOT weaken this. Tailwind emits a single linked stylesheet of utility CLASSES (class=\"bg-accent\"), never an inline style=\"\" attribute, so style-src 'self' still holds; bits-ui/Floating-UI positions popovers/menus by setting element.style in JS (CSSOM — the same mechanism as styleProps, NOT gated by style-src). The S18 invariant is unchanged: no literal style=\"\" attribute in markup (utilities/styleProps do dynamic styling). The CSP-injection e2e check still passes across every surface."
     },
     {
@@ -1666,7 +1663,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Swept every doc for stale vanilla-architecture references. CLAUDE.md: data-flow render*()->Svelte; replaced the globals/event-bus block with the runes+context('bb:store') model; 'Adding things' promotion->'a new feature' (all surfaces share one SPA); Deployment now 'npm run build'->dist/; build-includes note (info-page nav/footer only); the 'A27 not yet started' line ->A33 done; added home.css/admin.css to the repo layout. docs/architecture.md: rewrote the ESM/state.js/widgets narrative as the Svelte SPA section (kept a short history note); 'two things from partials'->one (app-*.html deleted); heading 'no bundler' dropped; A18 'build step violates pillar 2'->build step adopted via dist/; design-pillar 'public/ split'->dist/; Promoting-a-feature section -> 'Building a feature' + TOC + CLAUDE.md anchor; version-bump path text + runtime-fetch fallback (app-topbar gone) + app/app.css refs fixed. docs/adr-001: marked Phase 4c COMPLETE (A33; S18 via A55) + A33 spawned-item done. staging.html header comment refreshed (was 'app/demo still vanilla / migration in progress'). bump-version.mjs/test-version.mjs comments+fixtures de-referenced from deleted files (render.js/widgets.js/app-dash.html/app.css). README.md was already clean (product copy only). All remaining deleted-file mentions are intentional past-tense history. Spun off A59 for the version-classifier correctness bug found mid-sweep."
     },
     {
@@ -1678,7 +1674,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Added DayTrades.svelte — a read-only intraday trade table (Time/Symbol/Side/P&L + 'N · net' header) rendered in the cal panel's extra snippet alongside JournalEditor on day-select. Built from App's active-filtered trades for selectedDate (dayTrades derived), shows 'No trades on this day (with the active filters)' when empty. e2e asserts the table + net on a traded day."
     },
     {
@@ -1690,7 +1685,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Pinned overflow-x:hidden + max-width:100% on :global(html) AND :global(body) so the viewport scroller can't scroll sideways (overflow on body alone wasn't propagating); the wide 8-col calendar now scrolls within its own panel under @media(max-width:620px) (.calendar overflow-x:auto + .calgrid min-width:520px); #sv-app padding tightened under 560px; manage-data table already scrolls in its wrap. e2e (390px viewport) asserts body overflowX hidden, window.scrollX stays 0, and the calendar is its own scroll container."
     },
     {
@@ -1702,7 +1696,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Added the Overview stats grid to the Svelte manage-data modal (parity with vanilla #dm_summary): Trades, Date range, Day notes, Tagged trades, and approximate Local size (Blob of exportAll). e2e asserts the 5 stat cells."
     },
     {
@@ -1714,7 +1707,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Added a Saved-filters section to the Svelte manage-data modal with Apply / Rename / Delete per view (parity with vanilla #dm_filters). Introduced renameView in App (persists the {id,name,f} shape via Store meta) — rename previously didn't exist anywhere in the Svelte app. Apply closes the modal. e2e covers rename."
     },
     {
@@ -1726,7 +1718,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Added hover title tooltips to interactive controls that had only aria-label (Panel collapse chevron, calendar prev/next/Latest) for discoverability parity with vanilla."
     },
     {
@@ -1738,7 +1729,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Added a shared modal a11y action (app/staging-svelte/modal.js): Escape-to-close, Tab/Shift+Tab focus trap with initial focus (B9), focus restore on close, and a ref-counted body scroll-lock (B36). Applied via use:modal to StatCardModal/ExportReport/ManageData (ManageData's Escape still cancels an open per-trade editor first). e2e asserts the scroll-lock + Escape-close on the Net modal."
     },
     {
@@ -1750,7 +1740,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Rewrote EquityCurve onto a measured-width viewBox (bind:clientWidth, like vanilla) so SVG text isn't stretched, and added axis furniture: horizontal gridlines + y-axis $ tick labels, x-axis date labels, and per-series end-of-line value labels + dots, with nice-tick domain framing. niceTicks/axMoney moved to core.js (shared with render.js). All interactivity preserved (overlays/cursor/note-dots/drawdown band/keyboard). e2e asserts a y-tick label + an end label."
     },
     {
@@ -1762,7 +1751,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Calendar day cells now show 'N tr · X%' (trade count + win rate) beneath the P&L, derived from m.days (wins/trades). e2e asserts a traded cell's .dmeta."
     },
     {
@@ -1774,7 +1762,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Added a per-trade Delete control to ManageData → store.deleteTrade(id) + deleteTradeMeta(id) behind a confirm (B40 — meta not orphaned), emits trade:deleted (now logged in the activity terminal), then reloadAll. e2e asserts the table row count drops by one."
     },
     {
@@ -1786,7 +1773,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Stat-card modal fidelity: the Win card gains the proportional wins/losses/scratch split bar; the PnL-by-weekday chart now includes per-day trade counts and shows all active weekdays (incl. weekends); the Profit-Factor 'By symbol' view is now a Symbol|Trades|PF|Net table (cmSymPf parity). e2e asserts the split bar + the by-symbol table."
     },
     {
@@ -1798,7 +1784,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "AdvancedStats adds the conditional 'Avg hold time' row (fmtDur · held/n) computed from m.trades[].holdMs — shown only for fills-based exports that carry hold durations, hidden for close-event exports (TradingView/demo). fmtDur moved to core.js (shared with render.js)."
     },
     {
@@ -1810,7 +1795,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Cost panel per-symbol table adds the $/RT (round-turn = 2x per-side) column and a conditional unknown-fee note ('Add the symbol to data/exchange-fees.json for an exact figure.') shown when any symbol is priced with a fallback exchange fee. e2e asserts the $/RT header."
     },
     {
@@ -1822,7 +1806,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Session pill is now a button that opens a status-legend popup (Online/Offline/Degraded) with aria-haspopup/aria-expanded + outside-click close; App.reloadAll() now also refreshes savedFilters (a backup-restore updates saved views); JournalEditor shows a 'read-only in demo' note and disables its controls under PAGE_MODE==='demo'. e2e asserts the pill popup opens."
     },
     {
@@ -1834,7 +1817,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Added the Avg Win/Loss headline card to the Svelte Overview (value ratio(m.wl), sub avgW/avgL) and a 'wl' branch to StatCardModal — avg win/loss/ratio stats + win & loss distribution histograms (hist()), mirroring vanilla CARD_VIEWS.wl; added 'wl' to MODAL_KEYS. Pure metrics (m.wl/avgW/avgL/pnls) reused verbatim (A29). e2e asserts the card renders and its modal opens with the distribution."
     },
     {
@@ -1846,7 +1828,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Rebuilt CalendarMonth's grid as a 6-row Sunday-first sweep (buildWeeks) mirroring vanilla render.js: each row gets a leading .wkcell with ISO week no. (shared isoWeek, moved to core.js) + weekly P&L (.wkpnl pos/neg) + traded-day count. Grid is now 8-col (52px Week + 7 days); off-month days render as empty cells; rows past the month stop (w>0 && !monthHit). monthNet sums the weekly totals. Pure presentation of m.days (A29). e2e asserts a week cell renders its 'Wk N'."
     },
     {
@@ -1858,8 +1839,7 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": true,
-      "doneNote": null,
-      "prompt": null
+      "doneNote": null
     },
     {
       "completedDate": "2026-06-28",
@@ -1870,8 +1850,7 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P2",
       "effort": "large",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -1882,8 +1861,7 @@
       "category": "FEATURES",
       "priority": "P2",
       "effort": "large",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -1894,8 +1872,7 @@
       "category": "FEATURES",
       "priority": "P2",
       "effort": "large",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "id": "A59",
@@ -1906,7 +1883,6 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": false,
-      "prompt": null,
       "doneNote": "Found during the A56 docs sweep: scripts/bump-version.mjs isProdShipping() matched only /^app\\/[^/]+\\.js$/ — files directly under app/ — so the A33 cutover (the actual app moved into app/staging-svelte/) left a release-pipeline regression: a `feat:` to any .svelte component or app/staging-svelte/*.js bumped NEITHER track. Fixed the regex to /^app\\/.*\\.(?:js|svelte)$/ (nested-aware; covers the pure-logic core AND the Svelte SPA). Also: removed the dead `app/app.css` special-case (app.css was deleted in A33 — CSS is component-scoped/Vite-extracted now) and added the new homepage CSS `home.css` to PROD_ONLY (it's homepage-only, like site.css — was bumping nothing). Refreshed the stale STAGING_ONLY comment (cited the deleted app/staging.js->app/widgets.js rename). test-version.mjs fixtures updated to real current files + new assertions: Svelte SPA modules are prod (both tracks), home.css is prod-only. lint/typecheck/unit/e2e green."
     },
     {
@@ -1918,8 +1894,7 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P2",
       "effort": "large",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -1930,8 +1905,7 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P2",
       "effort": "large",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -1942,8 +1916,7 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P2",
       "effort": "large",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -1954,8 +1927,7 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P2",
       "effort": "large",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -1966,8 +1938,7 @@
       "category": "FEATURES",
       "priority": "P2",
       "effort": "large",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -1978,8 +1949,7 @@
       "category": "FEATURES",
       "priority": "P2",
       "effort": "large",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -1990,8 +1960,7 @@
       "category": "FEATURES",
       "priority": "P3",
       "effort": "medium",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -2002,8 +1971,7 @@
       "category": "FEATURES",
       "priority": "P3",
       "effort": "medium",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -2014,8 +1982,7 @@
       "category": "REVIEW / AUDIT",
       "priority": "P3",
       "effort": "medium",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -2026,8 +1993,7 @@
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P3",
       "effort": "medium",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -2038,8 +2004,7 @@
       "category": "REVIEW / AUDIT",
       "priority": "P3",
       "effort": "medium",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -2050,8 +2015,7 @@
       "category": "CHORE / REFACTOR",
       "priority": "P2",
       "effort": "small",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "completedDate": "2026-06-28",
@@ -2062,8 +2026,7 @@
       "category": "CHORE / REFACTOR",
       "priority": "P3",
       "effort": "small",
-      "status": "done",
-      "prompt": null
+      "status": "done"
     },
     {
       "id": "A18",
@@ -2834,6 +2797,17 @@
       "completedDate": "2026-06-29",
       "partial": false,
       "doneNote": "(1) Extracted a shared Caveats.svelte component — the 'Assumptions & caveats' <details> block (summary + ul + the li/b/em/i styling) lives once now; AdvancedStats.svelte + CostPanel.svelte render <Caveats>{li bullets}</Caveats> and dropped their duplicate ~25-line .caveats CSS. The bullets pass as the children snippet (the caller's scope), so their li/b/em/i styling uses :global scoped under the Caveats-owned .caveats/ul — CSP-clean (no inline styles), verified identical rendering (li=--dim 12px, b=--txt, em/i italic). (2) Button-idiom DECISION: KEEP the scoped repetition — do NOT introduce a Button.svelte primitive now. Rationale: the ~6-8 'secondary control' buttons vary (size/padding; donate/accent vs panel2-secondary tones), so a shared component needs a variant API that outweighs the small per-site duplication; refactoring 8 call sites across 5 components is disproportionate churn/risk for a P3 cleanup; and A104 favors colocated scoped CSS over utility/global classes (a global .btn utility would contradict it). A Button primitive earns its weight better as the UI grows (e.g. alongside the F29 resizable-grid work) — left for then. (3) Fixed the stale tokens.css header comment (referenced site.css / app.css / the 'bespoke homepage index.html', all retired by A69/A30) to describe the current reality. npm test + 45 e2e green; bundle 175.8/200 KiB."
+    },
+    {
+      "id": "F29",
+      "title": "(staging) Resizable tiling dashboard grid — phase 1: column width + snap",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "Superseded by A271 (which expands/supersedes F29 phase-1). Phase-1 resizable width+snap+persist shipped on the Dashboard via src/app/lib/modlayout.ts + the 12-track grid + the staging-gated corner drag handle; the retired STAGING_PAGE/F26-parallel-grid scaffolding this prompt referenced is gone. Phase-2 (height/2-D placement) lives on in A271's remaining scope + docs/grid-eval-r20.md."
     },
     {
       "id": "F31",
@@ -4882,6 +4856,17 @@
       "doneNote": "DONE (2026-07-07, #119) — Server-side cloud-tier entitlement gate (402) + storage quota on the mutating /api/sync routes. Client-side tier gate + subscribe CTA in #121."
     },
     {
+      "id": "A254",
+      "title": "Sync: purge resurrection — subscribe controller to erase + reset sync cursors on CloudStore.purge()",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": true,
+      "doneNote": "Shipped two of three parts; the third was descoped by owner decision. (1) Client resurrection fix (#119): purging a synced workspace disables its sync + resets its cursor/watermark so a reconcile can't resurrect. (2) Server erase (2026-07-07): a session-authed, owner-only POST /api/sync/delete deletes the workspace's sync_records rows + R2 ciphertext blobs (paged within the A15 subrequest budget) then drops the wrapped-DEK + registry shell; the cloudsync controller's onErased propagates a local purge to it best-effort; never paywalled; verified by scripts/test-sync.mjs. (3) Cross-device auto-drop: DROPPED (owner decision 2026-07-07) after the design correction showed the only sound path is client-driven tombstone-then-wipe (the server cannot mint tombstones under zero-knowledge, and a vanished-workspace-wipes-local handler is unsafe for the local-first moat) — the accepted, documented limitation: a second device keeps its local copy until it reconciles (its next listWorkspaces omits the deleted workspace and its pull 404s, so the stale copy persists locally but never re-uploads). Limitation documented in docs/synced-workspaces.md."
+    },
+    {
       "id": "A255",
       "title": "Sync: make trade tombstone suppression LWW-consistent with journal/trademeta/meta (convergence)",
       "category": "FIXES",
@@ -5034,6 +5019,28 @@
       "completedDate": "2026-07-07",
       "partial": false,
       "doneNote": "DONE (2026-07-07, #119) — Composite ${type}:${id} tombstone key so a trade and its trademeta no longer collide (edited-trade deletes now propagate)."
+    },
+    {
+      "id": "A272",
+      "title": "(gated by A271) Calendar-screen module dynamically fills the viewport (reduce negative space)",
+      "category": "LAYOUT (web vs mobile)",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-07 alongside the A271 screens slice. The Calendar screen's month grid now dynamically fills the viewport (its permanent Large state in the sizing model) instead of leaving negative space: on lg+ the month Card carries a class-based lg:min-h-[70vh] and its day-cell grid becomes flex-1 with grid-template-rows auto + N×minmax(0,1fr) (N = the month's 4/5/6 weeks, literal classes so the Tailwind JIT emits them), so day cells reflow taller to consume the space while keeping numbers legible and undistorted. Static CSS = no layout shift on load; CSP-clean (no inline style); lg-gated so mobile keeps its A182 square single-column cells and the year heatmap is unaffected. Covered by a new e2e assert (Calendar month-fill class); full suite 105 green."
+    },
+    {
+      "id": "A279",
+      "title": "Rework Cloud Sync UX — replace lock/unlock with sync-now + a parity status pill; clarify passkey vs passphrase (ref Obsidian)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": false,
+      "doneNote": "Shipped 2026-07-07 (design note docs/cloud-sync-ux-a279.md) and promoted to prod with the CH16 cloud-sync GA the same day. SyncStatusPill.svelte — one shared parity pill (off / needs-unlock / offline / syncing / pending / synced / error) via syncPillState(); the engine (cloudsync.svelte.ts) gained pending tracking, runSync direction ('both'|'pull'|'push') + forceFullPush, and pullFromCloud()/pushToCloud()/pauseCloudSync(); explicit direction is honest LWW ('the newest edit of each record wins' — no destructive force-override); WorkspaceSwitcher trimmed to pill + 'Sync now'; the Account cloud-sync card gained pill + Sync now + Pull/Push/Pause + the 'How sign-in and encryption relate' explainer (passkey signs in; passphrase/recovery unlocks E2E encryption; a PRF passkey does both); UnlockModal reframed 'Unlock encryption'. e2e updated, full suite 101 green; A299/A306 (archived) subsequently made status/pending/error per-workspace and fixed the error copy. OWNER SIGN-OFF 2026-07-07: reviewed visually — intuitive and unobtrusive, approved. The deliberately-deferred server-side 'behind' probe (the focus/online/unlock pull auto-resolves a behind cloud) remains an optional future follow-up."
     },
     {
       "id": "A280",
@@ -5386,6 +5393,17 @@
       "completedDate": "2026-07-07",
       "partial": false,
       "doneNote": "DONE (2026-07-07). resetIfStaleGap forces a full re-push + re-pull when the persisted last-sync gap exceeds the 90-day tombstone TTL (long-offline convergence), and onServerCopyGone treats a 404 on an enabled workspace as server-copy-gone — auto-disable, drop the cached key + cursors, and surface a serverGone message with a re-enable affordance."
+    },
+    {
+      "id": "A310",
+      "title": "Auth hardening batch: UV on the PRF path, unverified-email squatting, register races, destroySession-by-id",
+      "category": "SECURITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-07",
+      "partial": true,
+      "doneNote": "SHELVED (2026-07-07). Sub-parts (1) UV-on-enroll (+ per-credential user_verified), (3) register-race ON CONFLICT → clean 409, and (4) the destroySession-by-id revocation-only decision shipped in the A297–A314 batch. The one remaining sub-part — (2) unverified-email account squatting — is DEFERRED: it will be folded into a broader sign-up-flow + email-verification item later, not picked up standalone."
     },
     {
       "id": "A311",

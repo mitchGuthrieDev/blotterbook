@@ -173,6 +173,21 @@
     return rows;
   });
 
+  // ── A272: the month grid FILLS the viewport (its permanent "Large" state in the A271 sizing model —
+  // Calendar is a single dominant module, so sizing reduces to this fill). On lg+ the month Card is a
+  // flex column with a viewport-based min-height and the week rows share the remaining height
+  // (grid-template-rows: auto + N×1fr), so day cells reflow taller to consume the negative space
+  // instead of leaving it blank; the numbers keep their size (no distortion, no layout shift on load
+  // since it's static CSS). Class-based (no inline style — CSP/A55), and lg-only so mobile keeps its
+  // square, single-column stacked cells (A182 unchanged). N ∈ {4,5,6} weeks; literal strings so the
+  // Tailwind JIT emits them. ──
+  const ROWS_CLASS: Record<number, string> = {
+    4: 'lg:grid-rows-[auto_repeat(4,minmax(0,1fr))]',
+    5: 'lg:grid-rows-[auto_repeat(5,minmax(0,1fr))]',
+    6: 'lg:grid-rows-[auto_repeat(6,minmax(0,1fr))]',
+  };
+  const rowsClass = $derived(ROWS_CLASS[weeks.length] ?? ROWS_CLASS[6]);
+
   // ── Month summary stats. ─────────────────────────────────────────────────────────────────────
   const traded = $derived(
     Object.entries(monthDays)
@@ -348,12 +363,20 @@
     <!-- Left: grid / heatmap -->
     <div class="min-w-0 flex-1">
       {#if view === 'month'}
-        <Card.Root class="p-3">
+        <!-- A272: min-h-[70vh] + flex-col (Card is already flex-col) makes the month fill the viewport;
+             the grid below is flex-1 so its 1fr week-rows consume the height. -->
+        <Card.Root class="p-3 lg:min-h-[70vh]">
           <!-- A182: minmax(0,1fr) columns + min-w-0/overflow-hidden cells keep the month inside the
                card at mobile widths (no right-edge clipping, no horizontal scroll); the Week summary
                column is desktop-only (it would eat a day column's width on a phone). Day cells are
-               square on mobile and the P&L truncates instead of escaping the border. -->
-          <div class="grid grid-cols-[repeat(7,minmax(0,1fr))] gap-1 sm:grid-cols-[56px_repeat(7,minmax(0,1fr))] sm:gap-1.5">
+               square on mobile and the P&L truncates instead of escaping the border. A272: on lg+ the
+               grid grows (flex-1) and its rows share the height (rowsClass) so cells reflow to fill. -->
+          <div
+            class={cn(
+              'grid grid-cols-[repeat(7,minmax(0,1fr))] gap-1 sm:grid-cols-[56px_repeat(7,minmax(0,1fr))] sm:gap-1.5 lg:min-h-0 lg:flex-1',
+              rowsClass
+            )}
+          >
             <span class="hidden pb-1 text-[11px] text-muted-foreground sm:block">Week</span>
             {#each DOW_LABEL as d (d)}<span class="pb-1 text-center text-[11px] text-muted-foreground">{d}</span>{/each}
             {#each weeks as w, wi (wi)}

@@ -9,18 +9,32 @@ name: Changelog email
 # itself is idempotent server-side (the changelog_sends ledger), so a duplicate/re-run never
 # double-mails a version.
 #
-# CONFIG (owner-gated): set two repo secrets — CHANGELOG_NOTIFY_URL (the deployed origin, e.g.
-# https://blotterbook.com) and CHANGELOG_NOTIFY_SECRET (matching the Pages env var of the same name).
-# When either is unset the job no-ops cleanly, so forks / unconfigured repos never fail.
+# CONFIG (owner-gated, A315 — REQUIRED before this job can send):
+#   Repo secrets (Settings → Secrets and variables → Actions):
+#     - CHANGELOG_NOTIFY_URL     the origin this job POSTs to. MUST be the canonical
+#                                `https://<project>.pages.dev` origin, NOT https://blotterbook.com.
+#                                Find the exact pages.dev hostname on the Pages project's dashboard
+#                                (Custom domains tab lists it alongside blotterbook.com).
+#     - CHANGELOG_NOTIFY_SECRET  matches the Pages env var of the same name (below).
+#   When either secret is unset the job no-ops cleanly, so forks / unconfigured repos never fail.
 #
-# CLOUDFLARE (owner-gated, one-time): the origin sits behind Cloudflare, whose Bot Fight Mode / Managed
-# Challenge answers this runner's request with a "Just a moment…" interstitial (HTTP 403) instead of
-# reaching the Function — a JS challenge curl can't solve. Add a WAF custom rule to let the send through:
-#   When incoming requests match…
-#     (http.request.uri.path eq "/api/notify-changelog" and http.request.headers["x-changelog-secret"] ne "")
-#   Then… Skip → Managed Challenge / Bot Fight Mode / Security Level.
-# The shared secret still authenticates the request server-side, so the skip only widens who may *reach*
-# the endpoint, not who may act. If the challenge ever returns, the job below fails fast with this fix.
+#   Cloudflare Pages env vars (Pages project → Settings → Environment variables, Production):
+#     - CHANGELOG_NOTIFY_SECRET  same value as the repo secret above (constant-time compared, S22).
+#     - PUBLIC_ORIGIN            `https://blotterbook.com`. Required so /api/notify-changelog builds
+#                                user-facing links (the unsubscribe URL) off the branded domain even
+#                                though this job invokes it at the pages.dev origin — see
+#                                functions/api/notify-changelog.ts. Omitted → those links fall back to
+#                                whatever origin the job hit, i.e. the pages.dev host would leak into a
+#                                subscriber's inbox.
+#
+# WHY pages.dev, not blotterbook.com (A315 decision): blotterbook.com sits behind Cloudflare, whose
+# Bot Fight Mode / Managed Challenge on that custom-domain zone answers this runner's request with a
+# "Just a moment…" interstitial (HTTP 403) instead of reaching the Function — a JS challenge curl can't
+# solve, and the free plan can't scope a WAF skip rule around plain Bot Fight Mode (that needs the paid
+# Super Bot Fight Mode). The bare `<project>.pages.dev` hostname is Cloudflare's OWN zone (not the
+# customer's), so Bot Fight Mode / Security Level on the custom domain don't apply there — the runner
+# reaches the Function directly, no bypass needed. Compute/data guardrails are unaffected: this job only
+# ever sends changelog TEXT (A141), never trade data, over either origin.
 
 on:
   push:
@@ -65,13 +79,14 @@ jobs:
           fi
 
           BASE="${NOTIFY_URL%/}"
-          # A browser-ish UA so plain Bot-Fight (UA-keyed) heuristics don't reflexively challenge the runner;
-          # the WAF skip rule (see header) is what reliably lets the secret-bearing POST through.
+          # A browser-ish UA as defense-in-depth; the real fix is routing at the pages.dev origin (see
+          # header CONFIG) — that hostname isn't governed by the custom domain's Bot Fight Mode at all.
           UA="Mozilla/5.0 (compatible; BlotterbookChangelogBot/1.0; +https://blotterbook.com)"
 
           # One authenticated path does both jobs: it waits out the Cloudflare Pages deploy (the Function
           # answers 425 while it still serves the previous release) and performs the idempotent send. No
-          # separate static-file poll — that GET carried no secret, so the WAF skip couldn't cover it.
+          # separate static-file poll — routing at the pages.dev origin (see header CONFIG) is what lets
+          # this reach the Function at all; the deploy-freshness gate just avoids a stale-version send.
           for attempt in $(seq 1 20); do
             : > /tmp/notify-body.txt
             HTTP_CODE="$(curl -sS -o /tmp/notify-body.txt -w '%{http_code}' \
@@ -83,8 +98,8 @@ jobs:
             # A Cloudflare challenge means the request never reached our Function — retrying won't help.
             if grep -qiE "Just a moment|challenge-platform|__cf_chl|Enable JavaScript and cookies" /tmp/notify-body.txt; then
               echo "::error::Cloudflare served a bot challenge (HTTP ${HTTP_CODE}) — the request never reached /api/notify-changelog."
-              echo "::error::Add a WAF skip rule (see this workflow's header): Skip Managed Challenge/Bot Fight Mode when"
-              echo "::error::  http.request.uri.path eq \"/api/notify-changelog\" and http.request.headers[\"x-changelog-secret\"] ne \"\""
+              echo "::error::CHANGELOG_NOTIFY_URL must be the bare https://<project>.pages.dev origin, not blotterbook.com — see"
+              echo "::error::this workflow's header CONFIG comment for the exact secrets/env vars required."
               echo "----- response body (truncated) -----"; head -c 800 /tmp/notify-body.txt; echo; echo "-------------------------------------"
               exit 1
             fi

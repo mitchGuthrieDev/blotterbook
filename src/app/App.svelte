@@ -42,7 +42,7 @@
   import { fade } from 'svelte/transition';
   import { dur } from './lib/motion.ts';
   import Dashboard, { type DashStat, type DayCell, type StatDetail, type FilterModel, type FilterPatch } from './screens/Dashboard.svelte';
-  import { migrateLayout, defaultLayout, type ModEntry } from './lib/modlayout.ts';
+  import { migrateLayout, defaultLayout, analyticsKit, type ModEntry } from './lib/modlayout.ts';
   // The non-default screens are CODE-SPLIT: type-only static imports (erased at build) + lazy
   // `import()` loaders in the router below, so their chunks stay out of the /app first paint
   // (A96 budget). Dashboard stays static — it's the boot screen (and exports DEFAULT_MODULE_KEYS).
@@ -203,6 +203,19 @@
   function saveCalTarget(v: number) {
     calTarget = v;
     store.local.set(CAL_TARGET_KEY, v);
+  }
+
+  // A271 slice: the Analytics screen's per-module size layout — persisted to the Store.local seam
+  // (per-surface namespaced key), read through the analyticsKit lossless migration (a v1 bare-key
+  // string[] or a v2 {key,size}[] both upgrade). Analytics has no tabs/staged-save, so a size change
+  // persists immediately (unlike the Dashboard's dirty-asterisk model). On demo the in-memory
+  // DemoStore.local means edits work but never persist across reloads — correct (a UI pref, not trade
+  // data), and no isDemo guard is needed (DemoStore.local.set is a no-op by construction).
+  const ANALYTICS_MOD_KEY = isStaging ? 'bb:staging:analyticsModules' : 'bb:analyticsModules';
+  let analyticsModules = $state<ModEntry[] | undefined>(analyticsKit.migrateLayout(store.local.get(ANALYTICS_MOD_KEY))?.mods);
+  function saveAnalyticsModules(mods: ModEntry[]) {
+    analyticsModules = mods;
+    store.local.set(ANALYTICS_MOD_KEY, { v: 2, mods });
   }
   const dashLayouts = $derived({
     names: Object.keys(wsTemplates),
@@ -1230,6 +1243,9 @@
             untagged={analytics.untagged}
             statRows={analytics.statRows}
             {filterModel}
+            {isStaging}
+            modules={analyticsModules}
+            onmoduleschange={saveAnalyticsModules}
             holdCoverage={analytics.holdCoverage}
             bucketTrades={(lo, hi) =>
               dash.metricsActive.trades
