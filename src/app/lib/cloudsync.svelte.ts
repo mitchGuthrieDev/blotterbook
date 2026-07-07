@@ -81,6 +81,38 @@ let dashRef: { reload(): Promise<void> } | null = null;
 const sessions = new Map<string, WsKeys>(); // wsId → { recordKey, blindKey } — dropped on lock
 const reconciled = new Set<string>(); // wsIds that have had their FULL since=0 reconcile this session
 
+/* ── A299: PER-WORKSPACE sync state — pending/error/in-flight are scoped by workspace id (like
+ * `sessions`), so a workspace switch can't carry the previous workspace's flags. `cloudSync.pending/
+ * error/status` are the MIRROR of whichever workspace is active — refreshSyncStatus re-projects the
+ * active id's maps onto them. A background run for a NON-active workspace updates only its map entry
+ * (not the mirror), and `runningByWs` — cleared when EVERY run settles, even on abort — lets a
+ * re-derive show 'syncing' only while a run is genuinely in flight (no stranded spinner after a
+ * mid-sync switch). */
+const pendingByWs = new Map<string, boolean>(); // wsId → local edits owed to the cloud (un-pushed)
+const errorByWs = new Map<string, string>(); // wsId → last actionable sync error ('' = none)
+const runningByWs = new Set<string>(); // wsIds with a sync/push run in flight right now
+
+function setPending(id: string, v: boolean): void {
+  if (v) pendingByWs.set(id, true);
+  else pendingByWs.delete(id);
+  if (id === activeId()) cloudSync.pending = v;
+}
+function setError(id: string, msg: string): void {
+  if (msg) errorByWs.set(id, msg);
+  else errorByWs.delete(id);
+  if (id === activeId()) cloudSync.error = msg;
+}
+/** Mirror a workspace's transient status onto the reactive pill ONLY while it is the active one. */
+function setStatus(id: string, s: SyncStatus): void {
+  if (id === activeId()) cloudSync.status = s;
+}
+/** Drop every per-workspace flag for a workspace (opt-out / pause / erase). */
+function clearWsState(id: string): void {
+  pendingByWs.delete(id);
+  errorByWs.delete(id);
+  runningByWs.delete(id);
+}
+
 /* ── A251: workspace-switch barrier — a switch must NEVER read/write one workspace's records under
  * another's identity. TWO layers: (a) `cancelActiveSync()` (awaited by dashboard.switchWorkspace /
  * removeWorkspace BEFORE `store.setActiveWorkspace`) aborts + awaits the in-flight op so the active
@@ -228,6 +260,7 @@ function onErased(): void {
   localStore.local.remove(pushedKey(id));
   sessions.delete(id);
   reconciled.delete(id);
+  clearWsState(id); // A299: drop this workspace's pending/error/in-flight flags
   refreshSyncStatus();
   if (wasEnabled) void eraseServerCopy(id);
 }
@@ -248,16 +281,25 @@ async function eraseServerCopy(id: string): Promise<void> {
 
 /* ── status ────────────────────────────────────────────────────────────────────────────────────── */
 
-/** Recompute the active workspace's status. When enabled + online + unlocked but no key session is
- *  loaded yet, kick a full reconcile (the on-unlock / on-switch entry point). */
+/** Recompute the ACTIVE workspace's status and re-project its per-workspace pending/error onto the
+ *  reactive mirror. A299: this FULLY re-derives — a stale `syncing` or `error` from a previous (now
+ *  inactive, possibly aborted) workspace can never leak onto the pill, because pending/error are read
+ *  from the active id's maps and `syncing` is shown only while `runningByWs` holds an in-flight run.
+ *  When enabled + online + unlocked but no key session is loaded yet, kick a full reconcile (the
+ *  on-unlock / on-switch entry point). */
 export function refreshSyncStatus(): void {
   if (!cloudSync.configured || !localStore) return;
   const ws = localStore.activeWorkspace();
-  cloudSync.wsId = ws.id;
+  const id = ws.id;
+  cloudSync.wsId = id;
   cloudSync.wsName = ws.name;
   cloudSync.online = onLine();
   cloudSync.unlocked = getIK() !== null;
-  cloudSync.enabled = isEnabled(ws.id);
+  cloudSync.enabled = isEnabled(id);
+  // A299: mirror the ACTIVE workspace's per-workspace flags (a switch must not carry the previous
+  // workspace's pending/error).
+  cloudSync.pending = pendingByWs.get(id) ?? false;
+  cloudSync.error = errorByWs.get(id) ?? '';
   if (!cloudSync.enabled) {
     cloudSync.status = 'off';
     return;
@@ -273,10 +315,15 @@ export function refreshSyncStatus(): void {
     cloudSync.status = 'locked';
     return;
   }
-  if (!sessions.has(ws.id)) {
-    void syncActiveWorkspace({ full: true });
-  } else if (cloudSync.status === 'off' || cloudSync.status === 'locked' || cloudSync.status === 'offline') {
-    cloudSync.status = 'synced';
+  // Enabled + online + unlocked. Re-derive from scratch (no "upgrade only"): a live error sticks, an
+  // in-flight run is 'syncing', otherwise a loaded key session is 'synced'. No key session yet ⇒ kick
+  // the reconcile (which itself flips to 'syncing').
+  if (errorByWs.get(id)) cloudSync.status = 'error';
+  else if (runningByWs.has(id)) cloudSync.status = 'syncing';
+  else if (sessions.has(id)) cloudSync.status = 'synced';
+  else {
+    cloudSync.status = 'syncing';
+    void syncActiveWorkspace({ full: true }); // no key session yet (fresh switch/unlock) → reconcile
   }
 }
 
@@ -307,12 +354,12 @@ export async function enableCloudSync(): Promise<boolean> {
   if (cloudSync.busy || !localStore) return false;
   const id = activeId();
   cloudSync.busy = true;
-  cloudSync.error = '';
+  setError(id, '');
   try {
     if (cloudSync.tier !== 'cloud') throw new Error('Cloud tier required to sync.');
     const ik = getIK();
     if (!ik) {
-      cloudSync.status = 'locked';
+      setStatus(id, 'locked');
       return false; // caller opens the unlock modal
     }
     const crypto = await import('../../lib/core/crypto.ts');
@@ -340,8 +387,8 @@ export async function enableCloudSync(): Promise<boolean> {
     await runSync({ full: true, id });
     return true;
   } catch (e) {
-    cloudSync.error = messageOf(e);
-    cloudSync.status = 'error';
+    setError(id, messageOf(e));
+    setStatus(id, 'error');
     return false;
   } finally {
     cloudSync.busy = false;
@@ -367,20 +414,21 @@ async function runSync(opts: { full?: boolean; id?: string; direction?: 'both' |
   const run = (async () => {
     if (!getIK()) {
       if (sessions.has(id)) sessions.clear();
-      if (id === activeId()) cloudSync.status = 'locked';
+      setStatus(id, 'locked');
       return;
     }
     if (!onLine()) {
-      if (id === activeId()) cloudSync.status = 'offline';
+      setStatus(id, 'offline');
       return;
     }
     const keys = await ensureKeys(id);
     if (!keys) {
-      if (id === activeId()) cloudSync.status = getIK() ? 'off' : 'locked';
+      setStatus(id, getIK() ? 'off' : 'locked');
       return;
     }
     if (aborted()) return;
-    if (id === activeId()) cloudSync.status = 'syncing';
+    runningByWs.add(id); // A299: mark this workspace's run in flight (cleared in finally, even on abort)
+    setStatus(id, 'syncing');
     try {
       let merged = 0; // record count from the pull (truthy → a merge landed → reload the dashboard)
       if (plan.pull) {
@@ -403,14 +451,19 @@ async function runSync(opts: { full?: boolean; id?: string; direction?: 'both' |
       }
       reconciled.add(id);
       cloudSync.lastPull = Date.now();
-      cloudSync.pending = false; // everything up to this cutoff is now on the server
+      // A299: only a run that actually PUSHED clears "pending upload" — a pull-only run leaves local
+      // edits still owed to the cloud (the A279 regression: this used to clear pending unconditionally).
+      if (plan.push) setPending(id, false);
+      setError(id, ''); // a successful run clears the last error
       if (merged && dashRef && id === activeId()) await dashRef.reload();
-      if (id === activeId()) cloudSync.status = 'synced';
+      setStatus(id, 'synced');
     } catch (e) {
-      if (!aborted() && id === activeId()) {
-        cloudSync.error = messageOf(e);
-        cloudSync.status = 'error';
+      if (!aborted()) {
+        setError(id, messageOf(e));
+        setStatus(id, 'error');
       }
+    } finally {
+      runningByWs.delete(id);
     }
   })();
   inFlight = run.catch(() => {});
@@ -458,7 +511,7 @@ export function pauseCloudSync(): void {
   localStore.local.set(enabledKey(id), false);
   sessions.delete(id);
   reconciled.delete(id);
-  cloudSync.pending = false;
+  clearWsState(id); // A299: drop this workspace's pending/error/in-flight flags
   refreshSyncStatus();
 }
 
@@ -476,7 +529,7 @@ function canSyncActive(): boolean {
  *  touch the net). A279: mark the workspace "pending upload" for the parity pill even when it can't
  *  push right now (offline / locked) — the edit is real and still owed to the cloud. */
 function onLocalWrite(): void {
-  if (localStore && isEnabled(activeId())) cloudSync.pending = true;
+  if (localStore && isEnabled(activeId())) setPending(activeId(), true);
   if (!canSyncActive()) return;
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => void runPush(), DEBOUNCE_MS);
@@ -501,7 +554,8 @@ async function runPush(): Promise<void> {
   const store = localStore;
   const aborted = () => syncGeneration !== gen || store.activeWorkspace().id !== id;
   pushing = true;
-  cloudSync.status = 'syncing';
+  runningByWs.add(id);
+  setStatus(id, 'syncing');
   const run = (async () => {
     try {
       const watermark = Number(store.local.get(pushedKey(id), -1));
@@ -509,13 +563,16 @@ async function runPush(): Promise<void> {
       if (aborted()) return;
       store.local.set(pushedKey(id), newWatermark);
       cloudSync.lastPull = cloudSync.lastPull || 0;
-      cloudSync.pending = false; // the debounced write-behind push reached the server
-      cloudSync.status = 'synced';
+      setPending(id, false); // the debounced write-behind push reached the server
+      setError(id, '');
+      setStatus(id, 'synced');
     } catch (e) {
       if (!aborted()) {
-        cloudSync.error = messageOf(e);
-        cloudSync.status = 'error';
+        setError(id, messageOf(e));
+        setStatus(id, 'error');
       }
+    } finally {
+      runningByWs.delete(id);
     }
   })();
   inFlight = run.catch(() => {});
