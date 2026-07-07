@@ -104,15 +104,23 @@ npm run preview                  # serve the built dist/ locally (production-lik
 
 # Tests / lint (the CI suite — run before pushing)
 npm test                         # = lint + typecheck + format:check + test:unit
-npm run test:unit                # the 9 node suites: adapters / auth / version / flags / tax / demostore / curveandreport / compute / accounts
+npm run test:unit                # the 17 node suites: adapters / auth / version / flags / tax / demostore / workspaces /
+                                  #   curveandreport / compute / accounts / email / econ / crypto / sync / cloudsync /
+                                  #   cloudsync-store / modlayout
 npm run lint                     # ESLint (flat config; .ts skipped — typechecked instead, A79)
 npm run typecheck                # tsc (src/lib/**/*.ts except src/lib/components) + tsc(functions) + svelte-check (src/app + src/site + src/lib/components) — A61
 npm run test:e2e                 # Playwright render tests — BUILDS then serves dist/, boots every surface
 npm run format                   # Prettier
 # (the node suites still run standalone too, e.g. `node scripts/test-adapters.mjs`)
 
+# CI-load-bearing guards (also runnable locally; see .github/workflows/ci.yml)
+npm run size-budget               # scripts/check-bundle-size.mjs — /app/-surface JS budget (A96)
+npm run check-deploy              # scripts/check-deploy-contract.mjs — deploy-contract + version-classification guard (needs a built dist/, A99)
+npm run check-mermaid             # scripts/check-mermaid.mjs — parses every docs/ mermaid block with Mermaid's own parser
+
 # Build sub-step (idempotent; commit its output — it writes a COMMITTED source, not dist/)
-node scripts/build-manifest.mjs  # regenerate static/data/manifest.json content hashes (cache-busting)
+node scripts/build-manifest.mjs      # regenerate static/data/manifest.json content hashes (cache-busting)
+node scripts/build-econ-events.mjs   # regenerate static/data/econ-events.json (curated econ-release calendar, R14/R14a)
 # (build-includes.mjs retired by A69 — the nav/footer partials became Nav/Footer.svelte; the site
 #  pages are prerendered to static HTML at build time by scripts/vite-ssg.mjs. copy-static.mjs retired by A30.)
 ```
@@ -412,10 +420,19 @@ conforms to the rules below; keep it that way.
                         sync_records/sync_wrapped_ik/sync_workspace_keys/sync_workspaces (F62); apply via wrangler
 /scripts/
   build-manifest.mjs    regenerates static/data/manifest.json content hashes
+  build-econ-events.mjs regenerates static/data/econ-events.json — the curated economic-release calendar (R14/R14a)
   bump-version.mjs      two-track version bump from a merge commit (run by CI; classifies src/ + static/ paths)
   vite-ssg.mjs          A69 SSG plugin — server-renders the site components into their templates at build time (A95: moved here from the repo root)
-  check-bundle-size.mjs dev-only /app/-surface JS size budget (840 KiB ceiling as of A223) — fails the build if the app bundle crosses it (A96)
-  test-*.mjs            the CI test suite (adapters / auth / version / flags / tax / demostore / curveandreport / compute / accounts)
+  check-bundle-size.mjs dev-only /app/-surface JS size budget (840 KiB ceiling as of A223) — fails the build if the app bundle crosses it (A96); `npm run size-budget`
+  check-deploy-contract.mjs  A99 deploy-contract + version-classification guard (CI-load-bearing) — every
+                        static/_redirects/sitemap.xml/canonical/robots.txt target resolves in dist/, and
+                        every tracked src/+static/ path is classified by bump-version.mjs; `npm run check-deploy`
+  check-mermaid.mjs     docs-only mermaid drift gate (CI-load-bearing) — parses every ```mermaid fenced block
+                        under docs/ with Mermaid's own parser (reuses the e2e job's Playwright chromium);
+                        `npm run check-mermaid`
+  test-*.mjs            the 17-suite CI test suite (adapters / auth / version / flags / tax / demostore /
+                        workspaces / curveandreport / compute / accounts / email / econ / crypto / sync /
+                        cloudsync / cloudsync-store / modlayout)
 /e2e/                   Playwright render/E2E specs (dev-only — R19 Tier A)
 /dist/                  Vite build output (GITIGNORED) — the artifact Cloudflare Pages serves (A26)
 vite.config.mjs         Vite multi-page build config (root:src, publicDir:static, 10 HTML entries → dist/)
