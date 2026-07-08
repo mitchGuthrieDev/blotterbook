@@ -204,10 +204,7 @@
     onsetupsave?: (s: AppSetup) => void;
     /** Disable the cost-setup inputs on demo (never mutates). */
     costDisabled?: boolean;
-    /** A271 remainder: staging-gates the Small/KPI slice — the KPI-card modules in the picker + the
-     *  'sm' size option. Promote via a CH16 run once proven on staging. */
-    isStaging?: boolean;
-    /** A271 remainder: raw KPI numbers for the Win Rate / Profit Factor / Expectancy card modules. */
+    /** A271: raw KPI numbers for the Win Rate / Profit Factor / Expectancy card modules. */
     kpi?: DashKpi;
     /** Visible dashboard modules — order + per-module size (A271; persisted to Store.local); defaults to all shown. */
     modules?: ModEntry[];
@@ -259,7 +256,6 @@
     setup,
     onsetupsave,
     costDisabled = false,
-    isStaging = false,
     kpi,
     modules,
     onmoduleschange,
@@ -403,16 +399,8 @@
   // svelte-ignore state_referenced_locally — initial layout only; the app re-seeds via the prop below.
   let modOrder = $state<string[]>(keysOfProp(modules));
   let gridEl = $state<HTMLElement>();
-  // A271 remainder: the Small state is staging-gated until a CH16 run promotes it — off staging the
-  // controller sees a kit whose supportedSizes omits 'sm', so the Size menu / arrow keys / drag snap
-  // never offer it. The full dashboardKit (which understands sm) still backs migration/validation
-  // everywhere, so a staging layout carrying sm entries stays intact.
-  // svelte-ignore state_referenced_locally — PAGE_MODE is fixed per surface, so isStaging never changes after mount.
-  const sizeKit = isStaging
-    ? dashboardKit
-    : { ...dashboardKit, supportedSizes: (k: string) => dashboardKit.supportedSizes(k).filter(s => s !== 'sm') };
   // svelte-ignore state_referenced_locally
-  const sizeCtl = createSizeController(sizeKit, {
+  const sizeCtl = createSizeController(dashboardKit, {
     initial: modules,
     order: () => modOrder,
     emit: mods => onmoduleschange?.(mods),
@@ -423,10 +411,7 @@
     // Re-seed from the prop when the app supplies a persisted layout (e.g. on first load after boot).
     if (sizeCtl.reseed(modules)) modOrder = keysOfProp(modules);
   });
-  // A271 remainder: the KPI-card modules ship staging-first — off staging the picker doesn't offer
-  // them (a persisted staging layout can't leak across surfaces; storage is namespaced per surface).
-  const pickerModules = $derived(MODULES.filter(m => isStaging || !KPI_MODULE_KEYS.has(m.key)));
-  const hiddenModules = $derived(pickerModules.filter(m => !modOrder.includes(m.key)));
+  const hiddenModules = $derived(MODULES.filter(m => !modOrder.includes(m.key)));
   const moduleLabel = (key: string) => MODULES.find(m => m.key === key)?.label ?? key;
   function commitModules(order: string[]) {
     modOrder = order;
@@ -1815,7 +1800,7 @@
         <Dialog.Description>Pick the modules to add to this dashboard's layout.</Dialog.Description>
       </Dialog.Header>
       <div class="grid gap-2">
-        {#each pickerModules as m (m.key)}
+        {#each MODULES as m (m.key)}
           {@const onDash = modOrder.includes(m.key)}
           <label
             class={[

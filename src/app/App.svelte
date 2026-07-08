@@ -1208,7 +1208,6 @@
           costDisabled={dash.isDemo}
           modules={dashModules}
           onmoduleschange={dashTabsState.saveModules}
-          {isStaging}
           kpi={dashKpi}
           recentTrades={dash.filtered
             .slice(-12)

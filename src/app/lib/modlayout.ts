@@ -113,7 +113,7 @@ export const DASHBOARD_MODULES: ModDef[] = [
   { key: 'today', label: 'Today / Last Session' }, // F39 — picker-addable, not in the default layout
   { key: 'ddstatus', label: 'Drawdown Status' }, // F39
   { key: 'streak', label: 'Streak Monitor' }, // F39
-  { key: 'winrate', label: 'Win Rate' }, // A271 KPI card — glanceable Small-first; picker-addable (staging-gated in the picker)
+  { key: 'winrate', label: 'Win Rate' }, // A271 KPI card — glanceable Small-first; picker-addable (all surfaces, CH16 2026-07-08)
   { key: 'pfactor', label: 'Profit Factor' }, // A271 KPI card
   { key: 'expect', label: 'Expectancy' }, // A271 KPI card
 ];

@@ -7,9 +7,10 @@
       "version": "0.69.0",
       "date": "2026-07-08",
       "title": "Your account gets a home page, drag-to-resize modules everywhere, and reclaimable emails",
-      "summary": "A dedicated Account page joins the site — sign in, manage your plan, passkeys, and account from one place — the corner drag-resize handle for dashboard and Analytics modules ships on the live app and demo, and a sign-up dead end is gone: an email squatted by a never-verified account can now be reclaimed.",
+      "summary": "A dedicated Account page joins the site, dashboard modules gain a glanceable Small size with three new KPI cards and a space-saving carousel, the corner drag-resize handle ships on the live app and demo, and a sign-up dead end is gone: an email squatted by a never-verified account can now be reclaimed.",
       "highlights": [
         "New Account page: the site header's button now takes you to your account dashboard — sign in or sign up with a passkey, see your plan and supporter status, manage passkeys, start a cloud subscription, and (new) permanently delete your account and all synced data, all without opening the app.",
+        "Modules go glanceable: three new KPI cards — Win Rate, Profit Factor, and Expectancy — join the Add-modules picker, every module that reads well small (Today, Drawdown Status, Streak) gains a compact Small size, and a full row of six Small modules collapses into a swipeable carousel.",
         "Resize modules by dragging: grab the corner handle on any Dashboard or Analytics module and drag to snap it between half and full width — keyboard users can focus the handle and use the arrow keys. The ⋯ menu Size options remain.",
         "Layouts persist per device exactly as before; on the demo surface resizing works but (like everything on demo) is never saved.",
         "Sign-up fix: if someone registered your email but never verified it, creating your account now offers to email you a one-time reclaim link — clicking it releases the address and signs you up with your email already verified.",

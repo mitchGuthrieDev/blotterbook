@@ -389,7 +389,7 @@ conforms to the rules below; keep it that way.
                         (Analytics / Reports view-model builders), econ.svelte.ts (econ-calendar module
                         state, reads static/data/econ-events.json, R14/R14a), modlayout.ts (versioned
                         {key,size}[] per-screen module-layout state via makeLayoutKit — 12-track grid,
-                        A271; incl. the sm-first KPI-card modules + per-key supported sizes, staging-gated),
+                        A271; incl. the sm-first KPI-card modules + per-key supported sizes),
                         modsize.svelte.ts (A319 shared DOM-side size controller behind the
                         ModuleSizeMenu/ModuleResizeHandle parts — size menu + corner drag-resize)
                         + cloud-sync glue (opt-in, cloud-tier): vault.svelte.ts

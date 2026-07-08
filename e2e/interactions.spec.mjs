@@ -208,24 +208,33 @@ test('demo: dashboard tabs render and work in-memory (A135, promoted) — but ne
   await expect(page.getByRole('button', { name: 'New tab 1', exact: true })).toHaveCount(0);
 });
 
-test('demo: the A271 KPI-card modules + the Small size stay staging-gated', async ({ page }) => {
+test('demo: the A271 KPI-card modules + the Small size are promoted (CH16) — render real numbers, never persist', async ({ page }) => {
   test.setTimeout(60_000);
   await bootDashboard(page);
 
-  // The picker doesn't offer the staging-only KPI cards off staging.
+  // The picker offers the KPI cards on every surface now.
   await page.getByRole('button', { name: 'Add modules' }).click();
   const dlg = page.getByRole('dialog');
-  await expect(dlg.locator('label', { hasText: 'Today / Last Session' })).toBeVisible();
   for (const label of ['Win Rate', 'Profit Factor', 'Expectancy']) {
-    await expect(dlg.locator('label', { hasText: label })).toHaveCount(0);
+    await expect(dlg.locator('label', { hasText: label })).toBeVisible();
   }
-
-  // An sm-capable module's Size menu offers no Small off staging (Medium/Large only).
-  await dlg.locator('label', { hasText: 'Today / Last Session' }).locator('input[type=checkbox]').check();
+  await dlg.locator('label', { hasText: 'Win Rate' }).locator('input[type=checkbox]').check();
   await dlg.getByRole('button', { name: /Add module/ }).click();
-  await page.locator('#dashmod-today button[aria-label="Module menu"]').click();
-  await expect(page.getByRole('menuitem', { name: 'Medium' })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Small' })).toHaveCount(0);
+
+  // The card arrives Small (span 2) with a REAL computed headline from the seeded demo data.
+  const wr = page.locator('[data-mod]').filter({ has: page.locator('#dashmod-winrate') });
+  await expect(wr).toHaveClass(/lg:col-span-2/);
+  await expect(page.locator('#dashmod-winrate').getByText(/%$/)).toBeVisible();
+
+  // The Size menu offers Small everywhere now (sm-capable module).
+  await page.locator('#dashmod-winrate button[aria-label="Module menu"]').click();
+  await expect(page.getByRole('menuitem', { name: 'Small' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // Demo invariant: nothing persists — a reload is back to the default layout (no KPI card).
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+  await expect(page.locator('#dashmod-winrate')).toHaveCount(0);
 });
 
 test('demo: corner drag-resize handle is promoted (A271/A319, CH16) — keyboard resize works in-memory, never persists', async ({

@@ -5580,6 +5580,17 @@
       "completedDate": "2026-07-08",
       "partial": false,
       "doneNote": "Shipped 2026-07-08. The marketing-site header CTA (both the Nav.svelte shared header and Home.svelte's own header copy — navlaunch + the right-side cta) now reads Account → /account.html; the hero Launch Blotterbook buttons are untouched. The Account Dashboard is its OWN standalone prerendered site page (owner requirement — not a redirect to the app screen): src/account.html (noindex meta + robots.txt Disallow) + src/site/components/AccountDash.svelte + entries/account.ts, registered in vite.config.mjs (input + SSG_PAGES). One URL serves both states — the page routes itself: logged OUT it renders passkey login / create-account / recover (+ the A316 reclaim affordance); logged IN it renders the dashboard: identity (email/verified badge/resend-verify/member-since/sign-out), plan & billing (tier + Stripe subscribe CTA + supporter badge), cloud-sync status (metadata only — keys/workspace management link into the app, S25), security (passkey list + add/remove with the A302 last-passkey guard), and the FIRST UI for A305 account deletion (resumable POST /api/account/delete loop until done). Reuses the F53 client auth module from src/app/lib/account.svelte.ts (the dev/nav.ts cross-import pattern — no relocation needed; tsconfig.svelte covers both trees). The static frame + skeleton prerender (A69 SSG); session state hydrates client-side from /api/me. NO trade data on the page (S25). e2e: ssg.spec asserts the prerendered frame + noindex and a hydrated logged-out-view + header-link test; check-deploy 15 targets green."
+    },
+    {
+      "id": "A271",
+      "title": "Module sizing model — Small/Med/Large snap states + carousel grouping (resizable-modules refactor)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "large",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "Closed 2026-07-08 after the final slice shipped AND promoted (CH16 same-day, owner-ordered). Full trail: the build-approach recommendation (docs/module-sizing-approach-a271.md, verdict CUSTOM) → the S/M/L foundation + 12-track grid + lossless v1→v2 layout migration (modlayout.ts, 2026-07-07) → the ⋯-menu Size radio + corner drag-resize handle (A319 shared controller; promoted to all surfaces CH16 2026-07-08 AM) → the Analytics screen slice (makeLayoutKit per-screen domains) → the Small/KPI remainder (2026-07-08): three glanceable KPI-card modules (winrate/pfactor/expect — Small-first, sm/md, picker-addable, fed by the DashKpi prop from scope-active Metrics), Small support for the F39 trio (headline-only at sm), and the §4 six-contiguous-Small → ModuleCarousel grouped state (drag handle suppressed in-group; ⋯ Size menu is the exit), promoted to prod + demo the same day. Every done-when clause holds: S/M/L render correctly, resize snaps to the three states + the carousel group, layout persists per tab (v2 {key,size}[]), mobile degrades to a single column, the recommendation is recorded. Node coverage scripts/test-modlayout.mjs (44 assertions); e2e staging carousel + promoted demo tests. Future KPI-card ideas are net-new items, not this one; Analytics reorder/hide stays deliberately omitted (fixed curated set)."
     }
   ]
 }

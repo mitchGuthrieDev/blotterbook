@@ -356,7 +356,7 @@ test('staging redesign: six Small modules group into the ModuleCarousel (A271 re
   test.setTimeout(90_000);
   await bootDashboard(page);
 
-  // Add the six Small-capable modules: the F39 trio + the three KPI cards (staging-only in the picker).
+  // Add the six Small-capable modules: the F39 trio + the three KPI cards (picker-addable on every surface since the CH16 promotion).
   await page.getByRole('button', { name: 'Add modules' }).click();
   const dlg = page.getByRole('dialog');
   for (const label of ['Today / Last Session', 'Drawdown Status', 'Streak Monitor', 'Win Rate', 'Profit Factor', 'Expectancy']) {
