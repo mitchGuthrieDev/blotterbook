@@ -15,20 +15,20 @@
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
   import { Skeleton } from '$lib/components/ui/skeleton';
-  import { account, login, register, recoverSend, reclaimSend } from '../lib/account.svelte.ts';
+  import { account, login, register, recoverSend, reclaimSend, EMAIL_RE } from '$lib/account/account.svelte.ts';
 
   type View = 'default' | 'creating' | 'recovering';
   let view = $state<View>('default');
   let email = $state('');
   const disabled = $derived(account.busy || !account.available);
-  const emailValid = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()));
+  const emailValid = $derived(EMAIL_RE.test(email.trim()));
 
   // A300: lost-passkey recovery, reachable BEFORE the gate lets you in. recoverSend is enumeration-safe
   // (always generic), so we just show a "check your email" confirmation. The emailed `?recover=` link is
   // then handled pre-gate by App.svelte's onMount.
   let recoverEmail = $state('');
   let recoverSent = $state(false);
-  const recoverValid = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoverEmail.trim()));
+  const recoverValid = $derived(EMAIL_RE.test(recoverEmail.trim()));
   // A316: offered when a register attempt 409'd on a never-verified holder (account.reclaimable)
   let reclaimSent = $state(false);
 

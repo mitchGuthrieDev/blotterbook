@@ -119,15 +119,19 @@ console.log('Fail-closed gates:');
 {
   ok('503 when ACCOUNTS_DB unbound', (await subCreate({ request: req(), env: { STRIPE_SECRET_KEY: 'x' } })).status === 503);
   const db = mockDb();
-  ok(
-    '501 when the Stripe env trio is incomplete (no publishable key)',
-    (
-      await subCreate({
-        request: req(),
-        env: { ACCOUNTS_DB: db, STRIPE_SECRET_KEY: 'sk', STRIPE_PRICE_SUBSCRIPTION: 'price_x' },
-      })
-    ).status === 501
-  );
+  {
+    const res = await subCreate({
+      request: req(),
+      env: { ACCOUNTS_DB: db, STRIPE_SECRET_KEY: 'sk', STRIPE_PRICE_SUBSCRIPTION: 'price_x' },
+    });
+    const j = await res.json();
+    // A326: `error` carries the human sentence (the shared client api() surfaces it verbatim, and
+    // SubscribeForm's fallback keys off /not configured/i); the machine code lives in `code`.
+    ok(
+      '501 when the Stripe env trio is incomplete (no publishable key)',
+      res.status === 501 && /not configured/i.test(j.error) && j.code === 'not_configured'
+    );
+  }
   ok('cross-origin rejected 403', (await subCreate({ request: req({ origin: 'https://evil.example' }), env: ENV(db) })).status === 403);
   ok('401 without a session', (await subCreate({ request: req(), env: ENV(db) })).status === 401);
 }
@@ -263,7 +267,11 @@ console.log('\nStripe failure → clean 502:');
   const stub = stubStripe([[/\/v1\/customers$/, () => ({ status: 500, body: { error: { message: 'nope' } } })]]);
   try {
     const res = await subCreate({ request: req({ cookie: cookieFor(token) }), env: ENV(db) });
-    ok('customer-create failure → 502 subscription_failed', res.status === 502 && (await res.json()).error === 'subscription_failed');
+    const j = await res.json();
+    ok(
+      'customer-create failure → 502 with a human-readable error + subscription_failed code',
+      res.status === 502 && j.error === 'Could not start the subscription.' && j.code === 'subscription_failed'
+    );
   } finally {
     stub.restore();
   }

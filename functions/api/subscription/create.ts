@@ -86,13 +86,13 @@ export async function onRequestPost(ctx: Ctx) {
   const db = getDb(env);
   if (!db) return dbUnavailable();
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_PRICE_SUBSCRIPTION || !env.STRIPE_PUBLISHABLE_KEY) {
-    return json({ error: 'not_configured', message: 'In-app subscription is not configured.' }, 501);
+    return json({ error: 'In-app subscription is not configured.', code: 'not_configured' }, 501);
   }
 
   const session = await sessionFromRequest(request, db);
-  if (!session) return json({ error: 'auth_required', message: 'Sign in to subscribe.' }, 401);
+  if (!session) return json({ error: 'Sign in to subscribe.', code: 'auth_required' }, 401);
   const user = await userById(db, session.user_id);
-  if (!user) return json({ error: 'auth_required', message: 'Sign in to subscribe.' }, 401);
+  if (!user) return json({ error: 'Sign in to subscribe.', code: 'auth_required' }, 401);
 
   // Already entitled via a qualifying subscription → nothing to create.
   const existing = await subscriptionForUser(db, user.id);
@@ -120,7 +120,7 @@ export async function onRequestPost(ctx: Ctx) {
       form.set('metadata[client_reference_id]', user.id);
       const { ok, data } = await stripeReq(env, '/customers', { body: form, idem: `cust-create:${user.id}` });
       customerId = ok && typeof data?.id === 'string' ? (data.id as string) : null;
-      if (!customerId) return json({ error: 'subscription_failed', message: 'Could not start the subscription.' }, 502);
+      if (!customerId) return json({ error: 'Could not start the subscription.', code: 'subscription_failed' }, 502);
       // Inline persist (accounts.ts owns no setter for this yet; applyDonationToUser writes the same column).
       await db.prepare('UPDATE users SET stripe_customer_id = ? WHERE id = ?').bind(customerId, user.id).run();
     }
@@ -137,9 +137,9 @@ export async function onRequestPost(ctx: Ctx) {
     form.set('metadata[client_reference_id]', user.id);
     const { ok, data } = await stripeReq(env, '/subscriptions', { body: form, idem: `sub-create:${user.id}` });
     const secret = ok ? clientSecretOf(data as StripeSubscription | null) : null;
-    if (!secret) return json({ error: 'subscription_failed', message: 'Could not start the subscription.' }, 502);
+    if (!secret) return json({ error: 'Could not start the subscription.', code: 'subscription_failed' }, 502);
     return json({ clientSecret: secret, publishableKey: env.STRIPE_PUBLISHABLE_KEY });
   } catch (_) {
-    return json({ error: 'subscription_failed', message: 'Could not reach the payment provider.' }, 502);
+    return json({ error: 'Could not reach the payment provider.', code: 'subscription_failed' }, 502);
   }
 }

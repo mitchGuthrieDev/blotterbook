@@ -102,7 +102,8 @@
     </div>
     <p class="mt-2 text-[11px] text-muted-foreground">
       Supports TradingView, Tradovate / NinjaTrader, Quantower and other platform exports — mix platforms and export types freely;
-      overlapping trades merge. Not sure how to export? See the How-To guide.
+      overlapping trades merge. Not sure how to export? See
+      <a href="/help/import.html" target="_blank" rel="noopener" class="text-foreground underline hover:no-underline">the import guide</a>.
     </p>
   </div>
 

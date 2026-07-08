@@ -7,7 +7,12 @@
    chunk stays out of the /app boot payload (A96) — the passive session probe costs one fetch.
 
    GUARDRAIL (S25): accounts carry identity + entitlements only. Nothing about trades is ever
-   sent — the only POST bodies here are an email and WebAuthn ceremony responses. */
+   sent — the only POST bodies here are an email and WebAuthn ceremony responses.
+
+   Lives in src/lib/account/ (A328) because BOTH surfaces consume it — the app's Account screen and
+   the standalone site /account.html (A293) — so the dependency arrows stay app→shared and
+   site→shared (src/site must not import from src/app). Runes module: type-checked by svelte-check
+   (tsconfig.svelte.json), excluded from plain tsc alongside src/lib/components. */
 
 // type-only imports are erased at build time — they do NOT pull the chunk into boot
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
@@ -33,6 +38,16 @@ interface MeResponse {
   cloudSync?: boolean;
   user?: AccountUser;
   passkeys?: AccountPasskey[];
+}
+
+/** Single source for "is this a plausible email?" across the auth forms (A329). Deliberately
+ *  loose — the server (and the verification email itself) is the real validator. */
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Short local date for account metadata rows (member-since, passkey added/last-used) — shared by
+ *  the app Account screen and the site account dashboard (A329). */
+export function fmtDate(ms: number | null): string {
+  return ms == null ? '—' : new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 /** Shared reactive account state — import and read anywhere; mutate only via the actions below. */
@@ -231,6 +246,34 @@ export async function awaitCloudTier(attempts = 8, delayMs = 1500): Promise<bool
     await new Promise(r => setTimeout(r, delayMs));
   }
   return false;
+}
+
+/* ---- A305: account deletion ----------------------------------------------------------------- */
+
+/** Two-phase resumable deletion (A305): POST /api/account/delete until `{ done: true }` — each call
+ *  clears a bounded page of synced ciphertext, so a large account takes several calls, and an
+ *  interrupted run resumes by simply deleting again. Resolves true once fully deleted (session
+ *  refreshed); false on failure with `account.error` set. */
+export async function deleteAccount(maxCalls = 60): Promise<boolean> {
+  if (account.busy) return false;
+  account.busy = true;
+  account.error = '';
+  try {
+    for (let i = 0; i < maxCalls; i++) {
+      const data = await api<{ done?: boolean }>('/api/account/delete', {});
+      if (data?.done) {
+        await refreshSession();
+        return true;
+      }
+    }
+    account.error = 'Deletion is taking longer than expected — reload this page and delete again to continue where it left off.';
+    return false;
+  } catch (e) {
+    account.error = messageOf(e);
+    return false;
+  } finally {
+    account.busy = false;
+  }
 }
 
 /* ---- F55: recovery email + verification --------------------------------------------------- */

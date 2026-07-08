@@ -17,12 +17,12 @@ import { badOrigin, checkOrigin, getDb, readJson, sessionFromRequest } from '../
 export async function onRequestPost(ctx: Ctx) {
   const { request, env } = ctx;
   if (!checkOrigin(request)) return badOrigin();
-  if (!env.STRIPE_SECRET_KEY) return json({ error: 'not_configured', message: 'Payments are not configured.' }, 501);
+  if (!env.STRIPE_SECRET_KEY) return json({ error: 'Payments are not configured.', code: 'not_configured' }, 501);
 
   const body = await readJson<{ plan?: unknown }>(request);
   const plan = body?.plan === 'subscription' ? 'subscription' : 'one_time';
   const price = plan === 'subscription' ? env.STRIPE_PRICE_SUBSCRIPTION : env.STRIPE_PRICE_ONE_TIME;
-  if (!price) return json({ error: 'not_configured', message: 'No price is configured for that plan.' }, 501);
+  if (!price) return json({ error: 'No price is configured for that plan.', code: 'not_configured' }, 501);
 
   // Link to a logged-in account when there's a session (donations DB is optional here).
   let clientRef = '';
@@ -54,9 +54,9 @@ export async function onRequestPost(ctx: Ctx) {
       body: form.toString(),
     });
     const data = (await res.json().catch(() => null)) as { url?: string } | null;
-    if (!res.ok || !data?.url) return json({ error: 'checkout_failed', message: 'Could not create a checkout session.' }, 502);
+    if (!res.ok || !data?.url) return json({ error: 'Could not create a checkout session.', code: 'checkout_failed' }, 502);
     return json({ url: data.url });
   } catch (_) {
-    return json({ error: 'checkout_failed', message: 'Could not reach the payment provider.' }, 502);
+    return json({ error: 'Could not reach the payment provider.', code: 'checkout_failed' }, 502);
   }
 }

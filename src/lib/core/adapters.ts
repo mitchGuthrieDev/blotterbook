@@ -1171,7 +1171,7 @@ function parse(text: string, platformId?: string): ParseResult {
       error:
         'This CSV doesn’t match a supported platform export. Supported: ' +
         ADAPTERS.map(a => a.label).join(', ') +
-        '. See the How-To guide for per-platform export steps.',
+        '. See Help › Importing your trades for per-platform export steps.',
       detected: null,
     };
   // Unreachable in practice (detect() ids always resolve), but narrows `adapter` for the rest.

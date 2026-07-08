@@ -8,10 +8,10 @@
   //
   // The static frame prerenders (A69 SSG); the session is client-only, so account state hydrates
   // from /api/me on mount (the prerendered HTML shows the skeleton). Reuses the F53 client auth
-  // module (src/app/lib/account.svelte.ts) — the same pattern as dev/nav.ts re-using app modules.
+  // module from the shared src/lib/account/ home (A328 — consumed by the app AND this site page).
   import { onMount } from 'svelte';
   import SiteShell from '../lib/SiteShell.svelte';
-  import SubscribeForm from '../../app/parts/SubscribeForm.svelte';
+  import SubscribeForm from '$lib/account/SubscribeForm.svelte';
   import {
     account,
     refreshSession,
@@ -20,12 +20,14 @@
     logout,
     addPasskey,
     deletePasskey,
+    deleteAccount,
     emailVerifySend,
     recoverSend,
     reclaimSend,
-  } from '../../app/lib/account.svelte.ts';
+    EMAIL_RE,
+    fmtDate,
+  } from '$lib/account/account.svelte.ts';
 
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   let email = $state('');
   const emailValid = $derived(EMAIL_RE.test(email.trim()));
   const disabled = $derived(account.busy || !account.available);
@@ -47,10 +49,10 @@
     pkBusy = '';
   }
 
-  // A305: two-phase resumable deletion — POST until { done: true } (each call clears a bounded page
-  // of synced ciphertext, so a large account takes several calls).
+  // A305: two-phase resumable deletion — the POST-until-done loop lives in the shared account
+  // module (A329); failures surface through the page-level `account.error` alert like every other
+  // account action.
   let deleting = $state(false);
-  let deleteErr = $state('');
   let deleted = $state(false);
   async function onDeleteAccount() {
     if (
@@ -61,29 +63,8 @@
     )
       return;
     deleting = true;
-    deleteErr = '';
-    try {
-      for (let i = 0; i < 60; i++) {
-        const res = await fetch('/api/account/delete', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: '{}',
-        });
-        const data = (await res.json().catch(() => null)) as { done?: boolean; error?: string } | null;
-        if (!res.ok) throw new Error(data?.error || `Delete failed (${res.status}).`);
-        if (data?.done) {
-          deleted = true;
-          await refreshSession();
-          return;
-        }
-      }
-      throw new Error('Deletion is taking longer than expected — reload this page and delete again to continue where it left off.');
-    } catch (e) {
-      deleteErr = e instanceof Error ? e.message : 'Something went wrong.';
-    } finally {
-      deleting = false;
-    }
+    if (await deleteAccount()) deleted = true;
+    deleting = false;
   }
 
   async function onCreate(e: SubmitEvent) {
@@ -107,9 +88,6 @@
   async function onVerify() {
     if (await emailVerifySend()) verifySent = true;
   }
-
-  const fmtDate = (ms: number | null) =>
-    ms == null ? '—' : new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
   // A278: the in-app subscription form + the subscribe-intent carry. A `?subscribe=1` landing
   // (homepage "Get cloud sync" CTA) latches the intent through the login/signup step, so a fresh
@@ -370,7 +348,6 @@
           Permanently removes your account, passkeys, subscription linkage, and all synced (encrypted) data from our servers. Data stored
           locally in your browsers is not touched. This cannot be undone.
         </p>
-        {#if deleteErr}<p class="text-[13px] text-destructive" role="alert">{deleteErr}</p>{/if}
         <button
           type="button"
           class="rounded-md border border-destructive/50 bg-card px-3 py-1.5 text-[13px] text-destructive hover:bg-destructive/10 disabled:opacity-50"

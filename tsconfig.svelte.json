@@ -9,6 +9,8 @@
     "src/site/**/*.ts",
     "src/lib/components/**/*.svelte",
     "src/lib/components/**/*.ts",
+    "src/lib/account/**/*.svelte",
+    "src/lib/account/**/*.ts",
     "src/dev/**/*.svelte",
     "src/dev/**/*.ts"
   ],

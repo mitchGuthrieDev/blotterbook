@@ -67,7 +67,7 @@
   import BootSplash from './parts/BootSplash.svelte';
   import LaunchGate from './parts/LaunchGate.svelte';
   import WorkspaceSwitcher from './parts/WorkspaceSwitcher.svelte';
-  import { account, refreshSession, completeRecovery, completeReclaim } from './lib/account.svelte.ts';
+  import { account, refreshSession, completeRecovery, completeReclaim } from '$lib/account/account.svelte.ts';
   import { wrapStore, configureCloudSync } from './lib/cloudsync.svelte.ts';
   import { loadFlags, APP_FLAGS, accountGateEnabled, type AppFlags } from './lib/flags.ts';
   import { pickFlavor } from './lib/flavor.ts';

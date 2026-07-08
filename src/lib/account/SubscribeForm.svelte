@@ -1,8 +1,8 @@
 <script lang="ts">
   // A278 — the in-app subscription form (Stripe Payment Element). Used by BOTH the app's Account
-  // screen and the standalone /account.html page (owner decision), so it's deliberately
-  // self-contained and styled with plain Tailwind utilities (no shadcn imports — the site page
-  // doesn't carry that layer's conventions).
+  // screen and the standalone /account.html page (owner decision) — hence its home in
+  // src/lib/account/ (A328) — and deliberately self-contained, styled with plain Tailwind
+  // utilities (no shadcn imports — the site page doesn't carry that layer's conventions).
   //
   // Flow: createSubscription() → an INCOMPLETE Stripe subscription + the first invoice's
   // PaymentIntent client secret → lazy-load Stripe.js (js.stripe.com — CSP-allowed on the app +
@@ -15,8 +15,8 @@
   // Degradation: when Stripe.js can't load (script/iframe blockers) or the endpoint reports 501
   // (publishable key unset), the hosted-Checkout redirect (/api/checkout) is offered instead.
   import { onMount } from 'svelte';
-  import { account, awaitCloudTier, createSubscription, stripeJs, subscribe } from '../lib/account.svelte.ts';
-  import type { Stripe, StripeElements } from '@stripe/stripe-js';
+  import { account, awaitCloudTier, createSubscription, stripeJs, subscribe } from './account.svelte.ts';
+  import type { Stripe, StripeElements, StripePaymentElementOptions } from '@stripe/stripe-js';
 
   interface Props {
     /** Called once /api/me reports the cloud tier (the success terminal state). */
@@ -30,10 +30,14 @@
   let mountEl = $state<HTMLDivElement>();
   let stripe: Stripe | null = null;
   let elements: StripeElements | null = null;
+  let destroyed = false;
 
   onMount(() => {
     void boot();
-    return () => elements?.getElement('payment')?.destroy();
+    return () => {
+      destroyed = true;
+      elements?.getElement('payment')?.destroy();
+    };
   });
 
   async function boot() {
@@ -46,12 +50,14 @@
         return;
       }
       stripe = await stripeJs(res.publishableKey);
+      if (destroyed) return; // unmounted while Stripe.js loaded — don't mount into a detached node
       if (!stripe || !mountEl) {
         phase = 'fallback'; // blocked script/origin — offer hosted Checkout
         return;
       }
       elements = stripe.elements({ clientSecret: res.clientSecret });
-      const payment = elements.create('payment', { wallets: { link: 'never' } as never });
+      const options: StripePaymentElementOptions = { wallets: { link: 'never' } };
+      const payment = elements.create('payment', options);
       payment.mount(mountEl);
       payment.on('ready', () => (phase = 'ready'));
     } catch (e) {

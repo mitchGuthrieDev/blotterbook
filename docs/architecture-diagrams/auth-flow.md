@@ -8,7 +8,7 @@ sign-in, passphrase/recovery/PRF = encryption unlock), and the cloud-sync vault 
 [`functions/_lib/accounts.ts`](../../functions/_lib/accounts.ts) ·
 [`functions/api/me.ts`](../../functions/api/me.ts) ·
 [`functions/api/sync/wrapped-ik.ts`](../../functions/api/sync/wrapped-ik.ts) ·
-[`src/app/lib/account.svelte.ts`](../../src/app/lib/account.svelte.ts) ·
+[`src/lib/account/account.svelte.ts`](../../src/lib/account/account.svelte.ts) ·
 [`src/app/lib/vault.svelte.ts`](../../src/app/lib/vault.svelte.ts) ·
 [`src/lib/core/crypto.ts`](../../src/lib/core/crypto.ts) ·
 [`src/app/parts/CloudSyncSetup.svelte`](../../src/app/parts/CloudSyncSetup.svelte) ·

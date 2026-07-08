@@ -4,6 +4,17 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.70.0",
+      "date": "2026-07-08",
+      "title": "The Help hub goes live, and support gets real tools",
+      "summary": "The new Help hub announced last release is now live at /help — a proper documentation home with per-platform import guides, a plain-language cloud-sync explainer, and a support page — and behind the scenes the support desk can now credit a cloud subscription directly to an account.",
+      "highlights": [
+        "Help hub, live: /help lands with a getting-started walkthrough, per-platform import guides (deep-linkable per platform), a cloud-sync explainer that covers how the encryption and recovery key actually work, and a support page. The old How-To page redirects there, so existing links keep working.",
+        "Every Help page is fast and searchable: the pages are prerendered at build time (no blank-page flash) and indexed, so searching for an import question lands you on the right guide.",
+        "Under the hood: the support desk can now comp or revoke a cloud subscription on a specific account (fully audit-trailed) — used for makegoods and beta thank-yous; entitlement checks everywhere honor it, including sync itself."
+      ]
+    },
+    {
       "version": "0.69.0",
       "date": "2026-07-08",
       "title": "Your account gets a home page, drag-to-resize modules everywhere, and reclaimable emails",

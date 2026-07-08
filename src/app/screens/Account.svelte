@@ -49,7 +49,9 @@
     completeReclaim,
     registerPrfPasskey,
     subscribe,
-  } from '../lib/account.svelte.ts';
+    EMAIL_RE,
+    fmtDate,
+  } from '$lib/account/account.svelte.ts';
   import {
     vault,
     refreshVault,
@@ -74,7 +76,7 @@
   import CloudSyncSetup from '../parts/CloudSyncSetup.svelte';
   import UnlockModal from '../parts/UnlockModal.svelte';
   import SyncStatusPill from '../parts/SyncStatusPill.svelte';
-  import SubscribeForm from '../parts/SubscribeForm.svelte';
+  import SubscribeForm from '$lib/account/SubscribeForm.svelte';
 
   interface Props {
     /** demo surface — disables every control (demo never mutates) and skips the session probe. */
@@ -140,7 +142,7 @@
 
   let email = $state('');
   const disabled = $derived(isDemo || account.busy || !account.available);
-  const emailValid = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()));
+  const emailValid = $derived(EMAIL_RE.test(email.trim()));
 
   // F55 UI state
   let nudgeDismissed = $state(false);
@@ -150,7 +152,7 @@
   let recoverOpen = $state(false);
   let recoverEmail = $state('');
   let recoverSent = $state(false);
-  const recoverValid = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoverEmail.trim()));
+  const recoverValid = $derived(EMAIL_RE.test(recoverEmail.trim()));
   // A316: offered when a register attempt 409'd on a never-verified holder (account.reclaimable)
   let reclaimSent = $state(false);
   // one passkey on record → nudge to add a second (until dismissed)
@@ -165,9 +167,6 @@
     pkRemove = null;
     if (pk) await deletePasskey(pk.id);
   }
-
-  const fmtDate = (ms: number | null) =>
-    ms == null ? '—' : new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
   async function onCreateAccount(e: SubmitEvent) {
     e.preventDefault();
