@@ -71,8 +71,6 @@
      *  by App.svelte (mirrors the Dashboard `modules` prop). Undefined = the default layout. */
     modules?: ModEntry[];
     onmoduleschange?: (mods: ModEntry[]) => void;
-    /** A271 slice: staging-gate the corner drag-resize handle (the ⋯ menu Size radio ships everywhere). */
-    isStaging?: boolean;
   }
   let {
     kpis,
@@ -98,7 +96,6 @@
     bucketTrades,
     modules,
     onmoduleschange,
-    isStaging = false,
   }: Props = $props();
 
   // ── A271/A319 slice: module SIZE model (md ↔ lg on the 12-track grid) — the size map + drag/
@@ -954,11 +951,10 @@
       <div data-mod class={['min-w-0', spanClass(sizeCtl.previewSize(key))]}>
         <Card.Root class="relative h-full">
           {@render moduleHeader(key)}
-          {#if isStaging}
-            <!-- A319: the shared corner drag-resize handle (staging). Pointer drag snaps to the
-                 nearest supported span; role=slider + arrow keys are the keyboard path. -->
-            <ModuleResizeHandle ctl={sizeCtl} modKey={key} label={ANALYTICS_LABEL[key]} />
-          {/if}
+          <!-- A319: the shared corner drag-resize handle (all surfaces — CH16 2026-07-08). Pointer
+               drag snaps to the nearest supported span; role=slider + arrow keys are the keyboard
+               path. Layout prefs simply don't persist on demo (in-memory DemoStore). -->
+          <ModuleResizeHandle ctl={sizeCtl} modKey={key} label={ANALYTICS_LABEL[key]} />
           {#if key === 'dist'}{@render distBody()}{:else if key === 'dd'}{@render ddBody()}{:else if key === 'ls'}{@render lsBody()}{:else if key === 'hour'}{@render hourBody()}{:else if key === 'wday'}{@render wdayBody()}{:else if key === 'sym'}{@render symBody()}{:else if key === 'tag'}{@render tagBody()}{:else if key === 'stats'}{@render statsBody()}{/if}
         </Card.Root>
       </div>

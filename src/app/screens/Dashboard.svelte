@@ -185,8 +185,6 @@
     onsetupsave?: (s: AppSetup) => void;
     /** Disable the cost-setup inputs on demo (never mutates). */
     costDisabled?: boolean;
-    /** A271: staging-gate the corner drag-resize handle (the ⋯ menu Size radio ships everywhere). */
-    isStaging?: boolean;
     /** Visible dashboard modules — order + per-module size (A271; persisted to Store.local); defaults to all shown. */
     modules?: ModEntry[];
     onmoduleschange?: (mods: ModEntry[]) => void;
@@ -237,7 +235,6 @@
     setup,
     onsetupsave,
     costDisabled = false,
-    isStaging = false,
     modules,
     onmoduleschange,
     recentTrades = [],
@@ -1580,11 +1577,10 @@
       >
         <Card.Root id="dashmod-{key}" class={['relative h-full', fillClass(key)]}>
           {@render moduleHeader(key)}
-          {#if isStaging}
-            <!-- A271/A319: the shared corner drag-resize handle (staging). Pointer drag snaps to the
-                 nearest supported span; role=slider + arrow keys are the keyboard path. -->
-            <ModuleResizeHandle ctl={sizeCtl} modKey={key} label={moduleLabel(key)} />
-          {/if}
+          <!-- A271/A319: the shared corner drag-resize handle (all surfaces — CH16 2026-07-08).
+               Pointer drag snaps to the nearest supported span; role=slider + arrow keys are the
+               keyboard path. Layout prefs simply don't persist on demo (in-memory DemoStore). -->
+          <ModuleResizeHandle ctl={sizeCtl} modKey={key} label={moduleLabel(key)} />
           <Card.Content>
             {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'term'}<ActivityTerminal
               />{:else if key === 'compare'}{@render compareBody()}{:else if key === 'blotter'}{@render blotterBody()}{:else if key === 'today'}{@render todayBody()}{:else if key === 'ddstatus'}{@render ddBody()}{:else if key === 'streak'}{@render streakBody()}{/if}

@@ -1183,7 +1183,6 @@
           costDisabled={dash.isDemo}
           modules={dashModules}
           onmoduleschange={dashTabsState.saveModules}
-          {isStaging}
           recentTrades={dash.filtered
             .slice(-12)
             .reverse()
@@ -1248,7 +1247,6 @@
             untagged={analytics.untagged}
             statRows={analytics.statRows}
             {filterModel}
-            {isStaging}
             modules={analyticsModules}
             onmoduleschange={saveAnalyticsModules}
             holdCoverage={analytics.holdCoverage}

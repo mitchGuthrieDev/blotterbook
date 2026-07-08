@@ -101,7 +101,7 @@ type ModLayout = { v: 2; mods: ModEntry[] };   // persisted under modKeyFor(tabI
   `style=`. Large's extra height is a **class-based** min-height keyed on size (e.g. a
   `lg:min-h-[70vh]` utility), never an inline style — keeps CSP clean and lets the calendar/curve
   fill the viewport. Keyed `(key)` + `animate:flip` + `transition:fade` all stay.
-- **Snap to state.** A **corner drag-resize handle** (staging-gated) using Pointer Events +
+- **Snap to state.** A **corner drag-resize handle** (staging-gated at first; promoted to all surfaces, CH16 2026-07-08) using Pointer Events +
   `setPointerCapture`; on move, **rAF-throttled** conversion of the pointer offset against the
   container's measured track width → the **nearest of the three presets** (`sm/md/lg`), live-preview
   the span via `styleProps`; on release, commit the snapped enum through the `commitModules`

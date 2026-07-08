@@ -208,6 +208,30 @@ test('demo: dashboard tabs render and work in-memory (A135, promoted) — but ne
   await expect(page.getByRole('button', { name: 'New tab 1', exact: true })).toHaveCount(0);
 });
 
+test('demo: corner drag-resize handle is promoted (A271/A319, CH16) — keyboard resize works in-memory, never persists', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await bootDashboard(page);
+  await gotoScreen(page, 'Analytics');
+
+  // The handle ships on every surface now (the drag path itself is engine-tested in
+  // staging-redesign.spec.mjs); here the keyboard path proves the wiring on demo.
+  const ls = page.locator('[data-mod]').filter({ hasText: 'Long vs short' });
+  await expect(ls).toHaveClass(/lg:col-span-6/);
+  const handle = ls.getByRole('slider', { name: 'Resize Long vs short module' });
+  await expect(handle).toBeVisible();
+  await handle.focus();
+  await page.keyboard.press('ArrowRight'); // md → lg
+  await expect(ls).toHaveClass(/lg:col-span-12/);
+
+  // Demo invariant: the resize lives in the in-memory DemoStore only — a reload is back to Medium.
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+  await gotoScreen(page, 'Analytics');
+  await expect(page.locator('[data-mod]').filter({ hasText: 'Long vs short' })).toHaveClass(/lg:col-span-6/);
+});
+
 test('demo (mobile): top stat cards render as a one-at-a-time carousel with arrows + dots (A200)', async ({ page }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 360, height: 780 });

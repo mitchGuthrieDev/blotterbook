@@ -23,13 +23,17 @@ const SCREENS = ['Dashboard', 'Calendar', 'Analytics', 'Blotter', 'CSV Library',
 //  - single-select segments / pills / templates are no-ops when already active (their inactive
 //    siblings still prove the wiring);
 //  - overlay toggles keep ≥1 series on (clicking the last active one is a guarded no-op);
-//  - "Latest" is a no-op when the calendar cursor is already on the latest month.
+//  - "Latest" is a no-op when the calendar cursor is already on the latest month;
+//  - the corner resize handle (role=slider, A271/CH16) is a drag/keyboard control — a bare
+//    zero-distance click is a no-op by design (its liveness is covered by the promoted keyboard
+//    test in interactions.spec.mjs + the drag engine tests in staging-redesign.spec.mjs).
 const ALLOW = [
   /^(All time|This month|Month|Year|Custom)$/,
   /^(25|50|100|All)$/,
   /^(Gross|Net|Take-home)$/,
   /^Latest$/,
   /^(Performance|Cost & break-even|Tax \(1256\)|Full \/ custom)$/,
+  /^Resize .+ module$/,
 ];
 const SKIP_CLICK = [/^(PDF|Markdown|CSV|Email|Copy)$/];
 
