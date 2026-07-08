@@ -215,7 +215,7 @@
     {
       "id": "F57",
       "title": "Symbols dashboard — per-symbol info cards with expandable detail view",
-      "category": "FEATURE",
+      "category": "FEATURES",
       "priority": "P3",
       "effort": "large",
       "status": "open",

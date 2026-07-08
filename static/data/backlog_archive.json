@@ -1839,7 +1839,7 @@
       "status": "done",
       "completedDate": "2026-06-28",
       "partial": true,
-      "doneNote": null
+      "doneNote": "doneNote backfilled 2026-07-08 (backlog audit): the original close (2026-06-28, partial) predates this clone's retained history and never recorded a doneNote. Per the title, the pass shipped the R1 staging-app cleanup — export tile colors, shared-helper dedup, and stale-comment fixes — in the PRE-cutover staging view layer. That layer was retired wholesale by the CH16 redesign cutover (2026-07-01), so no residual scope survives it."
     },
     {
       "completedDate": "2026-06-28",
@@ -4385,7 +4385,7 @@
     {
       "id": "A237",
       "title": "Bug: data-feed selection overflows its dropdown boundaries — truncate",
-      "category": "APP",
+      "category": "FIXES",
       "priority": "P3",
       "effort": "small",
       "status": "done",
@@ -4396,7 +4396,7 @@
     {
       "id": "A243",
       "title": "Web view: Advanced Stats + Activity Terminal side-by-side (like cal/cost pairing)",
-      "category": "APP",
+      "category": "LAYOUT (web vs mobile)",
       "priority": "P3",
       "effort": "small",
       "status": "done",
@@ -4407,7 +4407,7 @@
     {
       "id": "R25",
       "title": "Account auth review: passkeys-only risks — do we need phone/email MFA?",
-      "category": "RESEARCH",
+      "category": "REVIEW / AUDIT",
       "priority": "P3",
       "effort": "small",
       "status": "done",
@@ -4418,7 +4418,7 @@
     {
       "id": "A244",
       "title": "Audit homepage info for accuracy/currency",
-      "category": "SITE",
+      "category": "REVIEW / AUDIT",
       "priority": "P3",
       "effort": "small",
       "status": "done",
@@ -4429,7 +4429,7 @@
     {
       "id": "A245",
       "title": "Dead admin control: showBetaAdapters flag gates nothing",
-      "category": "BUG",
+      "category": "FIXES",
       "priority": "P2",
       "effort": "small",
       "status": "done",
@@ -4462,7 +4462,7 @@
     {
       "id": "A248",
       "title": "Refresh CLAUDE.md repo-layout for the current tree",
-      "category": "DOCS",
+      "category": "CHORE / REFACTOR",
       "priority": "P3",
       "effort": "small",
       "status": "done",
@@ -4660,7 +4660,7 @@
     {
       "id": "A238",
       "title": "Analytics: top mini-modules adopt Dashboard module behavior (mobile carousel + click-through info)",
-      "category": "APP",
+      "category": "FEATURES",
       "priority": "P3",
       "effort": "medium",
       "status": "done",
@@ -4671,7 +4671,7 @@
     {
       "id": "A239",
       "title": "Status pill: clickable info popover + dot-only on mobile",
-      "category": "APP",
+      "category": "FEATURES",
       "priority": "P3",
       "effort": "small",
       "status": "done",
@@ -4682,7 +4682,7 @@
     {
       "id": "A240",
       "title": "Analytics: drawdown module — make it interactive and clearer about what it shows",
-      "category": "APP",
+      "category": "FEATURES",
       "priority": "P3",
       "effort": "medium",
       "status": "done",
@@ -4693,7 +4693,7 @@
     {
       "id": "A241",
       "title": "Mobile: performance-graph module audit — text size + use the module's full space",
-      "category": "APP",
+      "category": "LAYOUT (web vs mobile)",
       "priority": "P3",
       "effort": "small",
       "status": "done",
@@ -4704,7 +4704,7 @@
     {
       "id": "A242",
       "title": "Retire the Definitions module — distribute its content as contextual info on related modules",
-      "category": "APP",
+      "category": "FEATURES",
       "priority": "P3",
       "effort": "medium",
       "status": "done",

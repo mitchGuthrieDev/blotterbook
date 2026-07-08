@@ -7,7 +7,7 @@ is the deep-dive that `CLAUDE.md` points at.
 
 The internal shorthand you'll see throughout the codebase and backlog (A2, CH12,
 CH16, F13, F14, S19, R1, …) are backlog item ids from
-[`data/backlog.json`](../data/backlog.json) — kept here for traceability.
+[`data/backlog.json`](../static/data/backlog.json) — kept here for traceability.
 
 ## Contents
 
@@ -544,7 +544,7 @@ inline fallback for local dev / a failed fetch.
 `admin.html` is an internal control page. It can set the homepage's **Live** pill,
 manage **feature flags** (consumed by the app at boot via `/api/config`), show the
 **platform versions** read-only, show a read-only **Backlog** view (from
-[`data/backlog.json`](../data/backlog.json) — titles/effort/status only, prompts
+[`data/backlog.json`](../static/data/backlog.json) — titles/effort/status only, prompts
 stay in the file), auto-fill its own admin key, and **launch the staging sandbox**.
 The homepage pill reads `/api/status`: a fixed status (**Live** = green,
 **Maintenance** = yellow, **Offline** = red) wins; otherwise (**Auto**) it pings

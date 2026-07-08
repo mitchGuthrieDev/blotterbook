@@ -63,10 +63,10 @@ re-platform), and [`docs/architecture.md`](docs/architecture.md).
   `App.svelte` (an `AppShell` + hash router) + `screens/` (Dashboard/Calendar/Analytics/Blotter/
   CsvLibrary/TradeEditor/Reports/Account — Account ships on all surfaces, demo read-only, F53/CH16) + `parts/` (BootSplash/
   CostSetup/Onboarding/ActivityTerminal/InfoTip/StatCardRow/StatusBanner/DashTabs/DatePickerPopover/
-  DetectionStatus/EditableCellPopover/FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/
+  DetectionStatus/EditableCellPopover/FeedbackDialog/LaunchGate/ModuleCarousel/ModuleResizeHandle/ModuleSizeMenu/PaginationControls/
   ScreenshotLightbox/SegmentedControl/SymbolSelect/TagInput + the synced-workspaces
   parts WorkspaceSwitcher/CloudSyncSetup/UnlockModal/SyncStatusPill, A132/F61b/F63/A279) +
-  `lib/{dashboard.svelte.ts,dashtabs.svelte.ts,account.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports,econ.svelte.ts,modlayout.ts}`
+  `lib/{dashboard.svelte.ts,dashtabs.svelte.ts,account.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports,econ.svelte.ts,modlayout.ts,modsize.svelte.ts}`
   plus the cloud-sync glue `{vault.svelte.ts` (in-memory key session, F61b)`,cloudstore.ts` (write-behind `StoreLike` wrapper, F63)`,cloudsync.svelte.ts` (reactive sync controller, F63)`}`.
   It reuses the **pure-logic core** in `src/lib/core/` (A29, native TS per A61): `adapters` (+ `xlsx`
   for the ATAS X .xlsx path, F52) / `intake` (CSV gates + cross-export reconciliation, A177/A219) /
@@ -135,9 +135,11 @@ node scripts/build-econ-events.mjs   # regenerate static/data/econ-events.json (
 > migration is complete: A27 brought Svelte to staging, and the **A33 cutover** moved all three
 > surfaces (app/demo/staging) to the Svelte SPA and deleted the vanilla view layer.
 
-CI (`.github/workflows/ci.yml`) runs `npm ci` → lint → typecheck → format → the unit/logic
-tests → **the Vite build** → the Playwright render tests (against `dist/`), then re-runs the
-manifest build script and **fails if the result differs from what's committed** (the drift gate;
+CI (`.github/workflows/ci.yml`) runs two parallel jobs (CH38): a fast gate (`npm ci` → lint →
+typecheck → format) alongside the heavy job (the unit/logic tests → **the Vite build** →
+size-budget + deploy-contract guards → the mermaid docs gate → the Playwright render tests against
+`dist/`), which then re-runs the generated-data build scripts (`build-econ-events.mjs` +
+`build-manifest.mjs`, A323) and **fails if the result differs from what's committed** (the drift gate;
 `dist/` is gitignored, so this proves the build-time tooling didn't leave committed sources stale).
 So:
 
@@ -374,18 +376,21 @@ conforms to the rules below; keep it that way.
                         TradeEditor/Reports/Account (Account ships on all surfaces, demo read-only, F53/CH16)
     parts/              cross-screen pieces: BootSplash/CostSetup/Onboarding/ActivityTerminal/InfoTip/StatCardRow/
                         StatusBanner/DashTabs/DatePickerPopover/DetectionStatus/EditableCellPopover/
-                        FeedbackDialog/LaunchGate/ModuleCarousel/PaginationControls/ScreenshotLightbox/
+                        FeedbackDialog/LaunchGate/ModuleCarousel/ModuleResizeHandle/ModuleSizeMenu/PaginationControls/ScreenshotLightbox/
                         SegmentedControl/SymbolSelect/TagInput + synced-workspaces UI (opt-in, cloud-tier):
                         WorkspaceSwitcher (A132), CloudSyncSetup + UnlockModal (F61b), SyncStatusPill (A279)
     lib/                app-only glue (TS): dashboard.svelte.ts (dashboard state factory + workspace
-                        switch/reload), account.svelte.ts (F53 auth/session state + PRF passkey enroll),
+                        switch/reload), dashtabs.svelte.ts (tabbed dashboards + per-tab module-layout
+                        persistence, A135), account.svelte.ts (F53 auth/session state + PRF passkey enroll),
                         pagination.svelte.ts, actions.ts (styleProps), batch.ts
                         (multi-file import queue, F47), files.ts (readImage/downloadBlob — ex util.js, A76),
                         flags.ts (APP_FLAGS), flavor.ts, motion.ts, nav.ts, analytics.ts + reports.ts
                         (Analytics / Reports view-model builders), econ.svelte.ts (econ-calendar module
                         state, reads static/data/econ-events.json, R14/R14a), modlayout.ts (versioned
-                        {key,size}[] dashboard module-layout state — 12-track grid, size menu + corner
-                        drag-resize, A271) + cloud-sync glue (opt-in, cloud-tier): vault.svelte.ts
+                        {key,size}[] per-screen module-layout state via makeLayoutKit — 12-track grid,
+                        A271), modsize.svelte.ts (A319 shared DOM-side size controller behind the
+                        ModuleSizeMenu/ModuleResizeHandle parts — size menu + corner drag-resize)
+                        + cloud-sync glue (opt-in, cloud-tier): vault.svelte.ts
                         (in-memory key session, F61b), cloudstore.ts (write-behind StoreLike wrapper,
                         F63), cloudsync.svelte.ts (reactive sync controller, F63) — over the pure
                         cloudsync-core.ts engine, now in src/lib/core/ (A314)
