@@ -14,7 +14,9 @@
  *
  * Fail closed: 503 when CHANGELOG_NOTIFY_SECRET is unbound (endpoint disabled); 401 on a bad secret;
  * 503 (ACCOUNTS_DB shape) when the DB is unbound; 503 { error:'email unavailable' } when RESEND is
- * unbound. Content is changelog text only — never trade data (A141).
+ * unbound. A TOTAL send failure (recipients existed, nothing delivered) is a retryable 502 that is
+ * NOT ledgered — ledgering it would make every retry answer deduped:true and the release would
+ * silently never go out (A318). Content is changelog text only — never trade data (A141).
  *
  * A315: the send trigger invokes this endpoint at the bare `<project>.pages.dev` origin, not
  * `blotterbook.com` — that hostname is Cloudflare's own zone, so the custom domain's Bot Fight Mode /
@@ -25,7 +27,7 @@
  * already hardcoded to https://blotterbook.com/changelog.html; only the unsubscribe URL is derived
  * here, so it's the only link this env var affects.
  */
-import { json } from '../_lib/http.ts';
+import { json, rateLimited } from '../_lib/http.ts';
 import type { Ctx } from '../_lib/types.ts';
 import { dbUnavailable, getDb } from '../_lib/accounts.ts';
 import { confirmedSubscribers, constantTimeEqual, purgePending, recordSend, rotateUnsubToken, sendLedgerFor } from '../_lib/subscribers.ts';
@@ -42,6 +44,11 @@ interface ReleaseJson {
 
 export async function onRequestPost(ctx: Ctx) {
   const { request, env } = ctx;
+
+  // Defense-in-depth only (S22/A321): the limiter is fail-open by design (a missing STATUS_KV
+  // silently disables it), so auth must never depend on it — the constant-time secret compare
+  // below stays the real control.
+  if (await rateLimited(env, 'notify-changelog', request, 5, 60)) return json({ error: 'rate limited' }, 429);
 
   // --- auth: shared secret, constant-time (S22 — a real control, not the fail-open limiter) ---
   if (!env.CHANGELOG_NOTIFY_SECRET) return json({ error: 'Changelog notifications are not configured on this deployment.' }, 503);
@@ -99,11 +106,18 @@ export async function onRequestPost(ctx: Ctx) {
     });
   }
 
-  let result = { ok: true, sent: 0, failed: 0, unavailable: false as boolean | undefined };
+  let result = { ok: true, sent: 0, failed: 0 };
   if (messages.length) {
     const r = await sendEmailBatch(env, messages);
     if (r.unavailable) return emailUnavailable();
-    result = { ok: r.ok, sent: r.sent, failed: r.failed, unavailable: r.unavailable };
+    // A318: a TOTAL failure (nothing delivered) must NOT reach the ledger — recordSend would make
+    // every retry answer deduped:true and the release would silently never be sent. 502 lets the
+    // caller retry; a retry re-runs rotateUnsubToken per recipient, which is idempotent (no
+    // delivered email references the discarded tokens). Partial success (sent > 0) still ledgers
+    // below — a re-run would double-send the delivered subset — and the 200 body carries
+    // ok:false + failed so the caller can surface the shortfall.
+    if (r.sent === 0 && r.failed > 0) return json({ error: 'send failed', failed: r.failed }, 502);
+    result = { ok: r.ok, sent: r.sent, failed: r.failed };
   }
 
   // Record the send so it is never repeated — even a 0-recipient send is ledgered (idempotent).

@@ -61,7 +61,7 @@ flowchart TD
   wrapping is unconditional, syncing is not. The one CSP relaxation is `script-src 'wasm-unsafe-eval'`
   for the Argon2id **wasm** only (`'unsafe-inline'`/`'unsafe-eval'` stay absent).
 - **F56 login gate:** on app + staging (never demo), the shell probes `GET /api/me` at boot
-  (`refreshSession`, `src/app/lib/flags.ts`'s `accountGateEnabled()`, `App.svelte` ~930) and holds
+  (`refreshSession`, `src/app/lib/flags.ts`'s `accountGateEnabled()`, `App.svelte:944`) and holds
   behind `LaunchGate` until `account.user` resolves — including the pre-gate `?recover=` re-enrollment
-  ceremony (`App.svelte` ~932–943). The request carries a session cookie only; no plaintext trade
+  ceremony (`App.svelte:945-955`). The request carries a session cookie only; no plaintext trade
   field is ever sent.

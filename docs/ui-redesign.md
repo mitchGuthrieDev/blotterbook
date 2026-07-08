@@ -14,8 +14,8 @@ differently:
   **single global stylesheet every surface imports**. So these are **already live everywhere**: the
   real `/app/`, demo, staging, and the marketing site all already render greyscale + mono. There is no
   per-page stylesheet; there is one shared one. (The redesign screens themselves use only Tailwind
-  utility classes — no scoped page CSS. The only scoped `<style>` left is in the *old* live
-  `App.svelte`, which the redesign replaces with utilities.)
+  utility classes — no scoped page CSS, and the app root `App.svelte` carries no `<style>` block at
+  all; the old pre-cutover root that did was deleted in CH16.)
 - **Layout / structure** — the sidebar `AppShell` + `SidebarNav` and the per-screen screens
   (originally mocked in `src/dev/screens/*`) — has now **shipped to the real app** via the CH16
   cutover: the live `/app/`, demo, and staging all mount the redesigned sidebar-shell `App.svelte`

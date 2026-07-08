@@ -41,7 +41,7 @@ flowchart TD
         direction TB
         SWS["POST/GET /api/sync/workspaces<br/>register + wrapped DEK · list"]
         SIK["PUT/GET /api/sync/wrapped-ik<br/>account IK wrapped per unlock method"]
-        SPU["POST /api/sync/push<br/>≤15 ciphertext records → R2 + monotonic seq (D1)"]
+        SPU["POST /api/sync/push<br/>≤12 ciphertext records → R2 + monotonic seq (D1)"]
         SPL["GET /api/sync/pull?workspace_id&since<br/>records since seq cursor (ciphertext only)"]
         SDEL["POST /api/sync/delete<br/>erase a workspace's R2 blobs + D1 change-index ·<br/>paged · never paywalled (A254)"]
     end
@@ -107,7 +107,7 @@ flowchart TD
 | `POST /api/account/delete` | session cookie · Origin | Permanently delete the caller's account + all data — two-phase resumable: page-clear owned sync workspaces (R2 + D1) first, then explicit D1 deletes of every user-keyed row; no cloud-tier gate (A305, GDPR) |
 | `POST/GET /api/sync/workspaces` | session cookie · Origin (POST) | Register (owned upsert) a workspace + its wrapped DEK + optional encrypted name / list the caller's workspaces (F62). Fail-closed 503 without `ACCOUNTS_DB`+`SYNC_BUCKET` |
 | `PUT/GET /api/sync/wrapped-ik` | session cookie · Origin (PUT) | Store/fetch the account IK wrapped per unlock method (`prf`/`passphrase`/`recovery`) — opaque blobs (F62) |
-| `POST /api/sync/push` | session cookie · Origin | Store ≤15 ciphertext records in R2, upsert the D1 change-index under a monotonic per-workspace `seq`, LWW; cross-user/nonexistent workspace → 404; over-cap → 413 (F62) |
+| `POST /api/sync/push` | session cookie · Origin | Store ≤12 ciphertext records in R2, upsert the D1 change-index under a monotonic per-workspace `seq`, LWW; cross-user/nonexistent workspace → 404; over-cap → 413 (F62) |
 | `GET /api/sync/pull` | session cookie | Return records with `seq > since` (≤25/page) + `nextSince`/`more` — ciphertext + blinded ids only, never a plaintext trade field or name (F62) |
 | `POST /api/sync/delete` | session cookie · Origin | Erase a caller-owned workspace's synced copy — pages R2 blobs + D1 change-index, then drops the wrapped-DEK + registry rows; client loops while `done:false`; never paywalled (A254) |
 

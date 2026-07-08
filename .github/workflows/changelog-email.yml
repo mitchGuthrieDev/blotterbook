@@ -107,6 +107,18 @@ jobs:
             case "$HTTP_CODE" in
               2??)
                 echo "Sent (HTTP ${HTTP_CODE}):"; cat /tmp/notify-body.txt; echo
+                # A TOTAL failure can no longer arrive as 2xx — the Function 502s without ledgering
+                # (A318), which the 5?? case below retries. A 2xx with ok:false / failed>0 is a
+                # PARTIAL send: the version is already ledgered server-side (a re-run would only
+                # answer deduped:true, never re-deliver the failed subset), so warn loudly rather
+                # than fail the job — retrying can't fix it.
+                PARSE='const j=JSON.parse(require("fs").readFileSync("/tmp/notify-body.txt","utf8"));'
+                BODY_OK="$(node -e "${PARSE} process.stdout.write(String(j.ok))" 2>/dev/null || echo unknown)"
+                BODY_SENT="$(node -e "${PARSE} process.stdout.write(String(j.sent ?? 0))" 2>/dev/null || echo 0)"
+                BODY_FAILED="$(node -e "${PARSE} process.stdout.write(String(j.failed ?? 0))" 2>/dev/null || echo 0)"
+                if [ "$BODY_OK" != "true" ] || [ "$BODY_FAILED" != "0" ]; then
+                  echo "::warning::notify-changelog reported a PARTIAL send (ok=${BODY_OK}, sent=${BODY_SENT}, failed=${BODY_FAILED}) — the version is ledgered, so the failed recipients will NOT be retried automatically."
+                fi
                 exit 0
                 ;;
               425)
@@ -117,7 +129,10 @@ jobs:
                 cat /tmp/notify-body.txt; echo
                 exit 1
                 ;;
-              5??|000)
+              # 5xx includes the A318 total-send-failure 502 (nothing delivered, nothing ledgered —
+              # a retry re-attempts the whole send); 429 is the fail-open notify-changelog limiter
+              # (A321). Both are transient; the bounded loop exits 1 below if they never clear.
+              5??|429|000)
                 echo "Transient failure (HTTP ${HTTP_CODE}, attempt ${attempt}) — retrying…"
                 cat /tmp/notify-body.txt; echo
                 ;;

@@ -51,7 +51,10 @@ credentials, donations, recovery tokens) and `functions/_lib/email.ts` (the Rese
 
 **Passkey ceremonies (F53):** `POST /api/account/register-options` · `register-verify` ·
 `login-options` · `login-verify` · `logout`. Sessions are an opaque `__Host-` cookie (only
-`SHA-256(secret)` stored); every mutating route is Origin-checked.
+`SHA-256(secret)` stored); every mutating route is Origin-checked. Also: `POST
+/api/account/passkey-delete` removes one of the caller's passkeys (A302; refuses to delete the
+last one), and `POST /api/account/delete` permanently deletes the account + ALL its data (A305,
+GDPR; two-phase + resumable — sync workspaces/R2 blobs first, then every D1 row).
 
 **Donations (F54):**
 
@@ -129,8 +132,8 @@ Live today; no auth required:
 
 - `functions/api/geo.ts` — returns the visitor's coarse region from Cloudflare edge metadata
   (`{ country, region, regionCode }`). No IP lookup, no third-party service, nothing stored.
-  NOTE: deployed but currently NOT called by the app (the tax-state prefill was dropped in the
-  CH16 cutover; re-wiring it is a candidate enhancement).
+  Called by the app at boot when no tax state is saved yet (`prefillStateFromGeo` in
+  `src/app/lib/dashboard.svelte.ts`, A201) — fire-and-forget, in-memory only, silent on failure.
 - `GET /api/status` — the homepage "Live" indicator (`{ mode, label, updatedAt }`). The **POST**
   is admin-only (see below).
 - `GET /api/config` — feature flags the app reads at boot (no secrets). The **POST** is admin-only.
@@ -179,8 +182,8 @@ closed (503) when `ACCOUNTS_DB` / `RESEND_API_KEY` is unbound.
 - **Access JWT verification (S4).** When `ACCESS_TEAM_DOMAIN` + `ACCESS_AUD` are
   set, `/api/admin-key` verifies the `Cf-Access-Jwt-Assertion` signature against
   the team JWKS (cached 1h) + audience/issuer/expiry before issuing a token.
-  Unset → falls back to requiring the header's presence (route is still behind
-  Access + the middleware gate).
+  Unset → **fails closed** with a 503 (S12) unless `ALLOW_PRESENCE_AUTH=1`
+  (local/preview only) re-enables the presence-only fallback.
 
 Admin-auth environment variables (set in the Pages dashboard):
 

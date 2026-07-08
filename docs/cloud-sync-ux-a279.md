@@ -43,7 +43,10 @@ needs states the client already knows:
 
 | State | Meaning | Tone |
 |---|---|---|
+| `checking` | tier still unknown — `/api/me` probe in flight (A306) | muted (spinner) |
 | `off` | workspace not opted into sync | muted |
+| `paused` | was set up + synced, then paused — offer Resume, not first-time Enable (A306) | muted |
+| `needs-sub` | opted in but the subscription lapsed (402/403) — offer Renew (A306) | chart-4 |
 | `needs-unlock` | enabled, but the E2E key isn't in memory this session | chart-4 |
 | `offline` | enabled + unlocked, no network | muted |
 | `syncing` | a sync/push is in flight | muted (spinner) |
@@ -52,7 +55,8 @@ needs states the client already knows:
 | `error` | last sync failed | destructive |
 
 `cloudSync.pending` is set on every local write to an enabled workspace (even offline/locked, since the
-edit is still owed to the cloud) and cleared when a push/sync completes.
+edit is still owed to the cloud) and cleared only by a run that actually **pushed** (A299) — a
+pull-only run leaves it set.
 
 ### Direction controls (honest LWW)
 
@@ -63,8 +67,8 @@ devices differ, the newest edit of each record wins."_
 
 - **Sync now** — full reconcile (pull then push). The everyday action.
 - **Pull from cloud** — `runSync({ direction: 'pull' })` — pull + merge only.
-- **Push to cloud** — `runSync({ direction: 'push', forceFullPush: true })` — re-upload every local
-  record (watermark reset to -1), no pull. Still LWW per record.
+- **Push to cloud** — `pushToCloud()` → `runSync({ full: true, id, direction: 'push' })` — re-upload
+  every local record (watermark reset to -1), no pull. Still LWW per record.
 - **Pause sync** — `pauseCloudSync()` — stop syncing this workspace without erasing its cloud copy
   (that's the separate A254 purge path); reversible via re-enable.
 
@@ -79,10 +83,11 @@ devices differ, the newest edit of each record wins."_
 
 ## Engine changes (`cloudsync.svelte.ts`)
 
-- `cloudSync.pending` added; set on write, cleared on push/sync success.
+- `cloudSync.pending` added; set on write, cleared only by a run that actually pushed (A299).
 - `syncPillState()` + `SyncPill` type — the shared pill derivation.
-- `runSync` gained `direction: 'both' | 'pull' | 'push'` and `forceFullPush`; the default `'both'`
-  path is behaviour-preserving.
+- `runSync` gained `direction: 'both' | 'pull' | 'push'` (its options are `{ full?, id?, direction? }`);
+  the full-push derivation lives in the pure `syncPlan()` (`src/lib/core/cloudsync-core.ts`, A284).
+  The default `'both'` path is behaviour-preserving.
 - New exports: `pullFromCloud()`, `pushToCloud()`, `pauseCloudSync()`.
 
 ## What was explicitly NOT built

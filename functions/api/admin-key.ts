@@ -6,9 +6,10 @@
    carries the `Cf-Access-Jwt-Assertion` header Cloudflare injects on Access-protected
    hostnames. When ACCESS_TEAM_DOMAIN + ACCESS_AUD are configured, the assertion's
    signature is verified against the team JWKS before anything is issued (S4); when
-   they're not set, it falls back to requiring the header's presence (the route is
-   also behind Access + the _middleware gate). Off-Access it returns 401 and the
-   admin page falls back to manual key entry. */
+   they're not set, it FAILS CLOSED with a 503 (S12) — a spoofed assertion header must
+   never mint a token — unless ALLOW_PRESENCE_AUTH=1 is set (local/preview only), which
+   re-enables the presence-only fallback. Off-Access it returns 401 and the admin page
+   falls back to manual key entry. */
 
 import { issueToken, verifyAccessJwt, inspectAccessJwt } from '../_lib/auth.ts';
 import { json, rateLimited } from '../_lib/http.ts';

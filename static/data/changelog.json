@@ -4,6 +4,18 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.68.1",
+      "date": "2026-07-08",
+      "title": "Audit fixes: accurate quick-range dates, sturdier module resizing, reliable release emails",
+      "summary": "A full repo audit (the third pass this week) turned up a handful of small defects — all fixed the same day. The Analytics quick-range presets now match your local calendar day, the module corner drag-resize works from every grid position, and release-announcement emails can no longer be silently skipped after a provider outage.",
+      "highlights": [
+        "Analytics \"30D/90D\" presets now compute their start date in YOUR timezone — evening imports no longer scoped a day ahead — and the boundary is recomputed each time instead of freezing when the screen opens.",
+        "Module corner drag-resize (staging preview) now grows right-column modules too — drag toward bottom-right to enlarge, top-left to shrink — and an interrupted touch drag no longer freezes the preview.",
+        "Release-announcement emails: a fully failed send is now retried instead of being marked as delivered, and the send endpoint gained a rate limiter.",
+        "Under the hood: the module-sizing engine is now one shared component across Dashboard and Analytics, stored layouts are hardened against corruption, and the CI drift gate now covers the economic-calendar data generator."
+      ]
+    },
+    {
       "version": "0.68.0",
       "date": "2026-07-07",
       "title": "Resizable modules come to Analytics, and the calendar fills your screen",

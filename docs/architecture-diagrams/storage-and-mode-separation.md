@@ -66,12 +66,12 @@ Two *different* mechanisms — not one shared switch:
 
 | Surfaces | Isolation mechanism | Where |
 | --- | --- | --- |
-| **prod vs staging** | Same `Store`/IndexedDB engine, **different database name** (`blotterbook` vs `blotterbookStaging`). IndexedDB is origin-scoped, but named DBs are fully isolated, so the two never see each other's rows. | `store.ts` `DB_NAME` ternary |
+| **prod vs staging** | Same `Store`/IndexedDB engine, **different database name** (`blotterbook` vs `blotterbookStaging`). IndexedDB is origin-scoped, but named DBs are fully isolated, so the two never see each other's rows. | `store.ts` `LEGACY_DB_NAME` + `WS_DB_PREFIX` ternaries |
 | **demo vs everything** | A **different `Store` implementation** (`DemoStore`) backed by in-memory `Map`s — it never calls `indexedDB.open` at all, so it can't touch (or pollute) the prod `blotterbook` DB. | `App.svelte` store swap |
 
 ## Notes / gotchas
 
-- **The `DB_NAME` ternary maps both `app` *and* `demo` to `blotterbook`.** Demo is safe *only*
+- **The `LEGACY_DB_NAME`/`WS_DB_PREFIX` ternaries map both `app` *and* `demo` to `blotterbook`.** Demo is safe *only*
   because it never uses the real `Store`. If demo ever fell through to `Store`, it would write into
   the prod DB. That's why demo has belt-and-suspenders on top of the swap: every write path is
   `isDemo`-guarded (`if (isDemo) return;`) and the UI disables each data-writing control. The e2e

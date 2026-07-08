@@ -64,22 +64,22 @@ which sends ciphertext we can't read — never plaintext trades, and never by de
    (To preview the production build instead: `npm run build` emits `dist/`, then `npm run preview`.
    It must be served over http — the app loads its reference data over the network.)
 
-2. **Set up costs.** In the **Broker & Costs** panel, pick your **Broker**, **Data feed**, and
-   **State**, and set your monthly **Platform fee**.
+2. **Set up costs.** In the cost setup, pick your **Broker**, **Data feed**, and **State (tax)**,
+   and set your monthly **Platform ($/mo)** fee.
 
 3. **Export your CSV.** In TradingView, export your account balance history (the "List of trades"
    export) as CSV.
 
-4. **Load it.** Click **Load CSV**, pick the file, then **Start Blotterbook**. Your data is saved
-   locally and restored automatically next time. Re-uploads merge — only genuinely new trades are
-   added, so you can export a wider window each time without creating duplicates.
+4. **Load it.** Click **Choose CSV files**, pick the file(s), then **Launch Blotterbook →**. Your
+   data is saved locally and restored automatically next time. Re-uploads merge — only genuinely new
+   trades are added, so you can export a wider window each time without creating duplicates.
 
 **Just want to look around?** Click **See Demo** on the homepage for a generated, profitable
-two-year sample dataset (nothing is saved). To clear your data later, use **Manage data → Erase all
-local data**.
+two-year sample dataset (nothing is saved). To clear your data later, use **Erase all data** on the
+**CSV Library** screen.
 
-A step-by-step walkthrough and per-platform import guides live in the in-app **How-To** wiki
-(`howto.html`).
+A step-by-step walkthrough and per-platform import guides live in the **How-To** wiki on the info
+site (`howto.html`).
 
 ## How it works
 
