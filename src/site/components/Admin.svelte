@@ -695,6 +695,10 @@
                       onclick={() => revokeOverride(u)}>Revoke</button
                     >
                   </div>
+                {:else if u.effectiveTier === 'cloud'}
+                  <!-- A335: cloud via SUBSCRIPTION (no active override) — comping a paying
+                       subscriber is a no-op that muddies the audit trail, so no Grant button. -->
+                  <span class="text-[11px] text-muted-foreground">Subscribed — nothing to comp</span>
                 {:else}
                   <div class="flex flex-col gap-1">
                     {#if u.override?.revokedAt}

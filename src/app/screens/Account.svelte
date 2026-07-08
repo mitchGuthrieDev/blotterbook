@@ -3,7 +3,7 @@
   // the account.svelte.ts state module — no routing props. Logged out: passkey login + create-
   // account (email → register ceremony). Logged in: account info, donation badge placeholder
   // (F54 wires the real status), the passkey list with add-another, sign-out, and the (prod + staging, not demo)
-  // cloud-sync key card (F61b — set up / unlock / add-a-method). Demo surface: every control disabled
+  // cloud-sync card (F61b — set up / sync controls / add-a-method; the key prompt rides inline in each action, A336). Demo surface: every control disabled
   // + a note (demo never mutates); the session probe is skipped so demo issues no account traffic.
   import { onMount } from 'svelte';
   import {
@@ -18,8 +18,6 @@
     X,
     Cloud,
     ShieldCheck,
-    LockKeyhole,
-    LockKeyholeOpen,
     Download,
     RefreshCw,
     Fingerprint,
@@ -49,6 +47,7 @@
     completeReclaim,
     registerPrfPasskey,
     subscribe,
+    setCancelAtPeriodEnd,
     EMAIL_RE,
     fmtDate,
   } from '$lib/account/account.svelte.ts';
@@ -74,7 +73,7 @@
   } from '../lib/cloudsync.svelte.ts';
   import { downloadBlob } from '../lib/files.ts';
   import CloudSyncSetup from '../parts/CloudSyncSetup.svelte';
-  import UnlockModal from '../parts/UnlockModal.svelte';
+  import SyncKeyPrompt from '../parts/SyncKeyPrompt.svelte';
   import SyncStatusPill from '../parts/SyncStatusPill.svelte';
   import SubscribeForm from '$lib/account/SubscribeForm.svelte';
 
@@ -91,14 +90,39 @@
   let setupOpen = $state(false);
   // A278: the in-app subscription form, revealed by the Subscribe/Renew CTAs.
   let subscribeOpen = $state(false);
-  let unlockOpen = $state(false);
+  // A333: the cancel-subscription confirm dialog.
+  let cancelOpen = $state(false);
   let prfOk = $state(false);
   let addPassphrase = $state('');
   let regenKey = $state(''); // a freshly regenerated recovery key, shown once
   let regenCopied = $state(false);
 
-  // Lock the in-memory key session whenever the account session ends (logout / expiry). No key is
-  // ever persisted, so this just clears the in-memory IK; a reload has the same effect for free.
+  // A336: the vault is invisible — any action that needs the E2E key routes through ensureKey():
+  // run immediately when the key is already in memory this session, otherwise open the inline
+  // SyncKeyPrompt as a step of that action (reason copy names the action) and continue on success.
+  let keyPromptOpen = $state(false);
+  let keyPromptReason = $state('');
+  let afterKey: (() => void) | null = null;
+  async function ensureKey(reason: string, then: () => void) {
+    if (vault.unlocked) {
+      then();
+      return;
+    }
+    await refreshVault(); // populate the enrolled key methods before the prompt renders its tabs
+    keyPromptReason = reason;
+    afterKey = then;
+    keyPromptOpen = true;
+  }
+  // Resume needs the key too — same inline pattern. Missing-key check via cloudSync.unlocked, NOT
+  // the transient status (enableCloudSync's finally refreshes it back to 'off'/'paused' for a
+  // not-enabled workspace, masking the 'locked' signal set inside the attempt).
+  async function doResume() {
+    const ok = await enableCloudSync();
+    if (!ok && !cloudSync.unlocked) await ensureKey('resume sync', () => void doResume());
+  }
+
+  // Clear the in-memory key session whenever the account session ends (logout / expiry). No key is
+  // ever persisted, so this just drops the in-memory IK; a reload has the same effect for free.
   $effect(() => {
     if (!account.user) lock();
   });
@@ -531,53 +555,31 @@
               Set up cloud sync
             </Button>
           {:else}
-            <!-- A311(b): set up — the status pill + the sign-in/encryption explainer render whether
-                 LOCKED or UNLOCKED; only the add-a-method flows (which need the in-memory IK) stay gated
-                 on vault.unlocked below, so a locked user can still see their sync state + the guidance. -->
-            {#if !vault.unlocked}
-              <!-- set up, locked for this session — the E2E key isn't in memory yet -->
-              <div class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-chart-4/40 bg-chart-4/10 px-3 py-2">
-                <p class="flex items-center gap-2 text-xs text-chart-4">
-                  <LockKeyhole class="size-4" /> Encryption locked — unlock once to sync this session.
-                </p>
-                <Button size="sm" data-testid="cloud-unlock-open" onclick={() => (unlockOpen = true)}>
-                  <LockKeyholeOpen class="size-4" /> Unlock
-                </Button>
-              </div>
-            {:else}
-              <!-- unlocked in memory for this session -->
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <Badge variant="outline" class="border-chart-2/40 text-chart-2" data-testid="cloud-unlocked">
-                  <LockKeyholeOpen class="mr-1 size-3.5" /> Encryption unlocked this session
-                </Badge>
-                <Button variant="outline" size="sm" data-testid="cloud-lock" onclick={() => lock()}>
-                  <LockKeyhole class="size-4" /> Lock
-                </Button>
-              </div>
-            {/if}
-
-            <!-- A279/A311(b): active-workspace sync parity — the pill shows for a LOCKED user too (as
-                 'Needs unlock'); the direction controls need the unlocked IK, so they stay gated. -->
+            <!-- A336: the vault is invisible — no lock/unlock framing anywhere. The panel always
+                 shows the sync state + the sync actions; any action that needs the E2E key opens the
+                 inline SyncKeyPrompt as a step of that action and continues automatically. -->
             {#if cloudSync.configured}
               <div class="flex flex-col gap-2 rounded-md border border-border p-3" data-testid="cloud-sync-panel">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                   <SyncStatusPill />
-                  {#if vault.unlocked && cloudSync.enabled && cloudSync.status !== 'syncing'}
-                    <Button size="sm" data-testid="cloud-sync-now" onclick={() => void syncActiveWorkspace({ full: true })}>
+                  {#if cloudSync.enabled && cloudSync.status !== 'syncing'}
+                    <Button
+                      size="sm"
+                      data-testid="cloud-sync-now"
+                      onclick={() => void ensureKey('sync now', () => void syncActiveWorkspace({ full: true }))}
+                    >
                       <RefreshCw class="size-4" /> Sync now
                     </Button>
                   {/if}
                 </div>
-                {#if !vault.unlocked}
-                  <p class="text-xs text-muted-foreground">Unlock encryption above to sync this device.</p>
-                {:else if cloudSync.enabled}
+                {#if cloudSync.enabled}
                   <div class="flex flex-wrap gap-2">
                     <Button
                       variant="outline"
                       size="sm"
                       data-testid="cloud-pull"
                       disabled={cloudSync.status === 'syncing'}
-                      onclick={() => void pullFromCloud()}
+                      onclick={() => void ensureKey('pull from the cloud', () => void pullFromCloud())}
                     >
                       Pull from cloud
                     </Button>
@@ -586,7 +588,7 @@
                       size="sm"
                       data-testid="cloud-push"
                       disabled={cloudSync.status === 'syncing'}
-                      onclick={() => void pushToCloud()}
+                      onclick={() => void ensureKey('push to the cloud', () => void pushToCloud())}
                     >
                       Push to cloud
                     </Button>
@@ -600,7 +602,7 @@
                 {:else if cloudSync.paused}
                   <!-- A306: paused ≠ never-synced — a Resume control right here, not just in the switcher. -->
                   <div class="flex flex-wrap items-center gap-2">
-                    <Button size="sm" data-testid="cloud-resume" disabled={cloudSync.busy} onclick={() => void enableCloudSync()}>
+                    <Button size="sm" data-testid="cloud-resume" disabled={cloudSync.busy} onclick={() => void doResume()}>
                       <RefreshCw class="size-4" /> Resume sync
                     </Button>
                     <span class="text-xs text-muted-foreground"
@@ -623,74 +625,138 @@
                   Your <strong class="text-foreground">passkey</strong> signs you into your account — it proves who you are to the server.
                 </p>
                 <p>
-                  Your <strong class="text-foreground">passphrase</strong> or <strong class="text-foreground">recovery key</strong> unlocks your
+                  Your <strong class="text-foreground">passphrase</strong> or <strong class="text-foreground">recovery key</strong> opens your
                   end-to-end encryption — it turns your synced data back into plaintext in this browser. The server never sees it, so it can never
                   read your trades.
                 </p>
-                <p>A passkey that supports PRF can do both: sign you in <em>and</em> unlock encryption in one tap.</p>
+                <p>A passkey that supports PRF can do both: sign you in <em>and</em> open your encryption in one tap.</p>
               </div>
             </details>
 
-            {#if vault.unlocked}
-              <Separator />
-              <!-- add-a-method flows: each re-wraps the SAME in-memory IK (the encryption key) under a new KEK -->
-              <div class="flex flex-col gap-3">
-                <p class="text-xs font-medium text-muted-foreground">Encryption keys (unlock methods)</p>
+            <Separator />
+            <!-- A336: always visible; each add-a-method flow needs the in-memory IK, so the inline
+                 key prompt rides inside the action (same pattern as the sync controls above). -->
+            <div class="flex flex-col gap-3">
+              <p class="text-xs font-medium text-muted-foreground">Encryption keys</p>
 
-                <div class="flex flex-col gap-2">
-                  <Label for="add-passphrase" class="flex items-center gap-2"><KeyRound class="size-4" /> Set or change passphrase</Label>
-                  <div class="flex gap-2">
-                    <Input
-                      id="add-passphrase"
-                      type="password"
-                      autocomplete="new-password"
-                      placeholder="At least {MIN_PASSPHRASE} characters"
-                      bind:value={addPassphrase}
-                      disabled={vault.busy}
-                      aria-invalid={addPassphrase.length > 0 && !passphraseStrong(addPassphrase)}
-                    />
-                    <Button size="sm" disabled={vault.busy || !passphraseStrong(addPassphrase)} onclick={onSetPassphrase}>Save</Button>
-                  </div>
+              <div class="flex flex-col gap-2">
+                <Label for="add-passphrase" class="flex items-center gap-2"><KeyRound class="size-4" /> Set or change passphrase</Label>
+                <div class="flex gap-2">
+                  <Input
+                    id="add-passphrase"
+                    type="password"
+                    autocomplete="new-password"
+                    placeholder="At least {MIN_PASSPHRASE} characters"
+                    bind:value={addPassphrase}
+                    disabled={vault.busy}
+                    aria-invalid={addPassphrase.length > 0 && !passphraseStrong(addPassphrase)}
+                  />
+                  <Button
+                    size="sm"
+                    disabled={vault.busy || !passphraseStrong(addPassphrase)}
+                    onclick={() => void ensureKey('change your sync passphrase', () => void onSetPassphrase())}>Save</Button
+                  >
                 </div>
+              </div>
 
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                  <p class="flex items-center gap-2 text-sm text-foreground"><Fingerprint class="size-4" /> Add a passkey</p>
-                  {#if prfOk}
-                    <Button variant="secondary" size="sm" disabled={vault.busy} onclick={() => void addPasskeyMethod(registerPrfPasskey)}>
-                      <Plus class="size-4" /> Add PRF passkey
-                    </Button>
-                  {:else}
-                    <span class="text-xs text-muted-foreground">Passkey unlock needs a PRF-capable browser — use a passphrase here.</span>
-                  {/if}
-                </div>
-
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                  <p class="flex items-center gap-2 text-sm text-foreground"><RefreshCw class="size-4" /> Recovery key</p>
-                  <Button variant="outline" size="sm" disabled={vault.busy} onclick={onRegenerate}>Regenerate</Button>
-                </div>
-
-                {#if regenKey}
-                  <div class="flex flex-col gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3">
-                    <p class="text-xs text-destructive">New recovery key — save it now. Your previous key no longer works.</p>
-                    <code class="block break-all rounded bg-secondary px-2 py-1 font-mono text-sm text-foreground select-all"
-                      >{regenKey}</code
-                    >
-                    <div class="flex gap-2">
-                      <Button variant="secondary" size="sm" onclick={downloadRegen}><Download class="size-4" /> Download</Button>
-                      <Button variant="outline" size="sm" onclick={copyRegen}>{regenCopied ? 'Copied' : 'Copy'}</Button>
-                      <Button variant="ghost" size="sm" onclick={() => (regenKey = '')}>Done</Button>
-                    </div>
-                  </div>
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="flex items-center gap-2 text-sm text-foreground"><Fingerprint class="size-4" /> Add a passkey</p>
+                {#if prfOk}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={vault.busy}
+                    onclick={() => void ensureKey('add a passkey', () => void addPasskeyMethod(registerPrfPasskey))}
+                  >
+                    <Plus class="size-4" /> Add PRF passkey
+                  </Button>
+                {:else}
+                  <span class="text-xs text-muted-foreground">Passkey-based sync needs a PRF-capable browser — use a passphrase here.</span>
                 {/if}
+              </div>
+
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="flex items-center gap-2 text-sm text-foreground"><RefreshCw class="size-4" /> Recovery key</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={vault.busy}
+                  onclick={() => void ensureKey('regenerate your recovery key', () => void onRegenerate())}>Regenerate</Button
+                >
+              </div>
+
+              {#if regenKey}
+                <div class="flex flex-col gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3">
+                  <p class="text-xs text-destructive">New recovery key — save it now. Your previous key no longer works.</p>
+                  <code class="block break-all rounded bg-secondary px-2 py-1 font-mono text-sm text-foreground select-all">{regenKey}</code
+                  >
+                  <div class="flex gap-2">
+                    <Button variant="secondary" size="sm" onclick={downloadRegen}><Download class="size-4" /> Download</Button>
+                    <Button variant="outline" size="sm" onclick={copyRegen}>{regenCopied ? 'Copied' : 'Copy'}</Button>
+                    <Button variant="ghost" size="sm" onclick={() => (regenKey = '')}>Done</Button>
+                  </div>
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          {#if vault.error && !setupOpen && !keyPromptOpen}
+            <p class="text-xs text-destructive" role="alert">{vault.error}</p>
+          {/if}
+
+          <!-- A333: self-serve cancel/resume — only for a REAL subscriber (account.subscription is
+               null for admin-comped cloud, so this never renders for comps). Tier keeps working
+               until the paid period ends; the webhook remains the lifecycle writer. -->
+          {#if account.user && account.subscription && ['active', 'trialing', 'past_due'].includes(account.subscription.status ?? '')}
+            <Separator />
+            {#if account.subscription.cancelAtPeriodEnd}
+              <div class="flex flex-wrap items-center justify-between gap-2" data-testid="sub-cancel-scheduled">
+                <p class="text-xs text-muted-foreground">
+                  Subscription ends {fmtDate(account.subscription.currentPeriodEnd)} — sync stops then; your local data and encryption keys are
+                  untouched.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-testid="sub-resume"
+                  disabled={account.busy}
+                  onclick={() => void setCancelAtPeriodEnd(false)}>Resume subscription</Button
+                >
+              </div>
+            {:else}
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-xs text-muted-foreground">
+                  Cloud plan — $5/month{account.subscription.currentPeriodEnd
+                    ? `, renews ${fmtDate(account.subscription.currentPeriodEnd)}`
+                    : ''}.
+                </p>
+                <Button variant="outline" size="sm" data-testid="sub-cancel" disabled={account.busy} onclick={() => (cancelOpen = true)}>
+                  Cancel subscription
+                </Button>
               </div>
             {/if}
           {/if}
-
-          {#if vault.error && !setupOpen && !unlockOpen}
-            <p class="text-xs text-destructive" role="alert">{vault.error}</p>
-          {/if}
         </Card.Content>
       </Card.Root>
+
+      <!-- A333: confirm before scheduling the cancel (shadcn alert-dialog, matching the passkey-removal pattern). -->
+      <AlertDialog.Root bind:open={cancelOpen}>
+        <AlertDialog.Content>
+          <AlertDialog.Header>
+            <AlertDialog.Title>Cancel your cloud subscription?</AlertDialog.Title>
+            <AlertDialog.Description>
+              Sync keeps working until {fmtDate(account.subscription?.currentPeriodEnd ?? null)}, then stops. Your local data and encryption
+              keys are untouched, your cloud copy is kept for a grace period, and you can resume any time before the period ends.
+            </AlertDialog.Description>
+          </AlertDialog.Header>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel>Keep subscription</AlertDialog.Cancel>
+            <AlertDialog.Action data-testid="sub-cancel-confirm" onclick={() => void setCancelAtPeriodEnd(true)}>
+              Cancel at period end
+            </AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
 
       <CloudSyncSetup
         bind:open={setupOpen}
@@ -699,9 +765,17 @@
           onSyncUnlocked(); // first-time setup unlocks the IK too — refresh the shared sync status
         }}
       />
-      <!-- A257: converge the controller's status when the vault is unlocked FROM this screen (matches
-           WorkspaceSwitcher) — otherwise cloudSync.status stays stuck at 'locked'. -->
-      <UnlockModal bind:open={unlockOpen} onunlocked={() => onSyncUnlocked()} />
+      <!-- A257/A336: converge the controller's status when the key session opens FROM this screen
+           (matches WorkspaceSwitcher) — otherwise cloudSync.status stays stuck at 'locked'. -->
+      <SyncKeyPrompt
+        bind:open={keyPromptOpen}
+        reason={keyPromptReason}
+        onready={() => {
+          onSyncUnlocked();
+          afterKey?.();
+          afterKey = null;
+        }}
+      />
     {/if}
   {/if}
 </div>

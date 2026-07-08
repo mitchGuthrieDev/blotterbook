@@ -247,6 +247,18 @@
       "partial": false,
       "prompt": "From the owner. Write an executive-level BUSINESS document (docs/, e.g. docs/executive-overview.md — a polished, decision-oriented overview for a non-technical corporate audience) covering the platform end to end: what Blotterbook is + its core features/functionality (import → local compute → performance/cost/tax/calendar/analytics/reports), the SECURITY posture (local-compute moat — trade data never leaves the browser except opt-in E2E zero-knowledge cloud sync; CSP hardening; WebAuthn/passkey auth; server-side auth/entitlement enforcement), DATA MANAGEMENT (local-first IndexedDB, ciphertext-only egress, per-user storage quotas, delete/erase + retention), USER MANAGEMENT (accounts, passkeys, recovery, tiers/entitlements local vs cloud), PAYMENT HANDLING (Stripe subscription for the cloud tier + donations, PCI posture), a high-level architecture summary (Cloudflare Pages + edge functions + D1/R2), and the roadmap/positioning. Audience: potential corporate leads/partners in future meetings — accurate to the SHIPPED product, benefits-led, minimal jargon. BLOCKED — WAIT UNTIL OUT OF BETA (per owner): the product is in beta now; hold this until beta ends so the doc reflects the GA state (features, pricing, guarantees) rather than a moving target. Done when: the exec overview is written, accurate to the GA product, and owner-reviewed.",
       "doneNote": null
+    },
+    {
+      "id": "A338",
+      "title": "PRF-first cloud-sync setup — the passkey becomes the default sync key (passphrase as fallback)",
+      "category": "FEATURES",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "open",
+      "completedDate": null,
+      "partial": false,
+      "prompt": "Owner-approved direction (2026-07-08, decision from the A336 follow-up brief: \"file it, build later\"). Make the WebAuthn-PRF passkey the DEFAULT sync-key source at cloud-sync setup so most users never create a second secret. As designed in the A336 analysis: at setup, probe prfSupported() (vault.svelte.ts) — when true, lead with \"Use your passkey\" as the primary path (enroll a fresh PRF-flagged passkey via registerPrfPasskey — EXISTING F53 passkeys cannot gain PRF retroactively, the extension must be requested at creation — and wrap the IK under kekFromPrf, crypto.ts HKDF-from-PRF), with \"also set a passphrase (recommended)\" as the secondary option; when prfSupported() is false (Safari/Firefox today), keep the current passphrase-forward flow unchanged. HARD CONSTRAINTS verified in the brief: the recovery key stays MANDATORY and never de-emphasized (it remains the sole guaranteed root of trust — all-PRF-passkeys-lost + no recovery key = permanent data loss, same class as a forgotten passphrase); nothing changes server-side (the server already stores only opaque wrapped-IK blobs + public selectors per method — prf/passphrase/recovery identical in kind; E2E/zero-knowledge unaffected); add a light non-blocking nudge to set a passphrase when PRF is chosen (avoids the PRF-lost + no-passphrase + recovery-key-missing three-strikes scenario). Touch: CloudSyncSetup.svelte (the PRF-primary branch + copy), vault.svelte.ts finishSetup (wrap-under-fresh-PRF path), HelpCloudSync.svelte (setup steps), e2e cloud-sync setup specs (PRF is not drivable headless — assert the branch renders/gates correctly via prfSupported stubbing). Done when a PRF-capable browser is offered passkey-first setup, non-PRF browsers see the current flow, the recovery-key gate is unchanged, and tests/e2e cover the branch.",
+      "doneNote": null
     }
   ],
   "howToDrive": [

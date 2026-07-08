@@ -92,16 +92,17 @@ function installSyncTransport(page, { pushDelayMs = 0 } = {}) {
   return s;
 }
 
-// Reach an unlocked cloud-sync session from the Account screen (setup with a confirmed recovery key).
-async function setupAndUnlock(page) {
+// Complete cloud-sync setup from the Account screen (confirmed recovery key). Setup leaves the E2E
+// key in memory for the session — A336: the panel appearing IS the "ready" signal (there is no
+// unlocked badge; the vault is invisible).
+async function setupSync(page) {
   await gotoAccount(page);
   await page.getByTestId('cloud-setup-open').click();
   await page.getByTestId('cloud-generate').click();
   await expect(page.getByTestId('recovery-key')).toBeVisible({ timeout: 8000 });
   await page.getByTestId('recovery-saved').click();
   await page.getByTestId('cloud-finish').click();
-  await expect(page.getByTestId('cloud-unlocked')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible();
+  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible({ timeout: 15_000 });
 }
 
 const wsTrigger = page => page.getByRole('button', { name: /^Switch workspace: /, exact: false });
@@ -138,11 +139,12 @@ test('cloud sync (staging): setup blocks finishing until the recovery key is con
   await page.getByLabel('Cloud-sync passphrase').fill(PASSPHRASE);
   await expect(finish).toBeDisabled(); // still blocked — the confirmation is mandatory
 
-  // Confirm saved → Finish unlocks, and the account IK is now unlocked in memory for the session.
+  // Confirm saved → Finish enables, and the account IK lands in memory for the session — the sync
+  // panel appearing is the ready signal (A336: no unlocked badge).
   await page.getByTestId('recovery-saved').click();
   await expect(finish).toBeEnabled();
   await finish.click();
-  await expect(page.getByTestId('cloud-unlocked')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible({ timeout: 15_000 });
 });
 
 test('cloud sync (staging): a LOCAL-tier user sees the subscribe CTA, not the key-setup form', async ({ page }) => {
@@ -173,8 +175,9 @@ test('cloud sync (staging): a LOCAL-tier user sees the subscribe CTA, not the ke
   await expect(page.getByTestId('subscribe-form')).toBeVisible();
 });
 
-test('cloud sync (staging): lock, then unlock the IK with the passphrase', async ({ page }) => {
+test('cloud sync (staging): the key prompt rides inline in the sync action after a reload (A336)', async ({ page }) => {
   installStubs(page);
+  const sync = installSyncTransport(page, { pushDelayMs: 0 });
   await bootStaging(page);
   await gotoAccount(page);
 
@@ -186,23 +189,32 @@ test('cloud sync (staging): lock, then unlock the IK with the passphrase', async
   await page.getByLabel('Cloud-sync passphrase').fill(PASSPHRASE);
   await page.getByTestId('recovery-saved').click();
   await page.getByTestId('cloud-finish').click();
-  await expect(page.getByTestId('cloud-unlocked')).toBeVisible({ timeout: 15_000 });
-
-  // A279: unlocked → the reworked card shows the parity sync panel (staging runs the sync engine) and
-  // the passkey-vs-passphrase explainer — replacing the old bare lock/unlock framing.
-  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible();
+  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('How sign-in and encryption relate')).toBeVisible();
 
-  // Lock → the in-memory IK is cleared, the card offers to unlock again.
-  await page.getByTestId('cloud-lock').click();
-  await expect(page.getByTestId('cloud-unlock-open')).toBeVisible();
+  // A336: no lock/unlock affordances exist anywhere — the vault is invisible.
+  await expect(page.getByTestId('cloud-lock')).toHaveCount(0);
+  await expect(page.getByTestId('cloud-unlock-open')).toHaveCount(0);
   await expect(page.getByTestId('cloud-unlocked')).toHaveCount(0);
 
-  // Unlock modal → passphrase path rebuilds the KEK (Argon2id) and unwraps the IK back into memory.
-  await page.getByTestId('cloud-unlock-open').click();
+  // Reload → the in-memory IK is gone (nothing persists). Enabling sync from the switcher now opens
+  // the inline key prompt as a STEP of that action; the passphrase path rebuilds the KEK (Argon2id),
+  // unwraps the IK back into memory, and CONTINUES the enable automatically — one click, not
+  // unlock-then-click-again.
+  await page.reload({ waitUntil: 'networkidle' });
+  // The #account hash persists across the reload, so wait on the booted shell, not the Dashboard.
+  await expect(wsTrigger(page)).toBeVisible({ timeout: 8000 });
+  await wsTrigger(page).click();
+  await page.getByTestId('sync-enable').click();
+  await expect(page.getByText('Enter your sync passphrase to turn on sync.')).toBeVisible({ timeout: 8000 });
   await page.getByPlaceholder('Your cloud-sync passphrase').fill(PASSPHRASE);
-  await page.getByTestId('unlock-passphrase-submit').click();
-  await expect(page.getByTestId('cloud-unlocked')).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('sync-key-passphrase-submit').click();
+  await page.keyboard.press('Escape'); // dismiss the switcher dropdown if still open
+  await gotoAccount(page);
+  await expect(page.getByTestId('cloud-sync-panel').getByTestId('sync-state')).toHaveAttribute('data-status', 'synced', {
+    timeout: 20_000,
+  });
+  expect(sync.pushCount).toBeGreaterThan(0); // the continued enable actually ran the full reconcile
 });
 
 test('cloud sync (staging): A279/A299 state machine — enable → synced, controls, pending, pause/resume, per-workspace', async ({
@@ -214,7 +226,7 @@ test('cloud sync (staging): A279/A299 state machine — enable → synced, contr
   // A253) settles fast; the delay is turned on only around the 'pending' observation below.
   const sync = installSyncTransport(page, { pushDelayMs: 0 });
   await bootStaging(page);
-  await setupAndUnlock(page);
+  await setupSync(page);
 
   const panelPill = page.getByTestId('cloud-sync-panel').getByTestId('sync-state');
 
@@ -338,15 +350,14 @@ test('cloud sync (prod): renders the cloud-sync card for a logged-in user (CH16-
 
   // A279/CH16 (2026-07-07): cloud sync is LIVE on prod, not just staging — the CloudStore wraps every
   // non-demo Store (A256) and configureCloudSync runs on prod, so cloudSync.configured is true here.
-  // Complete setup + unlock and confirm the reworked parity panel + passkey/passphrase explainer render
-  // on the PROD surface (the same UI staging gets).
+  // Complete setup and confirm the reworked parity panel + passkey/passphrase explainer render
+  // on the PROD surface (the same UI staging gets); A336: the panel appearing IS the ready signal.
   await page.getByTestId('cloud-setup-open').click();
   await page.getByTestId('cloud-generate').click();
   await expect(page.getByTestId('recovery-key')).toBeVisible({ timeout: 8000 });
   await page.getByTestId('recovery-saved').click();
   await page.getByTestId('cloud-finish').click();
-  await expect(page.getByTestId('cloud-unlocked')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible();
+  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('How sign-in and encryption relate')).toBeVisible();
 
   await page.evaluate(() => indexedDB.deleteDatabase('blotterbook')); // leave the surface clean

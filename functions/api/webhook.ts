@@ -68,6 +68,7 @@ interface StripeSubObject {
   // subscription ITEMS (items.data[].current_period_end). Read both so the period survives whichever
   // version the webhook endpoint is pinned to.
   items?: { data?: Array<{ current_period_end?: unknown }> } | null;
+  cancel_at_period_end?: unknown; // A333 — boolean on customer.subscription.* objects; absent on invoices
   client_reference_id?: unknown;
   metadata?: { client_reference_id?: unknown; user_id?: unknown } | null;
 }
@@ -217,6 +218,8 @@ async function provisionSubscription(db: AccountsDb, eventId: string, type: stri
   const currentPeriodEnd = periodEndSec != null ? periodEndSec * 1000 : (existing?.current_period_end ?? null);
 
   if (customerId) await linkStripeCustomer(db, user, customerId); // future events resolve by customer id
+  // A333: subscription objects carry cancel_at_period_end; invoices don't (null → upsert preserves the stored flag).
+  const cancelAtPeriodEnd = typeof obj.cancel_at_period_end === 'boolean' ? obj.cancel_at_period_end : null;
   await upsertSubscription(
     db,
     {
@@ -226,6 +229,7 @@ async function provisionSubscription(db: AccountsDb, eventId: string, type: stri
       status,
       currentPeriodEnd,
       eventCreated,
+      cancelAtPeriodEnd,
     },
     now
   );

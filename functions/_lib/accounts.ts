@@ -133,6 +133,7 @@ export interface SubscriptionRow {
   updated: number; // ms epoch of the last webhook update
   past_due_since: number | null; // ms epoch of the FIRST failure of the current past_due run (grace base; NULL when not past_due — A266)
   last_event_created: number | null; // Stripe event.created (SECONDS) of the last APPLIED lifecycle event (out-of-order guard — A303)
+  cancel_at_period_end: number | null; // 1 = cancellation scheduled at period end (A333 self-serve cancel; still `active` until then)
 }
 
 /* ---- encoding / crypto -------------------------------------------------------------------- */
@@ -725,6 +726,7 @@ export async function upsertSubscription(
     status: string | null;
     currentPeriodEnd: number | null;
     eventCreated?: number | null; // Stripe event.created (SECONDS) driving this update — persisted for the out-of-order guard (A303)
+    cancelAtPeriodEnd?: boolean | null; // A333: undefined/null = this update doesn't know (e.g. invoice events) → preserve the stored flag
   },
   now = Date.now()
 ): Promise<void> {
@@ -737,21 +739,55 @@ export async function upsertSubscription(
   const pastDueSince = isPastDue ? (wasPastDue ? (existing?.past_due_since ?? now) : now) : null;
   // A303: carry the applied event.created forward (keep the prior stamp when this update didn't carry one).
   const lastEventCreated = s.eventCreated ?? existing?.last_event_created ?? null;
+  // A333: preserve the stored cancel flag when this update doesn't carry one (invoice.payment_failed).
+  const cancelFlag = s.cancelAtPeriodEnd == null ? (existing?.cancel_at_period_end ?? 0) : s.cancelAtPeriodEnd ? 1 : 0;
   if (existing) {
     await db
       .prepare(
-        'UPDATE subscriptions SET stripe_subscription_id = ?, stripe_customer_id = ?, status = ?, current_period_end = ?, updated = ?, past_due_since = ?, last_event_created = ? WHERE user_id = ?'
+        'UPDATE subscriptions SET stripe_subscription_id = ?, stripe_customer_id = ?, status = ?, current_period_end = ?, updated = ?, past_due_since = ?, last_event_created = ?, cancel_at_period_end = ? WHERE user_id = ?'
       )
-      .bind(s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince, lastEventCreated, s.userId)
+      .bind(
+        s.stripeSubscriptionId,
+        s.stripeCustomerId,
+        s.status,
+        s.currentPeriodEnd,
+        now,
+        pastDueSince,
+        lastEventCreated,
+        cancelFlag,
+        s.userId
+      )
       .run();
   } else {
     await db
       .prepare(
-        'INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, status, current_period_end, updated, past_due_since, last_event_created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, status, current_period_end, updated, past_due_since, last_event_created, cancel_at_period_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
       )
-      .bind(s.userId, s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince, lastEventCreated)
+      .bind(
+        s.userId,
+        s.stripeSubscriptionId,
+        s.stripeCustomerId,
+        s.status,
+        s.currentPeriodEnd,
+        now,
+        pastDueSince,
+        lastEventCreated,
+        cancelFlag
+      )
       .run();
   }
+}
+
+/** Public billing summary for /api/me (A333) — lets the client render Cancel/Resume without ever
+ *  seeing Stripe ids. NULL when the user has no subscription row (e.g. cloud via admin override). */
+export function publicSubscription(sub: SubscriptionRow | null) {
+  return sub
+    ? {
+        status: sub.status,
+        currentPeriodEnd: sub.current_period_end ?? null,
+        cancelAtPeriodEnd: !!sub.cancel_at_period_end,
+      }
+    : null;
 }
 
 /** How long a processed webhook event stays in the dedupe ledger (A265). Dedupe only needs to cover

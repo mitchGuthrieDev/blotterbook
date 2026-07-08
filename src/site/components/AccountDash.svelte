@@ -24,9 +24,26 @@
     emailVerifySend,
     recoverSend,
     reclaimSend,
+    setCancelAtPeriodEnd,
     EMAIL_RE,
     fmtDate,
   } from '$lib/account/account.svelte.ts';
+
+  // A333: whether the caller has a REAL subscription to manage (null for admin-comped cloud).
+  const manageableSub = $derived(
+    account.subscription != null && ['active', 'trialing', 'past_due'].includes(account.subscription.status ?? '')
+  );
+  async function onCancelSub() {
+    const ends = fmtDate(account.subscription?.currentPeriodEnd ?? null);
+    if (
+      !confirm(
+        `Cancel your cloud subscription? Sync keeps working until ${ends}, then stops. ` +
+          'Your local data and encryption keys are untouched, and you can resume any time before then.'
+      )
+    )
+      return;
+    await setCancelAtPeriodEnd(true);
+  }
 
   let email = $state('');
   const emailValid = $derived(EMAIL_RE.test(email.trim()));
@@ -289,6 +306,34 @@
             <SubscribeForm onsubscribed={() => (subscribeOpen = false)} />
           </div>
         {/if}
+        <!-- A333: self-serve cancel/resume — only for a real subscriber (never for admin comps). -->
+        {#if manageableSub && account.subscription}
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+            {#if account.subscription.cancelAtPeriodEnd}
+              <p class="m-0 text-[12.5px] text-muted-foreground" data-testid="sub-cancel-scheduled">
+                Subscription ends {fmtDate(account.subscription.currentPeriodEnd)} — sync stops then; your local data is untouched.
+              </p>
+              <button
+                type="button"
+                class="rounded-md border border-border bg-card px-3 py-1.5 text-[13px] text-foreground hover:bg-accent disabled:opacity-50"
+                data-testid="sub-resume"
+                disabled={account.busy}
+                onclick={() => void setCancelAtPeriodEnd(false)}>Resume subscription</button
+              >
+            {:else}
+              <p class="m-0 text-[12.5px] text-muted-foreground">
+                Renews {fmtDate(account.subscription.currentPeriodEnd)} · $5/month.
+              </p>
+              <button
+                type="button"
+                class="rounded-md border border-border bg-card px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+                data-testid="sub-cancel"
+                disabled={account.busy}
+                onclick={() => void onCancelSub()}>Cancel subscription</button
+              >
+            {/if}
+          </div>
+        {/if}
       </div>
 
       <!-- Cloud sync (status only — keys + per-workspace management live in the app, S25) -->
@@ -296,8 +341,8 @@
         <h2 class="mt-0">Cloud sync</h2>
         {#if account.tier === 'cloud'}
           <p class="m-0 text-sm text-muted-foreground">
-            Included in your plan. Sync is opt-in per workspace and end-to-end encrypted — keys never leave your devices, so set-up, unlock,
-            and workspace management happen <a href="/app/app.html#account">in the app's Account screen</a>.
+            Included in your plan. Sync is opt-in per workspace and end-to-end encrypted — keys never leave your devices, so set-up and
+            workspace management happen <a href="/app/app.html#account">in the app's Account screen</a>.
           </p>
         {:else}
           <p class="m-0 text-sm text-muted-foreground">

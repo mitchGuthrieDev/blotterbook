@@ -1,11 +1,11 @@
 <script lang="ts">
   // A279: the shared cloud-sync PARITY pill — one source of truth for the ACTIVE workspace's sync
   // state, rendered in both the WorkspaceSwitcher row and the Account cloud-sync card. It reads the
-  // reactive cloudSync rune via syncPillState() (off / needs-unlock / offline / syncing / pending /
+  // reactive cloudSync rune via syncPillState() (off / needs-key / offline / syncing / pending /
   // synced / error), so it re-settles automatically; no props beyond an optional icon-only mode for
   // the collapsed sidebar rail. Tier gating ('cloud tier required' / subscribe) is decided by the
   // caller BEFORE the pill is shown.
-  import { Cloud, CloudOff, RefreshCw, LockKeyhole, CloudUpload, TriangleAlert } from '@lucide/svelte';
+  import { Cloud, CloudOff, RefreshCw, KeyRound, CloudUpload, TriangleAlert } from '@lucide/svelte';
   import { cloudSync, syncPillState } from '../lib/cloudsync.svelte.ts';
 
   let { iconOnly = false }: { iconOnly?: boolean } = $props();
@@ -37,8 +37,8 @@
         return 'Syncing…';
       case 'pending':
         return 'Pending upload';
-      case 'needs-unlock':
-        return 'Needs unlock';
+      case 'needs-key':
+        return 'Needs your passphrase';
       case 'needs-sub':
         return 'Subscription inactive';
       case 'paused':
@@ -63,7 +63,7 @@
       case 'synced':
         return 'text-chart-2';
       case 'pending':
-      case 'needs-unlock':
+      case 'needs-key':
       case 'needs-sub':
         return 'text-chart-4';
       case 'error':
@@ -81,8 +81,8 @@
     <Cloud class="size-3.5 shrink-0" />
   {:else if pill === 'pending'}
     <CloudUpload class="size-3.5 shrink-0" />
-  {:else if pill === 'needs-unlock'}
-    <LockKeyhole class="size-3.5 shrink-0" />
+  {:else if pill === 'needs-key'}
+    <KeyRound class="size-3.5 shrink-0" />
   {:else if pill === 'needs-sub'}
     <TriangleAlert class="size-3.5 shrink-0" />
   {:else if pill === 'error'}

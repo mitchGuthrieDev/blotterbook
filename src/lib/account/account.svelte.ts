@@ -32,12 +32,20 @@ export interface AccountPasskey {
   lastUsedAt: number | null;
   backedUp: boolean;
 }
+/** A333: billing summary from /api/me (no Stripe ids). NULL when the user has no subscription row —
+ *  e.g. cloud via an admin comp — so the Cancel/Resume UI only ever shows for real subscribers. */
+export interface AccountSubscription {
+  status: string | null;
+  currentPeriodEnd: number | null;
+  cancelAtPeriodEnd: boolean;
+}
 interface MeResponse {
   // contract-only (legacy anonymous shape), not read by the app — A249
   tier?: string;
   cloudSync?: boolean;
   user?: AccountUser;
   passkeys?: AccountPasskey[];
+  subscription?: AccountSubscription | null;
 }
 
 /** Single source for "is this a plausible email?" across the auth forms (A329). Deliberately
@@ -67,6 +75,8 @@ export const account = $state({
   /** storage tier from /api/me — 'cloud' once an active/grace subscription grants it, else 'local'.
    *  Gates the cloud-sync setup UI: only a 'cloud' user can set up keys / sync (F60/A253). */
   tier: 'local',
+  /** A333: the caller's billing summary (null = no subscription row, e.g. admin-comped cloud). */
+  subscription: null as AccountSubscription | null,
 });
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -108,10 +118,12 @@ export async function refreshSession(): Promise<void> {
     account.user = me.user ?? null;
     account.passkeys = me.passkeys ?? [];
     account.tier = me.tier === 'cloud' ? 'cloud' : 'local';
+    account.subscription = me.subscription ?? null;
   } catch (_) {
     account.user = null;
     account.passkeys = [];
     account.tier = 'local';
+    account.subscription = null;
   } finally {
     account.loaded = true;
   }
@@ -234,6 +246,26 @@ export async function stripeJs(publishableKey: string) {
     return await loadStripe(publishableKey);
   } catch (_) {
     return null;
+  }
+}
+
+/** A333: schedule the caller's subscription to end at period end (`resume: true` undoes it while
+ *  still in-period). The tier keeps working until the paid period runs out — the endpoint flips
+ *  only Stripe's cancel_at_period_end; the webhook remains the lifecycle writer. Resolves true on
+ *  success (session refreshed so account.subscription reflects it); false with account.error set. */
+export async function setCancelAtPeriodEnd(cancel: boolean): Promise<boolean> {
+  if (account.busy) return false;
+  account.busy = true;
+  account.error = '';
+  try {
+    await api('/api/subscription/cancel', cancel ? {} : { resume: true });
+    await refreshSession();
+    return true;
+  } catch (e) {
+    account.error = messageOf(e);
+    return false;
+  } finally {
+    account.busy = false;
   }
 }
 

@@ -11,17 +11,18 @@
   // mount + mutation (refresh()) rather than deriving from a rune the store doesn't expose.
   //
   // The per-workspace SYNC STATUS row (F63) replaces the old "Sync coming soon" stub: it shows the
-  // active workspace's real state — not-synced / synced (last pull) / syncing / offline / locked /
-  // error — plus an "Enable sync" action (cloud tier + unlocked only; local tier shows an inert
-  // "cloud tier required" hint). PROD + STAGING (not demo), like the rest of the switcher.
-  import { Layers, ChevronsUpDown, Check, Plus, Pencil, Trash2, CloudOff, Cloud, LockKeyhole, TriangleAlert } from '@lucide/svelte';
+  // active workspace's real state — not-synced / synced (last pull) / syncing / offline / needs-key /
+  // error — plus an "Enable sync" action (cloud tier; local tier shows an inert "cloud tier
+  // required" hint). A336: when the E2E key isn't in memory, the action opens the inline
+  // SyncKeyPrompt as a step and continues automatically. PROD + STAGING (not demo).
+  import { Layers, ChevronsUpDown, Check, Plus, Pencil, Trash2, CloudOff, Cloud, TriangleAlert } from '@lucide/svelte';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import * as Dialog from '$lib/components/ui/dialog';
   import * as AlertDialog from '$lib/components/ui/alert-dialog';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import IconTip from '$lib/components/IconTip.svelte';
-  import UnlockModal from './UnlockModal.svelte';
+  import SyncKeyPrompt from './SyncKeyPrompt.svelte';
   import SyncStatusPill from './SyncStatusPill.svelte';
   import {
     cloudSync,
@@ -60,14 +61,25 @@
   }
 
   // ---- F63 cloud sync (active workspace) ----
-  let unlockOpen = $state(false);
-  async function openUnlock() {
-    await refreshVault(); // populate the enrolled unlock methods before the modal renders its tabs
-    unlockOpen = true;
+  // A336: the vault is invisible — when an action needs the E2E key, the inline SyncKeyPrompt rides
+  // INSIDE that action (reason copy names the action), and success continues it automatically.
+  let menuOpen = $state(false); // controlled so requestKey can close the menu under the prompt
+  let keyPromptOpen = $state(false);
+  let keyPromptReason = $state('');
+  let afterKey: (() => void) | null = null;
+  async function requestKey(reason: string, then: () => void) {
+    menuOpen = false; // the modal menu layer would sit over (and dismiss-fight) the dialog
+    await refreshVault(); // populate the enrolled key methods before the prompt renders its tabs
+    keyPromptReason = reason;
+    afterKey = then;
+    keyPromptOpen = true;
   }
   async function doEnable() {
     const ok = await enableCloudSync();
-    if (!ok && cloudSync.status === 'locked') await openUnlock();
+    // Missing-key check via cloudSync.unlocked, NOT the transient status: enableCloudSync's finally
+    // refreshes the status, which resets a not-enabled workspace back to 'off' and would mask the
+    // 'locked' signal set inside the attempt (the old status check here was dead code).
+    if (!ok && !cloudSync.unlocked) await requestKey(cloudSync.paused ? 'resume sync' : 'turn on sync', () => void doEnable());
     refresh();
   }
 
@@ -144,9 +156,10 @@
 </script>
 
 <DropdownMenu.Root
+  bind:open={menuOpen}
   onOpenChange={o => {
     if (!o) return;
-    refreshSyncStatus(); // keep the sync row current (e.g. after a first-time setup unlocked the IK elsewhere)
+    refreshSyncStatus(); // keep the sync row current (e.g. after a first-time setup opened the key session elsewhere)
     void refreshCloud();
   }}
 >
@@ -253,17 +266,9 @@
             disabled={cloudSync.busy}
             onclick={doEnable}>Re-enable sync</button
           >
-        {:else if !cloudSync.unlocked}
-          <button
-            type="button"
-            data-testid="sync-unlock"
-            class="flex items-center gap-1.5 text-xs font-medium text-foreground hover:underline"
-            onclick={openUnlock}
-          >
-            <LockKeyhole class="size-3.5 shrink-0" /> Unlock to {cloudSync.paused ? 'resume' : 'enable'} sync
-          </button>
         {:else}
-          <!-- A306: paused ≠ never-synced — offer Resume. -->
+          <!-- A306: paused ≠ never-synced — offer Resume. A336: this is ALWAYS the action button;
+               if the E2E key isn't in memory yet, doEnable opens the inline key prompt as a step. -->
           <button
             type="button"
             data-testid={cloudSync.paused ? 'sync-resume' : 'sync-enable'}
@@ -286,11 +291,13 @@
             onclick={() => void subscribe()}>Renew subscription</button
           >
         {:else if !cloudSync.unlocked}
+          <!-- A336: the key session lapsed while the workspace stayed enabled (e.g. a reload) —
+               resume is an action, not a vault concept; the prompt rides inside it. -->
           <button
             type="button"
-            data-testid="sync-unlock"
+            data-testid="sync-resume-key"
             class="self-start text-xs font-medium text-chart-4 hover:underline"
-            onclick={openUnlock}>Unlock to sync</button
+            onclick={() => void requestKey('resume syncing', () => void syncActiveWorkspace({ full: true }))}>Resume syncing</button
           >
         {:else if cloudSync.status !== 'syncing'}
           <button
@@ -305,10 +312,13 @@
   </DropdownMenu.Content>
 </DropdownMenu.Root>
 
-<UnlockModal
-  bind:open={unlockOpen}
-  onunlocked={() => {
+<SyncKeyPrompt
+  bind:open={keyPromptOpen}
+  reason={keyPromptReason}
+  onready={() => {
     onSyncUnlocked();
+    afterKey?.();
+    afterKey = null;
     refresh();
   }}
 />

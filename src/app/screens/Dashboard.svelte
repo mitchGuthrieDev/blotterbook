@@ -393,9 +393,10 @@
   const keysOfProp = (m?: ModEntry[]) => validKeys(m?.map(e => e.key));
   // A271/A272: Large modules that benefit from filling the viewport get extra height (the perf equity
   // curve + the trading calendar); others just widen. Class-based (no inline style — CSP/A55).
-  // A317: keyed on the PREVIEW size so the fill tracks the live drag, not just the committed size.
+  // A337 (revises A317): keyed on the COMMITTED size — the 65vh jump lands on release instead of
+  // mid-drag, so a live drag only previews the dragged card's span (the vertical lurch was jank).
   const FILL_AT_LARGE = new Set(['perf', 'cal']);
-  const fillClass = (key: string): string => (sizeCtl.previewSize(key) === 'lg' && FILL_AT_LARGE.has(key) ? 'lg:min-h-[65vh]' : '');
+  const fillClass = (key: string): string => (sizeCtl.sizeOf(key) === 'lg' && FILL_AT_LARGE.has(key) ? 'lg:min-h-[65vh]' : '');
   // svelte-ignore state_referenced_locally — initial layout only; the app re-seeds via the prop below.
   let modOrder = $state<string[]>(keysOfProp(modules));
   let gridEl = $state<HTMLElement>();
@@ -421,7 +422,8 @@
   // into the shared ModuleCarousel (one-at-a-time swipe/arrows/dots) instead of six ⅙-width cards.
   // Runs shorter than six render as individual span-2 cards; every complete six in a run groups. The
   // group key derives from its membership so the keyed {#each} + animate:flip stay stable while the
-  // grouping holds. Keyed on the PREVIEW size so a live drag out of sm regroups immediately.
+  // grouping holds. A337 (revises A317): keyed on the COMMITTED size — regrouping mounts/unmounts a
+  // whole ModuleCarousel, far too heavy mid-drag; it now lands on release with the committed span.
   type RenderItem = { kind: 'mod'; key: string; k: string } | { kind: 'group'; keys: string[]; k: string };
   const renderItems = $derived.by<RenderItem[]>(() => {
     const items: RenderItem[] = [];
@@ -435,7 +437,7 @@
       run = [];
     };
     for (const key of modOrder) {
-      if (sizeCtl.previewSize(key) === 'sm') {
+      if (sizeCtl.sizeOf(key) === 'sm') {
         run.push(key);
       } else {
         flush();
@@ -567,7 +569,10 @@
   }
   let cursor = $state<number | null>(null);
   let cw = $state(0); // measured plot width (px) → viewBox width, so labels/dots aren't stretched
-  const VH = 256; // = the SVG's CSS height (h-64 = 16rem = 256px)
+  // A334: height is measured too — a Large (65vh-filled) card grows the plot box, and the whole
+  // geometry (y(), ticks, labels, cursor line) re-derives at the real size instead of CSS-stretching.
+  let ch = $state(0); // measured plot height (px) → viewBox height
+  const VH = $derived(ch > 0 ? ch : 256); // 256 = the min-h-64 floor and the pre-measure fallback
   // A241: below sm, trim the axis gutters so the plot fills the card, and match the viewBox width to
   // the measured CSS width (W = cw) so the viewBox aspect === the box aspect — no 'meet' letterbox
   // (the old 560px floor letterboxed the curve on phones, shrinking every label with it), and axis
@@ -979,97 +984,105 @@
         {@render segBtn(enabled[s.key], s.label, () => toggleSeries(s.key))}
       {/each}
     </div>
-    <div bind:clientWidth={cw}>
+    <!-- A334: flex column so a Large (65vh) card's extra height flows INTO the plot — the svg
+         wrapper grows (flex-1, floor min-h-64) and bind:clientHeight re-derives the geometry. The
+         svg is ABSOLUTE inside the measured wrapper: an in-flow svg's intrinsic aspect (from the
+         now-reactive viewBox) would feed the wrapper's own height back into ch — a runaway growth
+         loop. At sm/md (no fill) Card.Content is a plain block, the flex classes are inert, and the
+         plot settles at exactly the old 256px. -->
+    <div class="flex flex-1 flex-col" bind:clientWidth={cw}>
       {#if view}
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-        <svg
-          viewBox="0 0 {W} {VH}"
-          class="h-64 w-full cursor-pointer touch-none outline-none"
-          role="img"
-          aria-label="Cumulative P&L curve — click a point to open that day in the calendar"
-          tabindex="0"
-          onpointermove={moveCursor}
-          onpointerleave={() => (cursor = null)}
-          onclick={onCurveClick}
-          onkeydown={onCurveKey}
-        >
-          <defs>
-            <linearGradient id="perfGross" x1="0" y1="0" x2="0" y2="1"
-              ><stop offset="0%" class="[stop-color:var(--chart-2)] [stop-opacity:0.24]" /><stop
-                offset="100%"
-                class="[stop-color:var(--chart-2)] [stop-opacity:0]"
-              /></linearGradient
-            >
-            <linearGradient id="perfNet" x1="0" y1="0" x2="0" y2="1"
-              ><stop offset="0%" class="[stop-color:var(--primary)] [stop-opacity:0.2]" /><stop
-                offset="100%"
-                class="[stop-color:var(--primary)] [stop-opacity:0]"
-              /></linearGradient
-            >
-            <linearGradient id="perfTake" x1="0" y1="0" x2="0" y2="1"
-              ><stop offset="0%" class="[stop-color:var(--chart-3)] [stop-opacity:0.24]" /><stop
-                offset="100%"
-                class="[stop-color:var(--chart-3)] [stop-opacity:0]"
-              /></linearGradient
-            >
-          </defs>
-          {#each view.yticks as t, i (i)}
-            <line x1={PAD.l} y1={t.y} x2={W - PAD.r} y2={t.y} class="stroke-border" stroke-width="1" vector-effect="non-scaling-stroke" />
-            <text x={PAD.l - 6} y={t.y + 3.5} text-anchor="end" class="fill-muted-foreground text-[11px] tabular-nums">{t.label}</text>
-          {/each}
-          {#if view.zeroY != null}
-            <line
-              x1={PAD.l}
-              y1={view.zeroY}
-              x2={W - PAD.r}
-              y2={view.zeroY}
-              class="stroke-muted-foreground/50"
-              stroke-width="1"
-              vector-effect="non-scaling-stroke"
-            />
-          {/if}
-          {#each view.xticks as t, i (i)}
-            <!-- A241: 11px on phones (viewBox is now 1:1 with the box, so px map through directly) -->
-            <text
-              x={t.x}
-              y={VH - 6}
-              text-anchor="middle"
-              class={['fill-muted-foreground tabular-nums', isNarrow.current ? 'text-[11px]' : 'text-[10px]']}>{t.label}</text
-            >
-          {/each}
-          {#each view.lines as ln (ln.key)}
-            <path d={ln.area} fill="url(#{ln.grad})" />
-          {/each}
-          {#each view.lines as ln (ln.key)}
-            <path d={ln.d} fill="none" class={ln.stroke} stroke-width="2" vector-effect="non-scaling-stroke" />
-          {/each}
-          {#each view.ends as e (e.key)}
-            <text x={W - PAD.r + 5} y={e.y + 3.5} text-anchor="start" class={['text-[11px] font-medium tabular-nums', e.fill]}
-              >{e.label}</text
-            >
-          {/each}
-          {#if cursor != null}
-            <line
-              x1={view.x(cursor)}
-              y1={PAD.t}
-              x2={view.x(cursor)}
-              y2={VH - PAD.b}
-              class="stroke-muted-foreground"
-              stroke-width="1"
-              stroke-dasharray="3 3"
-              vector-effect="non-scaling-stroke"
-            />
-            {#each view.lines as ln (ln.key)}
-              <circle
-                cx={view.x(cursor)}
-                cy={view.y(view.pts[cursor][ln.key])}
-                r="3.5"
-                class={[ln.stroke, ln.fill]}
+        <div class="relative min-h-64 flex-1" bind:clientHeight={ch}>
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+          <svg
+            viewBox="0 0 {W} {VH}"
+            class="absolute inset-0 h-full w-full cursor-pointer touch-none outline-none"
+            role="img"
+            aria-label="Cumulative P&L curve — click a point to open that day in the calendar"
+            tabindex="0"
+            onpointermove={moveCursor}
+            onpointerleave={() => (cursor = null)}
+            onclick={onCurveClick}
+            onkeydown={onCurveKey}
+          >
+            <defs>
+              <linearGradient id="perfGross" x1="0" y1="0" x2="0" y2="1"
+                ><stop offset="0%" class="[stop-color:var(--chart-2)] [stop-opacity:0.24]" /><stop
+                  offset="100%"
+                  class="[stop-color:var(--chart-2)] [stop-opacity:0]"
+                /></linearGradient
+              >
+              <linearGradient id="perfNet" x1="0" y1="0" x2="0" y2="1"
+                ><stop offset="0%" class="[stop-color:var(--primary)] [stop-opacity:0.2]" /><stop
+                  offset="100%"
+                  class="[stop-color:var(--primary)] [stop-opacity:0]"
+                /></linearGradient
+              >
+              <linearGradient id="perfTake" x1="0" y1="0" x2="0" y2="1"
+                ><stop offset="0%" class="[stop-color:var(--chart-3)] [stop-opacity:0.24]" /><stop
+                  offset="100%"
+                  class="[stop-color:var(--chart-3)] [stop-opacity:0]"
+                /></linearGradient
+              >
+            </defs>
+            {#each view.yticks as t, i (i)}
+              <line x1={PAD.l} y1={t.y} x2={W - PAD.r} y2={t.y} class="stroke-border" stroke-width="1" vector-effect="non-scaling-stroke" />
+              <text x={PAD.l - 6} y={t.y + 3.5} text-anchor="end" class="fill-muted-foreground text-[11px] tabular-nums">{t.label}</text>
+            {/each}
+            {#if view.zeroY != null}
+              <line
+                x1={PAD.l}
+                y1={view.zeroY}
+                x2={W - PAD.r}
+                y2={view.zeroY}
+                class="stroke-muted-foreground/50"
+                stroke-width="1"
                 vector-effect="non-scaling-stroke"
               />
+            {/if}
+            {#each view.xticks as t, i (i)}
+              <!-- A241: 11px on phones (viewBox is now 1:1 with the box, so px map through directly) -->
+              <text
+                x={t.x}
+                y={VH - 6}
+                text-anchor="middle"
+                class={['fill-muted-foreground tabular-nums', isNarrow.current ? 'text-[11px]' : 'text-[10px]']}>{t.label}</text
+              >
             {/each}
-          {/if}
-        </svg>
+            {#each view.lines as ln (ln.key)}
+              <path d={ln.area} fill="url(#{ln.grad})" />
+            {/each}
+            {#each view.lines as ln (ln.key)}
+              <path d={ln.d} fill="none" class={ln.stroke} stroke-width="2" vector-effect="non-scaling-stroke" />
+            {/each}
+            {#each view.ends as e (e.key)}
+              <text x={W - PAD.r + 5} y={e.y + 3.5} text-anchor="start" class={['text-[11px] font-medium tabular-nums', e.fill]}
+                >{e.label}</text
+              >
+            {/each}
+            {#if cursor != null}
+              <line
+                x1={view.x(cursor)}
+                y1={PAD.t}
+                x2={view.x(cursor)}
+                y2={VH - PAD.b}
+                class="stroke-muted-foreground"
+                stroke-width="1"
+                stroke-dasharray="3 3"
+                vector-effect="non-scaling-stroke"
+              />
+              {#each view.lines as ln (ln.key)}
+                <circle
+                  cx={view.x(cursor)}
+                  cy={view.y(view.pts[cursor][ln.key])}
+                  r="3.5"
+                  class={[ln.stroke, ln.fill]}
+                  vector-effect="non-scaling-stroke"
+                />
+              {/each}
+            {/if}
+          </svg>
+        </div>
         <div class="mt-1 text-center text-xs tabular-nums text-muted-foreground" aria-live="polite">
           {tip || 'Hover or arrow-key the curve for daily cumulative P&L'}
         </div>
@@ -1739,7 +1752,9 @@
   <!-- A271: a 12-track grid on lg (superset of the old 2-track model). Each module spans per its size
        (sm=2 · md=6 · lg=12); md/lg reproduce the old half/full widths exactly. Below lg it stacks. -->
   {#snippet moduleCard(key: string, grouped: boolean)}
-    <Card.Root id="dashmod-{key}" class={['relative h-full', fillClass(key)]}>
+    <!-- A337: [contain:layout_paint] bounds a neighbor's span change to this card's own box, so a
+         drag snap can't force layout/paint of every sibling's internals. -->
+    <Card.Root id="dashmod-{key}" class={['relative h-full [contain:layout_paint]', fillClass(key)]}>
       {@render moduleHeader(key)}
       <!-- A271/A319: the shared corner drag-resize handle (all surfaces — CH16 2026-07-08).
            Pointer drag snaps to the nearest supported span; role=slider + arrow keys are the
@@ -1749,7 +1764,9 @@
       {#if !grouped}
         <ModuleResizeHandle ctl={sizeCtl} modKey={key} label={moduleLabel(key)} />
       {/if}
-      <Card.Content>
+      <!-- A334: when this module is in the 65vh fill state, Card.Content must grow (flex-1) or the
+           extra card height strands as blank space below the content instead of reaching the chart. -->
+      <Card.Content class={fillClass(key) ? 'flex flex-1 flex-col' : ''}>
         {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'term'}<ActivityTerminal
           />{:else if key === 'compare'}{@render compareBody()}{:else if key === 'blotter'}{@render blotterBody()}{:else if key === 'today'}{@render todayBody()}{:else if key === 'ddstatus'}{@render ddBody()}{:else if key === 'streak'}{@render streakBody()}{:else if key === 'winrate'}{@render winrateBody()}{:else if key === 'pfactor'}{@render pfactorBody()}{:else if key === 'expect'}{@render expectBody()}{/if}
       </Card.Content>

@@ -274,7 +274,8 @@ declaration + doc/comment alignment, not a gate flip. Key decisions:
 - **Pauses gracefully.** Locked (`getIK()` null) or offline ⇒ sync pauses; a local write never blocks
   and never throws. The `WorkspaceSwitcher` affordance surfaces not-synced / synced (last pull) /
   syncing / offline / locked / error, an **Enable sync** action (cloud tier + unlocked only; local
-  tier shows an inert "cloud tier required" hint), and re-prompts unlock via F61b's `UnlockModal`.
+  tier shows an inert "cloud tier required" hint); when the E2E key is not in memory, the action
+  opens F61b's inline `SyncKeyPrompt` (ex `UnlockModal` — A336) as a step and continues automatically.
 - **Tests.** `scripts/test-cloudsync.mjs` (node, in `test:unit`) proves convergence with the real
   crypto + the real F62 functions over a mock D1/R2 + two in-memory stores: A→B propagation, offline
   reconcile, delete-via-tombstone (no resurrection), the seq race survived by the full reconcile, and

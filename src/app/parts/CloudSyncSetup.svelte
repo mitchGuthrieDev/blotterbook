@@ -17,7 +17,7 @@
 
   interface Props {
     open: boolean;
-    /** fired after setup completes (IK unlocked in memory) so the parent can refresh its view. */
+    /** fired after setup completes (IK now in memory) so the parent can refresh its view. */
     ondone?: () => void;
   }
   let { open = $bindable(), ondone }: Props = $props();
@@ -146,7 +146,7 @@
           </div>
         </div>
 
-        <!-- Optional passphrase (Argon2id KEK) — a second unlock path for no-PRF browsers / convenience -->
+        <!-- Optional passphrase (Argon2id KEK) — a second key method for no-PRF browsers / convenience -->
         <div class="flex flex-col gap-2 rounded-md border border-border p-3">
           <label class="flex items-center gap-2 text-sm text-foreground">
             <Checkbox bind:checked={usePassphrase} />
@@ -162,8 +162,8 @@
               aria-invalid={passphrase.length > 0 && !passphraseStrong(passphrase)}
             />
             <p class="text-xs text-muted-foreground">
-              Use at least {MIN_PASSPHRASE} characters mixing letters, numbers, or symbols. A passphrase lets you unlock on browsers without passkey
-              PRF support — it's convenience only; the downloaded recovery key stays the strong root of trust.
+              Use at least {MIN_PASSPHRASE} characters mixing letters, numbers, or symbols. A passphrase lets you use sync on browsers without
+              passkey PRF support — it's convenience only; the downloaded recovery key stays the strong root of trust.
             </p>
           {/if}
         </div>

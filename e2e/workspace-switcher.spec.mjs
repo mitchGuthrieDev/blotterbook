@@ -224,9 +224,10 @@ test('workspace switcher: shows a neutral "checking…" while the tier probe is 
   await expect(page.getByText('cloud tier required')).toHaveCount(0);
 });
 
-// F63: the per-workspace sync-status affordance renders on STAGING for a cloud-tier account. Without
-// an unlocked key it offers "Unlock to enable sync" (the e2e server can't run /api/sync, so this
-// asserts the affordance is present + wired, not a full push/pull — convergence is proven in
+// F63/A336: the per-workspace sync-status affordance renders on STAGING for a cloud-tier account.
+// The button is ALWAYS the sync action ("Enable sync"); when the E2E key isn't in memory, clicking
+// it opens the inline key prompt as a step of the action (the e2e server can't run /api/sync, so
+// this asserts the affordance is present + wired, not a full push/pull — convergence is proven in
 // scripts/test-cloudsync.mjs).
 test('cloud sync (staging): the switcher shows the sync affordance for a cloud-tier account', async ({ page }) => {
   await page.route('**/api/me', route =>
@@ -239,7 +240,8 @@ test('cloud sync (staging): the switcher shows the sync affordance for a cloud-t
   await bootDashboard(page);
   await trigger(page).click();
   await expect(page.getByTestId('sync-status')).toBeVisible();
-  // Cloud tier + locked (no IK unlocked) ⇒ the affordance offers to unlock before enabling.
-  await expect(page.getByTestId('sync-unlock')).toBeVisible();
+  // A336: the action button renders directly — no unlock affordance exists anymore.
+  await expect(page.getByTestId('sync-enable')).toBeVisible();
+  await expect(page.getByTestId('sync-unlock')).toHaveCount(0);
   await expect(page.getByText('cloud tier required')).toHaveCount(0);
 });

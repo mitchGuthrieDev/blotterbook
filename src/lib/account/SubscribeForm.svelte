@@ -31,11 +31,13 @@
   let stripe: Stripe | null = null;
   let elements: StripeElements | null = null;
   let destroyed = false;
+  let readyTimer: ReturnType<typeof setTimeout> | undefined;
 
   onMount(() => {
     void boot();
     return () => {
       destroyed = true;
+      clearTimeout(readyTimer);
       elements?.getElement('payment')?.destroy();
     };
   });
@@ -59,7 +61,18 @@
       const options: StripePaymentElementOptions = { wallets: { link: 'never' } };
       const payment = elements.create('payment', options);
       payment.mount(mountEl);
-      payment.on('ready', () => (phase = 'ready'));
+      // A332 watchdog: if the Element never reports ready (blocked frame, Stripe outage, a future
+      // visibility regression), degrade to hosted Checkout instead of a skeleton forever.
+      readyTimer = setTimeout(() => {
+        if (phase === 'loading') {
+          payment.destroy();
+          phase = 'fallback';
+        }
+      }, 10000);
+      payment.on('ready', () => {
+        clearTimeout(readyTimer);
+        phase = 'ready';
+      });
     } catch (e) {
       // 501 not-configured → hosted Checkout still works; anything else shows + allows retry.
       const msg = e instanceof Error ? e.message : 'Could not start the subscription.';
@@ -117,20 +130,29 @@
       Cloud sync — <span class="font-medium text-foreground">$5/month</span>. Card details are handled by Stripe and never touch
       Blotterbook.
     </p>
-    {#if phase === 'loading'}
-      <div class="h-24 animate-pulse rounded-md border border-border bg-secondary/40" role="status" aria-label="Loading payment form"></div>
-    {/if}
-    <form class={['flex flex-col gap-3', phase === 'loading' || phase === 'fallback' ? 'hidden' : '']} onsubmit={onConfirm}>
-      <div bind:this={mountEl}></div>
-      <button
-        type="submit"
-        class="self-start rounded-[9px] bg-primary px-4 py-2 text-[13.5px] font-semibold text-primary-foreground hover:brightness-[1.08] disabled:opacity-50"
-        disabled={phase !== 'ready'}
-        data-testid="subscribe-confirm"
-      >
-        {phase === 'confirming' ? 'Processing…' : phase === 'finalizing' ? 'Activating…' : 'Subscribe — $5/month'}
-      </button>
-    </form>
+    <!-- A332: the mount host must NEVER be display:none while the Element boots — Stripe's iframe
+         needs a laid-out box or its 'ready' event may never fire (the stuck-skeleton bug). The form
+         stays rendered during 'loading'; the skeleton OVERLAYS it (opaque) until ready. -->
+    <div class={['relative', phase === 'fallback' ? 'hidden' : '']}>
+      <form class="flex flex-col gap-3" onsubmit={onConfirm}>
+        <div bind:this={mountEl}></div>
+        <button
+          type="submit"
+          class="self-start rounded-[9px] bg-primary px-4 py-2 text-[13.5px] font-semibold text-primary-foreground hover:brightness-[1.08] disabled:opacity-50"
+          disabled={phase !== 'ready'}
+          data-testid="subscribe-confirm"
+        >
+          {phase === 'confirming' ? 'Processing…' : phase === 'finalizing' ? 'Activating…' : 'Subscribe — $5/month'}
+        </button>
+      </form>
+      {#if phase === 'loading'}
+        <div
+          class="absolute inset-0 h-full min-h-24 animate-pulse rounded-md border border-border bg-secondary"
+          role="status"
+          aria-label="Loading payment form"
+        ></div>
+      {/if}
+    </div>
     {#if error}
       <p class="m-0 text-[13px] text-destructive" role="alert">{error}</p>
       {#if phase === 'error'}

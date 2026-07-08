@@ -5690,6 +5690,72 @@
       "completedDate": "2026-07-08",
       "partial": false,
       "doneNote": "DONE 2026-07-08 (same pass as filed). (a) Added the 0.70.0 changelog entry (Help hub live + prerendered/indexed pages + the A276 support comp tooling under the hood) — prod and the Blotterlog top entry match again. (b) adapters.ts detection-failure message now points at \"Help › Importing your trades\"; Onboarding's step-2 hint links to /help/import.html (styled, target=_blank). (c) push.ts entitlement comment updated to hasCloudEntitlement() (A253/A277 — the same choke point /api/me reads)."
+    },
+    {
+      "id": "A332",
+      "title": "Embedded payment form fails to load on /account.html and the in-app Account screen",
+      "category": "FIXES",
+      "priority": "P1",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "DONE 2026-07-08. Root cause (code-confirmed, corroborated by measurements): SubscribeForm mounted the Payment Element into a display:none form (the 'hidden' class while phase==='loading'), so Stripe's iframe had no laid-out box and its 'ready' event never fired — eternal skeleton on BOTH surfaces (they share the component). FIX: the mount host now stays rendered with the opaque skeleton OVERLAYING it (relative wrapper + absolute inset-0) until ready; plus a 10s watchdog that destroys the Element and degrades to the hosted-Checkout fallback if 'ready' never fires for any reason (cleared on ready/unmount). Ruled out with evidence: the CSP already carries Stripe's documented minimum (script js.stripe.com, connect api.stripe.com, frame js.stripe.com+hooks.stripe.com); the /app/* _headers rule DOES match the canonical /app/ URL (splat matches empty). OWNER ACTIONS remaining: (1) DevTools console on /account.html — confirm no CSP violation lines name a stripe host; (2) Pages dashboard → env vars — confirm STRIPE_SECRET_KEY / STRIPE_PRICE_SUBSCRIPTION / STRIPE_PUBLISHABLE_KEY are set for Production (unset shows the fallback button, a different symptom than the stuck skeleton)."
+    },
+    {
+      "id": "A333",
+      "title": "Let a subscriber cancel (and un-cancel) their cloud subscription in-app",
+      "category": "FEATURES",
+      "priority": "P1",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "DONE 2026-07-08. Self-serve cancel/resume shipped end-to-end: functions/api/subscription/cancel.ts (session-authed + Origin-checked POST { resume? } → Stripe cancel_at_period_end true/false; 404 no_subscription when nothing to toggle; 501/503 fail-closed; A326 error shape; the webhook stays the ONLY lifecycle writer — the endpoint's one local write is the cancel_at_period_end display flag, updated optimistically and confirmed by customer.subscription.updated; grantsCloud never reads it so entitlement can't drift). subscriptions gained the cancel_at_period_end column (schema.sql + one-time ALTER migration note; upsert preserves the flag on invoice events; webhook parses it from subscription objects). /api/me now returns a subscription {status, currentPeriodEnd, cancelAtPeriodEnd} billing summary (null for admin comps — the UI never offers Cancel to a comped user). Client: setCancelAtPeriodEnd() action + Cancel/Resume UI on the app Account screen (alert-dialog confirm, \"keeps working until <date>\" copy, sub-cancel/sub-resume/sub-cancel-scheduled testids) and the site AccountDash Plan & billing card (confirm()). 11 new endpoint tests in test-subscription.mjs (28 total, green). functions/README.md documents the endpoint + migration. NOTE for owner: live prod D1 needs the one-time migration — npx wrangler d1 execute blotterbook-accounts --remote --command \"ALTER TABLE subscriptions ADD COLUMN cancel_at_period_end INTEGER\"."
+    },
+    {
+      "id": "A334",
+      "title": "Performance Graph module: the chart does not scale with the module size",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "DONE 2026-07-08. Reproduced + measured on the built demo with Playwright (screenshots in the PR session record): the chart svg was pinned at exactly 256px at every module size — viewBox height was the compile-time constant VH=256, the svg carried a hard h-64, and Card.Content (plain block) stranded the 65vh fill as blank space below the content. FIX (Dashboard.svelte): ch = $state(0) measured via bind:clientHeight on a new relative flex-1 min-h-64 wrapper; VH = $derived(ch > 0 ? ch : 256) so the WHOLE plot geometry (y(), ticks, end labels, cursor line) re-derives at the real size instead of CSS-stretching; the svg is ABSOLUTE inside the measured wrapper (an in-flow svg's intrinsic aspect from the now-reactive viewBox fed the wrapper's own height back into ch — a runaway growth loop caught in verification); Card.Content gets flex flex-1 flex-col only in the fill state. Verified post-fix: Large → svg 1102×440 filling the 65vh card (was 256), Medium → back to the 256 floor, no runaway; sm/md pixel-identical to before (flex classes inert without the flex parent). Analytics confirmed NOT affected (no fill class — its cards never outgrow content; caveat recorded: its preserveAspectRatio=none sparklines would distort if a fill is ever added there)."
+    },
+    {
+      "id": "A335",
+      "title": "Admin users panel offers 'Grant CLOUD' on accounts already cloud via subscription",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "DONE 2026-07-08. Admin.svelte row actions: a user whose effectiveTier is 'cloud' WITHOUT an active override (i.e. cloud via subscription) now shows a muted \"Subscribed — nothing to comp\" note instead of the Grant CLOUD button; active-override users keep Revoke, local users keep Grant + the confirm flow, revoked-override history still renders. Pure client-render fix — /api/admin/users already carried subscription/override/effectiveTier per row, no server change. (A first attempt by a fix agent introduced smart-quote corruption; reverted and re-applied cleanly — typecheck 0 errors.)"
+    },
+    {
+      "id": "A337",
+      "title": "Module corner drag-resize is laggy — profile the drag path and make resizing smooth (+ evaluate a motion dependency)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "DONE 2026-07-08 (perf fixes shipped; dependency decision = none needed). Profiling found the real cause: the drag rAF wrote a FRESH resizing object every animation frame even when the snap hadn't changed, invalidating every previewSize() reader (all cards' span classes, renderItems, fill classes) at ~60fps for the entire drag — the A317 rAF throttled writes per frame but not no-op writes. FIXES: (1) modsize.svelte.ts only assigns resizing when key/size actually changed (~60/s → 2-4 per drag); (2) the six-Small carousel regrouping + the 65vh fill now key on the COMMITTED size (sizeOf) instead of the live preview — regrouping mounts/unmounts a whole ModuleCarousel and the fill lurches the row, far too heavy mid-drag; both land on release (deliberate A317 behavior revision); (3) [contain:layout_paint] on Dashboard + Analytics card roots bounds a snap's reflow to each card's own box. animate:flip ruled out as a cause (fires only on reorder). DEPENDENCY BRIEF (researched motion/motion.dev ~2.3KiB gz mini, @formkit/auto-animate ~3KiB gz, Svelte built-ins): recommendation NO new dependency — the lag was a reactivity bug no animation lib would fix, animate:flip already covers reorders, and the size budget has only ~40KiB uncompressed headroom. If spring-smoothed span transitions are ever wanted as polish, motion's mini animate() is the pick (WAAPI/CSSOM, CSP-safe) as a separate owner-approved item."
+    },
+    {
+      "id": "A336",
+      "title": "Sync UX: hide lock/unlock from users — sync controls only, key ceremony behind the scenes (+ passkey-as-key follow-up)",
+      "category": "FEATURES",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "DONE 2026-07-08 (owner decisions: inline key prompts everywhere incl. key management; explicit clear-key control dropped entirely — sign-out/reload is the path; app + site reworked together; PRF-as-default filed as A338 for later). The vault is now invisible: UnlockModal renamed SyncKeyPrompt (reason prop — \"Enter your sync passphrase to turn on sync.\" — onready continues the calling action; Continue/Use passkey buttons; sync-key-* testids), the Account screen's locked/unlocked badge + Lock/Unlock buttons are gone (cloud-lock/cloud-unlock-open/cloud-unlocked testids removed), the sync panel always renders with Sync now / Pull / Push / Pause and each key-needing action routes through ensureKey() (prompt-then-continue), the Encryption keys management section is always visible with the same inline pattern, the WorkspaceSwitcher's two \"Unlock to …\" buttons became the real actions (sync-enable/sync-resume + the new sync-resume-key for a lapsed key session; the switcher menu is controlled so the prompt never fights the open menu layer), the pill's needs-unlock state became needs-key (\"Needs your passphrase\", KeyRound icon), and the site surfaces were reworded to match (HelpCloudSync \"signing in vs. decrypting\" + AccountDash copy). FIXED A REAL PRE-EXISTING BUG surfaced by the rework: doEnable's fallback checked cloudSync.status==='locked', but enableCloudSync's finally refreshes the status back to 'off' for a not-enabled workspace, so the branch was dead — the missing-key check now uses cloudSync.unlocked (found by the new e2e). Security model unchanged: keys in-memory only, auto-clear on logout, requireUnlocked server of truth. e2e: setupAndUnlock → setupSync (panel = ready signal), the lock/unlock test replaced by an inline-prompt-after-reload test that proves prompt → continue → synced end-to-end, switcher spec asserts sync-enable renders with no unlock affordance; all cloud-sync + workspace-switcher specs green."
     }
   ]
 }

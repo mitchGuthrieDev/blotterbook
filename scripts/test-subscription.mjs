@@ -7,6 +7,7 @@
    create + persistence, the incomplete-subscription resume path, metadata linkage, idempotency
    headers, and client-secret extraction across both Stripe API shapes. */
 import { onRequestPost as subCreate } from '../functions/api/subscription/create.ts';
+import { onRequestPost as subCancel } from '../functions/api/subscription/cancel.ts';
 import { SESSION_COOKIE, createSession, createUser } from '../functions/_lib/accounts.ts';
 
 let pass = 0,
@@ -275,6 +276,130 @@ console.log('\nStripe failure → clean 502:');
   } finally {
     stub.restore();
   }
+}
+
+/* ---- A333: self-serve cancel / resume (functions/api/subscription/cancel.ts) ---------------- */
+
+const cancelReq = ({ origin = ORIGIN, cookie = null, body = '{}' } = {}) =>
+  new Request(ORIGIN + '/api/subscription/cancel', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(origin ? { Origin: origin } : {}),
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+    body,
+  });
+const subRow = (userId, over = {}) => ({
+  user_id: userId,
+  stripe_subscription_id: 'sub_live',
+  stripe_customer_id: 'cus_live',
+  status: 'active',
+  current_period_end: Date.now() + 20 * 86400e3,
+  updated: Date.now(),
+  past_due_since: null,
+  last_event_created: null,
+  cancel_at_period_end: 0,
+  ...over,
+});
+
+console.log('\nCancel — gates:');
+{
+  const db = mockDb();
+  ok('cancel: 503 when ACCOUNTS_DB unbound', (await subCancel({ request: cancelReq(), env: { STRIPE_SECRET_KEY: 'x' } })).status === 503);
+  ok('cancel: 501 without STRIPE_SECRET_KEY', (await subCancel({ request: cancelReq(), env: { ACCOUNTS_DB: db } })).status === 501);
+  ok(
+    'cancel: cross-origin rejected 403',
+    (await subCancel({ request: cancelReq({ origin: 'https://evil.example' }), env: ENV(db) })).status === 403
+  );
+  ok('cancel: 401 without a session', (await subCancel({ request: cancelReq(), env: ENV(db) })).status === 401);
+  const user = await createUser(db, 'nosub@example.com');
+  const { token } = await createSession(db, user.id);
+  const res = await subCancel({ request: cancelReq({ cookie: cookieFor(token) }), env: ENV(db) });
+  const j = await res.json();
+  ok('cancel: 404 no_subscription when the user has no cancelable row', res.status === 404 && j.code === 'no_subscription');
+}
+
+console.log('\nCancel — schedules cancel_at_period_end via Stripe (never touches tier/status):');
+{
+  const db = mockDb();
+  const user = await createUser(db, 'cancel@example.com');
+  const { token } = await createSession(db, user.id);
+  const periodEndSec = Math.floor((Date.now() + 20 * 86400e3) / 1000);
+  db.tables.subscriptions.push(subRow(user.id));
+  const stub = stubStripe([
+    [
+      /\/v1\/subscriptions\/sub_live$/,
+      call => ({
+        id: 'sub_live',
+        cancel_at_period_end: call.body?.get('cancel_at_period_end') === 'true',
+        current_period_end: periodEndSec,
+      }),
+    ],
+  ]);
+  try {
+    const res = await subCancel({ request: cancelReq({ cookie: cookieFor(token) }), env: ENV(db) });
+    const j = await res.json();
+    const call = stub.calls[0];
+    ok(
+      'cancel: Stripe called with cancel_at_period_end=true on the stored subscription id',
+      call && /sub_live$/.test(call.url) && call.body?.get('cancel_at_period_end') === 'true'
+    );
+    ok(
+      'cancel: 200 { cancelAtPeriodEnd: true, currentPeriodEnd } (seconds converted to ms)',
+      res.status === 200 && j.cancelAtPeriodEnd === true && j.currentPeriodEnd === periodEndSec * 1000
+    );
+    const row = db.tables.subscriptions.find(r => r.user_id === user.id);
+    ok(
+      'cancel: row flag flipped; status/tier untouched (webhook stays the lifecycle writer)',
+      row.cancel_at_period_end === 1 && row.status === 'active'
+    );
+    // resume clears the flag while still in-period
+    const res2 = await subCancel({ request: cancelReq({ cookie: cookieFor(token), body: '{"resume":true}' }), env: ENV(db) });
+    const j2 = await res2.json();
+    const call2 = stub.calls[1];
+    ok(
+      'resume: Stripe called with cancel_at_period_end=false and the flag clears',
+      res2.status === 200 &&
+        j2.cancelAtPeriodEnd === false &&
+        call2.body?.get('cancel_at_period_end') === 'false' &&
+        db.tables.subscriptions.find(r => r.user_id === user.id).cancel_at_period_end === 0
+    );
+  } finally {
+    stub.restore();
+  }
+}
+
+console.log('\nCancel — failure paths:');
+{
+  const db = mockDb();
+  const user = await createUser(db, 'cancelfail@example.com');
+  const { token } = await createSession(db, user.id);
+  db.tables.subscriptions.push(subRow(user.id));
+  const stub = stubStripe([[/\/v1\/subscriptions\/sub_live$/, () => ({ status: 500, body: { error: { message: 'nope' } } })]]);
+  try {
+    const res = await subCancel({ request: cancelReq({ cookie: cookieFor(token) }), env: ENV(db) });
+    const j = await res.json();
+    ok(
+      'cancel: Stripe failure → 502 human error + cancel_failed code, row flag unchanged',
+      res.status === 502 &&
+        j.code === 'cancel_failed' &&
+        typeof j.error === 'string' &&
+        !/_/.test(j.error) &&
+        db.tables.subscriptions.find(r => r.user_id === user.id).cancel_at_period_end === 0
+    );
+  } finally {
+    stub.restore();
+  }
+  // an already-canceled subscription (rides out the period) has nothing to toggle
+  const db2 = mockDb();
+  const user2 = await createUser(db2, 'ridden@example.com');
+  const { token: token2 } = await createSession(db2, user2.id);
+  db2.tables.subscriptions.push(subRow(user2.id, { status: 'canceled' }));
+  ok(
+    'cancel: 404 for a fully-canceled subscription (nothing to toggle)',
+    (await subCancel({ request: cancelReq({ cookie: cookieFor(token2) }), env: ENV(db2) })).status === 404
+  );
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
