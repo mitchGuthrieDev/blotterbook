@@ -113,6 +113,9 @@ export const DASHBOARD_MODULES: ModDef[] = [
   { key: 'today', label: 'Today / Last Session' }, // F39 — picker-addable, not in the default layout
   { key: 'ddstatus', label: 'Drawdown Status' }, // F39
   { key: 'streak', label: 'Streak Monitor' }, // F39
+  { key: 'winrate', label: 'Win Rate' }, // A271 KPI card — glanceable Small-first; picker-addable (all surfaces, CH16 2026-07-08)
+  { key: 'pfactor', label: 'Profit Factor' }, // A271 KPI card
+  { key: 'expect', label: 'Expectancy' }, // A271 KPI card
 ];
 /** Every module key the dashboard knows (derived from the table above). */
 export const MODULE_KEYS: string[] = DASHBOARD_MODULES.map(d => d.key);
@@ -122,15 +125,21 @@ export const DEFAULT_MODULE_KEYS: string[] = ['perf', 'cal', 'cost', 'adv', 'ter
 /** Half-width modules today (lg:col-span-1 in the old 2-col grid) → default to Medium (span 6). The rest
  *  (perf / compare / blotter) were full-width → Large (span 12). */
 const PAIRED_MODULE_KEYS = new Set(['cal', 'cost', 'adv', 'term', 'today', 'ddstatus', 'streak']);
+/** A271 remainder: the dedicated glanceable KPI-card modules — Small-first (span 2, six per row). */
+export const KPI_MODULE_KEYS = new Set(['winrate', 'pfactor', 'expect']);
+/** A271 remainder: modules with a glanceable Small variant — the KPI cards plus the F39 batch
+ *  (Today / Drawdown Status / Streak), whose headline number reads fine at span 2. */
+const SM_CAPABLE_KEYS = new Set([...KPI_MODULE_KEYS, 'today', 'ddstatus', 'streak']);
 
-/** Default size that PRESERVES today's visual layout on upgrade: paired (half-width) → md, others → lg. */
-export const defaultSizeFor = (key: string): ModSize => (PAIRED_MODULE_KEYS.has(key) ? 'md' : 'lg');
+/** Default size that PRESERVES today's visual layout on upgrade: KPI cards → sm (they're new, no
+ *  layout predates them), paired (half-width) → md, others → lg. */
+export const defaultSizeFor = (key: string): ModSize => (KPI_MODULE_KEYS.has(key) ? 'sm' : PAIRED_MODULE_KEYS.has(key) ? 'md' : 'lg');
 
-/** Which sizes a module supports. The current dashboard modules are rich (tables/charts), so they
- *  support Medium ↔ Large (half ↔ full width; the two states that render well) — a span-2 "Small"
- *  would cram their content. `sm` stays in the model (grid + migration understand it) for future
- *  glanceable KPI-card modules + the carousel group; no current module opts into it yet. */
-export const supportedSizes = (_key: string): ModSize[] => ['md', 'lg'];
+/** Which sizes a module supports. Rich modules (tables/charts) stay Medium ↔ Large — a span-2
+ *  "Small" would cram their content. The glanceable set (A271 remainder) adds Small: the KPI cards
+ *  are sm/md (a full-width KPI number is silly), and the F39 trio supports all three. */
+export const supportedSizes = (key: string): ModSize[] =>
+  KPI_MODULE_KEYS.has(key) ? ['sm', 'md'] : SM_CAPABLE_KEYS.has(key) ? ['sm', 'md', 'lg'] : ['md', 'lg'];
 
 const DASH_SPEC: LayoutSpec = { keys: MODULE_KEYS, defaultKeys: DEFAULT_MODULE_KEYS, defaultSizeFor, supportedSizes };
 /** The dashboard's bound kit (A319 — the shared size controller takes a LayoutKit). */

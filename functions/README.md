@@ -95,6 +95,16 @@ GDPR; two-phase + resumable — sync workspaces/R2 blobs first, then every D1 ro
   **registration** options bound to that user (a new `register` challenge row); the client then posts
   to `register-verify`, which enrolls the new passkey and starts a session (the standard add-passkey
   path). Re-asserts `email_verified` and claims donations.
+- `POST /api/account/reclaim-send` — **unauthed**, Origin-checked (A316). Takes `{ email }`, ALWAYS
+  returns a generic `200`; emails a single-use reclaim link only when a **never-verified** account
+  holds the address (the squatting case — offered by the client after `register-options` answers its
+  409 with `reclaimable: true`). 503 when `RESEND_API_KEY` is unbound.
+- `POST /api/account/reclaim-confirm` — consumes the reclaim token (proof of inbox ownership). If the
+  holder is still never-verified and owns no sync workspaces (their R2 ciphertext would need the A305
+  pager), deletes the squatter shell, pre-creates a **fresh, already-verified** account for the email
+  (claiming donations), and returns registration options bound to it — `register-verify` then enrolls
+  the first passkey and starts the session. `register-options` also **lazily frees** a TTL-expired
+  (30-day) never-verified holder at the collision point, so stale squats clear without any link.
 
 Recovery/verify tokens are stored **hash-only** (`SHA-256(secret)`), single-use (`used_at` stamped on
 consume), and TTL'd (~15 min) — same posture as sessions (S25). Security never depends on the

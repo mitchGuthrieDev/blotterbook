@@ -20,6 +20,9 @@ const PAGES = [
   // F44: the changelog-email signup section is server-rendered (present before hydration).
   { path: '/changelog.html', must: ['Changelog', 'Beta released', 'class="entry', 'Get release notes by email', 'id="subscribe"'] },
   { path: '/legal.html', must: ['Legal &amp; Disclaimers', 'Not a broker. Not advice.', 'Terms of Service'] },
+  // A293: the Account Dashboard prerenders its static frame + the loading skeleton (the session is
+  // client-only, so account content hydrates from /api/me after load — never in the raw HTML).
+  { path: '/account.html', must: ['Your Account', 'Loading account', 'name="robots" content="noindex'] },
   { path: '/admin.html', must: ['Configuration', 'Feature flags', 'Backlog'] },
 ];
 
@@ -33,3 +36,13 @@ for (const p of PAGES) {
     for (const s of p.must) expect(html, `${p.path} raw HTML should contain: ${s}`).toContain(s);
   });
 }
+
+// A293: the Account page hydrates to the logged-out view (no session on the static test server —
+// the /api/me probe fails, which resolves to "no user"), and the site header's CTA routes here.
+test('/account.html hydrates to the logged-out view + the header CTA points at it', async ({ page }) => {
+  await page.goto('/account.html', { waitUntil: 'networkidle' });
+  await expect(page.getByRole('button', { name: 'Log in with a passkey' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create account with a passkey' })).toBeVisible();
+  await page.goto('/index.html', { waitUntil: 'networkidle' });
+  await expect(page.getByRole('link', { name: /^Account/ }).first()).toHaveAttribute('href', '/account.html');
+});

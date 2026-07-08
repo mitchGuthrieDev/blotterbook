@@ -18,6 +18,7 @@ const SSG_PAGES = [
   { url: 'roadmap.html', component: 'src/site/components/Roadmap.svelte' },
   { url: 'changelog.html', component: 'src/site/components/Changelog.svelte' },
   { url: 'legal.html', component: 'src/site/components/Legal.svelte' },
+  { url: 'account.html', component: 'src/site/components/AccountDash.svelte' }, // A293 — noindex; session hydrates client-side
   { url: 'admin.html', component: 'src/site/components/Admin.svelte' },
 ];
 //
@@ -54,6 +55,7 @@ export default defineConfig({
         roadmap: r('src/roadmap.html'),
         changelog: r('src/changelog.html'),
         legal: r('src/legal.html'),
+        account: r('src/account.html'), // A293 — the standalone Account Dashboard page
         admin: r('src/admin.html'),
         app: r('src/app/app.html'),
         demo: r('src/app/demo.html'),

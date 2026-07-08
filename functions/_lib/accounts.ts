@@ -108,7 +108,7 @@ export interface RecoveryTokenRow {
   id: string;
   user_id: string | null;
   email: string;
-  purpose: string; // 'verify' | 'recover'
+  purpose: string; // 'verify' | 'recover' | 'reclaim'
   token_hash: string;
   created_at: number;
   expires_at: number;
@@ -426,22 +426,50 @@ export async function setEmailVerified(db: AccountsDb, userId: string): Promise<
 // token TTL, so a real user who intends to verify has ample time.
 export const UNVERIFIED_USER_TTL_MS = 30 * 24 * 3600 * 1000;
 
+/** True when the user owns at least one sync workspace. Such an account's R2 ciphertext needs the
+ *  PAGED account-delete cleanup (A305 — a D1 delete can never reach R2), so every purge/reclaim path
+ *  below must skip workspace owners rather than orphan their blobs. */
+export async function ownsSyncWorkspaces(db: AccountsDb, userId: string): Promise<boolean> {
+  return !!(await db.prepare('SELECT * FROM sync_workspaces WHERE owner_user_id = ?').bind(userId).first());
+}
+
+/** A316: lazily free a TTL-expired, never-verified account at the registration collision point
+ *  (register-options calls this when the requested email is already held). Deletes the squatter shell
+ *  via {@link deleteUserAccount} (explicit child-row cleanup — never a bare cascade) and returns true
+ *  when the email was freed. Returns false — leaving the 409 path to run — when the holder is
+ *  verified, younger than the TTL, or owns sync workspaces (see {@link ownsSyncWorkspaces}). */
+export async function maybeFreeExpiredUnverified(db: AccountsDb, user: UserRow, now = Date.now()): Promise<boolean> {
+  if (user.email_verified) return false;
+  if (user.created_at >= now - UNVERIFIED_USER_TTL_MS) return false;
+  if (await ownsSyncWorkspaces(db, user.id)) return false;
+  await deleteUserAccount(db, user.id);
+  return true;
+}
+
 /**
  * Purge never-verified accounts older than {@link UNVERIFIED_USER_TTL_MS}, freeing their squatted
- * emails. The FK cascades (credentials/sessions/subscriptions/sync_* — ON DELETE CASCADE) clean the
- * child rows. Returns the number of users removed.
+ * emails. Bounded (`limit`) so an admin sweep stays within the subrequest budget (A15) — each
+ * deletion is an explicit {@link deleteUserAccount} (never a bare cascade), and workspace owners are
+ * skipped (their R2 blobs need the A305 pager). Returns the number of users removed.
  *
- * NOTE (A310): this is a bounded helper, deliberately NOT auto-wired to any request path — automatic
- * deletion of a real (if unverified) user's account is a product-policy call, and cloud-synced R2
- * blobs need the account-delete pager (A305) to clean fully, not a bare D1 cascade. It is provided for
- * a manual/admin sweep. The complementary proven-ownership (magic-link) RECLAIM flow — letting the real
- * owner take over a squatted email before the TTL elapses — remains unimplemented (see the audit).
+ * A316: the squatting fix is wired LAZILY — register-options frees the one colliding account via
+ * {@link maybeFreeExpiredUnverified} at the moment it matters, and the proven-ownership reclaim flow
+ * (/api/account/reclaim-send + reclaim-confirm) covers the pre-TTL window. This bulk helper remains
+ * for manual/admin sweeps only.
  */
-export async function purgeUnverifiedUsers(db: AccountsDb, now = Date.now()): Promise<number> {
+export async function purgeUnverifiedUsers(db: AccountsDb, now = Date.now(), limit = 10): Promise<number> {
   const cutoff = now - UNVERIFIED_USER_TTL_MS;
-  const res = (await db.prepare('DELETE FROM users WHERE email_verified = 0 AND created_at < ?').bind(cutoff).run()) as
-    { meta?: { changes?: number } } | undefined;
-  return res?.meta?.changes ?? 0;
+  const { results } = await db
+    .prepare('SELECT * FROM users WHERE email_verified = 0 AND created_at < ? LIMIT ?')
+    .bind(cutoff, limit)
+    .all<UserRow>();
+  let removed = 0;
+  for (const u of results) {
+    if (await ownsSyncWorkspaces(db, u.id)) continue;
+    await deleteUserAccount(db, u.id);
+    removed++;
+  }
+  return removed;
 }
 
 /* ---- donations (Phase 2 — F54) --------------------------------------------------------------
@@ -647,7 +675,7 @@ export async function markWebhookEvent(db: AccountsDb, id: string, type: string,
 
 export async function createRecoveryToken(
   db: AccountsDb,
-  t: { userId: string | null; email: string; purpose: 'verify' | 'recover' },
+  t: { userId: string | null; email: string; purpose: 'verify' | 'recover' | 'reclaim' },
   now = Date.now()
 ): Promise<string> {
   const id = randomB64u(16);
@@ -667,7 +695,7 @@ export async function createRecoveryToken(
 export async function consumeRecoveryToken(
   db: AccountsDb,
   token: string,
-  purpose: 'verify' | 'recover',
+  purpose: 'verify' | 'recover' | 'reclaim',
   now = Date.now()
 ): Promise<RecoveryTokenRow | null> {
   if (!token) return null;

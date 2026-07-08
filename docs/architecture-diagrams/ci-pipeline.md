@@ -31,9 +31,9 @@ flowchart TD
         B5 --> B6["playwright install (cached by version)"]
         B6 --> B7["check-mermaid — every docs/ mermaid block still parses"]
         B7 --> B8["test:e2e — Playwright, boot every surface from dist/"]
-        B8 --> B9["re-run scripts/build-manifest.mjs"]
+        B8 --> B9["re-run scripts/build-econ-events.mjs<br/>+ scripts/build-manifest.mjs"]
         B9 --> GATE{"git status clean?"}
-        GATE -->|"dirty"| FAIL["FAIL — committed manifest.json drifted"]
+        GATE -->|"dirty"| FAIL["FAIL — committed generated data drifted"]
         GATE -->|"clean"| PASS["pass"]
     end
 
@@ -55,7 +55,7 @@ flowchart TD
   cancel the other, and both must go green for the run to pass. This was split out of a single
   sequential job to cut wall-clock time to red/green on the fast gate.
 - **`npm run ci`** (`package.json`) chains the same checks (`test` → `build` → `size-budget` →
-  `check-deploy` → `test:e2e`) as a single local command a dev can run to reproduce the gist of both
+  `check-deploy` → `check-mermaid` → `test:e2e`) as a single local command a dev can run to reproduce the gist of both
   jobs before pushing; the workflow itself keeps named steps (not a call to `npm run ci`) so failures
   stay isolated per step in the Actions UI, and so the fast job doesn't redundantly re-run
   lint/typecheck/format inside `npm test`.
@@ -67,9 +67,10 @@ flowchart TD
   silently rendering as an error box on GitHub — see
   [the architecture-diagrams README](README.md#ci-drift-gate).
 - **The drift gate is `build-test-e2e`'s finale.** Because `dist/` is gitignored, CI re-runs the
-  deterministic `build-manifest.mjs` and asserts `git status` is clean — proving the committed
-  `static/data/manifest.json` matches what the tooling produces. If you edit any `static/data/*.json`
-  and forget to regenerate the manifest, this fails.
+  deterministic generated-data scripts — `build-econ-events.mjs` then `build-manifest.mjs` (A323) —
+  and asserts `git status` is clean, proving the committed `static/data/econ-events.json` +
+  `static/data/manifest.json` match what the tooling produces. If you edit any `static/data/*.json`
+  (or the econ-events source lists) and forget to regenerate, this fails.
 - **`check-deploy`** independently validates the deploy contract (source→URL assumptions) and the
   version-classification rules used by the [two-track bump](versioning-two-track.md).
 - Concurrency cancels in-progress PR runs (not `main`); permissions are read-only.

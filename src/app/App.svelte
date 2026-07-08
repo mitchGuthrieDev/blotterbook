@@ -41,7 +41,14 @@
   import { UserRound } from '@lucide/svelte';
   import { fade } from 'svelte/transition';
   import { dur } from './lib/motion.ts';
-  import Dashboard, { type DashStat, type DayCell, type StatDetail, type FilterModel, type FilterPatch } from './screens/Dashboard.svelte';
+  import Dashboard, {
+    type DashKpi,
+    type DashStat,
+    type DayCell,
+    type StatDetail,
+    type FilterModel,
+    type FilterPatch,
+  } from './screens/Dashboard.svelte';
   import { migrateLayout, defaultLayout, analyticsKit, type ModEntry } from './lib/modlayout.ts';
   // The non-default screens are CODE-SPLIT: type-only static imports (erased at build) + lazy
   // `import()` loaders in the router below, so their chunks stay out of the /app first paint
@@ -60,7 +67,7 @@
   import BootSplash from './parts/BootSplash.svelte';
   import LaunchGate from './parts/LaunchGate.svelte';
   import WorkspaceSwitcher from './parts/WorkspaceSwitcher.svelte';
-  import { account, refreshSession, completeRecovery } from './lib/account.svelte.ts';
+  import { account, refreshSession, completeRecovery, completeReclaim } from './lib/account.svelte.ts';
   import { wrapStore, configureCloudSync } from './lib/cloudsync.svelte.ts';
   import { loadFlags, APP_FLAGS, accountGateEnabled, type AppFlags } from './lib/flags.ts';
   import { pickFlavor } from './lib/flavor.ts';
@@ -149,6 +156,24 @@
       },
       { key: 'sharpe', label: 'Sharpe (daily)', value: num(m.sharpe), note: `${m.active} trading days` },
     ];
+  });
+  // A271 remainder: raw numbers for the glanceable KPI-card modules (Win Rate / Profit Factor /
+  // Expectancy) — same scope-active Metrics as the stat row; the modules add the visual breakdown.
+  const dashKpi = $derived.by<DashKpi>(() => {
+    const m = dash.metricsActive;
+    return {
+      n: m.n,
+      wins: m.wins,
+      losses: m.losses,
+      scratch: m.scratch,
+      winRate: m.winRate,
+      pf: m.pf,
+      gp: m.gp,
+      gl: m.gl,
+      expectancy: m.expectancy,
+      avgW: m.avgW,
+      avgL: m.avgL,
+    };
   });
   // Daily cumulative gross/net/take series for the Performance chart — same cost/tax-adjusted math as
   // the cost panel (tEff/fixedMo from costModel), so the Net/Take-home overlays reconcile.
@@ -947,12 +972,16 @@
       // Account.svelte (which normally handles it) never mounts while the gate blocks, so the 15-min
       // token used to just expire. Run the re-enrollment ceremony pre-gate; on success account.user
       // flips and the gate falls through. Scrub the token so a reload can't reuse a spent link.
-      const recoverToken = new URLSearchParams(location.search).get('recover');
-      if (recoverToken) {
+      const params = new URLSearchParams(location.search);
+      const recoverToken = params.get('recover');
+      const reclaimToken = params.get('reclaim'); // A316: squatted-email reclaim, same pre-gate problem
+      if (recoverToken || reclaimToken) {
         const url = new URL(location.href);
         url.searchParams.delete('recover');
+        url.searchParams.delete('reclaim');
         history.replaceState(null, '', url.pathname + url.search + url.hash);
-        void completeRecovery(recoverToken);
+        if (recoverToken) void completeRecovery(recoverToken);
+        else if (reclaimToken) void completeReclaim(reclaimToken);
       }
     }
     // A256/F63: initialize cloud sync on every NON-DEMO surface (probes the tier, wires focus/
@@ -1179,7 +1208,7 @@
           costDisabled={dash.isDemo}
           modules={dashModules}
           onmoduleschange={dashTabsState.saveModules}
-          {isStaging}
+          kpi={dashKpi}
           recentTrades={dash.filtered
             .slice(-12)
             .reverse()
@@ -1244,7 +1273,6 @@
             untagged={analytics.untagged}
             statRows={analytics.statRows}
             {filterModel}
-            {isStaging}
             modules={analyticsModules}
             onmoduleschange={saveAnalyticsModules}
             holdCoverage={analytics.holdCoverage}

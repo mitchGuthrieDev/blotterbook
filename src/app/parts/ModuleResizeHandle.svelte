@@ -1,7 +1,8 @@
 <script lang="ts">
-  // A319/A317: the shared corner drag-resize handle (staging-gated by the host screen). Pointer drag
-  // snaps to the nearest supported span; role=slider + arrow keys are the keyboard path (the ⋯ menu
-  // Size radio is the other). Hidden below lg (mobile stacks; size is ignored there).
+  // A319/A317: the shared corner drag-resize handle (all surfaces — CH16 2026-07-08; demo simply
+  // doesn't persist). Pointer drag snaps to the nearest supported span; role=slider + arrow keys are
+  // the keyboard path (the ⋯ menu Size radio is the other). Hidden below lg (mobile stacks; size is
+  // ignored there).
   import { Maximize2 } from '@lucide/svelte';
   import { SIZE_LABEL, type SizeController } from '../lib/modsize.svelte.ts';
 

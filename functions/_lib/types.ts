@@ -29,6 +29,10 @@ export interface Env {
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ONE_TIME?: string;
   STRIPE_PRICE_SUBSCRIPTION?: string;
+  /** Stripe publishable key (pk_test_/pk_live_ — public by design) for the in-app Payment Element
+   *  (A278). Returned to a logged-in caller by /api/subscription/create; unset → that endpoint
+   *  fails closed 501 and the client falls back to hosted Checkout (/api/checkout). */
+  STRIPE_PUBLISHABLE_KEY?: string;
   /** Resend API key for the F55 transactional emails (verify + recovery magic link). Unbound →
    *  the email endpoints fail closed with 503 { error: 'email unavailable' } (never a crash). */
   RESEND_API_KEY?: string;

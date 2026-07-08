@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<title>Account — Blotterbook</title>
+<meta name="description" content="Manage your Blotterbook account: sign in with a passkey, your plan and billing, cloud-sync status, and security settings.">
+<!-- A293: a personal page — never indexed (also robots-blocked in static/robots.txt). -->
+<meta name="robots" content="noindex, nofollow">
+<!-- A69: design tokens stay the single source (colors + fonts); the page's own CSS ships as the
+     Svelte components' extracted scoped stylesheet, linked by Vite from the client entry below. -->
+</head>
+<body>
+<!-- A69 SSG: vite-ssg.mjs server-renders AccountDash.svelte into this outlet at build time (the
+     static frame; account state is session-dependent and hydrates client-side from /api/me). -->
+<div id="app"><!--ssg-outlet--></div>
+<script type="module" src="site/entries/account.ts"></script>
+</body>
+</html>

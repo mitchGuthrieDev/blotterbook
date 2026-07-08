@@ -111,6 +111,15 @@ export function verifyEmailBody(link: string): string {
   <p style="color:#888;font-size:12px">If you didn't create a Blotterbook account, ignore this email.</p>
 </div>`;
 }
+/** A316: proven-ownership reclaim of an email squatted by a never-verified account. */
+export function reclaimEmailBody(link: string): string {
+  return `<div style="font-family:sans-serif;max-width:480px">
+  <h2>Reclaim your email for Blotterbook</h2>
+  <p>Someone registered a Blotterbook account with this address but never verified it. If that wasn't you, use this link to reclaim the address and finish creating your own account. It expires in 15 minutes and can be used once.</p>
+  <p><a href="${link}">Reclaim this email &amp; create my account</a></p>
+  <p style="color:#888;font-size:12px">If you didn't try to sign up for Blotterbook, you can safely ignore this — nothing changes until the link is used.</p>
+</div>`;
+}
 export function recoverEmailBody(link: string): string {
   return `<div style="font-family:sans-serif;max-width:480px">
   <h2>Recover your Blotterbook account</h2>

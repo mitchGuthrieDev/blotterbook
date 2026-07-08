@@ -25,6 +25,8 @@ import {
   insertCredential,
   credentialById,
   purgeUnverifiedUsers,
+  maybeFreeExpiredUnverified,
+  ownsSyncWorkspaces,
   UNVERIFIED_USER_TTL_MS,
   createRecoveryToken,
   consumeRecoveryToken,
@@ -50,6 +52,8 @@ import {
 } from '../functions/api/account/email-verify-confirm.ts';
 import { onRequestPost as recoverSend } from '../functions/api/account/recover-send.ts';
 import { onRequestPost as recoverVerify } from '../functions/api/account/recover-verify.ts';
+import { onRequestPost as reclaimSend } from '../functions/api/account/reclaim-send.ts';
+import { onRequestPost as reclaimConfirm } from '../functions/api/account/reclaim-confirm.ts';
 import { onRequestPost as passkeyDelete } from '../functions/api/account/passkey-delete.ts';
 
 let pass = 0,
@@ -77,6 +81,9 @@ function mockDb() {
     recovery_tokens: [],
     subscriptions: [], // F60 — keyed by user_id (no `id` column)
     webhook_events: [], // F60 — subscription-event dedupe ledger
+    sync_workspaces: [], // F62 — read by ownsSyncWorkspaces + swept by deleteUserAccount (A316)
+    sync_workspace_keys: [], // F62 — swept by deleteUserAccount
+    sync_wrapped_ik: [], // F62 — swept by deleteUserAccount
   };
   const where = (rows, clause, args, offset = 0) => {
     const conds = clause.split(/ AND /i).map(c => c.trim().match(/^(\w+) = \?$/)[1]);
@@ -103,6 +110,10 @@ function mockDb() {
       t.push(row);
       return changed(1);
     }
+    if ((m = s.match(/^SELECT \* FROM (\w+) WHERE email_verified = 0 AND created_at < \? LIMIT \?$/i))) {
+      // A316 purge candidate scan (purgeUnverifiedUsers) — bounded.
+      return tables[m[1]].filter(r => r.email_verified === 0 && r.created_at < args[0]).slice(0, args[1]);
+    }
     if ((m = s.match(/^SELECT \* FROM (\w+) WHERE (.+?)(?: ORDER BY .+)?$/i))) return where(tables[m[1]], m[2], args);
     // Generalized to any single-column key (`WHERE <col> = ?`) — `id` still matches (F60 upserts by user_id).
     if ((m = s.match(/^UPDATE (\w+) SET (.+) WHERE (\w+) = \?$/i))) {
@@ -111,12 +122,6 @@ function mockDb() {
       const row = tables[m[1]].find(r => r[keyCol] === args[cols.length]);
       if (row) cols.forEach((c, i) => (row[c] = args[i]));
       return [];
-    }
-    if ((m = s.match(/^DELETE FROM (\w+) WHERE email_verified = 0 AND created_at < \?$/i))) {
-      // A310 never-verified-account purge (purgeUnverifiedUsers) — reports the affected count.
-      const before = tables[m[1]].length;
-      tables[m[1]] = tables[m[1]].filter(r => !(r.email_verified === 0 && r.created_at < args[0]));
-      return changed(before - tables[m[1]].length);
     }
     if ((m = s.match(/^DELETE FROM (\w+) WHERE id = \? AND user_id = \?$/i))) {
       // A302 scoped credential delete (deleteCredentialForUser) — reports the affected count.
@@ -1092,11 +1097,171 @@ console.log('\nAuth hardening (A310) — race-safe createUser/insertCredential +
   await createUser(pdb, 'new@example.com', now - 1000); // recent, unverified — spared
   const legit = await createUser(pdb, 'legit@example.com', now - UNVERIFIED_USER_TTL_MS - 1000); // old but verified — spared
   await setEmailVerified(pdb, legit.id);
+  // A316: an aged unverified account that OWNS SYNC WORKSPACES must be skipped — its R2 ciphertext
+  // needs the paged account-delete cleanup (A305), which a purge can't perform.
+  const wsOwner = await createUser(pdb, 'wsowner@example.com', now - UNVERIFIED_USER_TTL_MS - 1000);
+  pdb.tables.sync_workspaces.push({ id: 'ws-1', owner_user_id: wsOwner.id, created_at: now });
+  ok('ownsSyncWorkspaces sees the seeded workspace', (await ownsSyncWorkspaces(pdb, wsOwner.id)) === true);
   const removed = await purgeUnverifiedUsers(pdb, now);
   ok('purge removes exactly the aged never-verified squatter', removed === 1);
   ok('...the squatted email is freed', (await userByEmail(pdb, 'victim@example.com')) == null);
   ok('...a fresh unverified account is spared', (await userByEmail(pdb, 'new@example.com')) != null);
   ok('...a verified account is spared regardless of age', (await userByEmail(pdb, 'legit@example.com')) != null);
+  ok(
+    '...an aged unverified WORKSPACE OWNER is spared (A305 pager owns that cleanup)',
+    (await userByEmail(pdb, 'wsowner@example.com')) != null
+  );
+  // maybeFreeExpiredUnverified applies the same guards one account at a time (the lazy path).
+  ok('maybeFree refuses a workspace owner', (await maybeFreeExpiredUnverified(pdb, wsOwner, now)) === false);
+  const fresh = await userByEmail(pdb, 'new@example.com');
+  ok('maybeFree refuses a pre-TTL account', (await maybeFreeExpiredUnverified(pdb, fresh, now)) === false);
+  const legit2 = await userByEmail(pdb, 'legit@example.com');
+  ok('maybeFree refuses a verified account', (await maybeFreeExpiredUnverified(pdb, legit2, now)) === false);
+}
+
+console.log('\nA316: sign-up squat purge (lazy, at the register collision) + reclaim flow:');
+{
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db };
+  const now = Date.now();
+  const optionsFor = email => registerOptions({ request: req('/api/account/register-options', { body: { email } }), env });
+
+  // Verified holder → plain 409 (no reclaim affordance).
+  const legit = await createUser(db, 'held@example.com', now - UNVERIFIED_USER_TTL_MS - 1000);
+  await setEmailVerified(db, legit.id);
+  const dupVerified = await optionsFor('held@example.com');
+  const dupVerifiedJson = await dupVerified.json();
+  ok('verified holder → 409 without reclaimable', dupVerified.status === 409 && !('reclaimable' in dupVerifiedJson));
+
+  // Young unverified holder → 409 + reclaimable: true (the client offers the magic-link flow).
+  await createUser(db, 'young@example.com', now - 1000);
+  const dupYoung = await optionsFor('young@example.com');
+  const dupYoungJson = await dupYoung.json();
+  ok('pre-TTL unverified holder → 409 with reclaimable: true', dupYoung.status === 409 && dupYoungJson.reclaimable === true);
+
+  // TTL-expired unverified squatter → freed on the spot; registration proceeds (200 + options).
+  const squatter = await createUser(db, 'squatted@example.com', now - UNVERIFIED_USER_TTL_MS - 1000);
+  db.tables.sessions.push({
+    id: 'sq-s',
+    user_id: squatter.id,
+    secret_hash: 'h',
+    created_at: now,
+    expires_at: now + DAY,
+    last_seen_at: null,
+  });
+  const freedRes = await optionsFor('squatted@example.com');
+  const freedJson = await freedRes.json();
+  ok(
+    'TTL-expired squatter → collision register succeeds (200 + options)',
+    freedRes.status === 200 && typeof freedJson.options?.challenge === 'string'
+  );
+  ok('...the squatter account is gone', (await userByEmail(db, 'squatted@example.com')) == null);
+  ok('...its child rows are swept (sessions)', !db.tables.sessions.some(s => s.user_id === squatter.id));
+
+  // ---- reclaim-send: enumeration-safe; emails ONLY a never-verified holder ----
+  const realFetch = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (url, init) => {
+    sent.push({ url, body: JSON.parse(init.body) });
+    return new Response('{"id":"em_1"}', { status: 200 });
+  };
+  try {
+    const renv = { ACCOUNTS_DB: db, RESEND_API_KEY: 're_x' };
+    const sendFor = email => reclaimSend({ request: req('/api/account/reclaim-send', { body: { email } }), env: renv });
+    const hit = await sendFor('young@example.com'); // unverified holder — the ONE that sends
+    const missVerified = await sendFor('held@example.com'); // verified holder — silent
+    const missFree = await sendFor('nobody@example.com'); // no account — silent
+    const bodies = await Promise.all([hit, missVerified, missFree].map(r => r.text()));
+    ok(
+      'reclaim-send returns an identical generic 200 for unverified / verified / free',
+      hit.status === 200 && bodies[0] === bodies[1] && bodies[1] === bodies[2]
+    );
+    ok(
+      'reclaim-send emails ONLY the never-verified holder (1 mail, with a reclaim link)',
+      sent.length === 1 && /\?reclaim=/.test(sent[0].body.html)
+    );
+    const noKey = await reclaimSend({
+      request: req('/api/account/reclaim-send', { body: { email: 'young@example.com' } }),
+      env: { ACCOUNTS_DB: db },
+    });
+    ok(
+      "reclaim-send 503 { error:'email unavailable' } when RESEND unbound",
+      noKey.status === 503 && (await noKey.json()).error === 'email unavailable'
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  // ---- reclaim-confirm: frees the squatter, pre-creates a VERIFIED account, binds the ceremony ----
+  const young = await userByEmail(db, 'young@example.com');
+  // seed an unclaimed donation under the reclaimed email — proof-of-inbox sweeps it in
+  db.tables.donations.push({
+    id: 'evt_reclaim_don',
+    user_id: null,
+    email: 'young@example.com',
+    amount_cents: 500,
+    currency: 'usd',
+    stripe_customer_id: null,
+    created_at: now,
+    claimed_at: null,
+  });
+  const token = await createRecoveryToken(db, { userId: young.id, email: young.email, purpose: 'reclaim' });
+  const rc = await reclaimConfirm({ request: req('/api/account/reclaim-confirm', { body: { token } }), env });
+  const rcJson = await rc.json();
+  ok('reclaim-confirm 200 with fresh registration options', rc.status === 200 && typeof rcJson.options?.challenge === 'string');
+  const fresh = await userByEmail(db, 'young@example.com');
+  ok('...the squatter is replaced by a FRESH account', fresh != null && fresh.id !== young.id);
+  ok('...the fresh account starts email-verified (the click IS the proof)', fresh.email_verified === 1);
+  ok('...the unclaimed donation swept onto the fresh account', (await donationById(db, 'evt_reclaim_don')).user_id === fresh.id);
+  const bound = db.tables.challenges.find(c => c.challenge === rcJson.options.challenge);
+  ok('...the register challenge is bound to the fresh user', bound?.type === 'register' && bound?.user_id === fresh.id);
+  const again = await reclaimConfirm({ request: req('/api/account/reclaim-confirm', { body: { token } }), env });
+  ok('reclaim-confirm rejects a reused token (400)', again.status === 400);
+
+  // A holder who verified between send and confirm is protected.
+  const race = await createUser(db, 'raced@example.com', now - 1000);
+  const raceToken = await createRecoveryToken(db, { userId: race.id, email: race.email, purpose: 'reclaim' });
+  await setEmailVerified(db, race.id);
+  const raced = await reclaimConfirm({ request: req('/api/account/reclaim-confirm', { body: { token: raceToken } }), env });
+  ok(
+    'reclaim-confirm 400 when the holder verified meanwhile',
+    raced.status === 400 && (await userByEmail(db, 'raced@example.com')).id === race.id
+  );
+
+  // A workspace-owning holder is refused (R2 cleanup needs the A305 pager).
+  const wsHolder = await createUser(db, 'wsheld@example.com', now - 1000);
+  db.tables.sync_workspaces.push({ id: 'ws-2', owner_user_id: wsHolder.id, created_at: now });
+  const wsToken = await createRecoveryToken(db, { userId: wsHolder.id, email: wsHolder.email, purpose: 'reclaim' });
+  const wsRes = await reclaimConfirm({ request: req('/api/account/reclaim-confirm', { body: { token: wsToken } }), env });
+  ok(
+    'reclaim-confirm 409 for a workspace-owning holder (account preserved)',
+    wsRes.status === 409 && (await userByEmail(db, 'wsheld@example.com')).id === wsHolder.id
+  );
+
+  // A recover-purpose token can't drive reclaim (purpose isolation), and cross-origin is rejected.
+  const wrongPurpose = await createRecoveryToken(db, { userId: wsHolder.id, email: wsHolder.email, purpose: 'recover' });
+  ok(
+    'reclaim-confirm rejects a recover-purpose token (400)',
+    (await reclaimConfirm({ request: req('/api/account/reclaim-confirm', { body: { token: wrongPurpose } }), env })).status === 400
+  );
+  ok(
+    'reclaim-confirm 503 when ACCOUNTS_DB unbound',
+    (await reclaimConfirm({ request: req('/api/account/reclaim-confirm', { body: { token: 'x.y' } }), env: {} })).status === 503
+  );
+  ok(
+    'reclaim-confirm cross-origin rejected 403',
+    (
+      await reclaimConfirm({
+        request: req('/api/account/reclaim-confirm', { origin: 'https://evil.example', body: { token: 'x.y' } }),
+        env,
+      })
+    ).status === 403
+  );
+  ok(
+    'reclaim-send cross-origin rejected 403',
+    (await reclaimSend({ request: req('/api/account/reclaim-send', { origin: 'https://evil.example', body: { email: 'a@b.co' } }), env }))
+      .status === 403
+  );
 }
 
 console.log('\nSession revocation + absolute cap + passkey delete (A302):');

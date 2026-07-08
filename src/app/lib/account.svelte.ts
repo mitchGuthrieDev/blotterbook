@@ -43,6 +43,8 @@ export const account = $state({
   busy: false,
   /** last actionable error message ('' = none). */
   error: '',
+  /** A316: the last register attempt 409'd on a NEVER-VERIFIED holder — offer the reclaim flow. */
+  reclaimable: false,
   /** false once the server says accounts aren't configured (503 — ACCOUNTS_DB unbound). */
   available: true,
   user: null as AccountUser | null,
@@ -59,9 +61,13 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const data = (await res.json().catch(() => null)) as (T & { error?: string }) | null;
+  const data = (await res.json().catch(() => null)) as (T & { error?: string; reclaimable?: boolean }) | null;
   if (res.status === 503) account.available = false;
-  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status}).`);
+  if (!res.ok) {
+    const err = new Error(data?.error || `Request failed (${res.status}).`) as Error & { reclaimable?: boolean };
+    if (data?.reclaimable) err.reclaimable = true; // A316: machine-readable 409 flavor for the UI
+    throw err;
+  }
   account.available = true;
   return data as T;
 }
@@ -100,12 +106,14 @@ async function ceremony(run: () => Promise<void>): Promise<boolean> {
   if (account.busy) return false;
   account.busy = true;
   account.error = '';
+  account.reclaimable = false;
   try {
     await run();
     await refreshSession();
     return true;
   } catch (e) {
     account.error = messageOf(e);
+    if (e instanceof Error && (e as Error & { reclaimable?: boolean }).reclaimable) account.reclaimable = true;
     return false;
   } finally {
     account.busy = false;
@@ -180,12 +188,49 @@ export function logout(): Promise<boolean> {
 
 /** Start a cloud-tier subscription checkout, then redirect to Stripe. The same-origin session cookie
  *  rides along, so /api/checkout stamps client_reference_id (and subscription metadata, #120) and the
- *  webhook links the subscription to THIS account — the reliable path to the 'cloud' tier. */
+ *  webhook links the subscription to THIS account — the reliable path to the 'cloud' tier.
+ *  A278: this hosted-Checkout redirect is now the FALLBACK path (script/iframe-blocked clients);
+ *  the primary path is the in-app Payment Element via createSubscription() below. */
 export function subscribe(): Promise<boolean> {
   return ceremony(async () => {
     const { url } = await api<{ url?: string }>('/api/checkout', { plan: 'subscription' });
     if (typeof url === 'string' && url) window.location.href = url;
   });
+}
+
+/* ---- A278: in-app subscription (Payment Element) ------------------------------------------- */
+
+export type CreateSubscriptionResult = { alreadySubscribed: true } | { clientSecret: string; publishableKey: string };
+
+/** Create (or resume) the incomplete subscription server-side and return the Payment Element
+ *  inputs. Throws with the server's message on failure (501 not-configured included — callers use
+ *  that to fall back to hosted Checkout). Not a ceremony: the form owns its own busy state. */
+export function createSubscription(): Promise<CreateSubscriptionResult> {
+  return api<CreateSubscriptionResult>('/api/subscription/create', {});
+}
+
+/** Lazy Stripe.js loader (A278) — the npm package is a tiny stub that injects the real script from
+ *  js.stripe.com at runtime, so nothing Stripe-sized ever sits in our bundle or on the boot path
+ *  (same pattern as the lazy webauthn() import above). Returns null when the script can't load
+ *  (blocked origin) — callers fall back to hosted Checkout. */
+export async function stripeJs(publishableKey: string) {
+  try {
+    const { loadStripe } = await import('@stripe/stripe-js');
+    return await loadStripe(publishableKey);
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Poll /api/me until the webhook flips the tier to cloud (the webhook is the only tier writer —
+ *  this just waits for it). Resolves true once cloud, false when attempts run out. */
+export async function awaitCloudTier(attempts = 8, delayMs = 1500): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    await refreshSession();
+    if (account.tier === 'cloud') return true;
+    await new Promise(r => setTimeout(r, delayMs));
+  }
+  return false;
 }
 
 /* ---- F55: recovery email + verification --------------------------------------------------- */
@@ -225,6 +270,33 @@ export async function recoverSend(email: string): Promise<boolean> {
 export function completeRecovery(token: string): Promise<boolean> {
   return ceremony(async () => {
     const { options } = await api<{ options: PublicKeyCredentialCreationOptionsJSON }>('/api/account/recover-verify', { token });
+    const { startRegistration } = await webauthn();
+    const response = await startRegistration({ optionsJSON: options });
+    await api('/api/account/register-verify', { response });
+  });
+}
+
+/* ---- A316: reclaim a squatted (never-verified) email --------------------------------------- */
+
+/** Request a reclaim magic link for an email held by a never-verified account (offered after a
+ *  register attempt sets `account.reclaimable`). Enumeration-safe like recoverSend: the server
+ *  always answers generically, so this resolves true whenever the request was accepted. */
+export async function reclaimSend(email: string): Promise<boolean> {
+  try {
+    await api('/api/account/reclaim-send', { email: email.trim().toLowerCase() });
+    return true;
+  } catch (_) {
+    // A 503 (email unavailable) is the only actionable failure; otherwise stay generic.
+    return account.available;
+  }
+}
+
+/** Complete a reclaim from its magic-link token: the server frees the squatted email, pre-creates a
+ *  fresh VERIFIED account, and returns registration options bound to it — then the standard passkey
+ *  ceremony enrolls the first passkey (register-verify starts the session). */
+export function completeReclaim(token: string): Promise<boolean> {
+  return ceremony(async () => {
+    const { options } = await api<{ options: PublicKeyCredentialCreationOptionsJSON }>('/api/account/reclaim-confirm', { token });
     const { startRegistration } = await webauthn();
     const response = await startRegistration({ optionsJSON: options });
     await api('/api/account/register-verify', { response });

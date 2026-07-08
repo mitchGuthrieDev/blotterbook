@@ -4,6 +4,21 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.69.0",
+      "date": "2026-07-08",
+      "title": "Your account gets a home page, drag-to-resize modules everywhere, and reclaimable emails",
+      "summary": "A dedicated Account page joins the site, dashboard modules gain a glanceable Small size with three new KPI cards and a space-saving carousel, the corner drag-resize handle ships on the live app and demo, and a sign-up dead end is gone: an email squatted by a never-verified account can now be reclaimed.",
+      "highlights": [
+        "New Account page: the site header's button now takes you to your account dashboard — sign in or sign up with a passkey, see your plan and supporter status, manage passkeys, start a cloud subscription, and (new) permanently delete your account and all synced data, all without opening the app.",
+        "Modules go glanceable: three new KPI cards — Win Rate, Profit Factor, and Expectancy — join the Add-modules picker, every module that reads well small (Today, Drawdown Status, Streak) gains a compact Small size, and a full row of six Small modules collapses into a swipeable carousel.",
+        "Resize modules by dragging: grab the corner handle on any Dashboard or Analytics module and drag to snap it between half and full width — keyboard users can focus the handle and use the arrow keys. The ⋯ menu Size options remain.",
+        "Layouts persist per device exactly as before; on the demo surface resizing works but (like everything on demo) is never saved.",
+        "Sign-up fix: if someone registered your email but never verified it, creating your account now offers to email you a one-time reclaim link — clicking it releases the address and signs you up with your email already verified.",
+        "Stale squats clear themselves: an account that never verifies its email frees the address automatically after 30 days.",
+        "Under the hood: unverified-account cleanup never touches encrypted cloud-sync data (those accounts use the full deletion path), and the reclaim endpoints follow the same no-enumeration posture as passkey recovery."
+      ]
+    },
+    {
       "version": "0.68.1",
       "date": "2026-07-08",
       "title": "Audit fixes: accurate quick-range dates, sturdier module resizing, reliable release emails",

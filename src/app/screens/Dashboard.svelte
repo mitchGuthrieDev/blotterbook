@@ -92,6 +92,23 @@
       dayRec: StreakRec;
     };
   };
+  // A271 remainder: raw numbers for the glanceable KPI-card modules (Win Rate · Profit Factor ·
+  // Expectancy). The top stat row shows the same headline values; the modules add the visual
+  // breakdown (W/L split, gross win-vs-loss, avg win-vs-loss) and live in the module grid so they
+  // can be placed/ordered/carousel-grouped. Built app-side from the scope-active Metrics.
+  export type DashKpi = {
+    n: number;
+    wins: number;
+    losses: number;
+    scratch: number;
+    winRate: number;
+    pf: number;
+    gp: number;
+    gl: number;
+    expectancy: number;
+    avgW: number;
+    avgL: number;
+  };
 </script>
 
 <script lang="ts">
@@ -114,16 +131,18 @@
   import { flip } from 'svelte/animate';
   import { fade, slide } from 'svelte/transition';
   import { MediaQuery } from 'svelte/reactivity';
-  import { DASHBOARD_MODULES, DEFAULT_MODULE_KEYS, dashboardKit, type ModEntry } from '../lib/modlayout.ts';
+  import { DASHBOARD_MODULES, DEFAULT_MODULE_KEYS, KPI_MODULE_KEYS, dashboardKit, type ModEntry } from '../lib/modlayout.ts';
   import { createSizeController, spanClass } from '../lib/modsize.svelte.ts';
   import ModuleSizeMenu from '../parts/ModuleSizeMenu.svelte';
   import ModuleResizeHandle from '../parts/ModuleResizeHandle.svelte';
+  import ModuleCarousel from '../parts/ModuleCarousel.svelte';
   import { dur } from '../lib/motion.ts';
   import {
     usd,
     usdWhole,
     money,
     num,
+    ratio,
     axMoney,
     niceTicks,
     linePath,
@@ -185,8 +204,8 @@
     onsetupsave?: (s: AppSetup) => void;
     /** Disable the cost-setup inputs on demo (never mutates). */
     costDisabled?: boolean;
-    /** A271: staging-gate the corner drag-resize handle (the ⋯ menu Size radio ships everywhere). */
-    isStaging?: boolean;
+    /** A271: raw KPI numbers for the Win Rate / Profit Factor / Expectancy card modules. */
+    kpi?: DashKpi;
     /** Visible dashboard modules — order + per-module size (A271; persisted to Store.local); defaults to all shown. */
     modules?: ModEntry[];
     onmoduleschange?: (mods: ModEntry[]) => void;
@@ -237,7 +256,7 @@
     setup,
     onsetupsave,
     costDisabled = false,
-    isStaging = false,
+    kpi,
     modules,
     onmoduleschange,
     recentTrades = [],
@@ -398,6 +417,34 @@
     modOrder = order;
     sizeCtl.emitCurrent();
   }
+  // A271 remainder (the §4 carousel contract): a full row of SIX contiguous Small modules collapses
+  // into the shared ModuleCarousel (one-at-a-time swipe/arrows/dots) instead of six ⅙-width cards.
+  // Runs shorter than six render as individual span-2 cards; every complete six in a run groups. The
+  // group key derives from its membership so the keyed {#each} + animate:flip stay stable while the
+  // grouping holds. Keyed on the PREVIEW size so a live drag out of sm regroups immediately.
+  type RenderItem = { kind: 'mod'; key: string; k: string } | { kind: 'group'; keys: string[]; k: string };
+  const renderItems = $derived.by<RenderItem[]>(() => {
+    const items: RenderItem[] = [];
+    let run: string[] = [];
+    const flush = () => {
+      while (run.length >= 6) {
+        items.push({ kind: 'group', keys: run.slice(0, 6), k: 'group:' + run.slice(0, 6).join('+') });
+        run = run.slice(6);
+      }
+      for (const k of run) items.push({ kind: 'mod', key: k, k });
+      run = [];
+    };
+    for (const key of modOrder) {
+      if (sizeCtl.previewSize(key) === 'sm') {
+        run.push(key);
+      } else {
+        flush();
+        items.push({ kind: 'mod', key, k: key });
+      }
+    }
+    flush();
+    return items;
+  });
   function moveModule(key: string, dir: -1 | 1) {
     const i = modOrder.indexOf(key),
       j = i + dir;
@@ -1421,15 +1468,20 @@
           your latest trading day
         {/if}
       </div>
-      <div class="mt-3 overflow-hidden rounded-md border border-border">
-        {@render kv(
-          'Trades',
-          md.avgTrades != null ? `${d.trades}${d.capped ? '+' : ''} · avg ${md.avgTrades.toFixed(1)}` : `${d.trades}${d.capped ? '+' : ''}`
-        )}
-        {@render kv('Best trade', usd(d.best), d.best >= 0 ? 'pos' : 'neg')}
-        {@render kv('Worst trade', usd(d.worst), d.worst >= 0 ? 'pos' : 'neg')}
-        {@render kv('Win-day rate', `${md.winDayPct.toFixed(0)}% of ${md.activeDays} day${md.activeDays === 1 ? '' : 's'}`)}
-      </div>
+      <!-- A271: the Small state is headline-only — the detail table shows from Medium up. -->
+      {#if sizeCtl.previewSize('today') !== 'sm'}
+        <div class="mt-3 overflow-hidden rounded-md border border-border">
+          {@render kv(
+            'Trades',
+            md.avgTrades != null
+              ? `${d.trades}${d.capped ? '+' : ''} · avg ${md.avgTrades.toFixed(1)}`
+              : `${d.trades}${d.capped ? '+' : ''}`
+          )}
+          {@render kv('Best trade', usd(d.best), d.best >= 0 ? 'pos' : 'neg')}
+          {@render kv('Worst trade', usd(d.worst), d.worst >= 0 ? 'pos' : 'neg')}
+          {@render kv('Win-day rate', `${md.winDayPct.toFixed(0)}% of ${md.activeDays} day${md.activeDays === 1 ? '' : 's'}`)}
+        </div>
+      {/if}
     {:else}
       {@render emptyModule()}
     {/if}
@@ -1449,16 +1501,19 @@
           {x.unit}{x.sincePeak === 1 ? '' : 's'} since the peak
         </div>
       {/if}
-      <div class="mt-3 overflow-hidden rounded-md border border-border">
-        {@render kv('To a new high', x.atHigh ? '$0' : money(x.current))}
-        {@render kv(
-          'Max drawdown',
-          x.maxDD > 0 ? `-${money(x.maxDD)}${x.maxDDpct != null ? ` · ${x.maxDDpct.toFixed(1)}%` : ''}` : '$0',
-          x.maxDD > 0 ? 'neg' : undefined
-        )}
-        {@render kv('Longest drawdown', x.maxDDdur > 0 ? `${x.maxDDdur} ${x.unit}${x.maxDDdur === 1 ? '' : 's'}` : '—')}
-        {@render kv('Recovery factor', num(x.recovery))}
-      </div>
+      <!-- A271: the Small state is headline-only — the detail table shows from Medium up. -->
+      {#if sizeCtl.previewSize('ddstatus') !== 'sm'}
+        <div class="mt-3 overflow-hidden rounded-md border border-border">
+          {@render kv('To a new high', x.atHigh ? '$0' : money(x.current))}
+          {@render kv(
+            'Max drawdown',
+            x.maxDD > 0 ? `-${money(x.maxDD)}${x.maxDDpct != null ? ` · ${x.maxDDpct.toFixed(1)}%` : ''}` : '$0',
+            x.maxDD > 0 ? 'neg' : undefined
+          )}
+          {@render kv('Longest drawdown', x.maxDDdur > 0 ? `${x.maxDDdur} ${x.unit}${x.maxDDdur === 1 ? '' : 's'}` : '—')}
+          {@render kv('Recovery factor', num(x.recovery))}
+        </div>
+      {/if}
     {:else}
       {@render emptyModule()}
     {/if}
@@ -1485,18 +1540,126 @@
       <div class="mt-0.5 text-[11px] text-muted-foreground">
         {t.len ? `${usd(t.sum)} on the run` : 'flat since the last flip'}
       </div>
-      <div class="mt-3 overflow-hidden rounded-md border border-border">
-        {@render kv(
-          'Consecutive days',
-          s.day.len ? `${s.day.len} ${runVerb(s.day.kind)} day${s.day.len === 1 ? '' : 's'}` : '—',
-          runTone(s.day.kind)
-        )}
-        {@render kv(`Record win streak (${s.recUnit}s)`, `${s.rec.maxWin} · ${usd(s.rec.maxWinSum)}`, 'pos')}
-        {@render kv(`Record loss streak (${s.recUnit}s)`, `${s.rec.maxLoss} · ${usd(s.rec.maxLossSum)}`, 'neg')}
-        {#if s.recUnit === 'trade'}
-          {@render kv('Best / worst day run', `${s.dayRec.maxWin}W / ${s.dayRec.maxLoss}L days`)}
-        {/if}
+      <!-- A271: the Small state is headline-only — the detail table shows from Medium up. -->
+      {#if sizeCtl.previewSize('streak') !== 'sm'}
+        <div class="mt-3 overflow-hidden rounded-md border border-border">
+          {@render kv(
+            'Consecutive days',
+            s.day.len ? `${s.day.len} ${runVerb(s.day.kind)} day${s.day.len === 1 ? '' : 's'}` : '—',
+            runTone(s.day.kind)
+          )}
+          {@render kv(`Record win streak (${s.recUnit}s)`, `${s.rec.maxWin} · ${usd(s.rec.maxWinSum)}`, 'pos')}
+          {@render kv(`Record loss streak (${s.recUnit}s)`, `${s.rec.maxLoss} · ${usd(s.rec.maxLossSum)}`, 'neg')}
+          {#if s.recUnit === 'trade'}
+            {@render kv('Best / worst day run', `${s.dayRec.maxWin}W / ${s.dayRec.maxLoss}L days`)}
+          {/if}
+        </div>
+      {/if}
+    {:else}
+      {@render emptyModule()}
+    {/if}
+  {/snippet}
+
+  <!-- ── A271 remainder: the glanceable KPI-card modules (Small-first; sm = headline only, md adds
+       the visual breakdown). The top stat row shows the same headline values — these add the W/L
+       split, gross win-vs-loss, and avg win-vs-loss comparisons, and live in the module grid so they
+       can be placed/ordered/carousel-grouped. Bars are SVG geometry attrs (CSP-clean, like the
+       picker thumbs). ── -->
+  {#snippet winrateBody()}
+    {#if kpi && kpi.n}
+      {@const decided = kpi.wins + kpi.losses}
+      <div class="text-xs text-muted-foreground">Winning trades</div>
+      <div class={['mt-1 text-xl font-bold tracking-tight tabular-nums', kpi.winRate >= 50 ? 'text-chart-2' : 'text-foreground']}>
+        {kpi.winRate.toFixed(1)}%
       </div>
+      <div class="mt-0.5 text-[11px] text-muted-foreground">{kpi.wins}W · {kpi.losses}L{kpi.scratch ? ` · ${kpi.scratch} flat` : ''}</div>
+      {#if sizeCtl.previewSize('winrate') !== 'sm'}
+        <svg
+          viewBox="0 0 100 6"
+          preserveAspectRatio="none"
+          class="mt-3 h-1.5 w-full"
+          role="img"
+          aria-label="{kpi.wins} wins vs {kpi.losses} losses"
+        >
+          <rect x="0" y="0" width={decided ? (100 * kpi.wins) / decided : 0} height="6" class="fill-chart-2" />
+          <rect
+            x={decided ? (100 * kpi.wins) / decided : 0}
+            y="0"
+            width={decided ? (100 * kpi.losses) / decided : 100}
+            height="6"
+            class="fill-destructive/70"
+          />
+        </svg>
+        <div class="mt-3 overflow-hidden rounded-md border border-border">
+          {@render kv('Trades in scope', `${kpi.n}`)}
+          {@render kv('Scratch (flat) trades', `${kpi.scratch}`)}
+        </div>
+      {/if}
+    {:else}
+      {@render emptyModule()}
+    {/if}
+  {/snippet}
+
+  {#snippet pfactorBody()}
+    {#if kpi && kpi.n}
+      {@const glAbs = Math.abs(kpi.gl)}
+      {@const denom = Math.max(kpi.gp, glAbs) || 1}
+      <div class="text-xs text-muted-foreground">Gross win ÷ gross loss</div>
+      <div
+        class={[
+          'mt-1 text-xl font-bold tracking-tight tabular-nums',
+          Number.isFinite(kpi.pf) && kpi.pf < 1 ? 'text-destructive' : 'text-chart-2',
+        ]}
+      >
+        {ratio(kpi.pf)}
+      </div>
+      <div class="mt-0.5 text-[11px] text-muted-foreground">{money(kpi.gp)} won · {money(glAbs)} lost</div>
+      {#if sizeCtl.previewSize('pfactor') !== 'sm'}
+        <svg
+          viewBox="0 0 100 15"
+          preserveAspectRatio="none"
+          class="mt-3 h-6 w-full"
+          role="img"
+          aria-label="Gross profit {money(kpi.gp)} vs gross loss {money(glAbs)}"
+        >
+          <rect x="0" y="0" width={(100 * kpi.gp) / denom} height="6" rx="1" class="fill-chart-2" />
+          <rect x="0" y="9" width={(100 * glAbs) / denom} height="6" rx="1" class="fill-destructive/70" />
+        </svg>
+        <div class="mt-3 overflow-hidden rounded-md border border-border">
+          {@render kv('Gross profit', usd(kpi.gp), 'pos')}
+          {@render kv('Gross loss', usd(kpi.gl), kpi.gl < 0 ? 'neg' : undefined)}
+        </div>
+      {/if}
+    {:else}
+      {@render emptyModule()}
+    {/if}
+  {/snippet}
+
+  {#snippet expectBody()}
+    {#if kpi && kpi.n}
+      {@const lAbs = Math.abs(kpi.avgL)}
+      {@const denom = Math.max(kpi.avgW, lAbs) || 1}
+      <div class="text-xs text-muted-foreground">Average edge per trade</div>
+      <div class={['mt-1 text-xl font-bold tracking-tight tabular-nums', kpi.expectancy >= 0 ? 'text-chart-2' : 'text-destructive']}>
+        {usd(kpi.expectancy)}
+      </div>
+      <div class="mt-0.5 text-[11px] text-muted-foreground">over {kpi.n} trade{kpi.n === 1 ? '' : 's'}</div>
+      {#if sizeCtl.previewSize('expect') !== 'sm'}
+        <svg
+          viewBox="0 0 100 15"
+          preserveAspectRatio="none"
+          class="mt-3 h-6 w-full"
+          role="img"
+          aria-label="Average win {money(kpi.avgW)} vs average loss {money(lAbs)}"
+        >
+          <rect x="0" y="0" width={(100 * kpi.avgW) / denom} height="6" rx="1" class="fill-chart-2" />
+          <rect x="0" y="9" width={(100 * lAbs) / denom} height="6" rx="1" class="fill-destructive/70" />
+        </svg>
+        <div class="mt-3 overflow-hidden rounded-md border border-border">
+          {@render kv('Average win', usd(kpi.avgW), 'pos')}
+          {@render kv('Average loss', usd(kpi.avgL), kpi.avgL < 0 ? 'neg' : undefined)}
+        </div>
+      {/if}
     {:else}
       {@render emptyModule()}
     {/if}
@@ -1550,6 +1713,11 @@
         {#each [0, 1, 2, 3, 4, 5] as c (c)}
           <rect x={4 + c * 6} y="11" width="5" height="6" rx="1" class={c >= 3 ? 'fill-destructive/70' : 'fill-chart-2/50'} />
         {/each}
+      {:else if KPI_MODULE_KEYS.has(key)}
+        <!-- A271: a glanceable KPI card — one big figure over a two-tone split bar -->
+        <rect x="4" y="6" width="18" height="7" rx="1" class="fill-chart-2/70" />
+        <rect x="4" y="17" width="20" height="3" rx="1" class="fill-chart-2/50" />
+        <rect x="25" y="17" width="11" height="3" rx="1" class="fill-destructive/50" />
       {:else}
         {#each [0, 1] as r (r)}
           {#each [0, 1, 2] as c (c)}
@@ -1570,26 +1738,42 @@
        Narrow viewports keep the single-column stack. -->
   <!-- A271: a 12-track grid on lg (superset of the old 2-track model). Each module spans per its size
        (sm=2 · md=6 · lg=12); md/lg reproduce the old half/full widths exactly. Below lg it stacks. -->
+  {#snippet moduleCard(key: string, grouped: boolean)}
+    <Card.Root id="dashmod-{key}" class={['relative h-full', fillClass(key)]}>
+      {@render moduleHeader(key)}
+      <!-- A271/A319: the shared corner drag-resize handle (all surfaces — CH16 2026-07-08).
+           Pointer drag snaps to the nearest supported span; role=slider + arrow keys are the
+           keyboard path. Layout prefs simply don't persist on demo (in-memory DemoStore).
+           Suppressed inside a carousel group — a slide isn't a grid child, so drag snapping has no
+           track to measure; the ⋯ Size menu is the path out of the group. -->
+      {#if !grouped}
+        <ModuleResizeHandle ctl={sizeCtl} modKey={key} label={moduleLabel(key)} />
+      {/if}
+      <Card.Content>
+        {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'term'}<ActivityTerminal
+          />{:else if key === 'compare'}{@render compareBody()}{:else if key === 'blotter'}{@render blotterBody()}{:else if key === 'today'}{@render todayBody()}{:else if key === 'ddstatus'}{@render ddBody()}{:else if key === 'streak'}{@render streakBody()}{:else if key === 'winrate'}{@render winrateBody()}{:else if key === 'pfactor'}{@render pfactorBody()}{:else if key === 'expect'}{@render expectBody()}{/if}
+      </Card.Content>
+    </Card.Root>
+  {/snippet}
+
   <div bind:this={gridEl} class="grid grid-cols-1 gap-5 lg:grid-cols-12">
-    {#each modOrder as key (key)}
+    {#each renderItems as item (item.k)}
       <div
         data-mod
-        class={['min-w-0', spanClass(sizeCtl.previewSize(key))]}
+        class={['min-w-0', item.kind === 'group' ? 'lg:col-span-12' : spanClass(sizeCtl.previewSize(item.key))]}
         animate:flip={{ duration: dur(180) }}
         transition:fade={{ duration: dur(140) }}
       >
-        <Card.Root id="dashmod-{key}" class={['relative h-full', fillClass(key)]}>
-          {@render moduleHeader(key)}
-          {#if isStaging}
-            <!-- A271/A319: the shared corner drag-resize handle (staging). Pointer drag snaps to the
-                 nearest supported span; role=slider + arrow keys are the keyboard path. -->
-            <ModuleResizeHandle ctl={sizeCtl} modKey={key} label={moduleLabel(key)} />
-          {/if}
-          <Card.Content>
-            {#if key === 'perf'}{@render perfBody()}{:else if key === 'cal'}{@render calBody()}{:else if key === 'cost'}{@render costBody()}{:else if key === 'adv'}{@render advBody()}{:else if key === 'term'}<ActivityTerminal
-              />{:else if key === 'compare'}{@render compareBody()}{:else if key === 'blotter'}{@render blotterBody()}{:else if key === 'today'}{@render todayBody()}{:else if key === 'ddstatus'}{@render ddBody()}{:else if key === 'streak'}{@render streakBody()}{/if}
-          </Card.Content>
-        </Card.Root>
+        {#if item.kind === 'group'}
+          <!-- A271 remainder: the six-Small grouped state — one glanceable card at a time. -->
+          <ModuleCarousel count={item.keys.length} label="Small modules">
+            {#snippet slide(i)}
+              {@render moduleCard(item.keys[i], true)}
+            {/snippet}
+          </ModuleCarousel>
+        {:else}
+          {@render moduleCard(item.key, false)}
+        {/if}
       </div>
     {/each}
   </div>
@@ -1615,7 +1799,9 @@
         <Dialog.Title>Add modules</Dialog.Title>
         <Dialog.Description>Pick the modules to add to this dashboard's layout.</Dialog.Description>
       </Dialog.Header>
-      <div class="grid gap-2">
+      <!-- A271/CH16: 13 modules now — the LIST scrolls so the dialog (and its footer buttons) can
+           never outgrow a short viewport. -->
+      <div class="grid max-h-[55vh] gap-2 overflow-y-auto pr-1">
         {#each MODULES as m (m.key)}
           {@const onDash = modOrder.includes(m.key)}
           <label

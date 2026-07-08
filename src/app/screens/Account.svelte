@@ -45,6 +45,8 @@
     emailVerifySend,
     recoverSend,
     completeRecovery,
+    reclaimSend,
+    completeReclaim,
     registerPrfPasskey,
     subscribe,
   } from '../lib/account.svelte.ts';
@@ -72,6 +74,7 @@
   import CloudSyncSetup from '../parts/CloudSyncSetup.svelte';
   import UnlockModal from '../parts/UnlockModal.svelte';
   import SyncStatusPill from '../parts/SyncStatusPill.svelte';
+  import SubscribeForm from '../parts/SubscribeForm.svelte';
 
   interface Props {
     /** demo surface — disables every control (demo never mutates) and skips the session probe. */
@@ -84,6 +87,8 @@
   // "cloud tier required" on local tier); demo never renders it (in-memory DemoStore never syncs). ──
   const cloudSyncOn = $derived(!isDemo && !!account.user);
   let setupOpen = $state(false);
+  // A278: the in-app subscription form, revealed by the Subscribe/Renew CTAs.
+  let subscribeOpen = $state(false);
   let unlockOpen = $state(false);
   let prfOk = $state(false);
   let addPassphrase = $state('');
@@ -146,6 +151,8 @@
   let recoverEmail = $state('');
   let recoverSent = $state(false);
   const recoverValid = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoverEmail.trim()));
+  // A316: offered when a register attempt 409'd on a never-verified holder (account.reclaimable)
+  let reclaimSent = $state(false);
   // one passkey on record → nudge to add a second (until dismissed)
   const showSecondPasskeyNudge = $derived(!!account.user && account.passkeys.length === 1 && !nudgeDismissed);
 
@@ -165,7 +172,15 @@
   async function onCreateAccount(e: SubmitEvent) {
     e.preventDefault();
     if (disabled || !emailValid) return;
+    reclaimSent = false;
     if (await register(email.trim().toLowerCase())) email = '';
+  }
+
+  // A316: email a single-use reclaim link for the address the register attempt collided on.
+  async function onReclaimEmail() {
+    if (disabled || !emailValid) return;
+    await reclaimSend(email);
+    reclaimSent = true; // generic — the server never reveals how the address is held
   }
 
   async function onVerifyEmail() {
@@ -187,12 +202,14 @@
     // `?donated=1` just show a confirmation. Scrub the query so a reload can't re-trigger it.
     const params = new URLSearchParams(location.search);
     const recoverToken = params.get('recover');
+    const reclaimToken = params.get('reclaim'); // A316: squatted-email reclaim magic link
     verifiedBanner = params.get('verified') === '1';
     donatedBanner = params.get('donated') === '1';
-    if (recoverToken || verifiedBanner || donatedBanner || params.get('verify')) {
+    if (recoverToken || reclaimToken || verifiedBanner || donatedBanner || params.get('verify')) {
       history.replaceState(null, '', location.pathname + location.hash);
     }
     if (recoverToken) void completeRecovery(recoverToken);
+    else if (reclaimToken) void completeReclaim(reclaimToken);
     else void refreshSession();
   });
 
@@ -297,6 +314,29 @@
             Create account with a passkey
           </Button>
         </form>
+        <!-- A316: the address is held by a never-verified account — offer proven-ownership reclaim -->
+        {#if reclaimSent}
+          <p class="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+            <LifeBuoy class="size-4" />
+            If that address is held by an unverified account, we've emailed a reclaim link. Open it on this device to create your account.
+          </p>
+        {:else if account.reclaimable}
+          <div class="flex flex-col gap-2 rounded-md border border-border bg-secondary/40 p-3" role="status">
+            <p class="text-xs text-muted-foreground">
+              Is that address yours? Prove it by email and the unverified account holding it will be released so you can sign up.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              class="self-start"
+              disabled={disabled || !emailValid}
+              onclick={() => void onReclaimEmail()}
+            >
+              Email me a reclaim link
+            </Button>
+          </div>
+        {/if}
       </Card.Content>
     </Card.Root>
   {:else}
@@ -459,7 +499,9 @@
                 Your supporter subscription is inactive, so this device has stopped syncing. Renew to resume — your local data and
                 encryption keys are untouched.
               </div>
-              <Button data-testid="cloud-renew" disabled={account.busy} onclick={() => void subscribe()} class="self-start">
+              <!-- A278: the CTA reveals the in-app Payment Element (hosted Checkout remains the
+                   form's own fallback for blocked clients). -->
+              <Button data-testid="cloud-renew" disabled={account.busy} onclick={() => (subscribeOpen = !subscribeOpen)} class="self-start">
                 <Cloud class="size-4" />
                 Renew — $5/month
               </Button>
@@ -468,10 +510,18 @@
                 Cloud sync is part of the <span class="font-medium text-foreground">$5/month</span> supporter tier — sync your journal across
                 your devices, still end-to-end encrypted. Your local data is unaffected either way.
               </div>
-              <Button data-testid="cloud-subscribe" disabled={account.busy} onclick={() => void subscribe()} class="self-start">
+              <Button
+                data-testid="cloud-subscribe"
+                disabled={account.busy}
+                onclick={() => (subscribeOpen = !subscribeOpen)}
+                class="self-start"
+              >
                 <Cloud class="size-4" />
                 Subscribe — $5/month
               </Button>
+            {/if}
+            {#if subscribeOpen}
+              <SubscribeForm onsubscribed={() => (subscribeOpen = false)} />
             {/if}
           {:else if !vault.loaded}
             <Skeleton class="h-9 w-48" />

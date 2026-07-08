@@ -169,12 +169,13 @@
       <a href="howto.html">How&nbsp;To</a>
       <a href="roadmap.html">Roadmap</a>
       <a href="changelog.html">Changelog</a>
-      <a class="navlaunch" href="/app/">Launch Blotterbook &rarr;</a>
+      <!-- A293: the header CTA is the Account entry — /account.html routes login vs dashboard itself. -->
+      <a class="navlaunch" href="/account.html">Account &rarr;</a>
     </div>
     <div class="navcta ml-auto flex items-center gap-[10px]">
       <a
         class="btn-primary inline-flex items-center gap-[7px] rounded-[9px] bg-primary px-4 py-[9px] text-[13.5px] font-semibold text-primary-foreground transition-[filter,transform] duration-150 hover:translate-y-[-1px] hover:brightness-[1.08]"
-        href="/app/">Launch Blotterbook &rarr;</a
+        href="/account.html">Account &rarr;</a
       >
     </div>
     <label
@@ -826,10 +827,12 @@
           </li>
         </ul>
         <div class="mt-auto flex flex-col gap-2">
-          <p class="text-[11px] leading-[1.4] text-muted-foreground">Launch the app, sign in, and subscribe from your account.</p>
+          <!-- A278: carries the subscribe intent — /account.html latches ?subscribe=1 through
+               login/signup and opens the payment form the moment the session exists. -->
+          <p class="text-[11px] leading-[1.4] text-muted-foreground">Sign in (or sign up) and subscribe right there.</p>
           <a
             class="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
-            href="/app/#account">Get cloud sync in the app &rarr;</a
+            href="/account.html?subscribe=1">Get cloud sync &rarr;</a
           >
         </div>
       </div>

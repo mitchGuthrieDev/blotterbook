@@ -22,6 +22,7 @@ import {
   credentialsForUser,
   dbUnavailable,
   getDb,
+  maybeFreeExpiredUnverified,
   parseTransports,
   putChallenge,
   readJson,
@@ -56,8 +57,27 @@ export async function onRequestPost(ctx: Ctx) {
     // tradeoff for standard passwordless-signup UX (tell the visitor immediately to log in instead
     // of silently proceeding into a dead-end registration). recover-send stays deliberately
     // enumeration-safe (always 200) since THAT path is the one an attacker would use to probe emails
-    // at scale; this one requires attempting a real registration per guess.
-    if (await userByEmail(db, email)) return json({ error: 'An account with that email already exists — log in instead.' }, 409);
+    // at scale; this one requires attempting a real registration per guess. A316 extends the same
+    // accepted tradeoff by one bit — the 409 for a NEVER-VERIFIED holder carries `reclaimable: true`
+    // so the client can offer the proven-ownership reclaim flow (reclaim-send/reclaim-confirm).
+    const holder = await userByEmail(db, email);
+    if (holder) {
+      // A316: a TTL-expired, never-verified squatter is freed on the spot (bounded: one account,
+      // explicit child cleanup, workspace owners skipped) and registration proceeds as if the email
+      // were free. Anything younger gets the 409 + the reclaim affordance instead.
+      const freed = await maybeFreeExpiredUnverified(db, holder);
+      if (!freed) {
+        return holder.email_verified
+          ? json({ error: 'An account with that email already exists — log in instead.' }, 409)
+          : json(
+              {
+                error: 'An account with that email exists but its address was never verified. If it is yours, you can reclaim it by email.',
+                reclaimable: true,
+              },
+              409
+            );
+      }
+    }
   }
 
   const existing = user ? await credentialsForUser(db, user.id) : [];

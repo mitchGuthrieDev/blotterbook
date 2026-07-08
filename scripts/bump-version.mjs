@@ -38,7 +38,14 @@ export const STAGING_ONLY = new Set(['src/app/staging.html']);
 // internal (Cloudflare Access–gated) → neither track. (A69: the marketing/info site is now Svelte
 // under src/site/ — page components + shared chrome + client entries — and the page CSS lives in
 // those scoped <style> blocks, so the old home.css/site.css/*.js entries are gone.)
-const PROD_ONLY_HTML = new Set(['src/index.html', 'src/howto.html', 'src/roadmap.html', 'src/legal.html', 'src/changelog.html']);
+const PROD_ONLY_HTML = new Set([
+  'src/index.html',
+  'src/howto.html',
+  'src/roadmap.html',
+  'src/legal.html',
+  'src/changelog.html',
+  'src/account.html', // A293 — the standalone Account Dashboard page (noindex, but prod-served)
+]);
 export function isProdOnly(f) {
   if (PROD_ONLY_HTML.has(f)) return true;
   // src/site/** Svelte components + shared chrome + client entries (A69) ship to prod — EXCEPT the
