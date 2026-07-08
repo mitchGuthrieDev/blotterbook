@@ -1799,7 +1799,9 @@
         <Dialog.Title>Add modules</Dialog.Title>
         <Dialog.Description>Pick the modules to add to this dashboard's layout.</Dialog.Description>
       </Dialog.Header>
-      <div class="grid gap-2">
+      <!-- A271/CH16: 13 modules now — the LIST scrolls so the dialog (and its footer buttons) can
+           never outgrow a short viewport. -->
+      <div class="grid max-h-[55vh] gap-2 overflow-y-auto pr-1">
         {#each MODULES as m (m.key)}
           {@const onDash = modOrder.includes(m.key)}
           <label
