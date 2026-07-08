@@ -24,8 +24,9 @@ R1 in `static/data/backlog.json` is the canonical, always-open recurring driver.
    `docs/architecture.md`.
 2. **Audit four dimensions** (consider fanning out a sub-agent per dimension for breadth):
    - **Architecture & duplication** — is the pure-logic core (`src/lib/*`) single-sourced and reused
-     verbatim (A29)? Is the `Store` seam (`context('bb:store')`) the only persistence path (A4)? Any
-     re-implementations of `compute`/`costModel`/`adapters`/formatters?
+     verbatim (A29)? Is the `Store` seam (`src/lib/core/store.ts`, prop-drilled from `App.svelte` —
+     there is no `context()` seam) the only persistence path (A4)? Any re-implementations of
+     `compute`/`costModel`/`adapters`/formatters?
    - **Svelte 5 / TS quality** — runes-only (no `export let`/`$:`/`createEventDispatcher`/store
      writables); `src/` is `any`-free; `npm run typecheck` (tsc + svelte-check) clean.
    - **Security posture** — no trade-data egress; CSP `style-src 'self'` / no inline styles (S18/A55);

@@ -61,7 +61,18 @@ GDPR; two-phase + resumable — sync workspaces/R2 blobs first, then every D1 ro
 - `functions/api/checkout.ts` — **implemented.** `POST` with `{ plan?: 'one_time' | 'subscription' }`.
   Resolves the price ONLY from `STRIPE_PRICE_*` server-side (never a client amount), and when the
   caller has a session it passes **`client_reference_id = <user id>`** so the webhook can credit the
-  exact account. Returns `{ url }`. Origin-checked; 501 until Stripe is configured.
+  exact account. Returns `{ url }`. Origin-checked; 501 until Stripe is configured. Since A278 this
+  hosted-Checkout redirect is the FALLBACK path (script/iframe-blocked clients); the primary
+  subscription path is the in-app Payment Element below.
+- `functions/api/subscription/create.ts` — **implemented (A278).** Session-authed `POST` that creates
+  (or resumes an in-flight INCOMPLETE) Stripe subscription with `payment_behavior:
+  default_incomplete` and returns `{ clientSecret, publishableKey }` for the in-app Payment Element
+  (an already-entitled caller gets `{ alreadySubscribed: true }`). Price resolved ONLY from
+  `STRIPE_PRICE_SUBSCRIPTION`; customer reuse-before-create + per-user `Idempotency-Key`s; **never
+  grants the tier — the signature-verified webhook stays the only writer of `subscriptions`** (S11/
+  F60). Origin-checked; 501 without the Stripe env trio (`STRIPE_SECRET_KEY` +
+  `STRIPE_PRICE_SUBSCRIPTION` + `STRIPE_PUBLISHABLE_KEY`), 503 without `ACCOUNTS_DB`. Errors follow
+  the repo convention (A326): human sentence in `error`, machine code in `code`.
 - `functions/api/webhook.ts` — **implemented (F54 + F60).** Verifies the Stripe signature over the RAW
   body FIRST (S11), then dedupes every event via a `webhook_events` ledger (replay-safe). On
   `checkout.session.completed` it records the donation in `donations` **keyed by the Stripe event id**.
@@ -245,6 +256,9 @@ audMatches:true, expired:false`.
   secret is set the endpoint fails closed (501) and never acts on an event.
 - `STRIPE_PRICE_ONE_TIME`, `STRIPE_PRICE_SUBSCRIPTION` — the only source of the price id (the client
   sends a plan NAME, never a price/amount).
+- `STRIPE_PUBLISHABLE_KEY` — **(A278)** returned by `/api/subscription/create` so the client can mount
+  the in-app Payment Element (public by design — it identifies the account to Stripe.js, grants no
+  API access). Unset → the endpoint answers 501 and the client falls back to hosted Checkout.
 - `RESEND_API_KEY` — **(F55)** the Resend API key for the two transactional emails (verify + recovery
   magic link). `functions/_lib/email.ts` posts to `https://api.resend.com/emails` via `fetch()` (no
   SDK). **Unbound → the email endpoints return 503 `{ error:'email unavailable' }`** and never crash.
