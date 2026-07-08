@@ -162,6 +162,10 @@ CREATE TABLE IF NOT EXISTS changelog_sends (
 --     npx wrangler d1 execute blotterbook-accounts --remote --command "ALTER TABLE subscriptions ADD COLUMN last_event_created INTEGER"
 --   (provisionSubscription treats a NULL as "no prior event" and always applies, so it is safe to
 --   deploy before the migration runs.)
+-- ⚠ EXISTING DEPLOYMENTS: `cancel_at_period_end` (A333 — self-serve cancel) was likewise added after
+--   first release. Same one-time migration is required on a live DB:
+--     npx wrangler d1 execute blotterbook-accounts --remote --command "ALTER TABLE subscriptions ADD COLUMN cancel_at_period_end INTEGER"
+--   (readers treat NULL as 0/false, so the app is safe to deploy before the migration runs.)
 CREATE TABLE IF NOT EXISTS subscriptions (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, -- the account's current subscription
   stripe_subscription_id TEXT,               -- Stripe subscription id (resolves lifecycle events)
@@ -170,7 +174,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   current_period_end INTEGER,                -- ms epoch — the paid period end (Stripe sends SECONDS; the webhook converts)
   updated INTEGER NOT NULL,                   -- ms epoch of the last webhook update
   past_due_since INTEGER,                     -- ms epoch of the FIRST failure of the current past_due run (grace base; NULL when not past_due — A266)
-  last_event_created INTEGER                  -- Stripe event.created (SECONDS) of the last APPLIED lifecycle event — older deliveries are dropped (out-of-order guard, A303)
+  last_event_created INTEGER,                 -- Stripe event.created (SECONDS) of the last APPLIED lifecycle event — older deliveries are dropped (out-of-order guard, A303)
+  cancel_at_period_end INTEGER                -- 1 = cancellation scheduled at period end (A333 self-serve cancel; status stays `active` until Stripe deletes it)
 );
 CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe ON subscriptions (stripe_subscription_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions (stripe_customer_id);

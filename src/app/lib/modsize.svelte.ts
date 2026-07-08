@@ -98,7 +98,11 @@ export function createSizeController(kit: LayoutKit, opts: SizeControllerOpts) {
       rafPending = requestAnimationFrame(() => {
         rafPending = 0;
         const deltaTracks = (lastEv.clientX - startX + (lastEv.clientY - startY)) / trackW;
-        resizing = { key, size: nearestSize(key, startSpan + deltaTracks) };
+        const size = nearestSize(key, startSpan + deltaTracks);
+        // A337: only write on an actual snap change — a fresh object every frame invalidates every
+        // previewSize() reader (all cards, renderItems, fill classes) at ~60fps for the whole drag,
+        // which was the reported lag. Snaps are discrete, so 2-4 writes per drag is the real signal.
+        if (!resizing || resizing.key !== key || resizing.size !== size) resizing = { key, size };
       });
     };
     // A317: `pointercancel` (touch interrupted by a system gesture, pen out of range) tears down

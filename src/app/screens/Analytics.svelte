@@ -949,7 +949,8 @@
   <div bind:this={gridEl} class="grid grid-cols-1 gap-4 lg:grid-cols-12">
     {#each MOD_ORDER as key (key)}
       <div data-mod class={['min-w-0', spanClass(sizeCtl.previewSize(key))]}>
-        <Card.Root class="relative h-full">
+        <!-- A337: containment bounds a neighbor's drag-snap reflow to this card's own box. -->
+        <Card.Root class="relative h-full [contain:layout_paint]">
           {@render moduleHeader(key)}
           <!-- A319: the shared corner drag-resize handle (all surfaces — CH16 2026-07-08). Pointer
                drag snaps to the nearest supported span; role=slider + arrow keys are the keyboard

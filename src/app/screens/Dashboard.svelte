@@ -393,9 +393,10 @@
   const keysOfProp = (m?: ModEntry[]) => validKeys(m?.map(e => e.key));
   // A271/A272: Large modules that benefit from filling the viewport get extra height (the perf equity
   // curve + the trading calendar); others just widen. Class-based (no inline style — CSP/A55).
-  // A317: keyed on the PREVIEW size so the fill tracks the live drag, not just the committed size.
+  // A337 (revises A317): keyed on the COMMITTED size — the 65vh jump lands on release instead of
+  // mid-drag, so a live drag only previews the dragged card's span (the vertical lurch was jank).
   const FILL_AT_LARGE = new Set(['perf', 'cal']);
-  const fillClass = (key: string): string => (sizeCtl.previewSize(key) === 'lg' && FILL_AT_LARGE.has(key) ? 'lg:min-h-[65vh]' : '');
+  const fillClass = (key: string): string => (sizeCtl.sizeOf(key) === 'lg' && FILL_AT_LARGE.has(key) ? 'lg:min-h-[65vh]' : '');
   // svelte-ignore state_referenced_locally — initial layout only; the app re-seeds via the prop below.
   let modOrder = $state<string[]>(keysOfProp(modules));
   let gridEl = $state<HTMLElement>();
@@ -421,7 +422,8 @@
   // into the shared ModuleCarousel (one-at-a-time swipe/arrows/dots) instead of six ⅙-width cards.
   // Runs shorter than six render as individual span-2 cards; every complete six in a run groups. The
   // group key derives from its membership so the keyed {#each} + animate:flip stay stable while the
-  // grouping holds. Keyed on the PREVIEW size so a live drag out of sm regroups immediately.
+  // grouping holds. A337 (revises A317): keyed on the COMMITTED size — regrouping mounts/unmounts a
+  // whole ModuleCarousel, far too heavy mid-drag; it now lands on release with the committed span.
   type RenderItem = { kind: 'mod'; key: string; k: string } | { kind: 'group'; keys: string[]; k: string };
   const renderItems = $derived.by<RenderItem[]>(() => {
     const items: RenderItem[] = [];
@@ -435,7 +437,7 @@
       run = [];
     };
     for (const key of modOrder) {
-      if (sizeCtl.previewSize(key) === 'sm') {
+      if (sizeCtl.sizeOf(key) === 'sm') {
         run.push(key);
       } else {
         flush();
@@ -1739,7 +1741,9 @@
   <!-- A271: a 12-track grid on lg (superset of the old 2-track model). Each module spans per its size
        (sm=2 · md=6 · lg=12); md/lg reproduce the old half/full widths exactly. Below lg it stacks. -->
   {#snippet moduleCard(key: string, grouped: boolean)}
-    <Card.Root id="dashmod-{key}" class={['relative h-full', fillClass(key)]}>
+    <!-- A337: [contain:layout_paint] bounds a neighbor's span change to this card's own box, so a
+         drag snap can't force layout/paint of every sibling's internals. -->
+    <Card.Root id="dashmod-{key}" class={['relative h-full [contain:layout_paint]', fillClass(key)]}>
       {@render moduleHeader(key)}
       <!-- A271/A319: the shared corner drag-resize handle (all surfaces — CH16 2026-07-08).
            Pointer drag snaps to the nearest supported span; role=slider + arrow keys are the

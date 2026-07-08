@@ -49,6 +49,7 @@
     completeReclaim,
     registerPrfPasskey,
     subscribe,
+    setCancelAtPeriodEnd,
     EMAIL_RE,
     fmtDate,
   } from '$lib/account/account.svelte.ts';
@@ -91,6 +92,8 @@
   let setupOpen = $state(false);
   // A278: the in-app subscription form, revealed by the Subscribe/Renew CTAs.
   let subscribeOpen = $state(false);
+  // A333: the cancel-subscription confirm dialog.
+  let cancelOpen = $state(false);
   let unlockOpen = $state(false);
   let prfOk = $state(false);
   let addPassphrase = $state('');
@@ -689,8 +692,60 @@
           {#if vault.error && !setupOpen && !unlockOpen}
             <p class="text-xs text-destructive" role="alert">{vault.error}</p>
           {/if}
+
+          <!-- A333: self-serve cancel/resume — only for a REAL subscriber (account.subscription is
+               null for admin-comped cloud, so this never renders for comps). Tier keeps working
+               until the paid period ends; the webhook remains the lifecycle writer. -->
+          {#if account.user && account.subscription && ['active', 'trialing', 'past_due'].includes(account.subscription.status ?? '')}
+            <Separator />
+            {#if account.subscription.cancelAtPeriodEnd}
+              <div class="flex flex-wrap items-center justify-between gap-2" data-testid="sub-cancel-scheduled">
+                <p class="text-xs text-muted-foreground">
+                  Subscription ends {fmtDate(account.subscription.currentPeriodEnd)} — sync stops then; your local data and encryption keys are
+                  untouched.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-testid="sub-resume"
+                  disabled={account.busy}
+                  onclick={() => void setCancelAtPeriodEnd(false)}>Resume subscription</Button
+                >
+              </div>
+            {:else}
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-xs text-muted-foreground">
+                  Cloud plan — $5/month{account.subscription.currentPeriodEnd
+                    ? `, renews ${fmtDate(account.subscription.currentPeriodEnd)}`
+                    : ''}.
+                </p>
+                <Button variant="outline" size="sm" data-testid="sub-cancel" disabled={account.busy} onclick={() => (cancelOpen = true)}>
+                  Cancel subscription
+                </Button>
+              </div>
+            {/if}
+          {/if}
         </Card.Content>
       </Card.Root>
+
+      <!-- A333: confirm before scheduling the cancel (shadcn alert-dialog, matching the passkey-removal pattern). -->
+      <AlertDialog.Root bind:open={cancelOpen}>
+        <AlertDialog.Content>
+          <AlertDialog.Header>
+            <AlertDialog.Title>Cancel your cloud subscription?</AlertDialog.Title>
+            <AlertDialog.Description>
+              Sync keeps working until {fmtDate(account.subscription?.currentPeriodEnd ?? null)}, then stops. Your local data and encryption
+              keys are untouched, your cloud copy is kept for a grace period, and you can resume any time before the period ends.
+            </AlertDialog.Description>
+          </AlertDialog.Header>
+          <AlertDialog.Footer>
+            <AlertDialog.Cancel>Keep subscription</AlertDialog.Cancel>
+            <AlertDialog.Action data-testid="sub-cancel-confirm" onclick={() => void setCancelAtPeriodEnd(true)}>
+              Cancel at period end
+            </AlertDialog.Action>
+          </AlertDialog.Footer>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
 
       <CloudSyncSetup
         bind:open={setupOpen}

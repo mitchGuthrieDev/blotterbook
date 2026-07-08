@@ -73,6 +73,16 @@ GDPR; two-phase + resumable — sync workspaces/R2 blobs first, then every D1 ro
   F60). Origin-checked; 501 without the Stripe env trio (`STRIPE_SECRET_KEY` +
   `STRIPE_PRICE_SUBSCRIPTION` + `STRIPE_PUBLISHABLE_KEY`), 503 without `ACCOUNTS_DB`. Errors follow
   the repo convention (A326): human sentence in `error`, machine code in `code`.
+- `functions/api/subscription/cancel.ts` — **implemented (A333).** Session-authed `POST
+  { resume?: boolean }` that sets (or, with `resume`, clears) `cancel_at_period_end` on the caller's
+  active/trialing/past_due subscription via the Stripe REST API, returning
+  `{ cancelAtPeriodEnd, currentPeriodEnd }`. The tier keeps working until the paid period ends
+  (grantsCloud's period-end policy); the webhook stays the only lifecycle writer — the endpoint's one
+  local write is the `cancel_at_period_end` display flag (updated optimistically; the
+  `customer.subscription.updated` event confirms it, and entitlement never reads it). 404
+  `no_subscription` when there is nothing to toggle; Origin-checked; 501/503 fail-closed; A326 error
+  shape. ⚠ live DBs need the one-time `ALTER TABLE subscriptions ADD COLUMN cancel_at_period_end
+  INTEGER` migration (see schema.sql).
 - `functions/api/webhook.ts` — **implemented (F54 + F60).** Verifies the Stripe signature over the RAW
   body FIRST (S11), then dedupes every event via a `webhook_events` ledger (replay-safe). On
   `checkout.session.completed` it records the donation in `donations` **keyed by the Stripe event id**.

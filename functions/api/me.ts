@@ -23,10 +23,12 @@ import {
   getDb,
   hasCloudEntitlement,
   publicPasskey,
+  publicSubscription,
   publicUser,
   readSessionToken,
   sessionFromRequest,
   sessionSetCookie,
+  subscriptionForUser,
   userById,
 } from '../_lib/accounts.ts';
 
@@ -48,9 +50,12 @@ export async function onRequestGet(ctx: Ctx) {
     if (!user) return json(ANON);
     const passkeys = (await credentialsForUser(db, user.id)).map(publicPasskey);
     const cloud = await hasCloudEntitlement(db, user.id); // A277 — subscription OR live admin override, one choke point
+    // A333: billing summary (status/period-end/cancel-scheduled — no Stripe ids) so the client can
+    // render Cancel/Resume. NULL for override-comped users, so the cancel UI never shows for them.
+    const subscription = publicSubscription(await subscriptionForUser(db, user.id));
     const token = readSessionToken(ctx.request); // the caller's own token, re-issued with a fresh Max-Age
     return json(
-      { tier: cloud ? 'cloud' : 'local', cloudSync: cloud, user: publicUser(user), passkeys },
+      { tier: cloud ? 'cloud' : 'local', cloudSync: cloud, user: publicUser(user), passkeys, subscription },
       200,
       token ? { 'Set-Cookie': sessionSetCookie(token) } : {}
     );
