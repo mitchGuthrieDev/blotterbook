@@ -21,7 +21,7 @@
       Sync is <b>opt-in and per workspace</b> — turning it on for one workspace doesn't sync any others. When it's on, every trade, journal
       note, tag, and saved filter is <b>encrypted on your device before it ever leaves the browser</b>. Our server only ever stores that
       scrambled ciphertext in a bucket next to a little bit of bookkeeping (record counts, timestamps, sizes) — it never sees your symbols,
-      P&amp;L, notes, screenshots, or tags, and it never sees a key that could unlock them.
+      P&amp;L, notes, screenshots, or tags, and it never sees a key that could decrypt them.
     </p>
     <p>
       Your other devices download the same ciphertext and decrypt it locally with the same key, then merge it into their own copy the same
@@ -31,7 +31,7 @@
   </section>
 
   <section id="cs-two-secrets" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
-    <h2 class="mt-0">Two different secrets: signing in vs. unlocking</h2>
+    <h2 class="mt-0">Two different secrets: signing in vs. decrypting</h2>
     <p>It helps to keep these apart — Blotterbook's Account screen names them separately on purpose:</p>
     <ol class="steps">
       <li>
@@ -39,13 +39,13 @@
         read your synced data.
       </li>
       <li>
-        <b>Unlocking encryption</b> — a separate secret (a <b>passphrase</b>, your downloaded <b>recovery key</b>, or a passkey that
-        supports it) turns the downloaded ciphertext back into readable trades, <b>inside your browser</b>. This "unlock" happens once per
-        browser session.
+        <b>Decrypting your data</b> — a separate secret (a <b>passphrase</b>, your downloaded <b>recovery key</b>, or a passkey that
+        supports it) turns the downloaded ciphertext back into readable trades, <b>inside your browser</b>. You're asked for it once per
+        browser session, as a step of whichever sync action needs it — like turning sync on.
       </li>
     </ol>
     <p>
-      Some passkeys can do both at once — sign you in <i>and</i> unlock encryption in a single tap. Whether yours can depends on your device and
+      Some passkeys can do both at once — sign you in <i>and</i> decrypt your data in a single tap. Whether yours can depends on your device and
       browser; if it can't, Blotterbook falls back to your passphrase.
     </p>
   </section>
@@ -65,8 +65,8 @@
     </div>
     <p>
       You don't need to generate a new recovery key when you add a workspace or a new device — the one key covers your whole account. Adding
-      a new passkey later re-enables unlocking from that device, as long as you still have an already-unlocked device, your passphrase, or
-      the recovery key handy to authorize it.
+      a new passkey later re-enables decryption from that device, as long as you still have a device where sync is already running, your
+      passphrase, or the recovery key handy to authorize it.
     </p>
   </section>
 
@@ -86,19 +86,21 @@
     <p>Once you're subscribed, set up encryption and turn sync on from inside the app (<b>Account</b> screen):</p>
     <ol class="steps">
       <li>Open <b>Set up cloud sync</b> and generate your recovery key — download or copy it, and confirm you've saved it.</li>
-      <li>Optionally add a passphrase, for browsers where your passkey can't unlock encryption directly.</li>
+      <li>Optionally add a passphrase, for browsers where your passkey can't decrypt your data directly.</li>
       <li>
         Switch to the workspace you want synced (the workspace switcher in the sidebar) and choose <b>Enable sync</b>. Other workspaces stay
         local-only unless you enable them too.
       </li>
       <li>
-        On a second device, sign in, unlock with your passphrase or recovery key (or a compatible passkey), and the workspace pulls down
-        automatically.
+        On a second device, sign in and turn on sync — you'll be asked for your passphrase or recovery key (or a compatible passkey) as part
+        of that step, and the workspace pulls down automatically.
       </li>
     </ol>
     <p>
       A status pill in the sidebar and on the Account page shows where things stand — <i>in sync</i>, <i>syncing</i>, <i>pending</i> (local
-      edits not pushed yet), <i>needs unlock</i>, or <i>offline</i> — plus a <b>Sync now</b> action, and separate <b>Pull from cloud</b> /
+      edits not pushed yet), <i>needs your passphrase</i>, or <i>offline</i> — plus a <b>Sync now</b> action, and separate
+      <b>Pull from cloud</b>
+      /
       <b>Push to cloud</b> / <b>Pause sync</b> controls on the Account page if you ever want more direct control. When two devices edited the
       same note or tag differently, the newest edit wins; trades themselves never conflict, since importing the same trade twice always converges
       to one record.

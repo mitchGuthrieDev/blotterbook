@@ -1,10 +1,13 @@
 <script lang="ts">
-  // Cloud-sync UNLOCK modal (F61b — docs/synced-workspaces.md "Key management"). A shared part: F63's
-  // CloudStore re-prompts through this whenever a sync op needs a key and the session is locked. Once
-  // per session it fetches the enrolled wrapped-IK methods (F62), lets the user pick one (passkey PRF
-  // tap / passphrase / recovery key), rebuilds the matching KEK (F61a) and unwraps the account IK into
-  // the vault's IN-MEMORY session — nothing is persisted. Staging-gated by its caller (Account screen).
-  import { LockKeyhole, KeyRound, Fingerprint, LifeBuoy } from '@lucide/svelte';
+  // The inline sync-key prompt (A336 — ex UnlockModal, F61b; docs/synced-workspaces.md "Key
+  // management"). Never a standalone destination: a sync action that needs the E2E key opens this
+  // as a STEP of that action ("Enter your sync passphrase to turn on sync"), and success continues
+  // the action via `onready`. It fetches the enrolled wrapped-IK methods (F62), lets the user
+  // continue with whichever they have (passphrase / passkey PRF tap / recovery key), rebuilds the
+  // matching KEK (F61a) and unwraps the account IK into the vault's IN-MEMORY session — nothing is
+  // persisted, and no lock/unlock vocabulary reaches the user (the vault is an implementation
+  // detail; users think in terms of sync being on or off).
+  import { KeyRound, Fingerprint, LifeBuoy } from '@lucide/svelte';
   import * as Dialog from '$lib/components/ui/dialog';
   import * as Tabs from '$lib/components/ui/tabs';
   import { Button } from '$lib/components/ui/button';
@@ -14,10 +17,12 @@
 
   interface Props {
     open: boolean;
-    /** fired once the IK is unlocked in memory. */
-    onunlocked?: () => void;
+    /** What the user is trying to do — rendered as "Enter your sync passphrase to {reason}." */
+    reason?: string;
+    /** Fired once the key is available in memory — the caller continues its action here. */
+    onready?: () => void;
   }
-  let { open = $bindable(), onunlocked }: Props = $props();
+  let { open = $bindable(), reason = '', onready }: Props = $props();
 
   let passphrase = $state('');
   let recoveryKey = $state('');
@@ -35,7 +40,7 @@
       passphrase = '';
       recoveryKey = '';
       open = false;
-      onunlocked?.();
+      onready?.();
     }
   }
 </script>
@@ -43,10 +48,10 @@
 <Dialog.Root bind:open>
   <Dialog.Content class="max-w-md">
     <Dialog.Header>
-      <Dialog.Title class="flex items-center gap-2"><LockKeyhole class="size-4" /> Unlock encryption</Dialog.Title>
+      <Dialog.Title class="flex items-center gap-2"><KeyRound class="size-4" /> Enter your sync passphrase</Dialog.Title>
       <Dialog.Description>
-        This unlocks your end-to-end encryption for this session so this device can read your synced data — separate from the passkey that
-        signs you in. Your key is held in memory only and cleared when you sign out or reload.
+        {reason ? `Enter your sync passphrase to ${reason}.` : 'Enter your sync passphrase to continue.'} It's separate from the passkey that
+        signs you in, is held in memory only, and clears when you sign out or reload.
       </Dialog.Description>
     </Dialog.Header>
 
@@ -60,9 +65,9 @@
       {#if hasPassphrase}
         <Tabs.Content value="passphrase" class="flex flex-col gap-3">
           <div class="flex flex-col gap-2">
-            <Label for="unlock-passphrase" class="flex items-center gap-2"><KeyRound class="size-4" /> Passphrase</Label>
+            <Label for="sync-key-passphrase" class="flex items-center gap-2"><KeyRound class="size-4" /> Passphrase</Label>
             <Input
-              id="unlock-passphrase"
+              id="sync-key-passphrase"
               type="password"
               autocomplete="current-password"
               placeholder="Your cloud-sync passphrase"
@@ -72,9 +77,9 @@
           <Button
             size="sm"
             class="self-start"
-            data-testid="unlock-passphrase-submit"
+            data-testid="sync-key-passphrase-submit"
             disabled={vault.busy || !passphrase}
-            onclick={async () => done(await unlockWithPassphrase(passphrase))}>Unlock</Button
+            onclick={async () => done(await unlockWithPassphrase(passphrase))}>Continue</Button
           >
         </Tabs.Content>
       {/if}
@@ -82,25 +87,31 @@
       {#if hasPasskey}
         <Tabs.Content value="passkey" class="flex flex-col gap-3">
           <p class="flex items-center gap-2 text-sm text-muted-foreground">
-            <Fingerprint class="size-4" /> Tap your PRF-capable passkey to unlock.
+            <Fingerprint class="size-4" /> Tap your PRF-capable passkey to continue.
           </p>
-          <Button size="sm" class="self-start" disabled={vault.busy} onclick={async () => done(await unlockWithPasskey())}>
-            <Fingerprint class="size-4" /> Unlock with a passkey
+          <Button
+            size="sm"
+            class="self-start"
+            data-testid="sync-key-passkey-submit"
+            disabled={vault.busy}
+            onclick={async () => done(await unlockWithPasskey())}
+          >
+            <Fingerprint class="size-4" /> Use passkey
           </Button>
         </Tabs.Content>
       {/if}
 
       <Tabs.Content value="recovery" class="flex flex-col gap-3">
         <div class="flex flex-col gap-2">
-          <Label for="unlock-recovery" class="flex items-center gap-2"><LifeBuoy class="size-4" /> Recovery key</Label>
-          <Input id="unlock-recovery" placeholder="Paste your recovery key" bind:value={recoveryKey} class="font-mono" />
+          <Label for="sync-key-recovery" class="flex items-center gap-2"><LifeBuoy class="size-4" /> Recovery key</Label>
+          <Input id="sync-key-recovery" placeholder="Paste your recovery key" bind:value={recoveryKey} class="font-mono" />
         </div>
         <Button
           size="sm"
           class="self-start"
-          data-testid="unlock-recovery-submit"
+          data-testid="sync-key-recovery-submit"
           disabled={vault.busy || !recoveryKey.trim()}
-          onclick={async () => done(await unlockWithRecoveryKey(recoveryKey))}>Unlock</Button
+          onclick={async () => done(await unlockWithRecoveryKey(recoveryKey))}>Continue</Button
         >
       </Tabs.Content>
     </Tabs.Root>

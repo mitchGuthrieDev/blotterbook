@@ -341,8 +341,8 @@
         <h2 class="mt-0">Cloud sync</h2>
         {#if account.tier === 'cloud'}
           <p class="m-0 text-sm text-muted-foreground">
-            Included in your plan. Sync is opt-in per workspace and end-to-end encrypted — keys never leave your devices, so set-up, unlock,
-            and workspace management happen <a href="/app/app.html#account">in the app's Account screen</a>.
+            Included in your plan. Sync is opt-in per workspace and end-to-end encrypted — keys never leave your devices, so set-up and
+            workspace management happen <a href="/app/app.html#account">in the app's Account screen</a>.
           </p>
         {:else}
           <p class="m-0 text-sm text-muted-foreground">

@@ -74,7 +74,7 @@ flowchart TD
         end
         subgraph PARTSSYNC["synced-workspaces UI (opt-in, cloud-tier)"]
             CSS["CloudSyncSetup"]
-            UM["UnlockModal"]
+            UM["SyncKeyPrompt"]
             SSPL["SyncStatusPill"]
             WSW["WorkspaceSwitcher"]
         end

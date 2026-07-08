@@ -76,8 +76,7 @@ export const cloudSync = $state({
 /** A279: the parity state the status pill renders for the ACTIVE workspace, derived from the reactive
  *  fields above. Surfaces call this inside a `$derived` so it re-settles automatically. Tier gating
  *  ('cloud tier required' / subscribe) is handled by the surface BEFORE the pill is shown. */
-export type SyncPill =
-  'checking' | 'off' | 'paused' | 'needs-sub' | 'needs-unlock' | 'offline' | 'syncing' | 'pending' | 'synced' | 'error';
+export type SyncPill = 'checking' | 'off' | 'paused' | 'needs-sub' | 'needs-key' | 'offline' | 'syncing' | 'pending' | 'synced' | 'error';
 export function syncPillState(): SyncPill {
   if (cloudSync.needsSub) return 'needs-sub'; // A306: lapsed subscription on an enabled workspace
   if (!cloudSync.enabled) {
@@ -86,7 +85,7 @@ export function syncPillState(): SyncPill {
   }
   if (cloudSync.status === 'error') return 'error';
   if (cloudSync.status === 'syncing') return 'syncing';
-  if (!cloudSync.unlocked) return 'needs-unlock';
+  if (!cloudSync.unlocked) return 'needs-key';
   if (!cloudSync.online) return 'offline';
   if (cloudSync.pending) return 'pending';
   return 'synced';
@@ -751,7 +750,7 @@ async function runPush(): Promise<void> {
   }
 }
 
-/** Called when the UnlockModal reports the IK is unlocked — converge the active workspace. */
+/** Called when the SyncKeyPrompt reports the IK is in memory — converge the active workspace. */
 export function onSyncUnlocked(): void {
   refreshSyncStatus();
   void syncActiveWorkspace({ full: true });

@@ -65,7 +65,7 @@ re-platform), and [`docs/architecture.md`](docs/architecture.md).
   CostSetup/Onboarding/ActivityTerminal/InfoTip/StatCardRow/StatusBanner/DashTabs/DatePickerPopover/
   DetectionStatus/EditableCellPopover/FeedbackDialog/LaunchGate/ModuleCarousel/ModuleResizeHandle/ModuleSizeMenu/PaginationControls/
   ScreenshotLightbox/SegmentedControl/SymbolSelect/TagInput + the synced-workspaces
-  parts WorkspaceSwitcher/CloudSyncSetup/UnlockModal/SyncStatusPill, A132/F61b/F63/A279) +
+  parts WorkspaceSwitcher/CloudSyncSetup/SyncKeyPrompt/SyncStatusPill, A132/F61b/F63/A279/A336) +
   `lib/{dashboard.svelte.ts,dashtabs.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports,econ.svelte.ts,modlayout.ts,modsize.svelte.ts}`
   plus the cloud-sync glue `{vault.svelte.ts` (in-memory key session, F61b)`,cloudstore.ts` (write-behind `StoreLike` wrapper, F63)`,cloudsync.svelte.ts` (reactive sync controller, F63)`}`.
   The account layer is SHARED with the site surface and lives at `src/lib/account/` (A328):
@@ -389,7 +389,8 @@ conforms to the rules below; keep it that way.
                         StatusBanner/DashTabs/DatePickerPopover/DetectionStatus/EditableCellPopover/
                         FeedbackDialog/LaunchGate/ModuleCarousel/ModuleResizeHandle/ModuleSizeMenu/PaginationControls/ScreenshotLightbox/
                         SegmentedControl/SymbolSelect/TagInput + synced-workspaces UI (opt-in, cloud-tier):
-                        WorkspaceSwitcher (A132), CloudSyncSetup + UnlockModal (F61b), SyncStatusPill (A279)
+                        WorkspaceSwitcher (A132), CloudSyncSetup (F61b) + SyncKeyPrompt (F61b/A336 — the inline
+                        key prompt that rides inside sync actions; ex UnlockModal), SyncStatusPill (A279)
     lib/                app-only glue (TS): dashboard.svelte.ts (dashboard state factory + workspace
                         switch/reload), dashtabs.svelte.ts (tabbed dashboards + per-tab module-layout
                         persistence, A135),

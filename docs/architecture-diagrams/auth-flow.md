@@ -12,7 +12,7 @@ sign-in, passphrase/recovery/PRF = encryption unlock), and the cloud-sync vault 
 [`src/app/lib/vault.svelte.ts`](../../src/app/lib/vault.svelte.ts) ·
 [`src/lib/core/crypto.ts`](../../src/lib/core/crypto.ts) ·
 [`src/app/parts/CloudSyncSetup.svelte`](../../src/app/parts/CloudSyncSetup.svelte) ·
-[`src/app/parts/UnlockModal.svelte`](../../src/app/parts/UnlockModal.svelte).
+[`src/app/parts/SyncKeyPrompt.svelte`](../../src/app/parts/SyncKeyPrompt.svelte) (ex UnlockModal — A336).
 
 ## Registration ceremony (create account / add passkey)
 
@@ -138,7 +138,7 @@ flowchart TB
 sequenceDiagram
     autonumber
     participant Setup as CloudSyncSetup.svelte
-    participant Unlock as UnlockModal.svelte
+    participant Unlock as SyncKeyPrompt.svelte
     participant V as vault.svelte.ts
     participant C as crypto.ts
     participant WIK as PUT/GET /api/sync/wrapped-ik

@@ -4,6 +4,14 @@ _Design note — 2026-07-07. Live on prod + staging (opt-in, `cloud`-tier; the s
 `cloudSync.configured`, true on every non-demo surface — CH16, 2026-07-07). Demo never syncs. Reference
 model: Obsidian Sync's status-pill + explicit sync._
 
+> **Superseded in part by A336 (2026-07-08).** Testing showed even the A279 framing's residual
+> Lock/Unlock controls confused users, so the vault is now fully invisible: `UnlockModal` became the
+> inline `SyncKeyPrompt` (it rides INSIDE whichever sync action needs the key and continues it on
+> success), the Account card's Lock/Unlock buttons and locked/unlocked badge are gone, the pill's
+> "Needs unlock" state reads "Needs your passphrase", and the switcher's "Unlock to …" buttons became
+> the real sync actions. The parity-pill model, direction controls, and the two-secrets explainer
+> below all survive unchanged.
+
 ## Problem
 
 The pre-rework cloud-sync UX was **lock-centric** and never told the user whether their data was
