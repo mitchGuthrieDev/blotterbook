@@ -15,14 +15,18 @@
   // the same initial state Home hydrates from.
   let scrolled = $state(false);
 
+  // A273: root-absolute (leading "/") rather than bare filenames -- Nav is also rendered by the
+  // one-level-deep /help/*.html pages (via SiteShell), where a relative "index.html" would resolve
+  // to /help/index.html instead of /. Absolute paths resolve identically for the root-level pages
+  // too, so this is a no-op there.
   const links = [
-    { key: 'features', href: 'index.html#features', label: 'Features' },
-    { key: 'platforms', href: 'index.html#platforms', label: 'Platforms' },
-    { key: 'pricing', href: 'index.html#pricing', label: 'Pricing' },
-    { key: 'faq', href: 'index.html#faq', label: 'FAQ' },
-    { key: 'howto', href: 'howto.html', label: 'How To' },
-    { key: 'roadmap', href: 'roadmap.html', label: 'Roadmap' },
-    { key: 'changelog', href: 'changelog.html', label: 'Changelog' },
+    { key: 'features', href: '/index.html#features', label: 'Features' },
+    { key: 'platforms', href: '/index.html#platforms', label: 'Platforms' },
+    { key: 'pricing', href: '/index.html#pricing', label: 'Pricing' },
+    { key: 'faq', href: '/index.html#faq', label: 'FAQ' },
+    { key: 'help', href: '/help/index.html', label: 'Help' },
+    { key: 'roadmap', href: '/roadmap.html', label: 'Roadmap' },
+    { key: 'changelog', href: '/changelog.html', label: 'Changelog' },
   ];
 </script>
 
@@ -38,7 +42,7 @@
   <nav class="nav relative mx-auto flex h-12 max-w-[1180px] items-center px-[22px]">
     <a
       class="wordmark inline-flex items-center gap-[9px] text-sm font-semibold tracking-[0.01em] text-foreground no-underline hover:no-underline"
-      href="index.html"
+      href="/index.html"
       ><span class="dot h-2 w-2 rounded-[2px] bg-[linear-gradient(135deg,var(--primary),var(--chart-3))]"></span>Blotterbook</a
     >
     <input
@@ -49,8 +53,8 @@
     />
     <div class="navlinks ml-2 flex-wrap gap-1">
       {#if variant === 'admin'}
-        <a href="index.html">Home</a>
-        <a href="changelog.html">Changelog</a>
+        <a href="/index.html">Home</a>
+        <a href="/changelog.html">Changelog</a>
       {:else}
         {#each links as l (l.key)}
           <a data-nav={l.key} class:active={active === l.key} href={l.href}>{l.label}</a>

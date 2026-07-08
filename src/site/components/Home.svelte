@@ -166,7 +166,7 @@
       <a href="#platforms">Platforms</a>
       <a href="#pricing">Pricing</a>
       <a href="#faq">FAQ</a>
-      <a href="howto.html">How&nbsp;To</a>
+      <a href="/help/index.html">Help</a>
       <a href="roadmap.html">Roadmap</a>
       <a href="changelog.html">Changelog</a>
       <!-- A293: the header CTA is the Account entry — /account.html routes login vs dashboard itself. -->
@@ -536,7 +536,7 @@
       <b>Tradovate&nbsp;/&nbsp;NinjaTrader</b>,
       <b>Quantower</b>, and <b>ATAS&nbsp;X</b> (a single .xlsx export) are verified against real exports; the rest are in <b>beta</b>, built
       from each platform's documented format and exercised with synthetic test data. Step-by-step export guides live in the
-      <a href="howto.html">How&nbsp;To</a>.
+      <a href="/help/index.html">Help</a>.
     </p>
     <ul
       class="plat-grid mt-[34px] grid list-none grid-cols-3 gap-3 p-0 max-[760px]:grid-cols-2 max-[460px]:grid-cols-1"
@@ -545,7 +545,7 @@
       <li>
         <a
           class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
-          href="howto.html#imp-tradingview"
+          href="/help/import.html#imp-tradingview"
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
             aria-hidden="true"
@@ -557,7 +557,7 @@
       <li>
         <a
           class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
-          href="howto.html#imp-tradovate"
+          href="/help/import.html#imp-tradovate"
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
             aria-hidden="true"
@@ -569,7 +569,7 @@
       <li>
         <a
           class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
-          href="howto.html#imp-tradovate"
+          href="/help/import.html#imp-tradovate"
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
             aria-hidden="true"
@@ -581,7 +581,7 @@
       <li>
         <a
           class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
-          href="howto.html#imp-quantower"
+          href="/help/import.html#imp-quantower"
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
             aria-hidden="true"
@@ -593,7 +593,7 @@
       <li>
         <a
           class="plat verified flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
-          href="howto.html#imp-atas"
+          href="/help/import.html#imp-atas"
           ><span
             class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-2 shadow-[0_0_0_3px_color-mix(in_srgb,var(--chart-2)_15%,transparent)]"
             aria-hidden="true"
@@ -605,7 +605,7 @@
       <li>
         <a
           class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
-          href="howto.html#imp-rithmic"
+          href="/help/import.html#imp-rithmic"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Rithmic R|Trader</b
           ><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a
@@ -614,7 +614,7 @@
       <li>
         <a
           class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
-          href="howto.html#imp-sierrachart"
+          href="/help/import.html#imp-sierrachart"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Sierra Chart</b
           ><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a
@@ -623,7 +623,7 @@
       <li>
         <a
           class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
-          href="howto.html#imp-tradestation"
+          href="/help/import.html#imp-tradestation"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">TradeStation</b
           ><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a
@@ -632,7 +632,7 @@
       <li>
         <a
           class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
-          href="howto.html#imp-motivewave"
+          href="/help/import.html#imp-motivewave"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">MotiveWave</b
           ><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a
@@ -641,7 +641,7 @@
       <li>
         <a
           class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
-          href="howto.html#imp-webull"
+          href="/help/import.html#imp-webull"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Webull</b
           ><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a
@@ -650,7 +650,7 @@
       <li>
         <a
           class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
-          href="howto.html#imp-ibkr"
+          href="/help/import.html#imp-ibkr"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Interactive Brokers</b
           ><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a
@@ -659,7 +659,7 @@
       <li>
         <a
           class="plat flex w-full items-center gap-[11px] rounded-[10px] border border-border bg-card px-4 py-[15px] text-foreground no-underline transition-[border-color,transform] duration-200 hover:translate-y-[-2px] hover:border-ring hover:no-underline"
-          href="howto.html#imp-schwab"
+          href="/help/import.html#imp-schwab"
           ><span class="pdot h-[9px] w-[9px] flex-none rounded-full bg-chart-4" aria-hidden="true"></span><b
             class="flex-1 text-[15px] font-semibold">Schwab / thinkorswim</b
           ><span class="pstate font-mono text-[10.5px] text-muted-foreground">Beta · synthetic</span></a
@@ -963,7 +963,7 @@
         >
           Not today. Local storage is per-browser, so data isn't synced across devices and is cleared if you clear site data — keep your
           original CSV or a backup. Re-uploading is safe: trades are de-duplicated by a stable id, so overlapping exports only add genuinely
-          new rows. Cross-device <b>synced workspaces</b> (end-to-end encrypted, ~$5/month) are the one planned paid add-on — see Pricing.
+          new rows. Cross-device <b>synced workspaces</b> (end-to-end encrypted, $5/month) are live as the one optional paid add-on — see Pricing.
         </p>
       </details>
       <details class="border-b border-border">
@@ -978,8 +978,8 @@
           class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground"
         >
           The app is <b>free for everyone</b> and stays free. You can optionally <b>back the project</b> with a $25 one-time, non-refundable
-          donation (checkout via Stripe) — it's not a purchase and grants no product access. The only planned paid feature is
-          <b>synced workspaces</b> — end-to-end-encrypted cross-device sync at about $5/month — which isn't ready yet. Nothing else is gated.
+          donation (checkout via Stripe) — it's not a purchase and grants no product access. The only paid feature is
+          <b>synced workspaces</b> — end-to-end-encrypted cross-device sync at $5/month, live now. Nothing else is gated.
         </p>
       </details>
     </div>
@@ -995,7 +995,7 @@
       <a href="#features">Features</a>
       <a href="#platforms">Platforms</a>
       <a href="#pricing">Pricing</a>
-      <a href="howto.html">How To</a>
+      <a href="/help/index.html">Help</a>
       <a href="roadmap.html">Roadmap</a>
       <a href="changelog.html">Changelog</a>
       <a href="legal.html">Legal</a>

@@ -15,7 +15,9 @@
         "Layouts persist per device exactly as before; on the demo surface resizing works but (like everything on demo) is never saved.",
         "Sign-up fix: if someone registered your email but never verified it, creating your account now offers to email you a one-time reclaim link — clicking it releases the address and signs you up with your email already verified.",
         "Stale squats clear themselves: an account that never verifies its email frees the address automatically after 30 days.",
-        "Under the hood: unverified-account cleanup never touches encrypted cloud-sync data (those accounts use the full deletion path), and the reclaim endpoints follow the same no-enumeration posture as passkey recovery."
+        "Under the hood: unverified-account cleanup never touches encrypted cloud-sync data (those accounts use the full deletion path), and the reclaim endpoints follow the same no-enumeration posture as passkey recovery.",
+        "A new Help hub at /help replaces the How-To page: getting started, per-platform import guides, a plain-language cloud-sync explainer (how the encryption and recovery key work), and a support page. Old links redirect.",
+        "Subscribe without leaving the app: cloud sync checkout now happens in an embedded, Stripe-hosted payment form (cards never touch Blotterbook) with 3DS support — the hosted checkout page remains as a fallback."
       ]
     },
     {

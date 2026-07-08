@@ -52,6 +52,32 @@
     label?: string;
     error?: string;
   }
+  // A276 — the admin user-management shapes (GET /api/admin/users, POST /api/admin/entitlement). Page-local
+  // like the backlog shapes above; identity + billing/entitlement metadata only (S25).
+  interface AdminOverride {
+    tier: string;
+    expiresAt: number | null;
+    reason: string | null;
+    grantedBy: string;
+    grantedAt: number;
+    revokedAt: number | null;
+  }
+  interface AdminUser {
+    id: string;
+    email: string;
+    emailVerified: boolean;
+    createdAt: number;
+    donationTotalCents: number;
+    donatedAt: number | null;
+    subscription: { status: string | null; currentPeriodEnd: number | null } | null;
+    override: AdminOverride | null;
+    effectiveTier: 'cloud' | 'local';
+  }
+  interface UsersResp {
+    users?: AdminUser[];
+    nextCursor?: number | null;
+    error?: string;
+  }
 
   // The admin token (S3) is a live credential — kept in this page-session field only, never
   // localStorage (S10). autoKey() re-issues a fresh token on each load via Access.
@@ -81,6 +107,24 @@
   let bkErr = $state(false);
   let fStatus = $state('');
   let fEffort = $state('');
+
+  // ---- users + entitlement overrides (A276) ----
+  let users = $state<AdminUser[]>([]);
+  let usersLoading = $state(false);
+  let usersMsg = $state({ text: '', kind: '' });
+  let userQuery = $state('');
+  let usersCursor = $state<number | null>(null);
+  // The open grant form is keyed to a single row at a time.
+  let grantForId = $state<string | null>(null);
+  let grantExpiry = $state<'none' | '30d' | '90d' | 'custom'>('none');
+  let grantCustomDate = $state('');
+  let grantReason = $state('');
+  let searchTimer: ReturnType<typeof setTimeout> | null = null;
+  const DAY_MS = 24 * 3600 * 1000;
+  const fmtDate = (ms: number | null | undefined) => (ms ? new Date(ms).toLocaleDateString() : '—');
+  // Whether an override is granting cloud RIGHT NOW (not revoked, not past expiry) — mirrors the
+  // server's overrideGrantsCloud predicate for the row's display.
+  const overrideActive = (o: AdminOverride | null) => !!o && o.revokedAt == null && (o.expiresAt == null || Date.now() < o.expiresAt);
 
   const MODES = [
     { m: 'auto', label: 'Auto-detect' },
@@ -159,6 +203,7 @@
           adminKey = d.token;
           const until = d.exp ? ' — expires ' + new Date(d.exp).toLocaleTimeString() : '';
           authnote = 'Authenticated' + (d.email ? ' as ' + d.email : '') + ' — admin token issued' + until + '.';
+          loadUsers(true); // the users list is token-gated — load it once the token is in hand
         }
       })
       .catch(() => {});
@@ -291,12 +336,102 @@
     fEffort = '';
   }
 
+  // ---- users management (A276) ----
+  function setUsersMsg(text: string, kind = '') {
+    usersMsg = { text, kind };
+  }
+  // Load a page of accounts. reset=true starts fresh (new search / first load); reset=false appends the
+  // next cursor page. Requires the admin token (autoKey issues it via Access) — the GET is token-gated.
+  function loadUsers(reset = true) {
+    const key = (adminKey || '').trim();
+    if (!key) {
+      setUsersMsg('Authenticating via Access…');
+      return;
+    }
+    usersLoading = true;
+    const params = new URLSearchParams();
+    if (userQuery.trim()) params.set('q', userQuery.trim());
+    if (!reset && usersCursor != null) params.set('cursor', String(usersCursor));
+    fetchT('/api/admin/users?' + params.toString(), { cache: 'no-store', headers: { 'x-admin-key': key } })
+      .then(r => r.json() as Promise<UsersResp>)
+      .then(d => {
+        if (d.error) {
+          setUsersMsg('Error: ' + d.error, 'err');
+          return;
+        }
+        setUsersMsg('');
+        users = reset ? d.users || [] : [...users, ...(d.users || [])];
+        usersCursor = d.nextCursor ?? null;
+      })
+      .catch(() => {
+        setUsersMsg('Could not load users (deploy on Cloudflare to use).', 'err');
+      })
+      .finally(() => {
+        usersLoading = false;
+      });
+  }
+  // Debounce the search box so each keystroke doesn't fire a request.
+  function onUserSearch() {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => loadUsers(true), 300);
+  }
+  function openGrant(u: AdminUser) {
+    grantForId = u.id;
+    grantExpiry = 'none';
+    grantCustomDate = '';
+    grantReason = u.override?.reason ?? '';
+  }
+  function cancelGrant() {
+    grantForId = null;
+  }
+  // POST a grant/revoke to /api/admin/entitlement and splice the returned row back in.
+  function postEntitlement(userId: string, action: 'grant' | 'revoke', expiresAt: number | null, reason: string) {
+    const key = (adminKey || '').trim();
+    if (!key) {
+      setUsersMsg('Enter the admin key first.', 'err');
+      return;
+    }
+    setUsersMsg('Saving…');
+    fetch('/api/admin/entitlement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
+      body: JSON.stringify({ userId, action, expiresAt, reason }),
+    })
+      .then(r => r.json().then((d: AdminUser & { error?: string }) => ({ ok: r.ok, d })))
+      .then(res => {
+        if (res.ok) {
+          users = users.map(x => (x.id === res.d.id ? res.d : x));
+          grantForId = null;
+          setUsersMsg(action === 'grant' ? 'Override granted.' : 'Override revoked.', 'ok');
+        } else setUsersMsg('Error: ' + (res.d.error || 'request failed'), 'err');
+      })
+      .catch(() => setUsersMsg('Network error — is this deployed on Cloudflare?', 'err'));
+  }
+  function submitGrant(u: AdminUser) {
+    let expiresAt: number | null = null;
+    if (grantExpiry === '30d') expiresAt = Date.now() + 30 * DAY_MS;
+    else if (grantExpiry === '90d') expiresAt = Date.now() + 90 * DAY_MS;
+    else if (grantExpiry === 'custom') {
+      const t = Date.parse(grantCustomDate);
+      if (Number.isNaN(t)) {
+        setUsersMsg('Enter a valid custom expiry date.', 'err');
+        return;
+      }
+      expiresAt = t;
+    }
+    postEntitlement(u.id, 'grant', expiresAt, grantReason.trim());
+  }
+  function revokeOverride(u: AdminUser) {
+    postEntitlement(u.id, 'revoke', null, '');
+  }
+
   onMount(() => {
     autoKey();
     loadStatus();
     loadConfig();
     loadVersions();
     loadBacklog();
+    loadUsers(); // no-op until autoKey() supplies the token, then autoKey re-invokes it
   });
 </script>
 
@@ -450,6 +585,156 @@
         : ''}"
   >
     {flagmsg.text}
+  </p>
+
+  <h2>Users &amp; entitlements</h2>
+  <p>
+    Accounts directory (<code>/api/admin/users</code>) with their subscription + <b>cloud-tier</b> status. Grant a <b>manual override</b> to
+    comp an account into the cloud tier regardless of billing (e.g. a reviewer or a support make-good), or revoke one. Overrides are the
+    single source of truth alongside subscriptions — <code>hasCloudEntitlement</code> honors either. Revoked overrides are kept as the audit trail.
+    Reads and writes both require the admin token above.
+  </p>
+  <div class="mx-0 mt-[14px] mb-[6px] flex flex-wrap items-end gap-[10px]">
+    <div class="flex flex-col gap-[5px]">
+      <label class="text-[10.5px] tracking-[0.07em] text-muted-foreground uppercase" for="usersearch">Search email</label>
+      <input
+        class="min-w-[240px] rounded-[7px] border border-border bg-secondary px-[10px] py-2 font-mono text-[13px] text-foreground outline-none focus:border-primary"
+        type="text"
+        id="usersearch"
+        placeholder="substring of an email…"
+        autocomplete="off"
+        bind:value={userQuery}
+        oninput={onUserSearch}
+      />
+    </div>
+    {#if usersLoading}<span class="self-center font-mono text-[11.5px] text-muted-foreground">Loading…</span>{/if}
+  </div>
+  {#if users.length}
+    <div class="mx-0 my-2 overflow-x-auto rounded-[9px] border border-border">
+      <table class="w-full border-collapse text-[13px]">
+        <thead>
+          <tr class="border-b border-border bg-secondary text-left">
+            {#each ['Email', 'Created', 'Verified', 'Donated', 'Subscription', 'Tier', 'Override'] as h (h)}
+              <th class="px-3 py-2 text-[10.5px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">{h}</th>
+            {/each}
+          </tr>
+        </thead>
+        <tbody>
+          {#each users as u (u.id)}
+            <tr class="border-b border-border align-top">
+              <td class="px-3 py-[10px] font-mono text-[12.5px] text-foreground">{u.email}</td>
+              <td class="px-3 py-[10px] font-mono text-[12px] whitespace-nowrap text-muted-foreground">{fmtDate(u.createdAt)}</td>
+              <td class="px-3 py-[10px] text-[12px]">
+                {#if u.emailVerified}<span class="text-chart-2">yes</span>{:else}<span class="text-muted-foreground">no</span>{/if}
+              </td>
+              <td class="px-3 py-[10px] font-mono text-[12px] whitespace-nowrap text-muted-foreground">
+                {u.donationTotalCents ? '$' + (u.donationTotalCents / 100).toFixed(2) : '—'}
+              </td>
+              <td class="px-3 py-[10px] font-mono text-[12px] whitespace-nowrap text-muted-foreground">
+                {u.subscription?.status ?? '—'}{#if u.subscription?.currentPeriodEnd}
+                  · {fmtDate(u.subscription.currentPeriodEnd)}{/if}
+              </td>
+              <td class="px-3 py-[10px]">
+                <span
+                  class="rounded-full border px-2 py-[2px] font-mono text-[10px] tracking-[0.04em] uppercase {u.effectiveTier === 'cloud'
+                    ? 'border-chart-2/40 text-chart-2'
+                    : 'border-border text-muted-foreground'}">{u.effectiveTier}</span
+                >
+              </td>
+              <td class="px-3 py-[10px] text-[12px]">
+                {#if grantForId === u.id}
+                  <div class="flex flex-col gap-2">
+                    <div class="flex flex-wrap gap-1">
+                      {#each [{ v: 'none', l: 'Permanent' }, { v: '30d', l: '30 days' }, { v: '90d', l: '90 days' }, { v: 'custom', l: 'Custom' }] as opt (opt.v)}
+                        <button
+                          type="button"
+                          class="cursor-pointer rounded-[6px] border px-2 py-1 font-mono text-[11px] {grantExpiry === opt.v
+                            ? 'border-primary bg-card text-foreground'
+                            : 'border-border bg-secondary text-muted-foreground hover:border-primary'}"
+                          onclick={() => (grantExpiry = opt.v as typeof grantExpiry)}>{opt.l}</button
+                        >
+                      {/each}
+                    </div>
+                    {#if grantExpiry === 'custom'}
+                      <input
+                        class="rounded-[6px] border border-border bg-secondary px-2 py-1 font-mono text-[12px] text-foreground outline-none focus:border-primary"
+                        type="date"
+                        aria-label="Custom expiry date"
+                        bind:value={grantCustomDate}
+                      />
+                    {/if}
+                    <input
+                      class="min-w-[180px] rounded-[6px] border border-border bg-secondary px-2 py-1 font-mono text-[12px] text-foreground outline-none focus:border-primary"
+                      type="text"
+                      placeholder="reason (optional)"
+                      bind:value={grantReason}
+                    />
+                    <div class="flex gap-2">
+                      <button
+                        type="button"
+                        class="cursor-pointer rounded-[6px] border border-chart-2/40 bg-secondary px-3 py-1 font-mono text-[11px] text-chart-2 hover:border-chart-2"
+                        onclick={() => submitGrant(u)}>Confirm grant</button
+                      >
+                      <button
+                        type="button"
+                        class="cursor-pointer rounded-[6px] border border-border bg-secondary px-3 py-1 font-mono text-[11px] text-muted-foreground hover:border-primary hover:text-foreground"
+                        onclick={cancelGrant}>Cancel</button
+                      >
+                    </div>
+                  </div>
+                {:else if overrideActive(u.override)}
+                  <div class="flex flex-col gap-1">
+                    <span class="font-mono text-[11.5px] text-chart-2"
+                      >CLOUD {u.override?.expiresAt ? 'until ' + fmtDate(u.override.expiresAt) : '(permanent)'}</span
+                    >
+                    <span class="font-mono text-[10.5px] text-muted-foreground">by {u.override?.grantedBy}</span>
+                    {#if u.override?.reason}<span class="text-[10.5px] text-muted-foreground">“{u.override.reason}”</span>{/if}
+                    <button
+                      type="button"
+                      class="mt-1 w-fit cursor-pointer rounded-[6px] border border-destructive/40 bg-secondary px-3 py-1 font-mono text-[11px] text-destructive hover:border-destructive"
+                      onclick={() => revokeOverride(u)}>Revoke</button
+                    >
+                  </div>
+                {:else}
+                  <div class="flex flex-col gap-1">
+                    {#if u.override?.revokedAt}
+                      <span class="font-mono text-[10.5px] text-muted-foreground">revoked {fmtDate(u.override.revokedAt)}</span>
+                    {/if}
+                    <button
+                      type="button"
+                      class="w-fit cursor-pointer rounded-[6px] border border-border bg-secondary px-3 py-1 font-mono text-[11px] text-foreground hover:border-primary"
+                      onclick={() => openGrant(u)}>Grant CLOUD</button
+                    >
+                  </div>
+                {/if}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+    {#if usersCursor != null}
+      <div class="mx-0 my-2 flex">
+        <button
+          type="button"
+          class="cursor-pointer rounded-[7px] border border-border bg-secondary px-3 py-2 font-sans text-[12.5px] text-muted-foreground hover:border-primary hover:text-foreground"
+          onclick={() => loadUsers(false)}>Load more</button
+        >
+      </div>
+    {/if}
+  {:else if !usersLoading}
+    <p class="mx-0 mt-1 mb-3 font-mono text-[13px] text-muted-foreground">
+      {userQuery.trim() ? 'No accounts match this search.' : 'No accounts.'}
+    </p>
+  {/if}
+  <p
+    class="mt-[6px] min-h-4 font-mono text-[12.5px] {usersMsg.kind === 'ok'
+      ? 'text-chart-2'
+      : usersMsg.kind === 'err'
+        ? 'text-destructive'
+        : 'text-muted-foreground'}"
+  >
+    {usersMsg.text}
   </p>
 
   <h2>Backlog</h2>

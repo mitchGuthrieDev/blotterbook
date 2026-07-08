@@ -14,7 +14,7 @@
 --
 -- ⚠ RE-RUN REQUIRED: every table below uses `CREATE TABLE IF NOT EXISTS`, so this file is
 -- idempotent — after ANY change here (F54 added `donations`, F55 added `recovery_tokens`, F44 added
--- `subscribers` + `changelog_sends`), the owner MUST re-run the
+-- `subscribers` + `changelog_sends`, A276 added `entitlement_overrides`), the owner MUST re-run the
 -- `wrangler d1 execute ... --file=functions/schema.sql` command above against the bound database so
 -- the new tables exist in prod. Existing rows are untouched.
 --
@@ -188,6 +188,28 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   type TEXT,                                  -- the event type processed
   created_at INTEGER NOT NULL                 -- ms epoch (when the webhook processed it)
 );
+
+-- Manual entitlement overrides (A276) — the admin comp/grant lever. One row per user (PK = user_id):
+-- an active row hands the `cloud` tier to an account regardless of its subscription (e.g. a comped
+-- reviewer, a support make-good), and hasCloudEntitlement() (functions/_lib/accounts.ts) treats a LIVE
+-- override as a grant. An override is LIVE while revoked_at IS NULL AND (expires_at IS NULL OR now <
+-- expires_at). REVOKED rows are KEPT, never deleted — the revoked_at/revoked_by stamp IS the audit
+-- trail. granted_by/revoked_by record the Access-authenticated admin email. S25: entitlement metadata
+-- only — never any trade data.
+CREATE TABLE IF NOT EXISTS entitlement_overrides (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  tier TEXT NOT NULL,                          -- 'cloud' (the only tier granted for now)
+  expires_at INTEGER,                          -- ms epoch; NULL = permanent
+  reason TEXT,                                 -- free-text note (why the override was granted)
+  granted_by TEXT NOT NULL,                    -- Cf-Access-Authenticated-User-Email of the granting admin
+  granted_at INTEGER NOT NULL,                 -- ms epoch
+  revoked_at INTEGER,                          -- ms epoch when revoked (NULL = active); row is KEPT as the audit trail
+  revoked_by TEXT                              -- admin email that revoked it (NULL until revoked)
+);
+CREATE INDEX IF NOT EXISTS idx_entitlement_overrides_expires ON entitlement_overrides (expires_at);
+
+-- Cursor-pagination support for the admin user list (A276 — GET /api/admin/users orders by created_at DESC).
+CREATE INDEX IF NOT EXISTS idx_users_created ON users (created_at);
 
 -- ── Synced workspaces — the DUMB encrypted-blob transport (F62; docs/synced-workspaces.md) ─────────
 -- Guardrail S25: these tables + the SYNC_BUCKET R2 objects hold ONLY ciphertext, blinded ids, wrapped

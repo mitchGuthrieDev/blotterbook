@@ -237,42 +237,6 @@
       "doneNote": null
     },
     {
-      "id": "A273",
-      "title": "(discuss + build) 'Help' site — Obsidian-style docs/support hub; migrate How-To; add cloud-sync docs",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "large",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Create a dedicated HELP site (use help.obsidian.md as the reference model — a sidebar-navigated docs hub) and MOVE the existing How-To wiki (src/site/components/Howto.svelte + howto.html) into it. Add: getting-started, the per-platform import guides (from How-To), a support/contact page, and pages documenting CLOUD SYNC (how E2E sync works, the recovery key, subscribing, per-workspace enable, the zero-knowledge guarantee). DISCUSSION FIRST — plan the information architecture (page tree, nav, URL scheme; extend the src/site SSG with a /help section vs a separate surface; keep it prerendered + CSP-clean per A69) and get sign-off on the structure before writing all the content. Update nav/footer + sitemap.xml/robots.txt + _redirects for any moved URLs (howto.html -> /help/...), keeping the drift gate green and preserving old URLs with redirects. Done when: the IA is agreed, the Help hub ships with How-To migrated + support + cloud-sync docs, and every URL move is handled across _redirects/sitemap/canonicals.",
-      "doneNote": null
-    },
-    {
-      "id": "A276",
-      "title": "(discuss + build) Admin: paginated user table to view/edit per-user entitlements (+ audit the entitlement model)",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "large",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Add a paginated USER table to the admin panel (src/site/components/Admin.svelte + a new admin /functions endpoint, Cloudflare-Access-gated + noindex like the rest of admin) that lists accounts and lets the owner VIEW and EDIT per-user entitlements — e.g. grant the owner (or a comped user) the CLOUD tier WITHOUT a Stripe subscription. FIRST audit + document how entitlements work today (F60: /api/me derives the tier from the D1 `subscriptions` row via grantsCloud; there is no manual-grant path) and decide the model change: add a manual override (e.g. an `entitlement_override` / `comped` field or a synthetic subscription row) that grantsCloud honors, with an audit trail of who set it and when. Server-side + admin-authed only (NEVER a client-trusted grant — see A277). Paginate the D1 query (never load all users at once). Constraints: admin endpoints behind Access + the admin token (S3/S4), fail-closed without ACCOUNTS_DB, and NO trade data ever surfaced (S25 — identity + entitlement only). Done when: the admin table paginates real users, the owner can grant/revoke the cloud entitlement server-side (reflected by /api/me), the override is audited, and the current-vs-new entitlement model is documented.",
-      "doneNote": null
-    },
-    {
-      "id": "A278",
-      "title": "(discuss + build) In-house Stripe subscription form (replace the Checkout redirect) + smooth the get-cloud-sync flow",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "large",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Replace the Stripe Checkout REDIRECT (/api/checkout -> hosted Checkout) with a HAND-ROLLED in-app subscription form that connects to Stripe via Stripe.js + Elements / Payment Element (PCI-safe — raw card data never touches our code), so subscribing happens inside the app without leaving for Stripe's hosted page. DISCUSSION/PLANNING FIRST — design the flow: loading Stripe.js (CSP additions for js.stripe.com script + the Elements iframe: script-src/connect-src/frame-src — owner-approved, minimal, documented), a /functions endpoint to create the Subscription/SetupIntent + return the client secret, 3DS + error handling, and preserving the account linkage (client_reference_id / subscription metadata, per #120). ALSO smooth the 'Get cloud sync' entry (tabled here): today a logged-OUT user with no local data clicks the homepage CTA -> lands in the app's first-run/onboarding state -> must then navigate to Account -> Subscribe; a logged-in user with data lands on Account directly. Carry the subscribe INTENT through login/onboarding so a fresh user lands on the subscribe step (not the empty dashboard), regardless of session/data state. Keep the moat + fail-closed posture; demo never sees it. Done when: users can subscribe via an in-app Elements form (no hosted-Checkout redirect), 3DS/errors handled, account linkage intact, CSP updated minimally, and the get-cloud-sync flow lands users on the subscribe step smoothly from any state.",
-      "doneNote": null
-    },
-    {
       "id": "A296",
       "title": "(post-beta) Executive-level business overview document for corporate leads",
       "category": "FEATURES",

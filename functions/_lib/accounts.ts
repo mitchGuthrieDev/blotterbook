@@ -114,6 +114,16 @@ export interface RecoveryTokenRow {
   expires_at: number;
   used_at: number | null;
 }
+export interface OverrideRow {
+  user_id: string; // PK — one manual entitlement override per user (A276)
+  tier: string; // 'cloud' (the only tier granted for now)
+  expires_at: number | null; // ms epoch; NULL = permanent
+  reason: string | null; // free-text note
+  granted_by: string; // Access-authenticated admin email
+  granted_at: number; // ms epoch
+  revoked_at: number | null; // ms epoch when revoked (NULL = active) — the row is KEPT as the audit trail
+  revoked_by: string | null; // admin email that revoked it
+}
 export interface SubscriptionRow {
   user_id: string; // PK — the account's single current subscription
   stripe_subscription_id: string | null;
@@ -305,6 +315,7 @@ export async function deleteUserAccount(db: AccountsDb, userId: string): Promise
   await db.prepare('DELETE FROM sync_workspace_keys WHERE owner_user_id = ?').bind(userId).run();
   await db.prepare('DELETE FROM sync_workspaces WHERE owner_user_id = ?').bind(userId).run();
   await db.prepare('DELETE FROM subscriptions WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM entitlement_overrides WHERE user_id = ?').bind(userId).run(); // A276 — drop the override + its audit trail with the account
   await db.prepare('DELETE FROM credentials WHERE user_id = ?').bind(userId).run();
   await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
   await db.prepare('DELETE FROM donations WHERE user_id = ?').bind(userId).run();
@@ -600,6 +611,100 @@ export async function subscriptionByStripeId(db: AccountsDb, stripeSubscriptionI
 }
 export async function userByStripeCustomerId(db: AccountsDb, stripeCustomerId: string) {
   return db.prepare('SELECT * FROM users WHERE stripe_customer_id = ?').bind(stripeCustomerId).first<UserRow>();
+}
+
+/* ---- manual entitlement overrides (A276) — the admin comp/grant lever --------------------------
+   An override hands the `cloud` tier to an account regardless of its subscription. hasCloudEntitlement()
+   below is the SINGLE SOURCE OF TRUTH the entitlement consumers call (A277): /api/me and the /api/sync/*
+   mutating routes grant `cloud` when EITHER a live override OR a paying subscription (grantsCloud) says
+   so. Revoked overrides are KEPT — the revoked_at/revoked_by stamp is the audit trail. S25: entitlement
+   metadata only. */
+
+/** Pure predicate: is this override currently granting? Live = not revoked AND (permanent OR unexpired). */
+export function overrideGrantsCloud(o: OverrideRow | null, now: number): boolean {
+  if (!o) return false;
+  if (o.revoked_at != null) return false;
+  if (o.expires_at != null && now >= o.expires_at) return false;
+  return true;
+}
+
+export async function subscriptionOverrideForUser(db: AccountsDb, userId: string) {
+  return db.prepare('SELECT * FROM entitlement_overrides WHERE user_id = ?').bind(userId).first<OverrideRow>();
+}
+
+/** The ONE cloud-entitlement choke point (A277): true when the user has a LIVE manual override OR a
+ *  subscription that grantsCloud(). Both /api/me and the sync routes resolve entitlement through here so
+ *  a comp/grant and a paid subscription are honored identically and in one place. */
+export async function hasCloudEntitlement(db: AccountsDb, userId: string, now = Date.now()): Promise<boolean> {
+  if (overrideGrantsCloud(await subscriptionOverrideForUser(db, userId), now)) return true;
+  return grantsCloud(await subscriptionForUser(db, userId), now);
+}
+
+/** Grant (or refresh) a user's entitlement override — upsert by user_id. On a refresh it updates
+ *  tier/expires_at/reason/granted_by/granted_at AND CLEARS any prior revoked_at/revoked_by (re-granting
+ *  a previously-revoked override reactivates it). tier defaults to 'cloud'. */
+export async function grantEntitlementOverride(
+  db: AccountsDb,
+  o: { userId: string; tier?: string; expiresAt?: number | null; reason?: string | null; grantedBy: string },
+  now = Date.now()
+): Promise<void> {
+  const tier = o.tier ?? 'cloud';
+  await db
+    .prepare(
+      'INSERT INTO entitlement_overrides (user_id, tier, expires_at, reason, granted_by, granted_at, revoked_at, revoked_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET tier = ?, expires_at = ?, reason = ?, granted_by = ?, granted_at = ?, revoked_at = ?, revoked_by = ?'
+    )
+    .bind(
+      o.userId,
+      tier,
+      o.expiresAt ?? null,
+      o.reason ?? null,
+      o.grantedBy,
+      now,
+      null,
+      null,
+      tier,
+      o.expiresAt ?? null,
+      o.reason ?? null,
+      o.grantedBy,
+      now,
+      null,
+      null
+    )
+    .run();
+}
+
+/** Revoke a user's override — stamp revoked_at/revoked_by. The row is KEPT (audit trail); a later
+ *  grant reactivates it (clearing the stamp). No-op when the user has no override row. */
+export async function revokeEntitlementOverride(db: AccountsDb, userId: string, revokedBy: string, now = Date.now()): Promise<void> {
+  await db.prepare('UPDATE entitlement_overrides SET revoked_at = ?, revoked_by = ? WHERE user_id = ?').bind(now, revokedBy, userId).run();
+}
+
+/** Admin-panel per-user view (A276). Composes the already-fetched user + subscription + override rows
+ *  into the shape /api/admin/* returns — NEVER any stripe_customer_id/stripe_subscription_id/session/
+ *  credential/sync/workspace field (S25). effectiveTier is computed in-memory from the two rows via the
+ *  same predicates hasCloudEntitlement() uses, so the list stays consistent with the live gate. */
+export function adminUserView(u: UserRow, sub: SubscriptionRow | null, override: OverrideRow | null, now = Date.now()) {
+  const cloud = overrideGrantsCloud(override, now) || grantsCloud(sub, now);
+  return {
+    id: u.id,
+    email: u.email,
+    emailVerified: !!u.email_verified,
+    createdAt: u.created_at,
+    donationTotalCents: u.donation_total_cents ?? 0,
+    donatedAt: u.donated_at ?? null,
+    subscription: sub ? { status: sub.status, currentPeriodEnd: sub.current_period_end ?? null } : null,
+    override: override
+      ? {
+          tier: override.tier,
+          expiresAt: override.expires_at ?? null,
+          reason: override.reason ?? null,
+          grantedBy: override.granted_by,
+          grantedAt: override.granted_at,
+          revokedAt: override.revoked_at ?? null,
+        }
+      : null,
+    effectiveTier: cloud ? 'cloud' : 'local',
+  };
 }
 
 /** Record this Stripe customer id on the user when not yet linked, so later lifecycle events that

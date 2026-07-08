@@ -36,8 +36,14 @@ import {
   markWebhookEvent,
   webhookEventSeen,
   WEBHOOK_EVENT_TTL_MS,
+  hasCloudEntitlement,
+  grantEntitlementOverride,
+  revokeEntitlementOverride,
+  upsertSubscription,
 } from '../functions/_lib/accounts.ts';
 import { onRequestGet as meGet, SUBSCRIPTION_GRACE_MS } from '../functions/api/me.ts';
+import { onRequestGet as adminUsers } from '../functions/api/admin/users.ts';
+import { onRequestPost as adminEntitlement } from '../functions/api/admin/entitlement.ts';
 import { onRequestPost as registerOptions } from '../functions/api/account/register-options.ts';
 import { onRequestPost as registerVerify } from '../functions/api/account/register-verify.ts';
 import { onRequestPost as loginOptions } from '../functions/api/account/login-options.ts';
@@ -80,6 +86,7 @@ function mockDb() {
     donations: [],
     recovery_tokens: [],
     subscriptions: [], // F60 — keyed by user_id (no `id` column)
+    entitlement_overrides: [], // A276 — manual cloud-tier overrides, keyed by user_id
     webhook_events: [], // F60 — subscription-event dedupe ledger
     sync_workspaces: [], // F62 — read by ownsSyncWorkspaces + swept by deleteUserAccount (A316)
     sync_workspace_keys: [], // F62 — swept by deleteUserAccount
@@ -88,6 +95,19 @@ function mockDb() {
   const where = (rows, clause, args, offset = 0) => {
     const conds = clause.split(/ AND /i).map(c => c.trim().match(/^(\w+) = \?$/)[1]);
     return rows.filter(r => conds.every((col, i) => r[col] === args[offset + i]));
+  };
+  // Convert a SQL LIKE pattern (with `\` escape) to a case-insensitive RegExp — used by the A276
+  // /api/admin/users `q=` email filter matcher below.
+  const likeToRegex = pattern => {
+    let re = '';
+    for (let i = 0; i < pattern.length; i++) {
+      const c = pattern[i];
+      if (c === '\\') re += (pattern[++i] ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      else if (c === '%') re += '.*';
+      else if (c === '_') re += '.';
+      else re += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    return new RegExp('^' + re + '$', 'i');
   };
   // A write result carrying the affected-row count (as an empty rows array with a `.changes` tag), so
   // run() can surface D1's meta.changes while first()/all() still see an empty result set.
@@ -104,6 +124,19 @@ function mockDb() {
       // 0 rows changed so the caller can detect the loser (mirrors D1's meta.changes).
       const conflict = s.match(/ON CONFLICT\((\w+)\) DO NOTHING/i);
       if (conflict && t.some(r => r[conflict[1]] === row[conflict[1]])) return changed(0);
+      // `ON CONFLICT(<col>) DO UPDATE SET <col = ?, …>` — A276 grantEntitlementOverride upsert. When a
+      // row with the conflict key exists, apply the SET assignments; the SET `?`s bind AFTER the VALUES
+      // args (so args index continues at cols.length). Otherwise fall through to a plain INSERT.
+      const upsert = s.match(/ON CONFLICT\((\w+)\) DO UPDATE SET (.+)$/i);
+      if (upsert) {
+        const keyCol = upsert[1];
+        const existing = t.find(r => r[keyCol] === row[keyCol]);
+        if (existing) {
+          const setCols = upsert[2].split(',').map(p => p.trim().match(/^(\w+) = \?$/)[1]);
+          setCols.forEach((c, i) => (existing[c] = args[cols.length + i] ?? null));
+          return changed(1);
+        }
+      }
       // Only enforce the `id` PK when the table actually has one (subscriptions is keyed by user_id).
       if (row.id !== undefined && t.some(r => r.id === row.id)) throw new Error(`UNIQUE constraint failed: ${m[1]}.id`);
       if (m[1] === 'users' && t.some(r => r.email === row.email)) throw new Error('UNIQUE constraint failed: users.email');
@@ -113,6 +146,25 @@ function mockDb() {
     if ((m = s.match(/^SELECT \* FROM (\w+) WHERE email_verified = 0 AND created_at < \? LIMIT \?$/i))) {
       // A316 purge candidate scan (purgeUnverifiedUsers) — bounded.
       return tables[m[1]].filter(r => r.email_verified === 0 && r.created_at < args[0]).slice(0, args[1]);
+    }
+    // A276 paginated admin user list (GET /api/admin/users). Keyset on created_at DESC with an optional
+    // email LIKE filter. Bind order: (cursor|null, limit[, '%term%']).
+    if (
+      (m = s.match(
+        /^SELECT \* FROM users WHERE \(\?1 IS NULL OR created_at < \?1\)(?: AND email LIKE \?3 ESCAPE '\\')? ORDER BY created_at DESC LIMIT \?2$/i
+      ))
+    ) {
+      const cursor = args[0];
+      const limit = args[1];
+      const pattern = args[2];
+      let rows = tables.users.slice();
+      if (cursor != null) rows = rows.filter(r => r.created_at < cursor);
+      if (pattern != null) {
+        const re = likeToRegex(pattern);
+        rows = rows.filter(r => re.test(r.email));
+      }
+      rows.sort((a, b) => b.created_at - a.created_at);
+      return rows.slice(0, limit);
     }
     if ((m = s.match(/^SELECT \* FROM (\w+) WHERE (.+?)(?: ORDER BY .+)?$/i))) return where(tables[m[1]], m[2], args);
     // Generalized to any single-column key (`WHERE <col> = ?`) — `id` still matches (F60 upserts by user_id).
@@ -1359,6 +1411,171 @@ console.log('\nSession revocation + absolute cap + passkey delete (A302):');
     'a normal add-passkey challenge is not flagged',
     (db.tables.challenges.find(c => c.challenge === 'add-chal').recovery ?? null) === null
   );
+}
+
+console.log('\nEntitlement overrides (A276) — hasCloudEntitlement choke point:');
+{
+  const db = mockDb();
+  const now = Date.now();
+  const u = await createUser(db, 'ent@example.com');
+  ok('no override + no subscription → not cloud', (await hasCloudEntitlement(db, u.id, now)) === false);
+
+  await grantEntitlementOverride(db, { userId: u.id, expiresAt: null, reason: 'comp', grantedBy: 'admin@bb' }, now);
+  ok('live permanent override (no sub) → cloud', (await hasCloudEntitlement(db, u.id, now)) === true);
+  ok(
+    '...override row stored with granted_by + a clean audit state',
+    db.tables.entitlement_overrides.length === 1 &&
+      db.tables.entitlement_overrides[0].granted_by === 'admin@bb' &&
+      db.tables.entitlement_overrides[0].revoked_at == null
+  );
+
+  await grantEntitlementOverride(db, { userId: u.id, expiresAt: now - 1000, grantedBy: 'admin@bb' }, now);
+  ok('override past its expiry → not cloud', (await hasCloudEntitlement(db, u.id, now)) === false);
+  ok('...the upsert refreshed the SAME row (one override per user)', db.tables.entitlement_overrides.length === 1);
+
+  await grantEntitlementOverride(db, { userId: u.id, expiresAt: now + 30 * DAY, grantedBy: 'admin@bb' }, now);
+  ok('re-grant with a future expiry → cloud again', (await hasCloudEntitlement(db, u.id, now)) === true);
+
+  await revokeEntitlementOverride(db, u.id, 'admin2@bb', now);
+  ok('revoke → not cloud', (await hasCloudEntitlement(db, u.id, now)) === false);
+  ok(
+    '...the revoked row is KEPT as the audit trail (revoked_by/revoked_at stamped)',
+    db.tables.entitlement_overrides.length === 1 &&
+      db.tables.entitlement_overrides[0].revoked_by === 'admin2@bb' &&
+      db.tables.entitlement_overrides[0].revoked_at != null
+  );
+
+  await grantEntitlementOverride(db, { userId: u.id, expiresAt: null, grantedBy: 'admin@bb' }, now);
+  ok(
+    're-grant reactivates (clears revoked_at) → cloud',
+    (await hasCloudEntitlement(db, u.id, now)) === true && db.tables.entitlement_overrides[0].revoked_at == null
+  );
+
+  // Override AND an active subscription → cloud via either path.
+  const u2 = await createUser(db, 'both@example.com');
+  await upsertSubscription(
+    db,
+    { userId: u2.id, stripeSubscriptionId: 'sub_x', stripeCustomerId: 'cus_x', status: 'active', currentPeriodEnd: now + 30 * DAY },
+    now
+  );
+  ok('active subscription alone → cloud (no override)', (await hasCloudEntitlement(db, u2.id, now)) === true);
+  await grantEntitlementOverride(db, { userId: u2.id, expiresAt: null, grantedBy: 'admin@bb' }, now);
+  ok('override AND active subscription → cloud', (await hasCloudEntitlement(db, u2.id, now)) === true);
+}
+
+console.log('\nA276 — /api/me flips tier via an override (no subscription touched):');
+{
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db };
+  const user = await createUser(db, 'meover@example.com');
+  const { token } = await createSession(db, user.id);
+  const me = async () => (await meGet({ request: req('/api/me', { method: 'GET', cookie: cookieFor(token) }), env })).json();
+  ok('starts local (no sub, no override)', (await me()).tier === 'local');
+  await grantEntitlementOverride(db, { userId: user.id, expiresAt: null, reason: 'reviewer comp', grantedBy: 'admin@bb' });
+  const flipped = await me();
+  ok('a live override flips /api/me to cloud', flipped.tier === 'cloud' && flipped.cloudSync === true);
+  ok('...with NO subscription row created (the override is independent)', db.tables.subscriptions.length === 0);
+  await revokeEntitlementOverride(db, user.id, 'admin@bb');
+  ok('revoking drops /api/me back to local', (await me()).tier === 'local');
+}
+
+console.log('\nAdmin API (A276) — /api/admin/users + /api/admin/entitlement:');
+{
+  const ADMIN_KEY = 'test-admin-key';
+  const adminGet = (path, { key = ADMIN_KEY } = {}) =>
+    new Request(ORIGIN + path, { method: 'GET', headers: key ? { 'x-admin-key': key } : {} });
+  const adminPost = (body, { key = ADMIN_KEY, email = null } = {}) =>
+    new Request(ORIGIN + '/api/admin/entitlement', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(key ? { 'x-admin-key': key } : {}),
+        ...(email ? { 'Cf-Access-Authenticated-User-Email': email } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+
+  // ---- auth + fail-closed ----
+  {
+    const db = mockDb();
+    const env = { ACCOUNTS_DB: db, ADMIN_KEY };
+    const noTok = await adminUsers({ request: adminGet('/api/admin/users', { key: null }), env });
+    ok('GET /api/admin/users → 401 without a token', noTok.status === 401);
+    const noTokPost = await adminEntitlement({ request: adminPost({ userId: 'x', action: 'grant' }, { key: null }), env });
+    ok('POST /api/admin/entitlement → 401 without a token', noTokPost.status === 401);
+    const noDb = await adminUsers({ request: adminGet('/api/admin/users'), env: { ADMIN_KEY } });
+    ok('GET /api/admin/users → 503 without ACCOUNTS_DB', noDb.status === 503 && /ACCOUNTS_DB/.test((await noDb.json()).error));
+    const noDbPost = await adminEntitlement({ request: adminPost({ userId: 'x', action: 'grant' }), env: { ADMIN_KEY } });
+    ok('POST /api/admin/entitlement → 503 without ACCOUNTS_DB', noDbPost.status === 503);
+  }
+
+  // ---- cursor pagination: page 2 excludes page 1, nextCursor shape, q= filter ----
+  {
+    const db = mockDb();
+    const env = { ACCOUNTS_DB: db, ADMIN_KEY };
+    const base = 1_000_000_000_000;
+    for (let i = 0; i < 5; i++) await createUser(db, `u${i}@example.com`, base + i * 1000); // distinct created_at
+    const p1 = await adminUsers({ request: adminGet('/api/admin/users?limit=2'), env });
+    const p1j = await p1.json();
+    ok(
+      'page 1 returns `limit` users, newest first',
+      p1.status === 200 && p1j.users.length === 2 && p1j.users[0].createdAt > p1j.users[1].createdAt
+    );
+    ok('page 1 hands back a numeric nextCursor', typeof p1j.nextCursor === 'number');
+    const p2 = await adminUsers({ request: adminGet('/api/admin/users?limit=2&cursor=' + p1j.nextCursor), env });
+    const p2j = await p2.json();
+    const p1ids = new Set(p1j.users.map(u => u.id));
+    ok('page 2 excludes every page-1 user', p2j.users.length === 2 && p2j.users.every(u => !p1ids.has(u.id)));
+    const last = await adminUsers({ request: adminGet('/api/admin/users?limit=2&cursor=' + p2j.nextCursor), env });
+    const lastj = await last.json();
+    ok('the final (short) page returns nextCursor null', lastj.users.length === 1 && lastj.nextCursor === null);
+    const q = await adminUsers({ request: adminGet('/api/admin/users?q=u3'), env });
+    const qj = await q.json();
+    ok('q= filters by email substring', qj.users.length === 1 && qj.users[0].email === 'u3@example.com');
+  }
+
+  // ---- grant→me cloud→revoke→me local round trip + audit stamp + S25 scan ----
+  {
+    const db = mockDb();
+    const env = { ACCOUNTS_DB: db, ADMIN_KEY };
+    const user = await createUser(db, 'round@example.com');
+    user.stripe_customer_id = 'cus_secret'; // a would-be-leaked field the admin view must never surface
+    const { token } = await createSession(db, user.id);
+    const me = async () => (await meGet({ request: req('/api/me', { method: 'GET', cookie: cookieFor(token) }), env })).json();
+    ok('round-trip: starts local', (await me()).tier === 'local');
+
+    const grant = await adminEntitlement({
+      request: adminPost({ userId: user.id, action: 'grant', expiresAt: null, reason: 'vip' }, { email: 'boss@bb' }),
+      env,
+    });
+    const gj = await grant.json();
+    ok(
+      'grant returns the updated view (effectiveTier cloud, override stamped)',
+      grant.status === 200 && gj.effectiveTier === 'cloud' && gj.override.grantedBy === 'boss@bb' && gj.override.reason === 'vip'
+    );
+    ok('grant → /api/me now reports cloud', (await me()).tier === 'cloud');
+
+    const unknown = await adminEntitlement({ request: adminPost({ userId: 'nope', action: 'grant' }), env });
+    ok('grant on an unknown user → 404', unknown.status === 404);
+
+    const revoke = await adminEntitlement({ request: adminPost({ userId: user.id, action: 'revoke' }, { email: 'boss@bb' }), env });
+    const rj = await revoke.json();
+    ok(
+      'revoke returns the updated view (effectiveTier local, revokedAt stamped)',
+      rj.effectiveTier === 'local' && rj.override.revokedAt != null
+    );
+    ok('revoke → /api/me back to local', (await me()).tier === 'local');
+
+    const noEmailGrant = await adminEntitlement({ request: adminPost({ userId: user.id, action: 'grant' }), env });
+    ok('grant without an Access email records granted_by = (token)', (await noEmailGrant.json()).override.grantedBy === '(token)');
+
+    const bad = await adminEntitlement({ request: adminPost({ userId: user.id, action: 'frobnicate' }), env });
+    ok('an invalid action → 400', bad.status === 400);
+
+    const list = await adminUsers({ request: adminGet('/api/admin/users'), env });
+    const blob = JSON.stringify(await list.json());
+    ok('the users response leaks no sensitive substrings (S25)', !/sync_|workspace|ciphertext|stripe_/i.test(blob));
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

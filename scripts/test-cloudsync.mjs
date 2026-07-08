@@ -47,6 +47,7 @@ function mockDb() {
     users: [],
     sessions: [],
     subscriptions: [], // A253 — callerHasCloud() reads this to gate the mutating sync routes
+    entitlement_overrides: [], // A276 — callerHasCloud()→hasCloudEntitlement() also reads a manual override
     sync_workspaces: [],
     sync_workspace_keys: [],
     sync_wrapped_ik: [],

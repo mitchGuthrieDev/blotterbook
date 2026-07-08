@@ -36,6 +36,7 @@ function mockDb() {
     users: [],
     sessions: [],
     subscriptions: [], // A253 — callerHasCloud() reads this to gate the mutating routes
+    entitlement_overrides: [], // A276 — callerHasCloud()→hasCloudEntitlement() also reads a manual override
     credentials: [], // A305 — deleteUserAccount cleans these
     donations: [],
     recovery_tokens: [],

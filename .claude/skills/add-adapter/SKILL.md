@@ -1,6 +1,6 @@
 ---
 name: add-adapter
-description: Add a new platform CSV adapter to Blotterbook's intake pipeline (backlog item A209 and its kind) — the sniff/toTrades/minScore object in src/lib/core/adapters.ts, its scripts/test-adapters.mjs fixture, and the docs tail (Howto import guide + homepage platform list). Use when asked to "add a platform adapter", "support <platform>'s export", "do an A209 adapter", or when a new real CSV export needs to be onboarded.
+description: Add a new platform CSV adapter to Blotterbook's intake pipeline (backlog item A209 and its kind) — the sniff/toTrades/minScore object in src/lib/core/adapters.ts, its scripts/test-adapters.mjs fixture, and the docs tail (the Help > Importing your trades guide + homepage platform list). Use when asked to "add a platform adapter", "support <platform>'s export", "do an A209 adapter", or when a new real CSV export needs to be onboarded.
 ---
 
 # Add a platform CSV adapter
@@ -52,8 +52,9 @@ never need to change for a new platform (see CLAUDE.md "Adding things").
    in the file where they apply: same-column delimiter refusal (semicolon/tab EU-locale files,
    A168), a `Status`-gated-execution check if the platform has a pending/working row state to skip.
 5. **Docs tail** (skip only if explicitly told this is an internal/beta-only add):
-   - `src/site/components/Howto.svelte` — a nav link (`#imp-<id>`), a guide section under it, and a
-     row in the export-types table.
+   - `src/site/components/HelpImport.svelte` (the Help site's Importing your trades page, served at
+     `/help/import.html`, A273) — a jump-to-platform chip (`#imp-<id>`), a guide section under it, and
+     a row in `HelpGettingStarted.svelte`'s export-types table (`/help/getting-started.html`).
    - `src/site/components/Home.svelte` — the platforms list / detection-status showcase.
    - A changelog entry (`data/changelog.json`) once the adapter ships verified (not on the beta add).
 6. **Beta → verified is a SEPARATE, later pass** (A103) — don't do it here. An adapter ships

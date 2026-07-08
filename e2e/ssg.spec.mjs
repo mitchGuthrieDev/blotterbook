@@ -14,7 +14,11 @@ const PAGES = [
       'Free for everyone. Support if it helps.',
     ],
   },
-  { path: '/howto.html', must: ['How to use Blotterbook', 'What is futures trading?', 'Importing by platform', 'Tradovate'] },
+  { path: '/help/index.html', must: ['How can we help?', 'Getting started', 'Importing your trades', 'Cloud sync'] },
+  { path: '/help/getting-started.html', must: ['Getting started', 'First run', 'Broker &amp; costs', 'Reading the dashboard'] },
+  { path: '/help/import.html', must: ['Importing your trades', 'What is futures trading?', 'Tradovate', 'Interactive Brokers'] },
+  { path: '/help/cloud-sync.html', must: ['Cloud sync', 'recovery key', 'zero-knowledge'] },
+  { path: '/help/support.html', must: ['Support', 'contact@blotterbook.com', 'never email us a CSV'] },
   { path: '/roadmap.html', must: ['Available now', 'In progress', 'Numbers you can trust to the cent'] },
   // Changelog server-renders the inline fallback (the live notes load via fetch on hydration).
   // F44: the changelog-email signup section is server-rendered (present before hydration).

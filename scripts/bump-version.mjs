@@ -40,7 +40,11 @@ export const STAGING_ONLY = new Set(['src/app/staging.html']);
 // those scoped <style> blocks, so the old home.css/site.css/*.js entries are gone.)
 const PROD_ONLY_HTML = new Set([
   'src/index.html',
-  'src/howto.html',
+  'src/help/index.html', // A273 — the Help site (ex src/howto.html)
+  'src/help/getting-started.html',
+  'src/help/import.html',
+  'src/help/cloud-sync.html',
+  'src/help/support.html',
   'src/roadmap.html',
   'src/legal.html',
   'src/changelog.html',

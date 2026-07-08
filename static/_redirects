@@ -4,3 +4,8 @@
 # URL stays /app/). Internal "Launch" links can keep pointing at /app/.
 /app/   /app/app.html   200
 /app    /app/app.html   200
+
+# A273: the How-To wiki moved into the new Help site (/help/*). Its content split across
+# getting-started + import; the platform import guides (the bulk of the page, and the part most
+# likely to be bookmarked/linked) landed on /help/import.html, so that's the redirect target.
+/howto.html   /help/import.html   301

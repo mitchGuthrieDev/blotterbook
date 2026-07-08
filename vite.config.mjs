@@ -14,7 +14,11 @@ import { ssg } from './scripts/vite-ssg.mjs';
 // (app/demo/staging.html) are intentionally absent (they're the SPA mounts).
 const SSG_PAGES = [
   { url: 'index.html', component: 'src/site/components/Home.svelte' },
-  { url: 'howto.html', component: 'src/site/components/Howto.svelte' },
+  { url: 'help/index.html', component: 'src/site/components/HelpHome.svelte' },
+  { url: 'help/getting-started.html', component: 'src/site/components/HelpGettingStarted.svelte' },
+  { url: 'help/import.html', component: 'src/site/components/HelpImport.svelte' },
+  { url: 'help/cloud-sync.html', component: 'src/site/components/HelpCloudSync.svelte' },
+  { url: 'help/support.html', component: 'src/site/components/HelpSupport.svelte' },
   { url: 'roadmap.html', component: 'src/site/components/Roadmap.svelte' },
   { url: 'changelog.html', component: 'src/site/components/Changelog.svelte' },
   { url: 'legal.html', component: 'src/site/components/Legal.svelte' },
@@ -51,7 +55,11 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: r('src/index.html'),
-        howto: r('src/howto.html'),
+        helpIndex: r('src/help/index.html'),
+        helpGettingStarted: r('src/help/getting-started.html'),
+        helpImport: r('src/help/import.html'),
+        helpCloudSync: r('src/help/cloud-sync.html'),
+        helpSupport: r('src/help/support.html'),
         roadmap: r('src/roadmap.html'),
         changelog: r('src/changelog.html'),
         legal: r('src/legal.html'),
