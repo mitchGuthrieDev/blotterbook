@@ -41,7 +41,14 @@
   import { UserRound } from '@lucide/svelte';
   import { fade } from 'svelte/transition';
   import { dur } from './lib/motion.ts';
-  import Dashboard, { type DashStat, type DayCell, type StatDetail, type FilterModel, type FilterPatch } from './screens/Dashboard.svelte';
+  import Dashboard, {
+    type DashKpi,
+    type DashStat,
+    type DayCell,
+    type StatDetail,
+    type FilterModel,
+    type FilterPatch,
+  } from './screens/Dashboard.svelte';
   import { migrateLayout, defaultLayout, analyticsKit, type ModEntry } from './lib/modlayout.ts';
   // The non-default screens are CODE-SPLIT: type-only static imports (erased at build) + lazy
   // `import()` loaders in the router below, so their chunks stay out of the /app first paint
@@ -149,6 +156,24 @@
       },
       { key: 'sharpe', label: 'Sharpe (daily)', value: num(m.sharpe), note: `${m.active} trading days` },
     ];
+  });
+  // A271 remainder: raw numbers for the glanceable KPI-card modules (Win Rate / Profit Factor /
+  // Expectancy) — same scope-active Metrics as the stat row; the modules add the visual breakdown.
+  const dashKpi = $derived.by<DashKpi>(() => {
+    const m = dash.metricsActive;
+    return {
+      n: m.n,
+      wins: m.wins,
+      losses: m.losses,
+      scratch: m.scratch,
+      winRate: m.winRate,
+      pf: m.pf,
+      gp: m.gp,
+      gl: m.gl,
+      expectancy: m.expectancy,
+      avgW: m.avgW,
+      avgL: m.avgL,
+    };
   });
   // Daily cumulative gross/net/take series for the Performance chart — same cost/tax-adjusted math as
   // the cost panel (tEff/fixedMo from costModel), so the Net/Take-home overlays reconcile.
@@ -1183,6 +1208,8 @@
           costDisabled={dash.isDemo}
           modules={dashModules}
           onmoduleschange={dashTabsState.saveModules}
+          {isStaging}
+          kpi={dashKpi}
           recentTrades={dash.filtered
             .slice(-12)
             .reverse()

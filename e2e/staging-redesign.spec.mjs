@@ -350,6 +350,48 @@ test('staging redesign: corner drag-resize grows a RIGHT-column module to Large 
   await expect(ls).toHaveClass(/lg:col-span-6/);
 });
 
+test('staging redesign: six Small modules group into the ModuleCarousel (A271 remainder) + the Size menu exits the group', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await bootDashboard(page);
+
+  // Add the six Small-capable modules: the F39 trio + the three KPI cards (staging-only in the picker).
+  await page.getByRole('button', { name: 'Add modules' }).click();
+  const dlg = page.getByRole('dialog');
+  for (const label of ['Today / Last Session', 'Drawdown Status', 'Streak Monitor', 'Win Rate', 'Profit Factor', 'Expectancy']) {
+    await dlg.locator('label', { hasText: label }).locator('input[type=checkbox]').check();
+  }
+  await dlg.getByRole('button', { name: /Add module/ }).click();
+  // The KPI cards default to Small (span 2); the F39 trio arrives Medium — no group yet.
+  await expect(page.locator('#dashmod-winrate')).toBeVisible();
+  await expect(page.locator('[data-mod]').filter({ has: page.locator('#dashmod-winrate') })).toHaveClass(/lg:col-span-2/);
+  await expect(page.getByRole('group', { name: 'Small modules' })).toHaveCount(0);
+
+  // Set the F39 trio to Small via the ⋯ Size radio → six CONTIGUOUS Small modules → the carousel
+  // group replaces the six ⅙-width cards (the §4 contract).
+  for (const key of ['today', 'ddstatus', 'streak']) {
+    await page.locator(`#dashmod-${key} button[aria-label="Module menu"]`).click();
+    await page.getByRole('menuitem', { name: 'Small' }).click();
+  }
+  const group = page.getByRole('group', { name: 'Small modules' });
+  await expect(group).toBeVisible();
+  // One glanceable card at a time; Next advances to another module.
+  await expect(group.locator('[id^="dashmod-"]')).toHaveCount(1);
+  const firstId = await group.locator('[id^="dashmod-"]').getAttribute('id');
+  await group.getByRole('button', { name: 'Next card' }).click();
+  await expect(group.locator('[id^="dashmod-"]')).not.toHaveAttribute('id', firstId);
+  // No corner drag handle inside the group — the ⋯ Size menu is the path out.
+  await expect(group.getByRole('slider')).toHaveCount(0);
+
+  // Exit: set the visible module back to Medium → only five Small remain → the group dissolves
+  // into individual cards.
+  await group.locator('button[aria-label="Module menu"]').click();
+  await page.getByRole('menuitem', { name: 'Medium' }).click();
+  await expect(page.getByRole('group', { name: 'Small modules' })).toHaveCount(0);
+  await expect(page.locator('#dashmod-winrate')).toBeVisible();
+});
+
 test('staging redesign: the Calendar month grid carries the viewport-fill class (A272)', async ({ page }) => {
   await bootDashboard(page);
   await gotoScreen(page, 'Calendar');

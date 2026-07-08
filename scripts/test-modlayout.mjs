@@ -200,4 +200,47 @@ ok(
 );
 ok('labelsOf builds the key→label map', labelsOf(ANALYTICS_MODULES).dist === 'P&L distribution (per trade)');
 
+// ── A271 remainder: the glanceable Small slice — KPI cards + the F39 trio. ──────────────────────
+const { supportedSizes, KPI_MODULE_KEYS } = m;
+ok(
+  'KPI cards are registered keys',
+  ['winrate', 'pfactor', 'expect'].every(k => MODULE_KEYS.includes(k))
+);
+ok(
+  'KPI cards are NOT in the default layout (picker-addable)',
+  ['winrate', 'pfactor', 'expect'].every(k => !DEFAULT_MODULE_KEYS.includes(k))
+);
+ok('KPI_MODULE_KEYS matches the registered KPI cards', J([...KPI_MODULE_KEYS].sort()) === J(['expect', 'pfactor', 'winrate']));
+ok(
+  'KPI cards default to Small',
+  ['winrate', 'pfactor', 'expect'].every(k => defaultSizeFor(k) === 'sm')
+);
+ok(
+  'KPI cards support sm/md only (no full-width KPI number)',
+  ['winrate', 'pfactor', 'expect'].every(k => J(supportedSizes(k)) === J(['sm', 'md']))
+);
+ok(
+  'the F39 trio gains Small (sm/md/lg)',
+  ['today', 'ddstatus', 'streak'].every(k => J(supportedSizes(k)) === J(['sm', 'md', 'lg']))
+);
+ok(
+  '...but their default stays md (existing layouts preserved)',
+  ['today', 'ddstatus', 'streak'].every(k => defaultSizeFor(k) === 'md')
+);
+ok(
+  'rich modules still refuse Small',
+  ['perf', 'cal', 'cost', 'adv', 'term', 'compare', 'blotter'].every(k => J(supportedSizes(k)) === J(['md', 'lg']))
+);
+ok('clampSize: sm on a rich module falls back to its default', clampSize('perf', 'sm') === 'lg' && clampSize('cal', 'sm') === 'md');
+ok('clampSize: sm on a KPI card sticks', clampSize('winrate', 'sm') === 'sm');
+ok(
+  'a persisted layout that predates the KPI cards is untouched by migration (no auto-injection)',
+  J(keysOf(migrateLayout(['perf', 'cal']).mods)) === J(['perf', 'cal']) &&
+    J(keysOf(migrateLayout({ v: 2, mods: [{ key: 'perf', size: 'lg' }] }).mods)) === J(['perf'])
+);
+ok(
+  'a v2 layout carrying a KPI card round-trips (sm preserved)',
+  J(migrateLayout({ v: 2, mods: [{ key: 'winrate', size: 'sm' }] }).mods) === J([{ key: 'winrate', size: 'sm' }])
+);
+
 console.log(`\n${pass} assertions passed.`);
