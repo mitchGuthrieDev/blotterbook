@@ -285,18 +285,6 @@
       "doneNote": null
     },
     {
-      "id": "A293",
-      "title": "Replace the 'Launch Blotterbook' header CTA with an 'Account' link → login/signup or a new Account Dashboard page",
-      "category": "FEATURES",
-      "priority": "P2",
-      "effort": "large",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "From the owner. Replace the marketing-site header CTA that currently reads 'Launch Blotterbook' with an 'Account' clickable link. Grep 'Launch Blotterbook' to locate it (site nav/header — likely src/site/lib/Nav.svelte + the Home hero CTA; the in-app onboarding LaunchGate button of the same name is SEPARATE — do not touch it unless intended). Behavior: if the visitor is NOT logged in, the 'Account' link takes them to a login/signup page; if they ARE logged in (or once they sign in through that flow), it takes them to a new dedicated ACCOUNT DASHBOARD page. IMPORTANT (owner): the Account Dashboard must be its OWN page — do NOT just redirect to the in-app Account screen (src/app/screens/Account.svelte). Build the Account Dashboard page FIRST: decide the surface (a new prerendered src/site page like /account or a small dedicated surface) and its IA (account summary, subscription/tier + billing status, cloud-sync status, passkeys/security, sign-out; NO trade data — S25), then wire the header link's logged-in-vs-out routing (reuse the F53 account session — /api/me / the account.svelte.ts session state) so the link resolves to login vs dashboard. Keep it CSP-clean + prerendered (A69) where it's a site page; update nav/footer/sitemap/_redirects for any new URL. DISCUSS the page IA + which surface before building. Done when: the header shows 'Account', logged-out routes to login/signup, logged-in routes to the new standalone Account Dashboard (not the app's Account screen), and the dashboard shows identity/subscription/sync/security (no trade data).",
-      "doneNote": null
-    },
-    {
       "id": "A296",
       "title": "(post-beta) Executive-level business overview document for corporate leads",
       "category": "FEATURES",

@@ -9,6 +9,7 @@ User-agent: *
 Content-Signal: search=yes,ai-train=no
 Allow: /
 Disallow: /app/
+Disallow: /account.html
 Disallow: /admin.html
 Disallow: /dev/
 

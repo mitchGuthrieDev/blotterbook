@@ -56,11 +56,12 @@
           <a data-nav={l.key} class:active={active === l.key} href={l.href}>{l.label}</a>
         {/each}
       {/if}
-      <a class="navlaunch" href="/app/">Launch Blotterbook &rarr;</a>
+      <!-- A293: the header CTA is the Account entry — /account.html routes login vs dashboard itself. -->
+      <a class="navlaunch" href="/account.html">Account &rarr;</a>
     </div>
     <a
       class="cta ml-auto rounded-[9px] bg-primary px-[14px] py-2 text-[13.5px] font-semibold text-primary-foreground no-underline hover:no-underline hover:brightness-[1.08]"
-      href="/app/">Launch Blotterbook &rarr;</a
+      href="/account.html">Account &rarr;</a
     >
     <label
       class="hamburger ml-auto h-9 w-10 cursor-pointer items-center justify-center rounded-[9px] border border-border bg-card"

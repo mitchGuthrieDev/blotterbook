@@ -169,12 +169,13 @@
       <a href="howto.html">How&nbsp;To</a>
       <a href="roadmap.html">Roadmap</a>
       <a href="changelog.html">Changelog</a>
-      <a class="navlaunch" href="/app/">Launch Blotterbook &rarr;</a>
+      <!-- A293: the header CTA is the Account entry — /account.html routes login vs dashboard itself. -->
+      <a class="navlaunch" href="/account.html">Account &rarr;</a>
     </div>
     <div class="navcta ml-auto flex items-center gap-[10px]">
       <a
         class="btn-primary inline-flex items-center gap-[7px] rounded-[9px] bg-primary px-4 py-[9px] text-[13.5px] font-semibold text-primary-foreground transition-[filter,transform] duration-150 hover:translate-y-[-1px] hover:brightness-[1.08]"
-        href="/app/">Launch Blotterbook &rarr;</a
+        href="/account.html">Account &rarr;</a
       >
     </div>
     <label

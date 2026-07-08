@@ -207,7 +207,7 @@ So:
   it (and a bare `<a>` gets UA blue + underline). The dev/redesign surfaces neutralize both with
   `[data-mode='dev'] button`/`a` resets in tailwind.css; elsewhere, give bare buttons/links explicit
   styling.
-- **Marketing/info site = Svelte SSG (A69).** `index/howto/roadmap/changelog/legal/admin.html` are
+- **Marketing/info site = Svelte SSG (A69).** `index/howto/roadmap/changelog/legal/account/admin.html` are
   hand-authored, marker-free **templates** (head meta + `<div id="app"><!--ssg-outlet--></div>`
   + a client-entry `<script>`). At build time [`vite-ssg.mjs`](scripts/vite-ssg.mjs) server-renders each page
   component (`src/site/components/*.svelte`) into the outlet (static HTML for SEO + first paint), and
@@ -333,6 +333,7 @@ conforms to the rules below; keep it that way.
   roadmap.html          shipped vs. planned checklist
   changelog.html        "Blotterlog" — versioned release notes (reads /data/changelog.json)
   legal.html            disclaimers, terms, privacy summary
+  account.html          standalone Account Dashboard — login/signup or identity/plan/sync/security (A293; noindex)
   admin.html            internal admin controls (Cloudflare Access–gated)  → /admin.html
   lib/                  $lib alias → src/lib
     core/               PURE-LOGIC CORE (A29) — framework-agnostic, native TS (A61), node-tested
@@ -396,7 +397,7 @@ conforms to the rules below; keep it that way.
                         F63), cloudsync.svelte.ts (reactive sync controller, F63) — over the pure
                         cloudsync-core.ts engine, now in src/lib/core/ (A314)
   site/                 MARKETING + INFO — Svelte SSG (A69; prerendered at build by scripts/vite-ssg.mjs, hydrated in place)
-    components/         Home / Howto / Roadmap / Changelog / Legal / Admin .svelte (the page components)
+    components/         Home / Howto / Roadmap / Changelog / Legal / AccountDash / Admin .svelte (the page components)
     lib/                shared chrome: Nav.svelte, Footer.svelte, SiteShell.svelte (base/typography styles + globals)
     entries/            per-page client entries (hydrate the prerendered component) — *.ts
   dev/                  DEV-ONLY surface (UI mockup workflow) — built + deployed but noindex + robots-blocked

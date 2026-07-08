@@ -6,9 +6,10 @@
     {
       "version": "0.69.0",
       "date": "2026-07-08",
-      "title": "Drag-to-resize modules everywhere, and reclaim a squatted email",
-      "summary": "The corner drag-resize handle for dashboard and Analytics modules — proven on staging — now ships on the live app and the demo. And a sign-up dead end is gone: an email address squatted by an account that never verified it can now be reclaimed by proving you own the inbox.",
+      "title": "Your account gets a home page, drag-to-resize modules everywhere, and reclaimable emails",
+      "summary": "A dedicated Account page joins the site — sign in, manage your plan, passkeys, and account from one place — the corner drag-resize handle for dashboard and Analytics modules ships on the live app and demo, and a sign-up dead end is gone: an email squatted by a never-verified account can now be reclaimed.",
       "highlights": [
+        "New Account page: the site header's button now takes you to your account dashboard — sign in or sign up with a passkey, see your plan and supporter status, manage passkeys, start a cloud subscription, and (new) permanently delete your account and all synced data, all without opening the app.",
         "Resize modules by dragging: grab the corner handle on any Dashboard or Analytics module and drag to snap it between half and full width — keyboard users can focus the handle and use the arrow keys. The ⋯ menu Size options remain.",
         "Layouts persist per device exactly as before; on the demo surface resizing works but (like everything on demo) is never saved.",
         "Sign-up fix: if someone registered your email but never verified it, creating your account now offers to email you a one-time reclaim link — clicking it releases the address and signs you up with your email already verified.",
