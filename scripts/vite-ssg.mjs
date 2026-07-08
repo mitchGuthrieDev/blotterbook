@@ -76,7 +76,10 @@ export function ssg(pages) {
         // Only act on a registered template that carries the outlet — app SPA shells and any
         // not-yet-converted page are left untouched (supports incremental migration).
         if (!html.includes(OUTLET)) return html;
-        const page = pages.find(p => ctx.path === '/' + p.url || ctx.path.endsWith('/' + p.url));
+        // A273: EXACT path match first. The endsWith fallback (kept for dev-server paths that carry
+        // a prefix) is ambiguous now that pages nest — '/help/index.html'.endsWith('/index.html') is
+        // true, so a suffix-first find() would inject the HOMEPAGE into the Help hub template.
+        const page = pages.find(p => ctx.path === '/' + p.url) ?? pages.find(p => ctx.path.endsWith('/' + p.url));
         if (!page) return html;
         const r = rendered.get(page.url);
         if (!r) return html;
