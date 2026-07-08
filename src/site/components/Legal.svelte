@@ -18,8 +18,10 @@
     anything the app shows you. Last updated July&nbsp;2026.
   </p>
 
-  <!-- F18/A202: counsel-reviewed and in effect. Update the Effective date when terms materially change. -->
-  <p class="text-[13px] text-muted-foreground"><b>Effective date:</b> July 6, 2026.</p>
+  <!-- F18/A202: counsel-reviewed and in effect. Update the Effective date when terms materially change.
+       2026-07-08 (docs audit): the Privacy Policy gained the cloud-sync section (E2E ciphertext egress,
+       live since GA) + subscription billing wording — factual as-built updates; flag for counsel review. -->
+  <p class="text-[13px] text-muted-foreground"><b>Effective date:</b> July 8, 2026.</p>
 
   <div class="note warn">
     <b>Not a broker. Not advice.</b> Blotterbook does not execute trades, hold funds, or route orders, and it is not a broker-dealer, futures
@@ -116,7 +118,7 @@
   <p>
     You are responsible for the accuracy of the data you import, for keeping your own backups (local storage is per-browser and can be
     cleared), and for complying with the export terms of your platforms and brokers. Blotterbook stores your trade data only in your browser
-    — see the
+    (for workspaces you opt into cloud sync, our servers additionally hold an end-to-end-encrypted copy we cannot read) — see the
     <a href="#privacy">Privacy Policy</a>.
   </p>
 
@@ -175,27 +177,39 @@
 
   <h2 id="privacy">Privacy Policy</h2>
   <p>
-    Blotterbook is built local-first: <b>your trade data never leaves your browser.</b> This policy explains the little data the Service does
-    touch, why, and your choices. It applies to the website, the app, and the demo.
+    Blotterbook is built local-first: <b>your trade data never leaves your browser readable.</b> All computation is local on every plan; the one
+    exception to "never leaves" is the optional, opt-in cloud sync, which transmits only end-to-end-encrypted ciphertext we cannot read (section
+    2). This policy explains the little data the Service does touch, why, and your choices. It applies to the website, the app, and the demo.
   </p>
 
   <h3>1. Your trade data stays in your browser</h3>
   <p>
     CSV/xlsx parsing, all computation (P&amp;L, costs, tax estimates), and storage happen entirely on your device. Trades, journal notes,
     tags, saved filters, layouts, and attached screenshots live in your browser's <b>IndexedDB</b> (plus first-party local storage for
-    settings and layouts). We do not receive, transmit, or store your trade data on any server. The public demo uses an in-memory store and
-    persists nothing. Export a backup any time from <b>Manage data → Download backup</b>, and erase everything from the same panel — your
-    data is yours.
+    settings and layouts). Unless you opt a workspace into cloud sync (section 2), we do not receive, transmit, or store your trade data on
+    any server — and even then, only ciphertext we cannot decrypt. The public demo uses an in-memory store, persists nothing, and can never
+    sync. Export a backup any time from <b>Manage data → Download backup</b>, and erase everything from the same panel — your data is yours.
   </p>
 
-  <h3>2. Coarse-region tax lookup (/api/geo)</h3>
+  <h3>2. Optional cloud sync (end-to-end encrypted, opt-in)</h3>
+  <p>
+    Subscribers can opt individual workspaces into <b>cloud sync</b>. When (and only when) you do, your trades, journal notes, and settings
+    for that workspace are encrypted <b>on your device</b> with keys that never leave your devices, and the resulting
+    <b>ciphertext</b> is stored on our servers (Cloudflare R2/D1) so your other devices can fetch and decrypt it. The server sees only
+    opaque encrypted blobs, blinded record ids, and timestamps — <b>never a symbol, P&amp;L figure, note, tag, or workspace name</b>, and it
+    holds no key that could decrypt them. Workspaces you don't opt in, free-tier accounts, and the demo never sync anything. You can pause
+    sync, remove a workspace's synced copy, or delete your account (which permanently deletes all synced ciphertext) at any time. The
+    plain-language explainer lives in <a href="/help/cloud-sync.html">Help › Cloud sync</a>.
+  </p>
+
+  <h3>3. Coarse-region tax lookup (/api/geo)</h3>
   <p>
     To pre-fill a sensible tax state, the app may ask our own <code>/api/geo</code> endpoint for an <b>approximate region</b> derived from Cloudflare's
     edge metadata. This returns a coarse region only — never a precise location — carries no trade data, stores nothing, and never overrides a
     state you choose or have saved. You can always change the state yourself.
   </p>
 
-  <h3>3. Accounts (passkeys, recovery email, session cookie)</h3>
+  <h3>4. Accounts (passkeys, recovery email, session cookie)</h3>
   <p>
     Launching the app on the live site uses a free account so the Service can carry your identity and any entitlements. The accounts system
     is designed to hold <b>identity and entitlements only — never your trade data</b>. Specifically, we store:
@@ -217,16 +231,18 @@
     to send verification and recovery emails; it processes your email address for that delivery and nothing about your trading.
   </p>
 
-  <h3>4. Donations &amp; payments (Stripe)</h3>
+  <h3>5. Donations, subscriptions &amp; payments (Stripe)</h3>
   <p>
-    Donations are processed by <b>Stripe</b>. When you donate, your payment details (card number, billing information) go directly to Stripe
-    — we never receive or store them. Stripe returns only the confirmation we need to record a
-    <b>donor flag and donation amount keyed to your account</b>. Stripe's handling of your payment data is governed by Stripe's own privacy
+    Donations and the optional <b>$5/month cloud-sync subscription</b> are processed by <b>Stripe</b>. Your payment details (card number,
+    billing information) go directly to Stripe — whether through Stripe's hosted checkout page or the embedded, Stripe-hosted payment form
+    in the app — and we never receive or store them. Stripe returns only the confirmation we need to record a
+    <b>donor flag / donation amount</b>
+    or a <b>subscription status keyed to your account</b>. Stripe's handling of your payment data is governed by Stripe's own privacy
     policy.
   </p>
 
-  <h3>5. Outbound network calls (the honest list)</h3>
-  <p>The Service makes only these outbound calls, and none of them include your trades:</p>
+  <h3>6. Outbound network calls (the honest list)</h3>
+  <p>The Service makes only these outbound calls, and none of them include your trades in readable form:</p>
   <ul>
     <li>loading the site's own static reference data, version, and release-notes JSON (brokers, exchange fees, feeds, state tax);</li>
     <li>a small feature-flag/status endpoint on our host to decide whether a maintenance banner shows;</li>
@@ -235,23 +251,29 @@
       account endpoints on our host to register/sign in with a passkey, verify or recover your email, and carry your session — identity
       only, never trades;
     </li>
-    <li>Stripe, only when you choose to donate; and</li>
+    <li>
+      for workspaces you've opted into cloud sync: the <code>/api/sync/*</code> endpoints on our host, carrying only the end-to-end-encrypted
+      ciphertext, blinded ids, and timestamps described in section 2 — never plaintext trade data;
+    </li>
+    <li>Stripe, only when you choose to donate or subscribe (including Stripe's script and payment iframe on the payment form); and</li>
     <li>
       the optional <b>Send feedback</b> button, which opens <i>your own</i> email client pre-filled with text you typed — nothing is sent automatically.
     </li>
   </ul>
 
-  <h3>6. Cookies &amp; tracking</h3>
+  <h3>7. Cookies &amp; tracking</h3>
   <p>
     We use a single first-party, essential <b>session cookie</b> for signed-in accounts. We do <b>not</b> use advertising cookies, third-party
     analytics that profile you, cross-site trackers, or ad networks, and we do not sell or share your personal information.
   </p>
 
-  <h3>7. Your rights (GDPR / CCPA)</h3>
+  <h3>8. Your rights (GDPR / CCPA)</h3>
   <p>
-    We hold the minimal identity data described above and <b>no trade data</b>. Subject to applicable law, you may request access to,
-    correction of, or deletion of your account data, and you may object to or restrict certain processing. We do <b>not sell</b> personal
-    information and run <b>no ad tracking</b>. To exercise any right — including deleting your account and its identity records — email
+    We hold the minimal identity data described above and <b>no readable trade data</b> (for synced workspaces, only ciphertext we cannot
+    decrypt). Subject to applicable law, you may request access to, correction of, or deletion of your account data, and you may object to
+    or restrict certain processing. We do <b>not sell</b> personal information and run <b>no ad tracking</b>. To exercise any right —
+    including deleting your account, its identity records, and all synced ciphertext (also available self-serve on the
+    <a href="/account.html">Account page</a>) — email
     <a href="mailto:privacy@blotterbook.com?subject=Privacy%20request">privacy@blotterbook.com</a>. To delete your locally stored trade
     data, use <b>Manage data → Erase</b> in the app; because it lives only in your browser, we cannot access or delete it for you.
   </p>

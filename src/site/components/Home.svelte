@@ -689,7 +689,7 @@
       Blotterbook is free for everyone — the whole CSV-driven app, with nothing about your trades uploaded. Launching takes a free account;
       or try the <a href="/app/demo.html">demo</a> with no sign-up. If it saves you money, back the project with an optional donation.
       Cross-device
-      <b>synced workspaces</b> are coming as a low-cost add-on.
+      <b>synced workspaces</b> are live as the one optional paid add-on — $5/month, end-to-end encrypted.
     </p>
     <div class="price-grid mt-[34px] grid grid-cols-[1.1fr_1fr_1fr] items-stretch gap-4 max-[900px]:grid-cols-1">
       <div class="plan flex flex-col rounded-[14px] border border-primary/50 bg-card p-[26px] ring-1 ring-primary/30">
@@ -961,9 +961,10 @@
         <p
           class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground"
         >
-          Not today. Local storage is per-browser, so data isn't synced across devices and is cleared if you clear site data — keep your
-          original CSV or a backup. Re-uploading is safe: trades are de-duplicated by a stable id, so overlapping exports only add genuinely
-          new rows. Cross-device <b>synced workspaces</b> (end-to-end encrypted, $5/month) are live as the one optional paid add-on — see Pricing.
+          Yes, if you want it: cross-device <b>synced workspaces</b> (end-to-end encrypted, $5/month) are live as the one optional paid add-on
+          — see Pricing. On the free tier, local storage is per-browser, so data isn't synced across devices and is cleared if you clear site
+          data — keep your original CSV or a backup. Re-uploading is safe: trades are de-duplicated by a stable id, so overlapping exports only
+          add genuinely new rows.
         </p>
       </details>
       <details class="border-b border-border">

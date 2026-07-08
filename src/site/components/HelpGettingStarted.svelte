@@ -83,7 +83,8 @@
     <p>
       Click <b>Load CSV</b> and choose your platform's export. Blotterbook reads the header row, <b>auto-detects the platform</b>, and shows
       what it found — it does not enter the app until you confirm. If detection is wrong or blank, pick the platform from the dropdown to
-      re-parse. Only <code>.csv</code> files are accepted, and nothing imports unless parsing succeeds.
+      re-parse. <code>.csv</code>, <code>.txt</code>, and <code>.tsv</code> files are accepted (plus the ATAS X <code>.xlsx</code>
+      workbook), and nothing imports unless parsing succeeds.
     </p>
     <div class="bg-card border border-border rounded-xl p-3.5 my-4">
       <p class="font-mono text-[10.5px] tracking-[0.08em] uppercase text-muted-foreground m-0 mb-2.5">Load &amp; detect</p>

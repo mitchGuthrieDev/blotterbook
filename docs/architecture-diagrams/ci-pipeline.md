@@ -24,7 +24,7 @@ flowchart TD
 
     subgraph JOBB["job: build-test-e2e (long pole)"]
         direction TB
-        B1["npm ci"] --> B2["test:unit — 17 node suites"]
+        B1["npm ci"] --> B2["test:unit — 18 node suites"]
         B2 --> B3["build — vite → dist/"]
         B3 --> B4["size-budget — /app/ bundle ≤ 840 KiB"]
         B4 --> B5["check-deploy — deploy contract + version classification"]

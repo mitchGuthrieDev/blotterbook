@@ -82,14 +82,14 @@
     },
     {
       "id": "A16",
-      "title": "(infra guardrail) Move to Workers Paid before shipping the paid cloud-sync tier",
+      "title": "(infra guardrail) Keep the paid cloud-sync tier on Workers Paid",
       "category": "ARCHITECTURE / DUPLICATION",
       "priority": "P2",
       "effort": "ongoing",
       "status": "guardrail",
       "completedDate": null,
       "partial": false,
-      "prompt": "Guardrail for the planned cloud-sync subscription tier (the `CloudStore` behind the `Store` seam, A4). Every device push/pull is a Pages Function invocation against the Workers FREE plan's 100,000 requests/day cap — a few hundred active sync users would exhaust it — and KV's 1,000 writes/day free cap is far too low for user data. Do NOT ship a paying sync product on the free Workers plan: treat the Workers Paid plan ($5/mo — 10M requests + higher KV/CPU) as a prerequisite, with R2 (10 GB free, free egress — fits the zero-knowledge model) for encrypted trade blobs and D1/KV for accounts/entitlements. Plan the economics around Workers Paid (trivial against subscription revenue), not around stretching the free tier. Reject a sync rollout that assumes the free request/KV caps.",
+      "prompt": "AS-BUILT NOTE (2026-07-08 docs audit): the paid cloud-sync tier SHIPPED (GA 2026-07-07) on exactly this architecture — Workers Paid, R2 for encrypted blobs, D1 for accounts/sync index — so the original pre-ship gate is satisfied; the guardrail below remains as the operating rule (do not downgrade plans or move sync volume onto free-plan caps). Guardrail for the planned cloud-sync subscription tier (the `CloudStore` behind the `Store` seam, A4). Every device push/pull is a Pages Function invocation against the Workers FREE plan's 100,000 requests/day cap — a few hundred active sync users would exhaust it — and KV's 1,000 writes/day free cap is far too low for user data. Do NOT ship a paying sync product on the free Workers plan: treat the Workers Paid plan ($5/mo — 10M requests + higher KV/CPU) as a prerequisite, with R2 (10 GB free, free egress — fits the zero-knowledge model) for encrypted trade blobs and D1/KV for accounts/entitlements. Plan the economics around Workers Paid (trivial against subscription revenue), not around stretching the free tier. Reject a sync rollout that assumes the free request/KV caps.",
       "doneNote": null
     },
     {
@@ -154,7 +154,7 @@
     },
     {
       "id": "A103",
-      "title": "Verify the 9 beta CSV adapters against real exports",
+      "title": "Verify the 7 beta CSV adapters against real exports",
       "category": "REVIEW / AUDIT",
       "priority": "P3",
       "effort": "large",
@@ -166,14 +166,14 @@
     },
     {
       "id": "A107",
-      "title": "How-to: add per-platform CSV-export screenshots + clearer steps",
+      "title": "Help hub: add per-platform CSV-export screenshots + clearer steps",
       "category": "FEATURES",
       "priority": "P3",
       "effort": "medium",
       "status": "open",
       "completedDate": null,
       "partial": false,
-      "prompt": "Improve the How-To wiki (src/site/components/Howto.svelte) so a new user can reliably export the right CSV from each supported platform. Add per-platform screenshots of the export flow and tighten the step-by-step instructions (where the export lives, which option to pick, common gotchas). Images go through Vite's asset pipeline (src/assets/ or co-located, fingerprinted) and must respect the CSP/img-src; keep the page prerendered (SSG, A69) and the bundle lean (A28/size-budget). Done when: each supported platform has clear instructions + at least one screenshot, and the page builds + prerenders cleanly. — UPDATE 2026-07-04: owner will capture screenshots; in the interim, use other trading-journal products' public import docs/wikis as REFERENCE for accurate per-platform steps, but do NOT republish their screenshots (copyright) — ship only our own captures or officially-licensed platform doc images.",
+      "prompt": "Improve the Help hub import guide (src/site/components/HelpImport.svelte — /help/import.html; the A273 successor to the old How-To wiki) so a new user can reliably export the right CSV from each supported platform. Add per-platform screenshots of the export flow and tighten the step-by-step instructions (where the export lives, which option to pick, common gotchas). Images go through Vite's asset pipeline (src/assets/ or co-located, fingerprinted) and must respect the CSP/img-src; keep the page prerendered (SSG, A69) and the bundle lean (A28/size-budget). Done when: each supported platform has clear instructions + at least one screenshot, and the page builds + prerenders cleanly. — UPDATE 2026-07-04: owner will capture screenshots; in the interim, use other trading-journal products' public import docs/wikis as REFERENCE for accurate per-platform steps, but do NOT republish their screenshots (copyright) — ship only our own captures or officially-licensed platform doc images.",
       "doneNote": null
     },
     {

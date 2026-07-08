@@ -80,7 +80,8 @@
       <div class="flex-1">
         <b class="text-foreground">Arrange it your way</b>
         <p class="mt-[3px] mb-0 text-[13.5px] leading-[1.5] text-muted-foreground">
-          Drag to reorder the modules, collapse what you don't need, and save named workspace layouts to switch between views.
+          Drag to reorder the modules, resize them from the corner handle (or the ⋯ Size menu), collapse what you don't need, switch between
+          tabbed dashboards, and save named workspace layouts to switch between views.
         </p>
       </div>
     </li>
@@ -212,8 +213,8 @@
       <div class="flex-1">
         <b class="text-foreground">A power-user workspace</b>
         <p class="mt-[3px] mb-0 text-[13.5px] leading-[1.5] text-muted-foreground">
-          Resizable, snapping modules; multiple tabbed workspaces; and Portfolios that capture a full set of layouts and data — a
-          trading-terminal feel for traders who want it.
+          Portfolios that capture a full set of layouts and data — a trading-terminal feel for traders who want it. (Resizable, snapping
+          modules and tabbed dashboards have already shipped — see "Arrange it your way" above.)
         </p>
       </div>
     </li>
