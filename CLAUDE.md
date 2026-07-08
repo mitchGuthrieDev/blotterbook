@@ -106,9 +106,9 @@ npm run preview                  # serve the built dist/ locally (production-lik
 
 # Tests / lint (the CI suite — run before pushing)
 npm test                         # = lint + typecheck + format:check + test:unit
-npm run test:unit                # the 17 node suites: adapters / auth / version / flags / tax / demostore / workspaces /
+npm run test:unit                # the 18 node suites: adapters / auth / version / flags / tax / demostore / workspaces /
                                   #   curveandreport / compute / accounts / email / econ / crypto / sync / cloudsync /
-                                  #   cloudsync-store / modlayout
+                                  #   cloudsync-store / modlayout / subscription
 npm run lint                     # ESLint (flat config; .ts skipped — typechecked instead, A79)
 npm run typecheck                # tsc (src/lib/**/*.ts except src/lib/components) + tsc(functions) + svelte-check (src/app + src/site + src/lib/components + src/dev) — A61
 npm run test:e2e                 # Playwright render tests — BUILDS then serves dist/, boots every surface
@@ -432,8 +432,13 @@ conforms to the rules below; keep it that way.
                         helpers — R2 bucket, ownership, LWW upsert), email.ts (Resend sender, F55),
                         subscribers.ts (F44 changelog-subscriber store), http.ts, types.ts
   api/{geo,status,config,admin-key}.ts  geo · status · feature flags · admin token
-  api/{me,checkout,webhook}.ts   storage tier — grants `cloud` on active/grace subscription (F60) · Stripe
-                        donations + subscription-lifecycle webhook (checkout + customer.subscription.*, F54/F60)
+  api/admin/*.ts        A276 admin user table + manual entitlement overrides (users list w/ cursor
+                        pagination · grant/revoke comped cloud) — Access+token-authed, audit-trailed
+  api/{me,checkout,webhook}.ts   storage tier — cloud via hasCloudEntitlement (override OR active/grace
+                        subscription, A276/F60) · Stripe donations + subscription-lifecycle webhook
+                        (checkout + customer.subscription.*, F54/F60)
+  api/subscription/create.ts  A278 in-app Payment Element bootstrap — incomplete subscription +
+                        PI client secret (webhook stays the only tier writer)
   api/account/*.ts      passkey register/login/logout + email-verify + recovery + reclaim (A316) + account-delete +
                         passkey-delete endpoints (F53/F55)
   api/sync/*.ts         F62 encrypted-blob transport (workspaces · wrapped-ik · push · pull · delete) over R2 + D1
@@ -441,6 +446,7 @@ conforms to the rules below; keep it that way.
                         subscriptions — double opt-in signup/confirm/unsubscribe + the send-trigger
                         broadcast endpoint
   schema.sql             D1 schema — accounts tables + subscriptions/webhook_events (F60) +
+                        entitlement_overrides (A276 manual comps, audit-trailed) +
                         sync_records/sync_wrapped_ik/sync_workspace_keys/sync_workspaces (F62) +
                         subscribers/changelog_sends (F44); apply via wrangler
 /scripts/
@@ -455,9 +461,9 @@ conforms to the rules below; keep it that way.
   check-mermaid.mjs     docs-only mermaid drift gate (CI-load-bearing) — parses every ```mermaid fenced block
                         under docs/ with Mermaid's own parser (reuses the e2e job's Playwright chromium);
                         `npm run check-mermaid`
-  test-*.mjs            the 17-suite CI test suite (adapters / auth / version / flags / tax / demostore /
+  test-*.mjs            the 18-suite CI test suite (adapters / auth / version / flags / tax / demostore /
                         workspaces / curveandreport / compute / accounts / email / econ / crypto / sync /
-                        cloudsync / cloudsync-store / modlayout)
+                        cloudsync / cloudsync-store / modlayout / subscription)
 /e2e/                   Playwright render/E2E specs (dev-only — R19 Tier A)
 /dist/                  Vite build output (GITIGNORED) — the artifact Cloudflare Pages serves (A26)
 vite.config.mjs         Vite multi-page build config (root:src, publicDir:static, 10 HTML entries → dist/)

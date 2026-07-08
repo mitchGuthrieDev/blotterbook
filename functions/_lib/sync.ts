@@ -16,7 +16,7 @@
 
 import type { Env } from './types.ts';
 import { json } from './http.ts';
-import { grantsCloud, subscriptionForUser, type AccountsDb } from './accounts.ts';
+import { hasCloudEntitlement, type AccountsDb } from './accounts.ts';
 
 /* ---- narrow R2 seam ------------------------------------------------------------------------------
    The subset of R2Bucket the sync endpoints use. R2Bucket satisfies it structurally; the sync test
@@ -49,14 +49,16 @@ export function authRequired() {
    Sync is a paid (cloud-tier) feature. The client checks its tier, but that is ADVISORY — the server
    MUST enforce entitlement itself or any authenticated free-tier session could push unbounded blobs
    (paywall bypass + storage DoS). So every MUTATING sync route (push, workspaces POST, wrapped-ik PUT)
-   resolves the caller's subscription server-side and requires grantsCloud() before writing.
+   resolves the caller's entitlement server-side and requires it before writing.
 
    READ/WRITE ASYMMETRY (intentional): the GET routes (pull, workspaces GET, wrapped-ik GET) do NOT
    gate on the tier. A lapsed/downgraded but still-provisioned account must be able to READ what it
    already stored so it can reconcile the cloud copy back down to its local IndexedDB and unlock. Reads
    neither bypass the paywall nor grow storage; only writes do, so only writes are gated. */
 export async function callerHasCloud(db: AccountsDb, userId: string, now = Date.now()): Promise<boolean> {
-  return grantsCloud(await subscriptionForUser(db, userId), now);
+  // A277: defer to hasCloudEntitlement — the single source of truth (subscription OR a live admin
+  // override), shared verbatim with /api/me so sync and the entitlements probe never disagree.
+  return hasCloudEntitlement(db, userId, now);
 }
 
 /** 402 body for a mutating sync call from a session without the cloud tier (A253). Local data is

@@ -180,9 +180,22 @@ closed (503) when `ACCOUNTS_DB` / `RESEND_API_KEY` is unbound.
   broadcasting stale). User-facing links (the unsubscribe URL) are built off `PUBLIC_ORIGIN` when
   set, so the branded domain — not the pages.dev host — reaches subscriber inboxes.
 
+## Admin user table + entitlement overrides (A276)
+
+- `GET /api/admin/users` — admin-token-authed (same posture as `/api/status`; the bearer
+  `x-admin-key` header is the CSRF control). Cursor-paginated user list (`created_at DESC`,
+  default 25 / clamp 100, `?q=` email substring) returning identity + entitlement fields ONLY
+  (S25 — never trade/sync/Stripe-id internals) plus `effectiveTier` computed by
+  `hasCloudEntitlement`. Fail-closed 503 without `ACCOUNTS_DB`.
+- `POST /api/admin/entitlement` — grant/revoke a manual cloud comp: upserts the audit-trailed
+  `entitlement_overrides` row (`granted_by`/`revoked_by` from `Cf-Access-Authenticated-User-Email`;
+  revoked rows are KEPT). `hasCloudEntitlement` (accounts.ts) is the single entitlement choke
+  point — a live override OR a qualifying subscription — read by both `/api/me` and the
+  `/api/sync/*` paywall (`callerHasCloud`), so a comp behaves exactly like a paid tier.
+
 ## Admin auth (shipped)
 
-`/api/admin-key`, `/api/status`, `/api/config`, and the staging gate
+`/api/admin-key`, `/api/status`, `/api/config`, `/api/admin/*` (A276), and the staging gate
 (`_middleware.ts`) share `_lib/auth.ts`:
 
 - **Short-lived tokens (S3).** `/api/admin-key` returns a signed HMAC token
@@ -261,7 +274,8 @@ audMatches:true, expired:false`.
   list + the F62 synced-workspaces change-index / wrapped keys — schema in
   [`functions/schema.sql`](schema.sql). **After ANY change to `schema.sql`** (F54 added `donations`,
   F55 added `recovery_tokens`, F44 added `subscribers` + `changelog_sends`, **F62 added
-  `sync_workspaces` + `sync_workspace_keys` + `sync_wrapped_ik` + `sync_records`**) the owner must
+  `sync_workspaces` + `sync_workspace_keys` + `sync_wrapped_ik` + `sync_records`**, **A276 added
+  `entitlement_overrides` + two indexes**) the owner must
   **re-run** the idempotent apply command so the new tables exist in prod:
   `npx wrangler d1 execute blotterbook-accounts --remote --file=functions/schema.sql`.
 - **R2** (`SYNC_BUCKET`) for the synced-workspaces encrypted-record ciphertext blobs (F62). Holds ONLY

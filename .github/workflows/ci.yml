@@ -70,7 +70,7 @@ jobs:
       - name: Install dev dependencies
         run: npm ci
 
-      - name: Unit + logic tests (17 suites — adapters / auth / version / flags / tax / demostore / workspaces / curveandreport / compute / accounts / email / econ / crypto / sync / cloudsync / cloudsync-store / modlayout)
+      - name: Unit + logic tests (18 suites — adapters / auth / version / flags / tax / demostore / workspaces / curveandreport / compute / accounts / email / econ / crypto / sync / cloudsync / cloudsync-store / modlayout / subscription)
         run: npm run test:unit
 
       - name: Build (Vite → dist/)

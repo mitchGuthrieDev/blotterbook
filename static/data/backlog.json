@@ -249,18 +249,6 @@
       "doneNote": null
     },
     {
-      "id": "A276",
-      "title": "(discuss + build) Admin: paginated user table to view/edit per-user entitlements (+ audit the entitlement model)",
-      "category": "FEATURES",
-      "priority": "P3",
-      "effort": "large",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Add a paginated USER table to the admin panel (src/site/components/Admin.svelte + a new admin /functions endpoint, Cloudflare-Access-gated + noindex like the rest of admin) that lists accounts and lets the owner VIEW and EDIT per-user entitlements — e.g. grant the owner (or a comped user) the CLOUD tier WITHOUT a Stripe subscription. FIRST audit + document how entitlements work today (F60: /api/me derives the tier from the D1 `subscriptions` row via grantsCloud; there is no manual-grant path) and decide the model change: add a manual override (e.g. an `entitlement_override` / `comped` field or a synthetic subscription row) that grantsCloud honors, with an audit trail of who set it and when. Server-side + admin-authed only (NEVER a client-trusted grant — see A277). Paginate the D1 query (never load all users at once). Constraints: admin endpoints behind Access + the admin token (S3/S4), fail-closed without ACCOUNTS_DB, and NO trade data ever surfaced (S25 — identity + entitlement only). Done when: the admin table paginates real users, the owner can grant/revoke the cloud entitlement server-side (reflected by /api/me), the override is audited, and the current-vs-new entitlement model is documented.",
-      "doneNote": null
-    },
-    {
       "id": "A278",
       "title": "(discuss + build) In-house Stripe subscription form (replace the Checkout redirect) + smooth the get-cloud-sync flow",
       "category": "FEATURES",
