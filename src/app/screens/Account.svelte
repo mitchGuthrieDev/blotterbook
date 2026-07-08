@@ -74,6 +74,7 @@
   import CloudSyncSetup from '../parts/CloudSyncSetup.svelte';
   import UnlockModal from '../parts/UnlockModal.svelte';
   import SyncStatusPill from '../parts/SyncStatusPill.svelte';
+  import SubscribeForm from '../parts/SubscribeForm.svelte';
 
   interface Props {
     /** demo surface — disables every control (demo never mutates) and skips the session probe. */
@@ -86,6 +87,8 @@
   // "cloud tier required" on local tier); demo never renders it (in-memory DemoStore never syncs). ──
   const cloudSyncOn = $derived(!isDemo && !!account.user);
   let setupOpen = $state(false);
+  // A278: the in-app subscription form, revealed by the Subscribe/Renew CTAs.
+  let subscribeOpen = $state(false);
   let unlockOpen = $state(false);
   let prfOk = $state(false);
   let addPassphrase = $state('');
@@ -496,7 +499,9 @@
                 Your supporter subscription is inactive, so this device has stopped syncing. Renew to resume — your local data and
                 encryption keys are untouched.
               </div>
-              <Button data-testid="cloud-renew" disabled={account.busy} onclick={() => void subscribe()} class="self-start">
+              <!-- A278: the CTA reveals the in-app Payment Element (hosted Checkout remains the
+                   form's own fallback for blocked clients). -->
+              <Button data-testid="cloud-renew" disabled={account.busy} onclick={() => (subscribeOpen = !subscribeOpen)} class="self-start">
                 <Cloud class="size-4" />
                 Renew — $5/month
               </Button>
@@ -505,10 +510,18 @@
                 Cloud sync is part of the <span class="font-medium text-foreground">$5/month</span> supporter tier — sync your journal across
                 your devices, still end-to-end encrypted. Your local data is unaffected either way.
               </div>
-              <Button data-testid="cloud-subscribe" disabled={account.busy} onclick={() => void subscribe()} class="self-start">
+              <Button
+                data-testid="cloud-subscribe"
+                disabled={account.busy}
+                onclick={() => (subscribeOpen = !subscribeOpen)}
+                class="self-start"
+              >
                 <Cloud class="size-4" />
                 Subscribe — $5/month
               </Button>
+            {/if}
+            {#if subscribeOpen}
+              <SubscribeForm onsubscribed={() => (subscribeOpen = false)} />
             {/if}
           {:else if !vault.loaded}
             <Skeleton class="h-9 w-48" />

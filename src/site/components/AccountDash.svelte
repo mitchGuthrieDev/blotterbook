@@ -11,6 +11,7 @@
   // module (src/app/lib/account.svelte.ts) — the same pattern as dev/nav.ts re-using app modules.
   import { onMount } from 'svelte';
   import SiteShell from '../lib/SiteShell.svelte';
+  import SubscribeForm from '../../app/parts/SubscribeForm.svelte';
   import {
     account,
     refreshSession,
@@ -22,7 +23,6 @@
     emailVerifySend,
     recoverSend,
     reclaimSend,
-    subscribe,
   } from '../../app/lib/account.svelte.ts';
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -111,8 +111,26 @@
   const fmtDate = (ms: number | null) =>
     ms == null ? '—' : new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
+  // A278: the in-app subscription form + the subscribe-intent carry. A `?subscribe=1` landing
+  // (homepage "Get cloud sync" CTA) latches the intent through the login/signup step, so a fresh
+  // user ends up ON the subscribe form — not hunting for it — the moment their session exists.
+  let subscribeOpen = $state(false);
+  let subscribeIntent = $state(false);
+
   onMount(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('subscribe') === '1') {
+      subscribeIntent = true;
+      history.replaceState(null, '', location.pathname + location.hash); // scrub — a reload shouldn't re-trigger
+    }
     void refreshSession();
+  });
+
+  $effect(() => {
+    if (subscribeIntent && account.loaded && account.user) {
+      subscribeIntent = false;
+      if (account.tier !== 'cloud') subscribeOpen = true;
+    }
   });
 </script>
 
@@ -283,10 +301,16 @@
               type="button"
               class="rounded-[9px] bg-primary px-4 py-2 text-[13.5px] font-semibold text-primary-foreground hover:brightness-[1.08] disabled:opacity-50"
               {disabled}
-              onclick={() => void subscribe()}>Get cloud sync</button
+              onclick={() => (subscribeOpen = !subscribeOpen)}>Get cloud sync</button
             >
           {/if}
         </div>
+        {#if subscribeOpen && account.tier !== 'cloud'}
+          <!-- A278: the shared Payment Element form (owner-approved on this surface too). -->
+          <div class="mt-4 border-t border-border pt-4">
+            <SubscribeForm onsubscribed={() => (subscribeOpen = false)} />
+          </div>
+        {/if}
       </div>
 
       <!-- Cloud sync (status only — keys + per-workspace management live in the app, S25) -->

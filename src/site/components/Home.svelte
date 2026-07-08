@@ -827,10 +827,12 @@
           </li>
         </ul>
         <div class="mt-auto flex flex-col gap-2">
-          <p class="text-[11px] leading-[1.4] text-muted-foreground">Launch the app, sign in, and subscribe from your account.</p>
+          <!-- A278: carries the subscribe intent — /account.html latches ?subscribe=1 through
+               login/signup and opens the payment form the moment the session exists. -->
+          <p class="text-[11px] leading-[1.4] text-muted-foreground">Sign in (or sign up) and subscribe right there.</p>
           <a
             class="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
-            href="/app/#account">Get cloud sync in the app &rarr;</a
+            href="/account.html?subscribe=1">Get cloud sync &rarr;</a
           >
         </div>
       </div>

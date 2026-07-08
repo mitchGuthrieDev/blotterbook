@@ -160,14 +160,17 @@ test('cloud sync (staging): a LOCAL-tier user sees the subscribe CTA, not the ke
   await expect(page.getByTestId('cloud-subscribe')).toBeVisible();
   await expect(page.getByTestId('cloud-setup-open')).toHaveCount(0);
 
-  // Subscribing kicks off a subscription checkout (plan: 'subscription' → /api/checkout links it to
-  // this account via the session cookie + subscription metadata, #120). Register the request wait
-  // BEFORE the click — the fetch fires during the click, so an after-the-fact wait would race.
-  const [checkoutReq] = await Promise.all([
-    page.waitForRequest(r => r.url().includes('/api/checkout') && r.method() === 'POST'),
+  // A278: the CTA now reveals the IN-APP subscription form, which immediately creates the
+  // incomplete subscription server-side (POST /api/subscription/create — the account linkage +
+  // price stay server-resolved). Register the request wait BEFORE the click — the fetch fires as
+  // the form mounts, so an after-the-fact wait would race. (On this static test server the API
+  // 404s, so the form settles into its error/fallback state — the wiring is what's asserted.)
+  const [createReq] = await Promise.all([
+    page.waitForRequest(r => r.url().includes('/api/subscription/create') && r.method() === 'POST'),
     page.getByTestId('cloud-subscribe').click(),
   ]);
-  expect(checkoutReq.postDataJSON()?.plan).toBe('subscription');
+  expect(createReq.method()).toBe('POST');
+  await expect(page.getByTestId('subscribe-form')).toBeVisible();
 });
 
 test('cloud sync (staging): lock, then unlock the IK with the passphrase', async ({ page }) => {

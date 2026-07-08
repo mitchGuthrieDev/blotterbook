@@ -188,12 +188,49 @@ export function logout(): Promise<boolean> {
 
 /** Start a cloud-tier subscription checkout, then redirect to Stripe. The same-origin session cookie
  *  rides along, so /api/checkout stamps client_reference_id (and subscription metadata, #120) and the
- *  webhook links the subscription to THIS account — the reliable path to the 'cloud' tier. */
+ *  webhook links the subscription to THIS account — the reliable path to the 'cloud' tier.
+ *  A278: this hosted-Checkout redirect is now the FALLBACK path (script/iframe-blocked clients);
+ *  the primary path is the in-app Payment Element via createSubscription() below. */
 export function subscribe(): Promise<boolean> {
   return ceremony(async () => {
     const { url } = await api<{ url?: string }>('/api/checkout', { plan: 'subscription' });
     if (typeof url === 'string' && url) window.location.href = url;
   });
+}
+
+/* ---- A278: in-app subscription (Payment Element) ------------------------------------------- */
+
+export type CreateSubscriptionResult = { alreadySubscribed: true } | { clientSecret: string; publishableKey: string };
+
+/** Create (or resume) the incomplete subscription server-side and return the Payment Element
+ *  inputs. Throws with the server's message on failure (501 not-configured included — callers use
+ *  that to fall back to hosted Checkout). Not a ceremony: the form owns its own busy state. */
+export function createSubscription(): Promise<CreateSubscriptionResult> {
+  return api<CreateSubscriptionResult>('/api/subscription/create', {});
+}
+
+/** Lazy Stripe.js loader (A278) — the npm package is a tiny stub that injects the real script from
+ *  js.stripe.com at runtime, so nothing Stripe-sized ever sits in our bundle or on the boot path
+ *  (same pattern as the lazy webauthn() import above). Returns null when the script can't load
+ *  (blocked origin) — callers fall back to hosted Checkout. */
+export async function stripeJs(publishableKey: string) {
+  try {
+    const { loadStripe } = await import('@stripe/stripe-js');
+    return await loadStripe(publishableKey);
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Poll /api/me until the webhook flips the tier to cloud (the webhook is the only tier writer —
+ *  this just waits for it). Resolves true once cloud, false when attempts run out. */
+export async function awaitCloudTier(attempts = 8, delayMs = 1500): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    await refreshSession();
+    if (account.tier === 'cloud') return true;
+    await new Promise(r => setTimeout(r, delayMs));
+  }
+  return false;
 }
 
 /* ---- F55: recovery email + verification --------------------------------------------------- */
