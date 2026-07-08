@@ -146,7 +146,7 @@ nav item at the bottom of the sidebar — logged-out it reads **Login** and open
 shadcn `dialog`) with "Log in with a passkey" / "Create account"; logged-in it becomes an
 **Account** screen: email, passkey list (rename/remove/add), donation status badge, sign-out, and a
 disabled **Workspaces** section stub ("Synced workspaces — coming later"). Session state is a rune
-in a new `src/app/lib/account.svelte.ts`; demo surface shows the logged-out state with every
+in `src/lib/account/account.svelte.ts` (shipped as `src/app/lib/account.svelte.ts`, relocated to the shared home by A328); demo surface shows the logged-out state with every
 control disabled (demo never mutates); gate rollout behind `isStaging` first.
 
 **Phase 2 — donation → account (Stripe, S11).** Extend `/api/webhook` *after* the existing

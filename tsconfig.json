@@ -12,7 +12,7 @@
     "forceConsistentCasingInFileNames": true,
     "paths": { "$lib": ["./src/lib"], "$lib/*": ["./src/lib/*"] }
   },
-  "//include": "Pure-logic core only (src/lib/core + utils). The shadcn-svelte UI under src/lib/components is .svelte + .ts barrels that import .svelte — plain tsc can't resolve those, so svelte-check (tsconfig.svelte.json) owns it.",
+  "//include": "Pure-logic core only (src/lib/core + utils). The shadcn-svelte UI under src/lib/components is .svelte + .ts barrels that import .svelte — plain tsc can't resolve those, so svelte-check (tsconfig.svelte.json) owns it. Ditto src/lib/account (A328): a runes .svelte.ts module + the SubscribeForm component, shared by the app AND the site surfaces.",
   "include": ["src/lib/**/*.ts"],
-  "exclude": ["node_modules", "dist", "src/lib/components"]
+  "exclude": ["node_modules", "dist", "src/lib/components", "src/lib/account"]
 }

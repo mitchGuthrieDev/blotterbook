@@ -89,8 +89,10 @@ for (const m of readFileSync(r('static/sitemap.xml'), 'utf8').matchAll(/<loc>([^
   ok(`sitemap loc exists in dist: ${m[1]}`, existsSync(distFileFor(m[1])));
 }
 
-// page <link rel="canonical"> across the served HTML entries.
-for (const f of execSync('git ls-files src/*.html', { cwd: ROOT })
+// page <link rel="canonical"> across the served HTML entries. The pathspec must be quoted so
+// git (not the shell) matches it — a git pathspec glob crosses '/', covering nested pages like
+// src/help/*.html; an unquoted shell glob would stop at the top level.
+for (const f of execSync("git ls-files -- 'src/*.html'", { cwd: ROOT })
   .toString()
   .split('\n')
   .map(s => s.trim())
@@ -102,6 +104,20 @@ for (const f of execSync('git ls-files src/*.html', { cwd: ROOT })
 // robots.txt Sitemap: line.
 const sm = readFileSync(r('static/robots.txt'), 'utf8').match(/^Sitemap:\s*(\S+)/m);
 if (sm) ok(`robots Sitemap target exists in dist: ${sm[1]}`, existsSync(distFileFor(sm[1])));
+
+// _headers CSP contract (A330): demo is the zero-egress showcase — it must carry its own strict
+// CSP block (re-pinned after the /app/* Stripe relaxation) with no third-party origin at all.
+{
+  const headers = readFileSync(r('static/_headers'), 'utf8');
+  const blocks = [...headers.matchAll(/^(\/\S*)\n((?:[ ]{2}.+\n?)+)/gm)].map(m => ({ path: m[1], body: m[2] }));
+  const demo = blocks.find(b => b.path === '/app/demo.html');
+  ok('demo.html re-pins its own CSP block in _headers', !!demo);
+  if (demo) {
+    const appIdx = blocks.findIndex(b => b.path === '/app/*');
+    ok('demo CSP block comes after the /app/* relaxation (later rule wins)', appIdx !== -1 && blocks.indexOf(demo) > appIdx);
+    ok('demo CSP contains no third-party origin', !/https?:\/\//.test(demo.body));
+  }
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

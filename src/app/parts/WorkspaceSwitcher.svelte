@@ -34,7 +34,7 @@
     type CloudWorkspace,
   } from '../lib/cloudsync.svelte.ts';
   import { refreshVault } from '../lib/vault.svelte.ts';
-  import { subscribe } from '../lib/account.svelte.ts';
+  import { subscribe } from '$lib/account/account.svelte.ts';
   import type { Dashboard } from '../lib/dashboard.svelte.ts';
   import type { Workspace } from '../../lib/core/types.ts';
 

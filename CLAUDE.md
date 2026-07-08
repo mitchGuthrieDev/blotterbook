@@ -66,8 +66,12 @@ re-platform), and [`docs/architecture.md`](docs/architecture.md).
   DetectionStatus/EditableCellPopover/FeedbackDialog/LaunchGate/ModuleCarousel/ModuleResizeHandle/ModuleSizeMenu/PaginationControls/
   ScreenshotLightbox/SegmentedControl/SymbolSelect/TagInput + the synced-workspaces
   parts WorkspaceSwitcher/CloudSyncSetup/UnlockModal/SyncStatusPill, A132/F61b/F63/A279) +
-  `lib/{dashboard.svelte.ts,dashtabs.svelte.ts,account.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports,econ.svelte.ts,modlayout.ts,modsize.svelte.ts}`
+  `lib/{dashboard.svelte.ts,dashtabs.svelte.ts,pagination.svelte.ts,actions,batch,files,flags,flavor,motion,nav,analytics,reports,econ.svelte.ts,modlayout.ts,modsize.svelte.ts}`
   plus the cloud-sync glue `{vault.svelte.ts` (in-memory key session, F61b)`,cloudstore.ts` (write-behind `StoreLike` wrapper, F63)`,cloudsync.svelte.ts` (reactive sync controller, F63)`}`.
+  The account layer is SHARED with the site surface and lives at `src/lib/account/` (A328):
+  `account.svelte.ts` (F53 auth/session runes + PRF passkey enroll) + `SubscribeForm.svelte` (A278
+  in-app Payment Element) — consumed by the app's Account screen/LaunchGate/WorkspaceSwitcher AND the
+  site's AccountDash page.
   It reuses the **pure-logic core** in `src/lib/core/` (A29, native TS per A61): `adapters` (+ `xlsx`
   for the ATAS X .xlsx path, F52) / `intake` (CSV gates + cross-export reconciliation, A177/A219) /
   `compute`+`costModel` in `core` / `store` (now with delete tombstones + named workspaces, F58/F59) /
@@ -110,7 +114,7 @@ npm run test:unit                # the 18 node suites: adapters / auth / version
                                   #   curveandreport / compute / accounts / email / econ / crypto / sync / cloudsync /
                                   #   cloudsync-store / modlayout / subscription
 npm run lint                     # ESLint (flat config; .ts skipped — typechecked instead, A79)
-npm run typecheck                # tsc (src/lib/**/*.ts except src/lib/components) + tsc(functions) + svelte-check (src/app + src/site + src/lib/components + src/dev) — A61
+npm run typecheck                # tsc (src/lib/**/*.ts except src/lib/{components,account}) + tsc(functions) + svelte-check (src/app + src/site + src/lib/{components,account} + src/dev) — A61
 npm run test:e2e                 # Playwright render tests — BUILDS then serves dist/, boots every surface
 npm run format                   # Prettier
 # (the node suites still run standalone too, e.g. `node scripts/test-adapters.mjs`)
@@ -368,6 +372,10 @@ conforms to the rules below; keep it that way.
                         environments vendor new ones by hand (canonical source)
     components/shell/   reusable sidebar app frame (UI redesign): AppShell.svelte (rail + content
                         column) + SidebarNav.svelte (data-driven nav rail) — every UI mockup sits inside
+    account/            SHARED account layer (A328) — consumed by the app AND the site surfaces:
+                        account.svelte.ts (F53 auth/session runes + PRF passkey enroll + A305
+                        deleteAccount + EMAIL_RE/fmtDate) + SubscribeForm.svelte (A278 in-app Stripe
+                        Payment Element). Runes module → svelte-check-owned (excluded from plain tsc)
     utils.ts            cn() class composer (clsx + tailwind-merge) — `$lib/utils`
   app/                  the journal app — a Svelte 5 SPA (ADR-001; vanilla layer removed A33, redesign cutover CH16)
     app.html            Svelte mount, data-mode="app" (served at /app/ via _redirects rewrite)
@@ -384,7 +392,7 @@ conforms to the rules below; keep it that way.
                         WorkspaceSwitcher (A132), CloudSyncSetup + UnlockModal (F61b), SyncStatusPill (A279)
     lib/                app-only glue (TS): dashboard.svelte.ts (dashboard state factory + workspace
                         switch/reload), dashtabs.svelte.ts (tabbed dashboards + per-tab module-layout
-                        persistence, A135), account.svelte.ts (F53 auth/session state + PRF passkey enroll),
+                        persistence, A135),
                         pagination.svelte.ts, actions.ts (styleProps), batch.ts
                         (multi-file import queue, F47), files.ts (readImage/downloadBlob — ex util.js, A76),
                         flags.ts (APP_FLAGS), flavor.ts, motion.ts, nav.ts, analytics.ts + reports.ts
@@ -474,7 +482,7 @@ vite.config.mjs         Vite multi-page build config (root:src, publicDir:static
 .node-version           pins Node 22 for the Cloudflare Pages build
 package.json            deps manifest — Vite + Tailwind v4 + shadcn-svelte/bits-ui + @lucide/svelte + dev tooling (pinned, lockfiled)
 components.json         shadcn-svelte CLI config (`npx shadcn-svelte add <name>`)  ·  ADR-002
-eslint.config.mjs       ESLint flat config  ·  .prettierrc.json  Prettier  ·  tsconfig.json (tsc: src/lib/**/*.ts except src/lib/components) + tsconfig.svelte.json (svelte-check: src/app + src/site + src/lib/components + src/dev) + tsconfig.functions.json  ·  playwright.config.mjs  e2e
+eslint.config.mjs       ESLint flat config  ·  .prettierrc.json  Prettier  ·  tsconfig.json (tsc: src/lib/**/*.ts except src/lib/{components,account}) + tsconfig.svelte.json (svelte-check: src/app + src/site + src/lib/{components,account} + src/dev) + tsconfig.functions.json  ·  playwright.config.mjs  e2e
 svelte.config.js        vitePreprocess — enables <script lang="ts"> in components (A61)
 LICENSE                 proprietary — all rights reserved
 ```

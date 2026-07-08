@@ -5624,6 +5624,72 @@
       "completedDate": "2026-07-08",
       "partial": false,
       "doneNote": "Shipped 2026-07-08 (design agent on Opus → owner sign-off incl. the /account.html-too decision → built). PRIMARY PATH: POST /api/subscription/create (session-authed, Origin-checked, fail-closed 503/501) creates the subscription with payment_behavior=default_incomplete + save_default_payment_method, price server-resolved (S13), customer reuse-before-create persisted to users.stripe_customer_id, per-user Stripe Idempotency-Keys, resumes an in-flight incomplete subscription, tolerates both latest_invoice.payment_intent and the 2025+ confirmation_secret shapes; NEVER grants the tier — the signature-verified webhook stays the only subscriptions writer and the client polls /api/me (awaitCloudTier). CLIENT: the shared SubscribeForm.svelte (Payment Element, Link disabled, confirmPayment redirect:if_required for in-app 3DS, poll-until-cloud, hosted-Checkout fallback when Stripe.js cannot load or the endpoint is 501) embedded in BOTH the app Account screen (Subscribe/Renew CTAs reveal it inline) and /account.html (owner decision); @stripe/stripe-js pinned + lazily dynamic-imported (loader stub only — off the boot path/budget). CSP (owner-approved): path-scoped /app/* + /account.html blocks add js.stripe.com (script+frame) / hooks.stripe.com (3DS frames) / api.stripe.com (connect), frame-src gains self (export-report iframe); every other page keeps pure-self. INTENT CARRY: the homepage Get-cloud-sync CTA → /account.html?subscribe=1; the account page latches the intent through login/signup and auto-opens the form for a non-cloud session — the fresh-user dead end is gone. /api/checkout kept as the fallback. Tests: scripts/test-subscription.mjs (17 assertions, suite #18 in test:unit); the cloud-sync e2e subscribe test flipped to the inline-form flow. OWNER OPS REMAINING: set STRIPE_PUBLISHABLE_KEY (pk_test staging / pk_live prod) in the Pages dashboard — until then the form falls back to hosted Checkout cleanly; verify the invoice→PI client-secret field against the account's pinned Stripe API version with a test-mode 3DS card (4000 0027 6000 3184) before announcing."
+    },
+    {
+      "id": "A326",
+      "title": "Subscription endpoint error shape breaks the SubscribeForm fallback + leaks raw codes",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "DONE 2026-07-08 (same pass as filed). Flipped /api/subscription/create to the repo-wide error convention — the human sentence now lives in `error` with the machine code in a separate `code` field (501 not_configured / 401 auth_required / 502 subscription_failed) — and applied the same shape to /api/checkout (same anti-pattern; its errors reach account.error via subscribe()). SubscribeForm's /not configured/i fallback test now matches, so the 501 path reaches phase=fallback (hosted Checkout offered) and no raw codes render. Also: dropped the as-never cast (options typed StripePaymentElementOptions — wallets.link is validly typed) and added a destroyed flag so an unmount during boot can't mount the Payment Element into a detached node. test-subscription.mjs pins the 501 + 502 shapes (17 ok)."
+    },
+    {
+      "id": "A327",
+      "title": "check-deploy-contract canonical guard silently skips src/help/*.html (unquoted glob)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "DONE 2026-07-08 (same pass as filed). check-deploy-contract.mjs now runs git ls-files -- 'src/*.html' (quoted git pathspec — crosses /) instead of the shell-expanded glob, so the canonical guard covers every served HTML entry: the scan went from 6 to 15 files and the guard output now lists all five src/help/*.html canonicals."
+    },
+    {
+      "id": "A328",
+      "title": "Site layer imports the app layer: relocate the shared account module + SubscribeForm to src/lib",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "DONE 2026-07-08 (same pass as filed). Relocated account.svelte.ts + SubscribeForm.svelte to the new shared src/lib/account/ home; all importers updated to $lib/account/* (App.svelte, screens/Account.svelte, parts/LaunchGate + WorkspaceSwitcher, site AccountDash.svelte, SubscribeForm itself). tsconfig.json excludes src/lib/account from plain tsc (runes module) and tsconfig.svelte.json includes it for svelte-check — typecheck fully green. No src/site file imports from src/app anymore; bump-version keeps the files prod-classified (src/lib/**.ts|svelte). Docs path refs updated (auth-flow diagram, accounts-architecture); CLAUDE.md layout updated in the same PR's docs sweep."
+    },
+    {
+      "id": "A329",
+      "title": "Account glue dedupe: deleteAccount action + shared EMAIL_RE/fmtDate across the two Account surfaces",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "DONE 2026-07-08 (same pass as filed). deleteAccount() (the A305 resumable POST-until-done loop) moved into the shared account module — AccountDash now calls it and failures surface through the standard account.error alert (dropped the bespoke deleteErr state + fetch loop). Exported EMAIL_RE + fmtDate from the account module and swapped in all duplicates: Account.svelte (2x regex + fmtDate), AccountDash.svelte (regex + fmtDate), and LaunchGate.svelte (2x regex — found beyond the audit's list). Client runes modules aren't node-importable, so the loop's server side stays covered by test-accounts.mjs's /api/account/delete tests."
+    },
+    {
+      "id": "A330",
+      "title": "Scope the Stripe CSP relaxation away from demo.html (zero-egress showcase surface)",
+      "category": "SECURITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "DONE 2026-07-08 (same pass as filed). static/_headers now re-declares the strict pure-'self' CSP for /app/demo.html after the /app/* Stripe block (the ! detach + re-declare pattern; later/more-specific rule wins on Pages), keeping frame-src 'self' for the export-report iframe. check-deploy-contract.mjs gained a CSP contract guard: demo must have its own block, it must come after /app/*, and it must contain no third-party origin (3 new CI-load-bearing checks; 26 passing)."
+    },
+    {
+      "id": "A331",
+      "title": "Docs/copy drift batch: 0.70.0 changelog entry, How-To→Help strings, push.ts entitlement comment",
+      "category": "COMMENTS / READABILITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "DONE 2026-07-08 (same pass as filed). (a) Added the 0.70.0 changelog entry (Help hub live + prerendered/indexed pages + the A276 support comp tooling under the hood) — prod and the Blotterlog top entry match again. (b) adapters.ts detection-failure message now points at \"Help › Importing your trades\"; Onboarding's step-2 hint links to /help/import.html (styled, target=_blank). (c) push.ts entitlement comment updated to hasCloudEntitlement() (A253/A277 — the same choke point /api/me reads)."
     }
   ]
 }

@@ -8,8 +8,9 @@
  *
  * SECURITY:
  *  - session-gated + Origin-checked; fail-closed 503 without ACCOUNTS_DB or SYNC_BUCKET.
- *  - ENTITLEMENT (A253): a mutating cloud-tier write → requires grantsCloud() server-side (else 402).
- *    The client tier check is advisory; without this a free-tier session could push unbounded blobs.
+ *  - ENTITLEMENT (A253/A277): a mutating cloud-tier write → requires hasCloudEntitlement() server-side
+ *    (subscription OR admin override — the same choke point /api/me reads; else 402). The client tier
+ *    check is advisory; without this a free-tier session could push unbounded blobs.
  *  - QUOTA (A253): per-record ciphertext byte cap + per-workspace record-count cap (else 413).
  *  - AUTHORIZATION: the workspace must exist AND be owned by the caller (ownedWorkspace → else 404),
  *    so user B can never push into user A's workspace.
