@@ -746,14 +746,34 @@ export async function upsertSubscription(
       .prepare(
         'UPDATE subscriptions SET stripe_subscription_id = ?, stripe_customer_id = ?, status = ?, current_period_end = ?, updated = ?, past_due_since = ?, last_event_created = ?, cancel_at_period_end = ? WHERE user_id = ?'
       )
-      .bind(s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince, lastEventCreated, cancelFlag, s.userId)
+      .bind(
+        s.stripeSubscriptionId,
+        s.stripeCustomerId,
+        s.status,
+        s.currentPeriodEnd,
+        now,
+        pastDueSince,
+        lastEventCreated,
+        cancelFlag,
+        s.userId
+      )
       .run();
   } else {
     await db
       .prepare(
         'INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, status, current_period_end, updated, past_due_since, last_event_created, cancel_at_period_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
       )
-      .bind(s.userId, s.stripeSubscriptionId, s.stripeCustomerId, s.status, s.currentPeriodEnd, now, pastDueSince, lastEventCreated, cancelFlag)
+      .bind(
+        s.userId,
+        s.stripeSubscriptionId,
+        s.stripeCustomerId,
+        s.status,
+        s.currentPeriodEnd,
+        now,
+        pastDueSince,
+        lastEventCreated,
+        cancelFlag
+      )
       .run();
   }
 }
