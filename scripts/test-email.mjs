@@ -97,8 +97,9 @@ const CHANGELOG = {
     { version: '9.9.8', date: '2026-07-05', title: 'Older', summary: 'Prior.' },
   ],
 };
-function installFetch({ turnstile = 'ok', changelogOk = true } = {}) {
+function installFetch({ turnstile = 'ok', changelogOk = true, batch = 'ok' } = {}) {
   const sent = { single: [], batch: [] }; // captured Resend calls
+  const batchPlan = Array.isArray(batch) ? [...batch] : null; // per-call outcomes ('ok'|'fail'), else uniform
   const real = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
     const u = String(url);
@@ -111,6 +112,8 @@ function installFetch({ turnstile = 'ok', changelogOk = true } = {}) {
     }
     if (u === 'https://api.resend.com/emails/batch') {
       sent.batch.push(JSON.parse(init.body));
+      const mode = batchPlan ? (batchPlan.shift() ?? 'ok') : batch;
+      if (mode === 'fail') return new Response(JSON.stringify({ message: 'resend down' }), { status: 500 });
       return new Response(JSON.stringify({ data: [] }), { status: 200 });
     }
     if (u === 'https://api.resend.com/emails') {
@@ -480,6 +483,73 @@ console.log('\nnotify-changelog — 0 recipients still ledgers; fail-closed shap
   } finally {
     f.restore();
   }
+}
+
+console.log('\nnotify-changelog — A318: a TOTAL send failure is a retryable 502, never ledgered:');
+{
+  // First attempt: every chunk fails (Resend outage). Second attempt: Resend is back.
+  const f = installFetch({ batch: ['fail', 'ok'] });
+  try {
+    const db = mockDb();
+    const env = { ACCOUNTS_DB: db, ...RESEND_ENV, CHANGELOG_NOTIFY_SECRET: 'sekret' };
+    const { confirmToken } = await createSubscriber(db, 'outage@list.co');
+    await confirmSubscriber(db, confirmToken);
+    const send = notifyReq(env, 'sekret');
+
+    const r1 = await send();
+    const j1 = await r1.json();
+    ok('total failure → 502 { error: send failed, failed }', r1.status === 502 && j1.error === 'send failed' && j1.failed === 1);
+    ok('...version NOT ledgered (retry stays possible)', db.tables.changelog_sends.length === 0);
+
+    // The retry is a real re-send, not deduped:true — this is the A318 fix.
+    const r2 = await send();
+    const j2 = await r2.json();
+    ok('retry re-attempts the send (no deduped:true)', j2.deduped !== true && f.sent.batch.length === 2);
+    ok('...and succeeds + ledgers once Resend recovers', r2.status === 200 && j2.sent === 1 && db.tables.changelog_sends.length === 1);
+  } finally {
+    f.restore();
+  }
+}
+
+console.log('\nnotify-changelog — A318: a PARTIAL send (sent > 0) still ledgers, 200 ok:false:');
+{
+  // 101 confirmed subscribers → two Resend batch chunks (100 + 1); the second chunk fails.
+  const f = installFetch({ batch: ['ok', 'fail'] });
+  try {
+    const db = mockDb();
+    const env = { ACCOUNTS_DB: db, ...RESEND_ENV, CHANGELOG_NOTIFY_SECRET: 'sekret' };
+    for (let i = 0; i < 101; i++) {
+      const { confirmToken } = await createSubscriber(db, `sub${i}@list.co`);
+      await confirmSubscriber(db, confirmToken);
+    }
+    const r = await notifyReq(env, 'sekret')();
+    const j = await r.json();
+    ok('partial failure → 200 with ok:false + counts', r.status === 200 && j.ok === false && j.sent === 100 && j.failed === 1);
+    // A re-run would double-send the delivered subset, so the version IS ledgered — deduped thereafter.
+    ok('...version ledgered', db.tables.changelog_sends.length === 1 && db.tables.changelog_sends[0].version === '9.9.9');
+    const again = await notifyReq(env, 'sekret')();
+    ok('...re-run is deduped (no double-send of the delivered subset)', (await again.json()).deduped === true && f.sent.batch.length === 2);
+  } finally {
+    f.restore();
+  }
+}
+
+console.log('\nnotify-changelog — A321: fail-open rate limiter in front of the secret compare:');
+{
+  // Minimal STATUS_KV stub — enough for rateLimited()'s get/put. No KV bound elsewhere in this
+  // file, so every other block exercises the fail-open path (limiter absent) unchanged.
+  const kvStore = new Map();
+  const STATUS_KV = { get: async k => kvStore.get(k) ?? null, put: async (k, v) => void kvStore.set(k, v) };
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db, ...RESEND_ENV, CHANGELOG_NOTIFY_SECRET: 'sekret', STATUS_KV };
+  let last;
+  for (let i = 0; i < 5; i++) last = await notifyReq(env, 'wrong')(); // burn the 5/60s budget
+  ok('under the limit → the secret compare still answers (401)', last.status === 401);
+  const limited = await notifyReq(env, 'wrong')();
+  ok('6th request in the window → 429 rate limited', limited.status === 429 && (await limited.json()).error === 'rate limited');
+  // Defense-in-depth ordering: the limiter sits BEFORE auth, so even the right secret is throttled.
+  const rightButLimited = await notifyReq(env, 'sekret')();
+  ok('...even with the RIGHT secret (limiter runs first)', rightButLimited.status === 429);
 }
 
 console.log('\npurgePending — unconfirmed rows older than the TTL are swept:');

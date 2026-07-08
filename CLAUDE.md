@@ -110,7 +110,7 @@ npm run test:unit                # the 17 node suites: adapters / auth / version
                                   #   curveandreport / compute / accounts / email / econ / crypto / sync / cloudsync /
                                   #   cloudsync-store / modlayout
 npm run lint                     # ESLint (flat config; .ts skipped — typechecked instead, A79)
-npm run typecheck                # tsc (src/lib/**/*.ts except src/lib/components) + tsc(functions) + svelte-check (src/app + src/site + src/lib/components) — A61
+npm run typecheck                # tsc (src/lib/**/*.ts except src/lib/components) + tsc(functions) + svelte-check (src/app + src/site + src/lib/components + src/dev) — A61
 npm run test:e2e                 # Playwright render tests — BUILDS then serves dist/, boots every surface
 npm run format                   # Prettier
 # (the node suites still run standalone too, e.g. `node scripts/test-adapters.mjs`)
@@ -191,7 +191,8 @@ So:
   composed over **bits-ui v2** with `data-slot` attrs and `cn` from `$lib/utils`. Use these for dialogs/menus/popovers/selects instead of hand-rolling a11y; you
   **own the source**, so customize them in place. They render canonically (Dialog/menus/popover/select
   **portal to body**). Add/maintain them with the **shadcn-svelte CLI** — `components.json` is wired,
-  so `npx shadcn-svelte add <name>` works. **Icons = [`@lucide/svelte`](https://lucide.dev)** (the
+  so `npx shadcn-svelte add <name>` works where the registry is reachable; in egress-blocked
+  environments (e.g. the remote sandbox) vendor the component source by hand instead. **Icons = [`@lucide/svelte`](https://lucide.dev)** (the
   shadcn-standard set; named imports `import { Calendar } from '@lucide/svelte'`, rendered as
   components with a `class` for sizing/color, e.g. `<Calendar class="size-4" />`). A class applied via prop onto a primitive's ROOT element
   doesn't get the parent's Svelte scope hash, so style such elements with utilities (or the primitive),
@@ -358,7 +359,8 @@ conforms to the rules below; keep it that way.
     components/ui/      canonical shadcn-svelte primitives (ADR-002): button, badge, card, checkbox,
                         input, textarea, label, switch, table, tabs, tooltip, breadcrumb, separator,
                         skeleton, dialog, sheet, alert-dialog, dropdown-menu, popover, select (bits-ui v2).
-                        CLI registry is egress-blocked → vendor new ones by hand (canonical source)
+                        CLI works where the registry is reachable; in egress-blocked
+                        environments vendor new ones by hand (canonical source)
     components/shell/   reusable sidebar app frame (UI redesign): AppShell.svelte (rail + content
                         column) + SidebarNav.svelte (data-driven nav rail) — every UI mockup sits inside
     utils.ts            cn() class composer (clsx + tailwind-merge) — `$lib/utils`
@@ -425,8 +427,9 @@ conforms to the rules below; keep it that way.
   api/{geo,status,config,admin-key}.ts  geo · status · feature flags · admin token
   api/{me,checkout,webhook}.ts   storage tier — grants `cloud` on active/grace subscription (F60) · Stripe
                         donations + subscription-lifecycle webhook (checkout + customer.subscription.*, F54/F60)
-  api/account/*.ts      passkey register/login/logout + email-verify + recovery endpoints (F53/F55)
-  api/sync/*.ts         F62 encrypted-blob transport (workspaces · wrapped-ik · push · pull) over R2 + D1
+  api/account/*.ts      passkey register/login/logout + email-verify + recovery + account-delete +
+                        passkey-delete endpoints (F53/F55)
+  api/sync/*.ts         F62 encrypted-blob transport (workspaces · wrapped-ik · push · pull · delete) over R2 + D1
   api/{subscribe,confirm,unsubscribe,notify-changelog}.ts  F44 changelog (Blotterlog) email
                         subscriptions — double opt-in signup/confirm/unsubscribe + the send-trigger
                         broadcast endpoint
@@ -454,7 +457,7 @@ vite.config.mjs         Vite multi-page build config (root:src, publicDir:static
 .node-version           pins Node 22 for the Cloudflare Pages build
 package.json            deps manifest — Vite + Tailwind v4 + shadcn-svelte/bits-ui + @lucide/svelte + dev tooling (pinned, lockfiled)
 components.json         shadcn-svelte CLI config (`npx shadcn-svelte add <name>`)  ·  ADR-002
-eslint.config.mjs       ESLint flat config  ·  .prettierrc.json  Prettier  ·  tsconfig.json (tsc: src/lib/**/*.ts except src/lib/components) + tsconfig.svelte.json (svelte-check: src/app + src/site + src/lib/components) + tsconfig.functions.json  ·  playwright.config.mjs  e2e
+eslint.config.mjs       ESLint flat config  ·  .prettierrc.json  Prettier  ·  tsconfig.json (tsc: src/lib/**/*.ts except src/lib/components) + tsconfig.svelte.json (svelte-check: src/app + src/site + src/lib/components + src/dev) + tsconfig.functions.json  ·  playwright.config.mjs  e2e
 svelte.config.js        vitePreprocess — enables <script lang="ts"> in components (A61)
 LICENSE                 proprietary — all rights reserved
 ```
@@ -490,9 +493,10 @@ inside the components, and `App.svelte` resolves the active `Store` (real Indexe
 `Entitlements.storeFor()`, in-memory `DemoStore` for demo) once and — **on every non-demo surface** — wraps it in
 a `CloudStore` (F63; inert until a cloud-tier user opts in + unlocks) before **prop-drilling** it into the rune-module factories and down to
 screens/parts (no `context()` seam), and `PAGE_MODE` (with `isDemo`/`isStaging` locals derived from
-it) adapts per surface. Boot: `loadRefData()` → `Store.init()` → `restoreSession()`
+it) adapts per surface. `mount()` happens first (`main.ts`); then boot: `loadRefData()` →
+`Store.init()` → setup/session restore inside `loadData()`
 (app seeds nothing → empty state shows first-run onboarding; demo seeds in-memory; staging seeds its
-DB first) → `mount()`.
+DB first).
 
 **The sync branch (F58–F63; live on prod + staging, opt-in `cloud`-tier — never demo).** On every
 non-demo surface, `CloudStore` wraps the local `Store`:
@@ -507,7 +511,8 @@ The `core.ts` event bus survives the cutover (emitters re-wired in A151 — the 
 dropped them all): `loadRefData` emits `refdata:loaded`, and the shared actions fire `app:ready`
 (first, at boot start — A195), `data:loaded`, `data:imported`, `note:saved`, `trade:deleted`,
 `backup:created`, `data:erased`, `filter:saved`, `filter:applied`, and `tab:created` over an
-`EventTarget` for any listener (the Dashboard's ActivityTerminal subscribes). The bus keeps a
+`EventTarget` for any listener (the Dashboard's ActivityTerminal subscribes); `loadEconEvents`
+emits `econ:loaded`. The bus keeps a
 50-entry replay buffer (`busLog()`, A188) so late subscribers backfill the boot events; it is
 otherwise a no-op with no subscriber.
 

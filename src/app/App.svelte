@@ -45,7 +45,7 @@
   import { migrateLayout, defaultLayout, analyticsKit, type ModEntry } from './lib/modlayout.ts';
   // The non-default screens are CODE-SPLIT: type-only static imports (erased at build) + lazy
   // `import()` loaders in the router below, so their chunks stay out of the /app first paint
-  // (A96 budget). Dashboard stays static — it's the boot screen (and exports DEFAULT_MODULE_KEYS).
+  // (A96 budget). Dashboard stays static — it's the boot screen.
   import type { CalDay, DayTrade } from './screens/Calendar.svelte';
   import { buildAnalytics } from './lib/analytics.ts';
   import type { BlotterRow } from './screens/Blotter.svelte';
@@ -210,7 +210,8 @@
   // string[] or a v2 {key,size}[] both upgrade). Analytics has no tabs/staged-save, so a size change
   // persists immediately (unlike the Dashboard's dirty-asterisk model). On demo the in-memory
   // DemoStore.local means edits work but never persist across reloads — correct (a UI pref, not trade
-  // data), and no isDemo guard is needed (DemoStore.local.set is a no-op by construction).
+  // data), and no isDemo guard is needed (DemoStore.local writes to its in-memory map, so nothing
+  // reaches localStorage by construction).
   const ANALYTICS_MOD_KEY = isStaging ? 'bb:staging:analyticsModules' : 'bb:analyticsModules';
   let analyticsModules = $state<ModEntry[] | undefined>(analyticsKit.migrateLayout(store.local.get(ANALYTICS_MOD_KEY))?.mods);
   function saveAnalyticsModules(mods: ModEntry[]) {

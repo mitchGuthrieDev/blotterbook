@@ -18,9 +18,9 @@
 > `recovery` (A302, flags a register challenge as account-recovery so verify revokes prior sessions);
 > `donations.user_id`/`recovery_tokens.user_id` gained `ON DELETE CASCADE` (A305, backs the account-
 > deletion endpoint on fresh installs — SQLite can't add a CASCADE FK to an existing table, so
-> pre-A305 deployments rely on `deleteUserAccount`'s explicit deletes instead). A305 also added
-> `functions/api/account/passkey-delete.ts` (passkey removal) and `functions/api/account/delete.ts`
-> (full account deletion).
+> pre-A305 deployments rely on `deleteUserAccount`'s explicit deletes instead). A302 added
+> `functions/api/account/passkey-delete.ts` (passkey removal); A305 added
+> `functions/api/account/delete.ts` (full account deletion).
 
 ## Recommendation (up front)
 
@@ -196,7 +196,7 @@ Paid before any paying sync tier) and on the CloudStore initiative being real.
 
 **As built:** F53–F56 have all shipped and archived done. F56 in particular is no longer
 staging-only or gated on Open question 1 — the login gate (`ACCOUNT_GATE`, `src/app/lib/flags.ts:26`)
-is `true` and armed (`gateArmed`, `src/app/App.svelte:754`) on **every non-demo surface** (app +
+is `true` and armed (`gateArmed`, `src/app/App.svelte:767`) on **every non-demo surface** (app +
 staging); demo stays exempt by construction.
 
 - **F53 (P2, large)** — Accounts Phase 1: D1 schema + passkey register/login/logout endpoints

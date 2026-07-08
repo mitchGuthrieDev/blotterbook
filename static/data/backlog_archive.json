@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "title": "Blotterbook — completed backlog archive (Done items)",
   "intro": "Archived Done items moved out of backlog.json to keep the active backlog lean. Each retains its doneNote — the shipped record of what was actually done (prompts were already stripped per donePolicy). Newest work tends toward the end, mirroring the order items were completed in the live file.",
-  "updated": "2026-07-07",
+  "updated": "2026-07-08",
   "note": "Append-only archive of completed backlog items. When an item in backlog.json is set to `done`, move its object here. Admin-only and fetched no-store; like backlog.json it is EXCLUDED from the cache-busting manifest (build-manifest.mjs) and from version-bump path classification (bump-version.mjs), so editing it never churns the manifest or bumps the version. The admin Backlog panel fetches this file alongside backlog.json and merges the item lists.",
   "categories": [
     "SECURITY",
@@ -5459,6 +5459,105 @@
       "completedDate": "2026-07-07",
       "partial": false,
       "doneNote": "Fixed via the owner-chosen pages.dev bypass and CONFIRMED end-to-end 2026-07-07. Code: .github/workflows/changelog-email.yml targets the canonical <project>.pages.dev origin (Cloudflare's own zone — the custom domain's Bot Fight Mode had 403-challenged the GitHub runner; free plan can't WAF-exempt it), all Pro-tier WAF-skip messaging removed, secrets documented in the workflow header; functions/api/notify-changelog.ts gained PUBLIC_ORIGIN (functions/_lib/types.ts) so the unsubscribe link stays branded blotterbook.com when invoked at pages.dev (falls back to the request origin); the earlier kj77tb hardening (challenge-detect fail-fast, browser UA, ?version= 425 deploy-freshness gate) turned out to be already merged via PR #123 and was kept. Tests: scripts/test-email.mjs covers the branded-link + fallback-origin cases (70/70). Infra (owner, 2026-07-07): CHANGELOG_NOTIFY_URL=https://trading-journal-4tn.pages.dev/ + CHANGELOG_NOTIFY_SECRET repo secrets; CHANGELOG_NOTIFY_SECRET + PUBLIC_ORIGIN=https://blotterbook.com Pages Production env vars. PROOF: workflow run #6 (commit e5741c8, the 0.68.0 changelog entry) — the first-ever green run — waited out the deploy via three 425 retries then got HTTP 200 {ok:true,version:'0.68.0',recipients:1,sent:1,failed:0}. Runs #1-#5 had never sent (no-op/challenge-blocked). Docs: functions/README.md env-var section + the A141 design doc + the cloudflare-functions diagram record the as-built routing."
+    },
+    {
+      "id": "A317",
+      "title": "Corner drag-resize: right-column modules can never reach Large + interrupted-drag wedge",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "Fixed 2026-07-08 (R1 pass-3 audit, docs/repo-audit-2026-07-08.md; found independently by two audit agents). The A271 drag snapped to (clientX − card.left)/trackW, so a RIGHT-column Medium module (ls/wday on Analytics, cost/term on the default Dashboard) maxed out at ~6 tracks with the pointer already at the grid's right edge — Large was unreachable and the handle silently inert; teardown was pointerup-only, so a pointercancel (touch interrupted, pen out of range) leaked the listeners and wedged the preview span; Dashboard's fillClass read the committed size while the span read the preview, popping the 65vh fill only after release. Fix (in the shared controller, src/app/lib/modsize.svelte.ts — A319): the span is now the DRAG DELTA against the span at grab time, and the delta is DIAGONAL (x + y, matching the nwse cursor) since a right-column handle has no room to travel right but down always has room; pointercancel tears down WITHOUT committing; the rAF throttle applies the LATEST event instead of dropping same-frame moves (a fast drag-and-release used to commit a stale size); fillClass keys on previewSize. Covered by a new staging e2e (corner-drags 'Long vs short' — right column — to Large and back, e2e/staging-redesign.spec.mjs) that fails against the old math."
+    },
+    {
+      "id": "A318",
+      "title": "notify-changelog: a totally-failed broadcast was ledgered + reported green (never retried)",
+      "category": "FIXES",
+      "priority": "P2",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "Fixed 2026-07-08 (R1 pass-3 audit). When Resend was down, sendEmailBatch returned {ok:false,sent:0,failed:N} but functions/api/notify-changelog.ts still recordSend()'d the version and returned HTTP 200 — the workflow printed success, and every retry answered deduped:true, so subscribers silently never received that release. Now a total failure (recipients present, sent===0 && failed>0) SKIPS the ledger and returns 502 so the workflow's bounded retry loop (which also gained 429 as transient) re-sends — rotateUnsubToken re-rotation on retry is idempotent; partial success (sent>0) still ledgers (a re-run would double-send the delivered subset) and the workflow now parses the 2xx body and emits a ::warning with ok/sent/failed counts. The 0-recipient-ledgers path is unchanged. Pinned by scripts/test-email.mjs: total failure → 502 + not ledgered + a retry re-sends; partial → 200 ok:false + ledgered + re-run dedupes (80/80)."
+    },
+    {
+      "id": "A319",
+      "title": "Extract the duplicated module-size controller (Dashboard ↔ Analytics) into one shared home",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "Done 2026-07-08 (R1 pass-3 audit). The A271 rework had copy-pasted the entire DOM-side size controller into Analytics (~110 lines/screen: sizesOfProp/sizeOf/spanClass/SIZE_LABEL/the lastModKey echo-guard $effect/emitLayout/setModuleSize/sizeIndex + the token-identical pointer-resize block) plus the role=slider corner-handle markup and the ⋯-menu Size radio group — with Calendar named as the next sized screen, a third copy was imminent, and the A317 bug had to be found twice. Now: src/app/lib/modsize.svelte.ts hosts createSizeController(kit, {initial,order,emit,grid,narrow}) — a rune-module factory over the pure LayoutKit (modlayout.ts stays DOM-free for the node suite) owning the size map, reseed echo-guard, emitCurrent, menu/keyboard setters and the (A317-fixed) drag path — and the markup lives in two shared parts, ModuleSizeMenu.svelte (renders inside the host's DropdownMenu.Content) + ModuleResizeHandle.svelte. Both screens now consume the same controller (Dashboard keeps its screen-owned modOrder; commitModules = set order + ctl.emitCurrent()). Also removed Analytics' dead animate:flip (its each iterates a constant array that never reorders — the comment advertised an animation that could never run) and its now-unused flip/dur imports."
+    },
+    {
+      "id": "A320",
+      "title": "Single-source the module key+label tables + dedupe stored layout keys (drift gates)",
+      "category": "ARCHITECTURE / DUPLICATION",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "Done 2026-07-08 (R1 pass-3 audit). Each screen's module key set existed twice — modlayout.ts as migration data, the screen as a keys+labels table — held in sync by comments only (drift failed silently: migrateLayout stripped the unlisted key from every persisted layout), DEFAULT_MODULE_KEYS was defined twice with the Dashboard export orphaned under a stale A148 comment (App.svelte's template save had moved to modlayout.defaultLayout()), and migrateLayout/validLayout passed duplicated keys through to the screens' keyed {#each}. Now modlayout.ts owns the ModDef {key,label} tables (DASHBOARD_MODULES/ANALYTICS_MODULES + labelsOf); the key sets DERIVE from them; both screens import the tables; the Dashboard-side duplicate export + stale comments are gone (dashboardKit is exported for the shared controller); migrateLayout/validLayout dedupe (first occurrence wins); PAIRED_MODULE_KEYS/ANALYTICS_FULL_KEYS un-exported (internal only). test-modlayout.mjs pins the lockstep derivation, label non-emptiness, and all three dedupe paths (32 assertions)."
+    },
+    {
+      "id": "A321",
+      "title": "Rate-limit /api/notify-changelog ahead of the shared-secret compare",
+      "category": "SECURITY",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "Done 2026-07-08 (R1 pass-3 audit). notify-changelog was the one sensitive endpoint with no rateLimited() call in front of its auth, letting an anonymous caller hammer the constant-time secret compare at unlimited rate (defense-in-depth only — the compare is sound and the per-version ledger caps blast radius). Now onRequestPost opens with the sibling-standard guard (5/60s keyed 'notify-changelog' → 429), explicitly documented as S22 defense-in-depth that auth never depends on (the limiter stays fail-open by design); the workflow treats 429 as transient/retryable. test-email.mjs covers it with a STATUS_KV stub: 6th request 429s even with the correct secret, and the no-KV fail-open path is unchanged."
+    },
+    {
+      "id": "A322",
+      "title": "Analytics quick-range presets: UTC/local off-by-one + frozen 'now'",
+      "category": "FIXES",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "Fixed 2026-07-08 (R1 pass-3 audit). The 30D/90D presets derived their from-date via toISOString() (UTC) while trade dates and YTD are local — an evening-US user's '30D' started one calendar day ahead — and RANGES was a $derived.by with no reactive deps, freezing new Date() at mount. Now the boundary is built from local Y/M/D and computed at CALL time (rangeFor(label) invoked on click/render; rangeActive re-derives whenever the filter set changes), so nothing caches a stale 'now'."
+    },
+    {
+      "id": "A323",
+      "title": "CI drift gate: cover build-econ-events (+ make it idempotent) and check-mermaid parity in npm run ci",
+      "category": "CHORE / REFACTOR",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "Done 2026-07-08 (R1 pass-3 audit). The CI drift gate re-ran only build-manifest.mjs, so editing the deterministic, network-free build-econ-events.mjs without regenerating its committed static/data/econ-events.json (or hand-editing the JSON) passed CI. ci.yml now re-runs build-econ-events THEN build-manifest before the clean-tree check — which required making the generator IDEMPOTENT first: it stamped updated with today's date on every run (the audit's own dry-run dirtied the file with a date-only diff), so it now keeps the committed stamp when re-rendering with it reproduces the file byte-for-byte, advancing the date only when the CONTENT changed. Also: npm run ci gained check-mermaid for local/CI parity."
+    },
+    {
+      "id": "A324",
+      "title": "Delta test-coverage gaps: analytics view-model buckets + the corner-drag e2e path",
+      "category": "REVIEW / AUDIT",
+      "priority": "P3",
+      "effort": "small",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "Done 2026-07-08 (R1 pass-3 audit). buildAnalytics' hour-of-day bucketing (HH slice parse, per-bucket rounded average, numeric key, garbage-timestamp drop), per-symbol rows (rounded win%, |P&L| sort), byTag/untagged (tagsFor-driven buckets + disjoint remainder), and holdCoverage (fraction + the A176 partial-coverage footnote on Avg hold time, and the zero-coverage em-dash) had no node assertions — test-compute.mjs now pins all of them (158 assertions). The corner drag-resize path had ZERO coverage on either screen (the staging e2e covered only the ⋯-menu path — the A317 bug lived exactly in the untested path): staging-redesign.spec.mjs now corner-drags a RIGHT-column module ('Long vs short') to Large — asserting the live preview before release and the commit — and back to Medium."
+    },
+    {
+      "id": "A325",
+      "title": "Docs-accuracy batch: fix every stale claim found by the full documentation audit",
+      "category": "COMMENTS / READABILITY",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "done",
+      "completedDate": "2026-07-08",
+      "partial": false,
+      "doneNote": "Done 2026-07-08 (R1 pass-3 audit — a full docs-accuracy sweep by two verification agents, every claim re-checked against code before editing; 17 fixes across 12 files). CLAUDE.md: boot order corrected (mount() first, no restoreSession() — setup restore lives inside loadData()), the shadcn-CLI self-contradiction harmonized (CLI works where the registry is reachable; vendor by hand when egress-blocked), /api/sync gained · delete and /api/account gained delete + passkey-delete, svelte-check scope gained src/dev, event-bus list gained econ:loaded. architecture.md: same boot fix + econ:loaded; the staging gate corrected to FAIL-CLOSED 403 without ADMIN_KEY unless ALLOW_PRESENCE_AUTH=1 (S12 — the doc said 'stays open'); the pre-CH16 CSV-input flow (Load CSV/Start Blotterbook/Manage data/Platform dropdown) rewritten to the real import-on-drop F47 batch queue + DetectionStatus + 'Choose CSV files'/'Launch Blotterbook →'. README quick-start relabeled to the real controls (cost setup inputs; 'Erase all data' on CSV Library; How-To is on the info site). functions/README: /api/geo IS called (prefillStateFromGeo, A201); account-endpoint list completed; the same stale presence-auth claim fixed. Diagrams: cloudflare-functions push cap ≤15→≤12 (A253/A281); storage-and-mode-separation DB_NAME→LEGACY_DB_NAME/WS_DB_PREFIX; boot-and-lifecycle needsOnboarding rewritten to the A235 no-trades-AND-no-CSVs + F48 sticky-until-Launch formula + line refs re-pinned; security-trust-boundaries line refs re-pinned. cloud-sync-ux-a279: 10 pill states (A306's checking/paused/needs-sub), forceFullPush corrected to runSync({full,id,direction}) over syncPlan() (A284), pending cleared only by a run that pushed (A299). accounts-architecture: passkey-delete attribution A305→A302 + gateArmed ref. ui-redesign: dropped the pointer at the deleted old App.svelte's <style>. Code comments: admin-key.ts header now describes fail-closed presence-auth (S12); App.svelte's DemoStore.local 'no-op' wording corrected (it writes the in-memory map; nothing reaches localStorage). check-mermaid: 17 diagrams, 0 invalid."
     }
   ]
 }

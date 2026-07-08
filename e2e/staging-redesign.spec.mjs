@@ -315,6 +315,41 @@ test('staging redesign: Analytics module size (⋯ menu) resizes the grid span +
   await expect(page.locator('[data-mod]').filter({ hasText: 'Drawdown (underwater)' })).toHaveClass(/lg:col-span-12/);
 });
 
+test('staging redesign: corner drag-resize grows a RIGHT-column module to Large + drags back (A317)', async ({ page }) => {
+  await bootDashboard(page);
+  await gotoScreen(page, 'Analytics');
+  // 'Long vs short' renders in the RIGHT column of the default layout (dist lg, then dd | ls at md) —
+  // exactly the case the old card-left-edge span math could never grow (A317). The drag delta is
+  // diagonal (x + y), so growing drags toward bottom-right and shrinking toward top-left.
+  const ls = page.locator('[data-mod]').filter({ hasText: 'Long vs short' });
+  await expect(ls).toHaveClass(/lg:col-span-6/);
+  const handle = ls.getByRole('slider', { name: 'Resize Long vs short module' });
+  await expect(handle).toBeVisible();
+
+  // The md→lg midpoint is 3 tracks = half the md card's width; the drag delta is diagonal (x + y),
+  // so budget it mostly on Y (the handle already sits at the grid's right edge) and keep every
+  // coordinate inside the viewport (events outside it never reach the page).
+  const lsBox = await ls.boundingBox();
+  const need = lsBox.width / 2 + 60; // 3 tracks + slack
+  await handle.evaluate(el => el.scrollIntoView({ block: 'center' }));
+  const grow = await handle.boundingBox();
+  await page.mouse.move(grow.x + grow.width / 2, grow.y + grow.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grow.x + 20, grow.y + Math.max(40, need - 20), { steps: 8 });
+  await expect(ls).toHaveClass(/lg:col-span-12/); // live preview before release
+  await page.mouse.up();
+  await expect(ls).toHaveClass(/lg:col-span-12/); // committed
+
+  // And back: drag toward top-left snaps it to Medium again.
+  await handle.evaluate(el => el.scrollIntoView({ block: 'center' }));
+  const shrink = await handle.boundingBox();
+  await page.mouse.move(shrink.x + shrink.width / 2, shrink.y + shrink.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(Math.max(10, shrink.x - need), Math.max(10, shrink.y - need), { steps: 8 });
+  await page.mouse.up();
+  await expect(ls).toHaveClass(/lg:col-span-6/);
+});
+
 test('staging redesign: the Calendar month grid carries the viewport-fill class (A272)', async ({ page }) => {
   await bootDashboard(page);
   await gotoScreen(page, 'Calendar');

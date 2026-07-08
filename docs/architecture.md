@@ -163,8 +163,9 @@ The **pure-logic core is reused verbatim** (A29, JS→TS per A61) — `core.ts` 
 event bus), `adapters.ts`, `store.ts` / `demostore.ts`, `curveseries.ts`, `report.ts`,
 `sampledata.ts`, and the shared `format.ts` (all `src/lib/core/*.ts`) are TS modules imported unchanged by the Svelte
 components. Reactive state lives in Svelte runes (`$state`/`$derived`) inside the components,
-not in a shared globals object. Boot runs `loadRefData()` → `Store.init()` → `restoreSession()`
-(demo seeds in-memory; staging seeds its DB first), then `mount()`s the app.
+not in a shared globals object. `mount()` happens first; boot then runs `loadRefData()` →
+`Store.init()` → setup/session restore inside `loadData()` (demo seeds in-memory; staging seeds
+its DB first).
 
 > *History:* the original app was a monolithic `app.js`, split (A2) into concern-scoped scripts
 > and then (A20) migrated to native ES modules with reassignable state on `app/state.js`. The
@@ -177,7 +178,8 @@ The activity terminal, definitions, and status banners are now Svelte components
 remains (emitters re-wired in A151 after the cutover dropped them): `loadRefData` emits
 `refdata:loaded`, and the shared actions fire `app:ready` (first, at boot start — A195),
 `data:loaded`, `data:imported`, `note:saved`, `trade:deleted`, `backup:created`, `data:erased`,
-`filter:saved`, `filter:applied`, and `tab:created` over an `EventTarget` for any listener; a
+`filter:saved`, `filter:applied`, and `tab:created` (plus `econ:loaded` from `loadEconEvents`)
+over an `EventTarget` for any listener; a
 50-entry replay buffer (`busLog()`, A188) lets the ActivityTerminal backfill boot events, and the
 bus stays a no-op when nothing subscribes.
 
@@ -213,13 +215,12 @@ the info pages share `Nav`/`Footer`/`SiteShell`; every surface shares the tokens
 ## Input: the CSV
 
 Blotterbook reads CSV exports from a trading **platform** and **auto-detects** the
-format. The flow is two-step so a bad file never silently corrupts your data:
-
-1. **Load CSV** → the file is parsed and the platform is detected (overridable
-   from the **Platform** dropdown). A status line confirms what was found (e.g.
-   *Detected TradingView · 63 trades ready*) or explains the problem.
-2. **Start Blotterbook** (landing) or **Import** (Manage data) commits the parsed
-   trades.
+format. Intake is **import-on-drop** via the F47 batch queue (`src/app/lib/batch.ts`):
+drop files (several at once is fine) or click **Choose CSV files**, and each file runs
+the intake gates + auto-detection and imports — or is refused — landing a per-file row
+in the detection-status list (`src/app/parts/DetectionStatus.svelte`: imported ✓ /
+recognized-non-trade · / refused ✗), so a bad file never silently corrupts your data.
+On first run, **Launch Blotterbook →** enables once at least one file has imported (F48).
 
 `.csv`/`.txt`/`.tsv` files are accepted (plus `.xlsx` for the ATAS X statistics export, F52 —
 routed through `xlsx.ts` into the same CSV-text pipeline before the normal gates apply), and
@@ -433,8 +434,9 @@ once** so it opens in the loaded state. It ships the full redesigned sidebar she
 the CSV import flow); notes/tags/filters persist to its own DB.
 
 **Staging is key-gated.** `functions/_middleware.ts` gates `/app/staging.html`: it
-requires the `ADMIN_KEY` via an `x-admin-key` header or a `bb_staging` cookie (if
-`ADMIN_KEY` isn't configured, staging stays open). Browsers can't set request
+requires an admin credential via an `x-admin-key` header or a `bb_staging` cookie (if
+neither `TOKEN_SECRET` nor `ADMIN_KEY` is configured, staging **fails closed** with a
+403 — S12 — unless `ALLOW_PRESENCE_AUTH=1` is set for local/preview). Browsers can't set request
 headers on a navigation, so the admin panel's **Launch staging env** button sets
 the short-lived path-scoped `bb_staging` cookie before opening the page — the token
 never travels in the URL (S19).

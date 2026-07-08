@@ -42,7 +42,7 @@
  *           invented.
  * ─────────────────────────────────────────────────────────────────────────────────────────────────
  */
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -309,16 +309,17 @@ for (const ev of eiaCrudeEvents(RANGE.from, RANGE.to)) events.push(ev);
 const TYPE_ORDER = { fomc: 0, cpi: 1, nfp: 2, gdp: 3, eiaCl: 4 };
 events.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : TYPE_ORDER[a.t] - TYPE_ORDER[b.t]));
 
-const file = {
-  schemaVersion: SCHEMA_VERSION,
-  updated: new Date().toISOString().slice(0, 10),
-  range: RANGE,
-  types: TYPES,
-  events,
-};
+// A323: IDEMPOTENT — the `updated` stamp advances only when the generated CONTENT actually changed:
+// if re-rendering with the committed file's own stamp reproduces it byte-for-byte, keep it as is.
+// (A fresh `new Date()` stamp on every run would dirty the committed file daily with no data change,
+// which would break the CI drift gate that re-runs this script and expects a clean tree.)
+const priorText = await readFile(OUT, 'utf8').catch(() => null);
+const priorUpdated = priorText ? (JSON.parse(priorText).updated ?? null) : null;
+const withStamp = updated => render({ schemaVersion: SCHEMA_VERSION, updated, range: RANGE, types: TYPES, events });
+const out = priorUpdated && withStamp(priorUpdated) === priorText ? priorText : withStamp(new Date().toISOString().slice(0, 10));
 
 // Readable-but-compact layout: pretty header + `types` map, one event object per line.
-await writeFile(OUT, render(file));
+await writeFile(OUT, out);
 console.log(`Wrote econ-events.json — ${events.length} events (${RANGE.from} … ${RANGE.to}).`);
 const counts = {};
 for (const e of events) counts[e.t] = (counts[e.t] || 0) + 1;

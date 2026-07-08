@@ -20,14 +20,15 @@
   import { cn } from '$lib/utils';
   import { usd, usdWhole, DOW_LABEL } from '../../lib/core/core.ts';
   import { decimateMinMax } from '../../lib/core/curveseries.ts';
-  import { X, ChevronUp, ArrowUpDown, MoreHorizontal, Maximize2, Check } from '@lucide/svelte';
+  import { X, ChevronUp, ArrowUpDown, MoreHorizontal } from '@lucide/svelte';
   import * as Card from '$lib/components/ui/card';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import IconTip from '$lib/components/IconTip.svelte';
-  import { flip } from 'svelte/animate';
   import { MediaQuery } from 'svelte/reactivity';
-  import { dur } from '../lib/motion.ts';
-  import { analyticsKit, spanFor, ANALYTICS_DEFAULT_KEYS, type ModEntry, type ModSize } from '../lib/modlayout.ts';
+  import { analyticsKit, labelsOf, ANALYTICS_DEFAULT_KEYS, ANALYTICS_MODULES, type ModEntry } from '../lib/modlayout.ts';
+  import { createSizeController, spanClass } from '../lib/modsize.svelte.ts';
+  import ModuleSizeMenu from '../parts/ModuleSizeMenu.svelte';
+  import ModuleResizeHandle from '../parts/ModuleResizeHandle.svelte';
   import StatCardRow, { type StatItem } from '../parts/StatCardRow.svelte';
   import InfoTip from '../parts/InfoTip.svelte';
   import type { Kpi, DistBar, SignedBar, SymbolRow, TagRow, StatRow } from '../lib/analytics.ts';
@@ -100,103 +101,28 @@
     isStaging = false,
   }: Props = $props();
 
-  // ── A271 slice: module SIZE model (md ↔ lg on the 12-track grid) — mirrors Dashboard.svelte's
-  // sizing, minus reorder/hide/add (Analytics is a fixed curated set, so only size is editable and
-  // the order is constant). Persisted to Store.local by App.svelte via the ModEntry[] `modules` prop
-  // + `onmoduleschange`, migrated losslessly through analyticsKit (v1 string[] → v2 {key,size}[]). ──
-  const ANALYTICS_LABEL: Record<string, string> = {
-    dist: 'P&L distribution (per trade)',
-    dd: 'Drawdown (underwater)',
-    ls: 'Long vs short',
-    hour: 'Avg P&L by hour',
-    wday: 'Avg P&L by weekday',
-    sym: 'Performance by symbol',
-    tag: 'Performance by tag',
-    stats: 'Advanced statistics',
-  };
+  // ── A271/A319 slice: module SIZE model (md ↔ lg on the 12-track grid) — the size map + drag/
+  // keyboard resize paths live in the SHARED controller (createSizeController — one home for
+  // Dashboard + Analytics), minus reorder/hide/add (Analytics is a fixed curated set, so only size is
+  // editable and the order is constant). Persisted to Store.local by App.svelte via the ModEntry[]
+  // `modules` prop + `onmoduleschange`, migrated losslessly through analyticsKit (A320: the key +
+  // label table is single-sourced in modlayout.ts). ──
+  const ANALYTICS_LABEL = labelsOf(ANALYTICS_MODULES);
   const MOD_ORDER = ANALYTICS_DEFAULT_KEYS; // fixed order — Analytics has no reorder/hide
-  const supportedSizes = analyticsKit.supportedSizes;
-  const SIZE_LABEL: Record<ModSize, string> = { sm: 'Small', md: 'Medium', lg: 'Large' };
-  // 12-track grid span as a STATIC Tailwind class (media-query-aware: no span below lg → mobile stacks;
-  // literal strings so the JIT generates them). md = span 6 (half), lg = span 12 (full).
-  const spanClass = (size: ModSize): string => (size === 'sm' ? 'lg:col-span-2' : size === 'md' ? 'lg:col-span-6' : 'lg:col-span-12');
-  const sizesOfProp = (mm?: ModEntry[]): Record<string, ModSize> => Object.fromEntries((mm ?? []).map(e => [e.key, e.size]));
-  // svelte-ignore state_referenced_locally — initial read only; the reseed effect below re-syncs.
-  let modSizes = $state<Record<string, ModSize>>(sizesOfProp(modules));
-  // svelte-ignore state_referenced_locally
-  let lastModKey = modules ? JSON.stringify(modules) : '';
-  $effect(() => {
-    // Re-seed from the prop when App supplies a persisted layout (first load after boot / workspace switch).
-    const key = modules ? JSON.stringify(modules) : '';
-    if (key !== lastModKey) {
-      lastModKey = key;
-      modSizes = sizesOfProp(modules);
-    }
-  });
-  const sizeOf = (key: string): ModSize => modSizes[key] ?? analyticsKit.defaultSizeFor(key);
-  const sizeIndex = (key: string) => supportedSizes(key).indexOf(sizeOf(key));
-  function emitLayout(sizes: Record<string, ModSize>) {
-    const mods = MOD_ORDER.map(k => ({ key: k, size: sizes[k] ?? analyticsKit.defaultSizeFor(k) }));
-    lastModKey = JSON.stringify(mods); // keep the echo-guard in sync so the persisted prop doesn't reseed
-    onmoduleschange?.(mods);
-  }
-  function setModuleSize(key: string, size: ModSize) {
-    if (!supportedSizes(key).includes(size) || sizeOf(key) === size) return;
-    modSizes = { ...modSizes, [key]: size };
-    emitLayout(modSizes);
-  }
-
-  // ── Corner drag-resize (staging-gated; pointer path). Snap to the nearest supported span [6,12] on
-  // the measured 12-track width — rAF-throttled, live-previewed via the span class, committed on
-  // release. The keyboard path is arrow keys on the role="slider" handle + the ⋯ menu Size radio.
-  // Not active on narrow (mobile stacks; size is ignored there). ──
   const isNarrow = new MediaQuery('(max-width: 639px)');
   let gridEl = $state<HTMLElement>();
-  let resizing = $state<{ key: string; size: ModSize } | null>(null);
-  let rafPending = 0;
-  const previewSize = (key: string): ModSize => (resizing?.key === key ? resizing.size : sizeOf(key));
-  const nearestSize = (key: string, spanGuess: number): ModSize =>
-    supportedSizes(key).reduce((best, s) => (Math.abs(spanFor(s) - spanGuess) < Math.abs(spanFor(best) - spanGuess) ? s : best));
-  function startResize(e: PointerEvent, key: string) {
-    if (isNarrow.current) return;
-    const handle = e.currentTarget as HTMLElement;
-    const card = handle.closest('[data-mod]') as HTMLElement | null;
-    if (!card || !gridEl) return;
-    e.preventDefault();
-    handle.setPointerCapture(e.pointerId);
-    const trackW = gridEl.getBoundingClientRect().width / 12;
-    const cardLeft = card.getBoundingClientRect().left;
-    const onMove = (ev: PointerEvent) => {
-      if (rafPending) return;
-      rafPending = requestAnimationFrame(() => {
-        rafPending = 0;
-        resizing = { key, size: nearestSize(key, (ev.clientX - cardLeft) / Math.max(1, trackW)) };
-      });
-    };
-    const onUp = () => {
-      handle.removeEventListener('pointermove', onMove);
-      handle.removeEventListener('pointerup', onUp);
-      if (rafPending) {
-        cancelAnimationFrame(rafPending);
-        rafPending = 0;
-      }
-      if (resizing) setModuleSize(resizing.key, resizing.size);
-      resizing = null;
-    };
-    handle.addEventListener('pointermove', onMove);
-    handle.addEventListener('pointerup', onUp);
-  }
-  function onResizeKey(e: KeyboardEvent, key: string) {
-    const sizes = supportedSizes(key);
-    const i = sizes.indexOf(sizeOf(key));
-    if ((e.key === 'ArrowRight' || e.key === 'ArrowUp') && i < sizes.length - 1) {
-      e.preventDefault();
-      setModuleSize(key, sizes[i + 1]);
-    } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowDown') && i > 0) {
-      e.preventDefault();
-      setModuleSize(key, sizes[i - 1]);
-    }
-  }
+  // svelte-ignore state_referenced_locally — initial read only; the reseed effect below re-syncs.
+  const sizeCtl = createSizeController(analyticsKit, {
+    initial: modules,
+    order: () => MOD_ORDER,
+    emit: mods => onmoduleschange?.(mods),
+    grid: () => gridEl,
+    narrow: () => isNarrow.current,
+  });
+  $effect(() => {
+    // Re-seed from the prop when App supplies a persisted layout (first load after boot / workspace switch).
+    sizeCtl.reseed(modules);
+  });
 
   const winShare = $derived(wins + losses ? Math.round((wins / (wins + losses)) * 100) : 0);
   const longShare = $derived(long.n + short.n ? Math.round((long.n / (long.n + short.n)) * 100) : 0);
@@ -243,19 +169,25 @@
     filterModel?.set({ hours: filterModel.hours.includes(h) ? filterModel.hours.filter(x => x !== h) : [...filterModel.hours, h] });
 
   // ── A197 quick date scoping: preset ranges write the shared from/to, so every screen narrows
-  // together and the range shows up as a removable chip like any other filter. ──
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-  const RANGES = $derived.by(() => {
+  // together and the range shows up as a removable chip like any other filter. A322: the boundary is
+  // a LOCAL calendar date (trade dates are local — `toISOString` is UTC, which put an evening-US
+  // user's "30D" one day ahead), and it's computed at CALL time so `now` is never frozen at mount
+  // (the old `$derived.by` had no reactive deps and cached its `new Date()` forever). ──
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const iso = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const RANGE_LABELS = ['30D', '90D', 'YTD', 'All'] as const;
+  function rangeFor(label: string): { from: string; to: string } {
     const now = new Date();
     const daysAgo = (n: number) => iso(new Date(now.getTime() - n * 86_400_000));
-    return [
-      { label: '30D', from: daysAgo(30), to: '' },
-      { label: '90D', from: daysAgo(90), to: '' },
-      { label: 'YTD', from: `${now.getFullYear()}-01-01`, to: '' },
-      { label: 'All', from: '', to: '' },
-    ];
-  });
-  const rangeActive = (r: { from: string; to: string }) => filterModel?.from === r.from && (filterModel?.to || '') === r.to;
+    if (label === '30D') return { from: daysAgo(30), to: '' };
+    if (label === '90D') return { from: daysAgo(90), to: '' };
+    if (label === 'YTD') return { from: `${now.getFullYear()}-01-01`, to: '' };
+    return { from: '', to: '' };
+  }
+  const rangeActive = (label: string) => {
+    const r = rangeFor(label);
+    return filterModel?.from === r.from && (filterModel?.to || '') === r.to;
+  };
 
   // Active filters → removable chips (mirrors the Dashboard popover state, so the narrowing that
   // click-to-filter applies is always visible and reversible right here).
@@ -458,15 +390,8 @@
           {/snippet}
         </IconTip>
         <DropdownMenu.Content align="end" class="min-w-[150px]">
-          <DropdownMenu.Group>
-            <DropdownMenu.Label class="text-xs font-normal text-muted-foreground">Size</DropdownMenu.Label>
-            {#each supportedSizes(key) as sz (sz)}
-              <DropdownMenu.Item onSelect={() => setModuleSize(key, sz)}>
-                <Check class={['size-4', sizeOf(key) === sz ? 'opacity-100' : 'opacity-0']} />
-                {SIZE_LABEL[sz]}
-              </DropdownMenu.Item>
-            {/each}
-          </DropdownMenu.Group>
+          <!-- A319: the shared Size radio group (one home for Dashboard + Analytics). -->
+          <ModuleSizeMenu ctl={sizeCtl} modKey={key} />
         </DropdownMenu.Content>
       </DropdownMenu.Root>
     </div>
@@ -581,16 +506,16 @@
   {#if filterModel}
     <div class="flex flex-wrap items-center gap-2 text-xs">
       <span class="text-muted-foreground">Range:</span>
-      {#each RANGES as r (r.label)}
+      {#each RANGE_LABELS as label (label)}
         <button
           type="button"
           class={cn(
             'rounded-md border border-border px-2 py-0.5 font-medium hover:bg-accent',
-            rangeActive(r) && 'border-ring bg-secondary'
+            rangeActive(label) && 'border-ring bg-secondary'
           )}
-          aria-pressed={rangeActive(r)}
-          title={r.from ? `Trades since ${r.from}` : 'All dates'}
-          onclick={() => filterModel?.set({ from: r.from, to: r.to })}>{r.label}</button
+          aria-pressed={rangeActive(label)}
+          title={rangeFor(label).from ? `Trades since ${rangeFor(label).from}` : 'All dates'}
+          onclick={() => filterModel?.set(rangeFor(label))}>{label}</button
         >
       {/each}
     </div>
@@ -1020,31 +945,19 @@
 
   <!-- A271 slice: the module grid — a 12-track grid on lg (mirrors the Dashboard). Each module spans
        per its size (md = span 6 half, lg = span 12 full); md/lg reproduce today's 2-column layout
-       exactly. Below lg it stacks (single column). Order is fixed (Analytics has no reorder/hide/add);
+       exactly. Below lg it stacks (single column). Order is fixed (Analytics has no reorder/hide/add;
+       a size change reflows the neighbours instantly — no FLIP here, that needs a reorder);
        only per-module size is user-editable — via the ⋯ menu Size radio (everywhere) or the corner
-       drag handle (staging). animate:flip re-snaps the neighbours when a module resizes. -->
+       drag handle (staging). -->
   <div bind:this={gridEl} class="grid grid-cols-1 gap-4 lg:grid-cols-12">
     {#each MOD_ORDER as key (key)}
-      <div data-mod class={['min-w-0', spanClass(previewSize(key))]} animate:flip={{ duration: dur(180) }}>
+      <div data-mod class={['min-w-0', spanClass(sizeCtl.previewSize(key))]}>
         <Card.Root class="relative h-full">
           {@render moduleHeader(key)}
           {#if isStaging}
-            <!-- Corner drag-resize handle (staging). Pointer drag snaps to Medium/Large; role=slider +
-                 arrow keys are the keyboard path (the ⋯ menu Size radio is the other). -->
-            <button
-              type="button"
-              class="absolute right-1 bottom-1 z-10 hidden size-5 cursor-nwse-resize touch-none place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring lg:grid"
-              role="slider"
-              aria-label="Resize {ANALYTICS_LABEL[key]} module"
-              aria-valuemin={0}
-              aria-valuemax={supportedSizes(key).length - 1}
-              aria-valuenow={sizeIndex(key)}
-              aria-valuetext={SIZE_LABEL[sizeOf(key)]}
-              onpointerdown={e => startResize(e, key)}
-              onkeydown={e => onResizeKey(e, key)}
-            >
-              <Maximize2 class="size-3" />
-            </button>
+            <!-- A319: the shared corner drag-resize handle (staging). Pointer drag snaps to the
+                 nearest supported span; role=slider + arrow keys are the keyboard path. -->
+            <ModuleResizeHandle ctl={sizeCtl} modKey={key} label={ANALYTICS_LABEL[key]} />
           {/if}
           {#if key === 'dist'}{@render distBody()}{:else if key === 'dd'}{@render ddBody()}{:else if key === 'ls'}{@render lsBody()}{:else if key === 'hour'}{@render hourBody()}{:else if key === 'wday'}{@render wdayBody()}{:else if key === 'sym'}{@render symBody()}{:else if key === 'tag'}{@render tagBody()}{:else if key === 'stats'}{@render statsBody()}{/if}
         </Card.Root>

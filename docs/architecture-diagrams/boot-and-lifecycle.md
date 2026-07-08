@@ -28,11 +28,11 @@ sequenceDiagram
 
     App->>App: gateArmed = !isDemo && accountGateEnabled() (F56, flags.ts)
     alt gateArmed - app + staging, demo is never gated
-        App->>Acct: void refreshSession() — GET /api/me (App.svelte ~930)
+        App->>Acct: void refreshSession() — GET /api/me (App.svelte:944)
         opt "?recover= param present"
             App->>Acct: completeRecovery(token) — pre-gate re-enrollment (A300)
         end
-        Note over App: gateBlocking = gateArmed && !account.user<br/>renders LaunchGate instead of appBody (App.svelte ~1089-1096)<br/>until account.user resolves — login/register unmounts the gate
+        Note over App: gateBlocking = gateArmed && !account.user<br/>renders LaunchGate instead of appBody (App.svelte:1101-1108)<br/>until account.user resolves — login/register unmounts the gate
     end
 
     App->>Dash: createDashboard(store, {seed, isDemo})
@@ -52,15 +52,18 @@ sequenceDiagram
     Dash->>Bus: emit data:loaded with the trade count
     deactivate Dash
     App->>App: fetch /data/versions.json (badge) · loadFlags()
-    App->>App: if !isDemo: configureCloudSync({localStore, dash}) — opt-in E2E sync (F63, App.svelte:948)
-    App->>App: needsOnboarding = !isDemo && !isStaging && loaded && allTrades.length == 0
+    App->>App: if !isDemo: configureCloudSync({localStore, dash}) — opt-in E2E sync (F63, App.svelte:961)
+    App->>App: freshApp (no trades AND no CSV files — A235) arms onboardingActive<br/>needsOnboarding = !isDemo && !isStaging && loaded && onboardingActive (sticky until Launch — F48)
 ```
 
 ## Notes
 
 - **Seeding gate:** `SEEDED = isStaging || isDemo`. The real app (`data-mode="app"`) seeds nothing —
   an empty store is the first-run signal that shows onboarding.
-- **Onboarding** appears only when `!isDemo && !isStaging && dash.loaded && !dash.allTrades.length`.
+- **Onboarding** arms on a truly fresh app — no trades AND no CSV files in the library (A235) — via
+  `onboardingActive`, and is sticky: it stays up through the review step until the Launch button
+  clears it (F48). `needsOnboarding = !isDemo && !isStaging && dash.loaded && onboardingActive`
+  (App.svelte:753-758).
 - **Demo never persists:** the in-memory `DemoStore` plus per-write `if (isDemo) return` guards
   (belt-and-suspenders) mean the boot path can seed demo in memory without ever touching disk.
 - The event bus is a no-op when nothing is subscribed; `ActivityTerminal` is the usual listener.

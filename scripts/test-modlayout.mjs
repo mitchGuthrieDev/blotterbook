@@ -157,4 +157,47 @@ ok(
   J(migrateLayout(['perf', 'dist']).mods.map(e => e.key)) === J(['perf'])
 );
 
+// ── A320: duplicated keys in a stored layout are dropped (first occurrence wins) — a corrupted /
+// tampered Store.local value must never reach the screens' keyed {#each} blocks with a repeat. ──
+ok('migrateLayout(v1) dedupes a repeated key', J(migrateLayout(['perf', 'cal', 'perf']).mods.map(e => e.key)) === J(['perf', 'cal']));
+ok(
+  'migrateLayout(v2) dedupes a repeated key (first size wins)',
+  J(
+    migrateLayout({
+      v: 2,
+      mods: [
+        { key: 'cal', size: 'lg' },
+        { key: 'cal', size: 'md' },
+      ],
+    }).mods
+  ) === J([{ key: 'cal', size: 'lg' }])
+);
+ok(
+  'validLayout dedupes a repeated key',
+  J(
+    validLayout([
+      { key: 'perf', size: 'lg' },
+      { key: 'perf', size: 'md' },
+      { key: 'cal', size: 'md' },
+    ])
+  ) ===
+    J([
+      { key: 'perf', size: 'lg' },
+      { key: 'cal', size: 'md' },
+    ])
+);
+
+// ── A320: the key + label tables are the single source — the kits' key sets derive from them, so a
+// module added to a screen table is automatically known to that screen's migration (drift gate). ──
+const { DASHBOARD_MODULES, MODULE_KEYS, ANALYTICS_MODULES, ANALYTICS_MODULE_KEYS, labelsOf } = m;
+ok('DASHBOARD_MODULES ↔ MODULE_KEYS derive in lockstep', J(DASHBOARD_MODULES.map(d => d.key)) === J(MODULE_KEYS));
+ok('ANALYTICS_MODULES ↔ ANALYTICS_MODULE_KEYS derive in lockstep', J(ANALYTICS_MODULES.map(d => d.key)) === J(ANALYTICS_MODULE_KEYS));
+ok(
+  'every default key is a known key with a non-empty label',
+  DEFAULT_MODULE_KEYS.every(k => MODULE_KEYS.includes(k)) &&
+    ANALYTICS_DEFAULT_KEYS.every(k => ANALYTICS_MODULE_KEYS.includes(k)) &&
+    [...DASHBOARD_MODULES, ...ANALYTICS_MODULES].every(d => typeof d.label === 'string' && d.label.length > 0)
+);
+ok('labelsOf builds the key→label map', labelsOf(ANALYTICS_MODULES).dist === 'P&L distribution (per trade)');
+
 console.log(`\n${pass} assertions passed.`);

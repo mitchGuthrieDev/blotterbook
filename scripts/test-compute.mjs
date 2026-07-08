@@ -263,6 +263,48 @@ const t = (time, pnl, side = 'long', root = 'MES', qty = 1) => ({ time, date: ti
   ok('hist: unknown-side remainder exposed (A170)', vm.unknownSide === 6 - vm.long.n - vm.short.n);
 }
 
+// ── A324: the rest of the Analytics view-model — hour buckets, symbol/tag rows, hold coverage ──
+{
+  const { buildAnalytics } = await import('../src/app/lib/analytics.ts');
+  const trades = [
+    t('2026-01-05 09:59:59', 10, 'long', 'MES'), // 09h
+    t('2026-01-05 10:00:00', 100, 'long', 'MES'), // 10h
+    t('2026-01-06 10:30:00', -49, 'short', 'MES'), // 10h — avg (100−49)/2 = 25.5 → rounds to 26
+    t('2026-01-06 14:05:00', -60, 'short', 'MNQ'), // 14h
+    { ...t('2026-01-07 15:00:00', 5, 'long', 'MNQ'), time: 'garbage' }, // unparseable HH → dropped from hours
+  ];
+  const tags = new Map([
+    ['2026-01-05 10:00:00', ['setup-a']],
+    ['2026-01-06 10:30:00', ['setup-a']],
+  ]);
+  const vm = buildAnalytics(compute(trades), trades, tr => tags.get(tr.time) ?? []);
+
+  // Hour-of-day: keyed on the timestamp's HH slice, averaged per bucket, rounded; carries the
+  // numeric hour for click-to-filter; sorted ascending; garbage timestamps drop out.
+  const hourBy = k => vm.hours.find(h => h.key === k);
+  ok('hours: buckets keyed + sorted, garbage dropped', vm.hours.map(h => h.label).join(',') === '09,10,14');
+  ok('hours: per-bucket rounded average (25.5 → 26)', hourBy(10)?.value === 26 && hourBy(9)?.value === 10 && hourBy(14)?.value === -60);
+
+  // Per-symbol rows: win% rounded from wins/trades, sorted by |P&L| desc.
+  const mes = vm.symbols.find(s => s.sym === 'MES');
+  const mnq = vm.symbols.find(s => s.sym === 'MNQ');
+  ok('symbols: pnl + rounded win% (MES 2/3 → 67)', mes?.pnl === 61 && mes?.trades === 3 && mes?.win === 67);
+  ok('symbols: MNQ 1/2 → 50, |P&L| sort puts MES first', mnq?.win === 50 && vm.symbols[0]?.sym === 'MES');
+
+  // Tag rows: tagsFor-driven buckets + the disjoint untagged remainder (win% same convention).
+  const setupA = vm.byTag.find(r => r.tag === 'setup-a');
+  ok('tags: tagged bucket (1W/1L → win 50, pnl 51)', setupA?.trades === 2 && setupA?.win === 50 && setupA?.pnl === 51);
+  ok('tags: untagged = the disjoint remainder', vm.untagged?.trades === 3 && setupA.trades + vm.untagged.trades === trades.length);
+
+  // Hold coverage: fraction of trades carrying holdMs; the avg-hold stat footnotes partial coverage.
+  const withHolds = trades.map((tr, i) => (i < 2 ? { ...tr, holdMs: 120_000 } : tr));
+  const vmH = buildAnalytics(compute(withHolds), withHolds, () => []);
+  ok('holdCoverage: 2 of 5 trades → 0.4', approx(vmH.holdCoverage, 0.4, 1e-9));
+  const avgHold = vmH.statRows.find(r => r.k === 'Avg hold time')?.v;
+  ok('avg hold: value + partial-coverage footnote (A176)', avgHold === '2m · 40% of trades');
+  ok('holdCoverage: none → 0 and em-dash stat', vm.holdCoverage === 0 && vm.statRows.find(r => r.k === 'Avg hold time')?.v === '—');
+}
+
 // ── dailySeries MID-series assertions (endpoint reconciliation lives in test-curveandreport) ──
 {
   const { dailySeries } = await import('../src/lib/core/curveseries.ts');

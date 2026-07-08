@@ -107,8 +107,13 @@ jobs:
       - name: Render / e2e tests (boot every surface, zero console errors)
         run: npm run test:e2e
 
-      - name: Regenerate data manifest
-        run: node scripts/build-manifest.mjs
+      - name: Regenerate generated data files (manifest + econ events)
+        # A323: BOTH generated-and-committed static/data files re-run here, so the clean-tree gate
+        # below catches an edited generator whose committed output wasn't regenerated (econ-events
+        # is deterministic + network-free, same as the manifest).
+        run: |
+          node scripts/build-econ-events.mjs
+          node scripts/build-manifest.mjs
 
       - name: Fail if generated outputs are not committed
         run: |
@@ -116,7 +121,7 @@ jobs:
           # artifacts (node_modules, playwright-report, test-results) are gitignored, so a clean
           # tree here also proves the tooling never wrote into the shipped/committed files.
           if ! git diff --quiet || [ -n "$(git status --porcelain)" ]; then
-            echo "::error::Generated files are stale or untracked. Run 'node scripts/build-manifest.mjs' and commit the result."
+            echo "::error::Generated files are stale or untracked. Run 'node scripts/build-econ-events.mjs && node scripts/build-manifest.mjs' and commit the result."
             git --no-pager status --short
             exit 1
           fi
