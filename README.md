@@ -78,8 +78,8 @@ which sends ciphertext we can't read — never plaintext trades, and never by de
 two-year sample dataset (nothing is saved). To clear your data later, use **Erase all data** on the
 **CSV Library** screen.
 
-A step-by-step walkthrough and per-platform import guides live in the **How-To** wiki on the info
-site (`howto.html`).
+A step-by-step walkthrough and per-platform import guides live in the **Help** site
+(`/help/index.html`).
 
 ## How it works
 

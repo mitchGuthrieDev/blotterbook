@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Shared layout for the info pages (changelog/howto/roadmap/legal) + the admin panel (A69 — ex the
+  // Shared layout for the info pages (changelog/help/roadmap/legal) + the admin panel (A69 — ex the
   // shared half of site.css). Composes <Nav>/<Footer> around a `.wrap` content column and owns the
   // site-wide base styles (resets, body chrome, typographic scale, .note/.panel) so each page
   // component only carries ITS OWN page-specific CSS. These base rules are declared :global because

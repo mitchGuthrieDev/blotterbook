@@ -106,8 +106,8 @@ from there). See [`docs/archive/structure-reorg-plan.md`](archive/structure-reor
 - `functions/` — Pages Functions are resolved from the project root.
 - `static/_headers`, `static/_redirects` — copied to the output root, where they take effect.
 - `static/robots.txt`, `static/sitemap.xml`, the favicon (`src/assets/favicon.svg`), and the pages
-  that serve at `/…` (`src/index.html`, `src/howto.html`, `src/roadmap.html`, `src/changelog.html`,
-  `src/legal.html`, `src/admin.html`).
+  that serve at `/…` (`src/index.html`, the five `src/help/*.html` pages (A273), `src/roadmap.html`,
+  `src/changelog.html`, `src/legal.html`, `src/account.html`, `src/admin.html`).
 
 **Consequence — moving any browser-served file changes its URL, hard-coded in several places that
 must be updated in lockstep.** Before relocating anything under `src/` or `static/` (or renaming a
@@ -510,7 +510,7 @@ commit:
    `src/assets/*`, `src/styles/tailwind.css`, `static/data/*`
    except versions/backlog/changelog json) bumps **both** prod and staging; **only**
    `src/app/staging.html` bumps staging alone; the marketing/info site (`src/index.html` +
-   `src/{howto,roadmap,changelog,legal}.html` + their `src/site/**` Svelte components, shared chrome,
+   `src/help/*.html` + `src/{roadmap,changelog,legal,account}.html` + their `src/site/**` Svelte components, shared chrome,
    and client entries — A69) bumps prod alone; everything else (the internal admin page —
    `src/admin.html`/`Admin.svelte`/`admin.ts` — README, `.github`, scripts, functions) bumps nothing.
 
@@ -574,10 +574,12 @@ anchor links plus links to the standalone info pages. On narrow screens the nav
 links collapse behind a **hamburger menu** (a CSS-only checkbox toggle on every
 page).
 
-**Standalone info pages** (Svelte SSG sharing `Nav`/`Footer`/`SiteShell` chrome; page CSS is scoped per component, A69): `howto.html` (a How-To wiki with a
-sticky sidebar — getting-started walkthrough + per-platform import guides),
+**Standalone info pages** (Svelte SSG sharing `Nav`/`Footer`/`SiteShell` chrome; page CSS is scoped per component, A69): the `/help/` hub (A273 — five
+pages behind a shared `HelpShell` sidebar: landing, getting-started, per-platform
+import guides, cloud sync, support; `howto.html` 301s to `/help/import.html`),
 `roadmap.html` (shipped-vs-planned checklist), `changelog.html` ("Blotterlog"
-release notes), and `legal.html` (disclaimers, terms, privacy summary).
+release notes), `legal.html` (disclaimers, terms, privacy summary), and
+`account.html` (the A293 standalone Account Dashboard — noindex).
 
 ## Known limitations
 

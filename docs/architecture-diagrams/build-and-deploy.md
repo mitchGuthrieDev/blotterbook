@@ -26,15 +26,15 @@ flowchart TD
 
     DIST --> PAGES["Cloudflare Pages<br/>build cmd: npm run build · output dir: dist"]
     FUNCS["functions/* (repo root, unserved by Vite)"] --> EDGE["Pages Functions (edge runtime)"]
-    PAGES --> CDN["served surface:<br/>/ · /howto.html · /app/ · /app/demo.html ·<br/>/app/staging.html · /data/* · /dev/components.html"]
+    PAGES --> CDN["served surface:<br/>/ · /help/* · /account.html · /app/ · /app/demo.html ·<br/>/app/staging.html · /data/* · /dev/components.html"]
     EDGE --> CDN2["/api/* + /app/staging.html gate"]
 ```
 
-## The 10 entry points
+## The 15 entry points
 
 | Group | Entries |
 | --- | --- |
-| Marketing/info (prerendered via SSG) | `index` · `howto` · `roadmap` · `changelog` · `legal` · `admin` |
+| Marketing/info (prerendered via SSG) | `index` · `help/*` (×5, A273) · `roadmap` · `changelog` · `legal` · `account` · `admin` |
 | App surfaces (SPA shells) | `app/app` · `app/demo` · `app/staging` |
 | Dev-only (noindex, robots-blocked) | `dev/components` (styleguide) |
 

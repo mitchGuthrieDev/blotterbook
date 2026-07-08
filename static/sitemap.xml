@@ -3,7 +3,11 @@
      intentionally excluded — no indexable content, and disallowed in robots.txt. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://blotterbook.com/</loc></url>
-  <url><loc>https://blotterbook.com/howto.html</loc></url>
+  <url><loc>https://blotterbook.com/help/index.html</loc></url>
+  <url><loc>https://blotterbook.com/help/getting-started.html</loc></url>
+  <url><loc>https://blotterbook.com/help/import.html</loc></url>
+  <url><loc>https://blotterbook.com/help/cloud-sync.html</loc></url>
+  <url><loc>https://blotterbook.com/help/support.html</loc></url>
   <url><loc>https://blotterbook.com/roadmap.html</loc></url>
   <url><loc>https://blotterbook.com/changelog.html</loc></url>
   <url><loc>https://blotterbook.com/legal.html</loc></url>

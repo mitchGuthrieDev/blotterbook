@@ -56,10 +56,11 @@ const surfaces = [
     },
   },
   {
-    name: 'howto',
-    path: '/howto.html',
+    // A273: the How-To wiki moved into the Help site.
+    name: 'help',
+    path: '/help/index.html',
     check: async page => {
-      await expect(page.locator('h1')).toContainText('How to use Blotterbook');
+      await expect(page.locator('h1')).toContainText('How can we help?');
     },
   },
   {

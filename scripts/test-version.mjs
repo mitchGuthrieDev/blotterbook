@@ -105,7 +105,7 @@ ok(
 ok(
   'a site component + an info page → prod only',
   (() => {
-    const s = classifySurfaces(['src/site/lib/SiteShell.svelte', 'src/howto.html']);
+    const s = classifySurfaces(['src/site/lib/SiteShell.svelte', 'src/help/import.html']);
     return s.prod && !s.staging;
   })()
 );

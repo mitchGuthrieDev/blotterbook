@@ -12,7 +12,7 @@ lockstep across several files.
 flowchart LR
     subgraph SRCTREE["src/ (Vite root)"]
         I["index.html"]
-        H["howto.html"]
+        H["help/*.html (×5, A273)"]
         AP["app/app.html"]
         DM["app/demo.html"]
         SG["app/staging.html"]
@@ -25,7 +25,7 @@ flowchart LR
     end
 
     I -->|"maps to"| U1["/"]
-    H --> U2["/howto.html"]
+    H --> U2["/help/*.html"]
     AP -->|"_redirects rewrite"| U3["/app/"]
     DM --> U4["/app/demo.html"]
     SG --> U5["/app/staging.html"]
