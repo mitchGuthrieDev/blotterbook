@@ -60,7 +60,7 @@
   import BootSplash from './parts/BootSplash.svelte';
   import LaunchGate from './parts/LaunchGate.svelte';
   import WorkspaceSwitcher from './parts/WorkspaceSwitcher.svelte';
-  import { account, refreshSession, completeRecovery } from './lib/account.svelte.ts';
+  import { account, refreshSession, completeRecovery, completeReclaim } from './lib/account.svelte.ts';
   import { wrapStore, configureCloudSync } from './lib/cloudsync.svelte.ts';
   import { loadFlags, APP_FLAGS, accountGateEnabled, type AppFlags } from './lib/flags.ts';
   import { pickFlavor } from './lib/flavor.ts';
@@ -947,12 +947,16 @@
       // Account.svelte (which normally handles it) never mounts while the gate blocks, so the 15-min
       // token used to just expire. Run the re-enrollment ceremony pre-gate; on success account.user
       // flips and the gate falls through. Scrub the token so a reload can't reuse a spent link.
-      const recoverToken = new URLSearchParams(location.search).get('recover');
-      if (recoverToken) {
+      const params = new URLSearchParams(location.search);
+      const recoverToken = params.get('recover');
+      const reclaimToken = params.get('reclaim'); // A316: squatted-email reclaim, same pre-gate problem
+      if (recoverToken || reclaimToken) {
         const url = new URL(location.href);
         url.searchParams.delete('recover');
+        url.searchParams.delete('reclaim');
         history.replaceState(null, '', url.pathname + url.search + url.hash);
-        void completeRecovery(recoverToken);
+        if (recoverToken) void completeRecovery(recoverToken);
+        else if (reclaimToken) void completeReclaim(reclaimToken);
       }
     }
     // A256/F63: initialize cloud sync on every NON-DEMO surface (probes the tier, wires focus/

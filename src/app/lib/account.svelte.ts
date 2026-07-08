@@ -43,6 +43,8 @@ export const account = $state({
   busy: false,
   /** last actionable error message ('' = none). */
   error: '',
+  /** A316: the last register attempt 409'd on a NEVER-VERIFIED holder — offer the reclaim flow. */
+  reclaimable: false,
   /** false once the server says accounts aren't configured (503 — ACCOUNTS_DB unbound). */
   available: true,
   user: null as AccountUser | null,
@@ -59,9 +61,13 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const data = (await res.json().catch(() => null)) as (T & { error?: string }) | null;
+  const data = (await res.json().catch(() => null)) as (T & { error?: string; reclaimable?: boolean }) | null;
   if (res.status === 503) account.available = false;
-  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status}).`);
+  if (!res.ok) {
+    const err = new Error(data?.error || `Request failed (${res.status}).`) as Error & { reclaimable?: boolean };
+    if (data?.reclaimable) err.reclaimable = true; // A316: machine-readable 409 flavor for the UI
+    throw err;
+  }
   account.available = true;
   return data as T;
 }
@@ -100,12 +106,14 @@ async function ceremony(run: () => Promise<void>): Promise<boolean> {
   if (account.busy) return false;
   account.busy = true;
   account.error = '';
+  account.reclaimable = false;
   try {
     await run();
     await refreshSession();
     return true;
   } catch (e) {
     account.error = messageOf(e);
+    if (e instanceof Error && (e as Error & { reclaimable?: boolean }).reclaimable) account.reclaimable = true;
     return false;
   } finally {
     account.busy = false;
@@ -225,6 +233,33 @@ export async function recoverSend(email: string): Promise<boolean> {
 export function completeRecovery(token: string): Promise<boolean> {
   return ceremony(async () => {
     const { options } = await api<{ options: PublicKeyCredentialCreationOptionsJSON }>('/api/account/recover-verify', { token });
+    const { startRegistration } = await webauthn();
+    const response = await startRegistration({ optionsJSON: options });
+    await api('/api/account/register-verify', { response });
+  });
+}
+
+/* ---- A316: reclaim a squatted (never-verified) email --------------------------------------- */
+
+/** Request a reclaim magic link for an email held by a never-verified account (offered after a
+ *  register attempt sets `account.reclaimable`). Enumeration-safe like recoverSend: the server
+ *  always answers generically, so this resolves true whenever the request was accepted. */
+export async function reclaimSend(email: string): Promise<boolean> {
+  try {
+    await api('/api/account/reclaim-send', { email: email.trim().toLowerCase() });
+    return true;
+  } catch (_) {
+    // A 503 (email unavailable) is the only actionable failure; otherwise stay generic.
+    return account.available;
+  }
+}
+
+/** Complete a reclaim from its magic-link token: the server frees the squatted email, pre-creates a
+ *  fresh VERIFIED account, and returns registration options bound to it — then the standard passkey
+ *  ceremony enrolls the first passkey (register-verify starts the session). */
+export function completeReclaim(token: string): Promise<boolean> {
+  return ceremony(async () => {
+    const { options } = await api<{ options: PublicKeyCredentialCreationOptionsJSON }>('/api/account/reclaim-confirm', { token });
     const { startRegistration } = await webauthn();
     const response = await startRegistration({ optionsJSON: options });
     await api('/api/account/register-verify', { response });

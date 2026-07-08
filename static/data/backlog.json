@@ -307,18 +307,6 @@
       "partial": false,
       "prompt": "From the owner. Write an executive-level BUSINESS document (docs/, e.g. docs/executive-overview.md — a polished, decision-oriented overview for a non-technical corporate audience) covering the platform end to end: what Blotterbook is + its core features/functionality (import → local compute → performance/cost/tax/calendar/analytics/reports), the SECURITY posture (local-compute moat — trade data never leaves the browser except opt-in E2E zero-knowledge cloud sync; CSP hardening; WebAuthn/passkey auth; server-side auth/entitlement enforcement), DATA MANAGEMENT (local-first IndexedDB, ciphertext-only egress, per-user storage quotas, delete/erase + retention), USER MANAGEMENT (accounts, passkeys, recovery, tiers/entitlements local vs cloud), PAYMENT HANDLING (Stripe subscription for the cloud tier + donations, PCI posture), a high-level architecture summary (Cloudflare Pages + edge functions + D1/R2), and the roadmap/positioning. Audience: potential corporate leads/partners in future meetings — accurate to the SHIPPED product, benefits-led, minimal jargon. BLOCKED — WAIT UNTIL OUT OF BETA (per owner): the product is in beta now; hold this until beta ends so the doc reflects the GA state (features, pricing, guarantees) rather than a moving target. Done when: the exec overview is written, accurate to the GA product, and owner-reviewed.",
       "doneNote": null
-    },
-    {
-      "id": "A316",
-      "title": "Sign-up flow rework: unverified-email squatting reclaim + TTL purge (deferred from A310)",
-      "category": "SECURITY",
-      "priority": "P3",
-      "effort": "medium",
-      "status": "open",
-      "completedDate": null,
-      "partial": false,
-      "prompt": "Deferred remainder of A310 (owner decision 2026-07-07): fix unverified-email account squatting as part of a broader sign-up-flow + email-verification rework — do not bolt it on piecemeal. TODAY: anonymous registration binds any email with NO verification (functions/api/account/register-verify.ts) while recovery only emails VERIFIED addresses (recover-send.ts), so an attacker who registers victim@example.com first permanently blocks the real owner from BOTH signup (409 email-taken) and recovery (silent no-send). A purgeUnverifiedUsers() helper + UNVERIFIED_USER_TTL_MS (30d) already exist in functions/_lib/accounts.ts (~L421) but are UNWIRED. Build BOTH: (a) wire the TTL purge so never-verified accounts free their email automatically (decide the trigger — opportunistic on register-options, or a scheduled path — within the A15 subrequest budget), and (b) a proven-ownership RECLAIM path: when signup hits the 409 on an UNVERIFIED email, offer a magic-link flow that emails the address and, on click, transfers/frees the account (single-use TTL'd token, same primitives as recovery). Keep the S25/S22 posture (auth never depends on the fail-open rate limiter; enumeration trade-offs documented). Extend scripts/test-accounts.mjs to cover squat → purge and squat → reclaim. Done when: a never-verified account stops blocking its email (purge wired + tested), a legitimate owner can reclaim a squatted unverified email via proven inbox ownership, and the accounts suite covers both paths.",
-      "doneNote": null
     }
   ],
   "howToDrive": [

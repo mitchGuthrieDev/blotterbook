@@ -15,7 +15,7 @@
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
   import { Skeleton } from '$lib/components/ui/skeleton';
-  import { account, login, register, recoverSend } from '../lib/account.svelte.ts';
+  import { account, login, register, recoverSend, reclaimSend } from '../lib/account.svelte.ts';
 
   type View = 'default' | 'creating' | 'recovering';
   let view = $state<View>('default');
@@ -29,17 +29,28 @@
   let recoverEmail = $state('');
   let recoverSent = $state(false);
   const recoverValid = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoverEmail.trim()));
+  // A316: offered when a register attempt 409'd on a never-verified holder (account.reclaimable)
+  let reclaimSent = $state(false);
 
   function toDefault() {
     view = 'default';
     recoverSent = false;
+    reclaimSent = false;
   }
 
   async function onCreate(e: SubmitEvent) {
     e.preventDefault();
     if (disabled || !emailValid) return;
+    reclaimSent = false;
     // On success account.user flips → App unmounts the gate; no local navigation needed.
     if (await register(email.trim().toLowerCase())) email = '';
+  }
+
+  // A316: email a single-use reclaim link for the address the register attempt collided on.
+  async function onReclaimEmail() {
+    if (disabled || !emailValid) return;
+    await reclaimSend(email);
+    reclaimSent = true; // generic — the server never reveals how the address is held
   }
 
   async function onRecover(e: SubmitEvent) {
@@ -112,6 +123,29 @@
                 <Button type="button" variant="ghost" {disabled} onclick={toDefault}>Back</Button>
               </div>
             </form>
+            <!-- A316: the address is held by a never-verified account — offer proven-ownership reclaim -->
+            {#if reclaimSent}
+              <p class="text-xs text-muted-foreground" role="status">
+                If that address is held by an unverified account, we've emailed a reclaim link. Open it on this device to create your
+                account.
+              </p>
+            {:else if account.reclaimable}
+              <div class="flex flex-col gap-2 rounded-md border border-border bg-secondary/40 p-3" role="status">
+                <p class="text-xs text-muted-foreground">
+                  Is that address yours? Prove it by email and the unverified account holding it will be released so you can sign up.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  class="self-start"
+                  disabled={disabled || !emailValid}
+                  onclick={() => void onReclaimEmail()}
+                >
+                  Email me a reclaim link
+                </Button>
+              </div>
+            {/if}
           {:else}
             <!-- A300: recover access — email a re-enrollment link. Enumeration-safe: always generic. -->
             {#if recoverSent}

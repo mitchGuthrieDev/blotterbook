@@ -432,7 +432,7 @@ conforms to the rules below; keep it that way.
   api/{geo,status,config,admin-key}.ts  geo · status · feature flags · admin token
   api/{me,checkout,webhook}.ts   storage tier — grants `cloud` on active/grace subscription (F60) · Stripe
                         donations + subscription-lifecycle webhook (checkout + customer.subscription.*, F54/F60)
-  api/account/*.ts      passkey register/login/logout + email-verify + recovery + account-delete +
+  api/account/*.ts      passkey register/login/logout + email-verify + recovery + reclaim (A316) + account-delete +
                         passkey-delete endpoints (F53/F55)
   api/sync/*.ts         F62 encrypted-blob transport (workspaces · wrapped-ik · push · pull · delete) over R2 + D1
   api/{subscribe,confirm,unsubscribe,notify-changelog}.ts  F44 changelog (Blotterlog) email

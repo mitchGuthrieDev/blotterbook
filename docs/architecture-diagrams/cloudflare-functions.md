@@ -53,6 +53,7 @@ flowchart TD
         OUT["POST logout"]
         EVS["POST email-verify-send / GET|POST email-verify-confirm<br/>verify recovery token → email_verified=1 + claims donations"]
         REC["POST recover-send / recover-verify<br/>lost-passkey magic link → fresh registration options"]
+        RCL["POST reclaim-send / reclaim-confirm<br/>squatted-email reclaim: proof of inbox → frees the<br/>never-verified holder + fresh verified account (A316)"]
         PKD["POST passkey-delete<br/>remove a passkey · last-credential lockout guard (A302)"]
         DEL["POST delete<br/>two-phase resumable account deletion:<br/>clear owned sync workspaces, then D1 rows (A305, GDPR)"]
     end
@@ -97,6 +98,7 @@ flowchart TD
 | `POST /api/account/logout` | session cookie | Deletes the session row + expires the cookie (F53) |
 | `POST /api/account/email-verify-send`, `GET\|POST email-verify-confirm` | session (send) / token (confirm) | Single-use recovery-token email verification; confirms also claims unclaimed donations by matching email |
 | `POST /api/account/recover-send`, `recover-verify` | public | "Lost your passkey?" magic-link recovery → fresh WebAuthn registration options, no account enumeration |
+| `POST /api/account/reclaim-send`, `reclaim-confirm` | public | Squatted-email reclaim (A316): proof-of-inbox magic link frees a never-verified holder and pre-creates a fresh verified account; enumeration-safe generic 200 on send |
 | `POST /api/checkout` | Origin-checked | Creates a Stripe Checkout session over the REST API (no SDK); `501 not_configured` until `STRIPE_SECRET_KEY`/price env vars are set |
 | `POST /api/webhook` | Stripe signature (S11) | Verifies the raw-body signature, then on `checkout.session.completed` credits/claims a donation, and on `customer.subscription.created/updated/deleted` + `invoice.payment_failed` upserts a `subscriptions` row with `status` + `current_period_end` (F60); dedup on the Stripe event id (`webhook_events`); `501` until `STRIPE_WEBHOOK_SECRET` is set |
 | `POST /api/subscribe` | public (same-origin) | Changelog-email double opt-in signup — writes a `pending` row + emails a confirm link; one generic 200 for new/pending/confirmed (enumeration-safe, F44) |
