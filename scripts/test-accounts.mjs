@@ -41,6 +41,7 @@ import {
   revokeEntitlementOverride,
   upsertSubscription,
 } from '../functions/_lib/accounts.ts';
+import { ARCHIVED } from '../functions/_lib/archive.ts';
 import { onRequestGet as meGet, SUBSCRIPTION_GRACE_MS } from '../functions/api/me.ts';
 import { onRequestGet as adminUsers } from '../functions/api/admin/users.ts';
 import { onRequestPost as adminEntitlement } from '../functions/api/admin/entitlement.ts';
@@ -373,21 +374,30 @@ console.log('\nCeremony option endpoints (mocked D1):');
     'login challenge stored with TTL',
     db.tables.challenges.some(c => c.challenge === loJson.options.challenge && c.type === 'login' && c.expires_at > Date.now())
   );
-  // register-options: email validation + duplicate rejection + stored register challenge
-  const bad = await registerOptions({ request: req('/api/account/register-options', { body: { email: 'not-an-email' } }), env });
-  ok('register-options rejects a bad email (400)', bad.status === 400);
-  const ro = await registerOptions({ request: req('/api/account/register-options', { body: { email: 'Trader@Example.com ' } }), env });
-  const roJson = await ro.json();
-  ok(
-    'register-options 200 with creation options',
-    ro.status === 200 && typeof roJson.options?.challenge === 'string' && roJson.options.user?.name === 'trader@example.com'
-  );
-  ok('register-options requires a discoverable credential', roJson.options.authenticatorSelection?.residentKey === 'required');
-  const chRow = db.tables.challenges.find(c => c.challenge === roJson.options.challenge);
-  ok('register challenge holds the email server-side', chRow?.type === 'register' && chRow?.email === 'trader@example.com');
-  await createUser(db, 'taken@example.com');
-  const dup = await registerOptions({ request: req('/api/account/register-options', { body: { email: 'taken@example.com' } }), env });
-  ok('register-options rejects an existing email (409)', dup.status === 409);
+  // register-options (new-account path): email validation + duplicate rejection + stored challenge.
+  // ARCHIVE FREEZE (docs/archive-freeze.md): this anonymous+email path is frozen; the tests below
+  // stay intact for a future revert but are skipped while ARCHIVED, replaced by a 410 assertion.
+  if (!ARCHIVED) {
+    const bad = await registerOptions({ request: req('/api/account/register-options', { body: { email: 'not-an-email' } }), env });
+    ok('register-options rejects a bad email (400)', bad.status === 400);
+    const ro = await registerOptions({ request: req('/api/account/register-options', { body: { email: 'Trader@Example.com ' } }), env });
+    const roJson = await ro.json();
+    ok(
+      'register-options 200 with creation options',
+      ro.status === 200 && typeof roJson.options?.challenge === 'string' && roJson.options.user?.name === 'trader@example.com'
+    );
+    ok('register-options requires a discoverable credential', roJson.options.authenticatorSelection?.residentKey === 'required');
+    const chRow = db.tables.challenges.find(c => c.challenge === roJson.options.challenge);
+    ok('register challenge holds the email server-side', chRow?.type === 'register' && chRow?.email === 'trader@example.com');
+    await createUser(db, 'taken@example.com');
+    const dup = await registerOptions({ request: req('/api/account/register-options', { body: { email: 'taken@example.com' } }), env });
+    ok('register-options rejects an existing email (409)', dup.status === 409);
+  } else {
+    const frozen = await registerOptions({ request: req('/api/account/register-options', { body: { email: 'anyone@example.com' } }), env });
+    const frozenJson = await frozen.json();
+    ok('register-options (new-account path) frozen: 410 archived', frozen.status === 410 && frozenJson.code === 'archived');
+    console.log('  (skipped — archive freeze: register-options new-account validation tests)');
+  }
 }
 
 console.log('\nVerify endpoints — challenge consumption ordering:');
@@ -696,39 +706,54 @@ console.log('\nSubscription linkage robustness (checkout metadata + items[].curr
   // (a) The customer.subscription.* events don't carry client_reference_id, so /api/checkout must
   //     stamp it into subscription_data.metadata for a subscription — else the webhook can't resolve
   //     the account order-independently (and $0/trial signups never link via the donation path).
+  // ARCHIVE FREEZE (docs/archive-freeze.md): /api/checkout is frozen unconditionally (donations +
+  // hosted-Checkout subscriptions both start NEW money flows) — kept intact for a future revert.
   const db = mockDb();
   const user = await createUser(db, 'link@example.com');
   const { token } = await createSession(db, user.id);
-  const captured = [];
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = async (url, init) => {
-    captured.push({ url: String(url), body: String(init?.body ?? '') });
-    return new Response(JSON.stringify({ url: 'https://checkout.stripe.test/s' }), { status: 200 });
-  };
-  try {
+  if (!ARCHIVED) {
+    const captured = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      captured.push({ url: String(url), body: String(init?.body ?? '') });
+      return new Response(JSON.stringify({ url: 'https://checkout.stripe.test/s' }), { status: 200 });
+    };
+    try {
+      const env = {
+        ACCOUNTS_DB: db,
+        STRIPE_SECRET_KEY: 'sk_test',
+        STRIPE_PRICE_SUBSCRIPTION: 'price_sub',
+        STRIPE_PRICE_ONE_TIME: 'price_ot',
+      };
+      const res = await checkout({ request: req('/api/checkout', { cookie: cookieFor(token), body: { plan: 'subscription' } }), env });
+      ok('subscription checkout returns a url (200)', res.status === 200 && (await res.json()).url?.startsWith('https://'));
+      const subBody = decodeURIComponent(captured.at(-1)?.body ?? '');
+      ok(
+        'checkout stamps subscription_data[metadata][client_reference_id] = user id',
+        subBody.includes('subscription_data[metadata][client_reference_id]=' + user.id)
+      );
+      ok('subscription checkout uses mode=subscription', subBody.includes('mode=subscription'));
+      // a one_time checkout must NOT stamp subscription metadata
+      captured.length = 0;
+      await checkout({ request: req('/api/checkout', { cookie: cookieFor(token), body: { plan: 'one_time' } }), env });
+      ok(
+        'one_time checkout does NOT set subscription metadata',
+        !decodeURIComponent(captured.at(-1)?.body ?? '').includes('subscription_data[metadata]')
+      );
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  } else {
     const env = {
       ACCOUNTS_DB: db,
       STRIPE_SECRET_KEY: 'sk_test',
       STRIPE_PRICE_SUBSCRIPTION: 'price_sub',
       STRIPE_PRICE_ONE_TIME: 'price_ot',
     };
-    const res = await checkout({ request: req('/api/checkout', { cookie: cookieFor(token), body: { plan: 'subscription' } }), env });
-    ok('subscription checkout returns a url (200)', res.status === 200 && (await res.json()).url?.startsWith('https://'));
-    const subBody = decodeURIComponent(captured.at(-1)?.body ?? '');
-    ok(
-      'checkout stamps subscription_data[metadata][client_reference_id] = user id',
-      subBody.includes('subscription_data[metadata][client_reference_id]=' + user.id)
-    );
-    ok('subscription checkout uses mode=subscription', subBody.includes('mode=subscription'));
-    // a one_time checkout must NOT stamp subscription metadata
-    captured.length = 0;
-    await checkout({ request: req('/api/checkout', { cookie: cookieFor(token), body: { plan: 'one_time' } }), env });
-    ok(
-      'one_time checkout does NOT set subscription metadata',
-      !decodeURIComponent(captured.at(-1)?.body ?? '').includes('subscription_data[metadata]')
-    );
-  } finally {
-    globalThis.fetch = realFetch;
+    const frozen = await checkout({ request: req('/api/checkout', { cookie: cookieFor(token), body: { plan: 'subscription' } }), env });
+    const frozenJson = await frozen.json();
+    ok('checkout frozen: 410 archived', frozen.status === 410 && frozenJson.code === 'archived');
+    console.log('  (skipped — archive freeze: checkout metadata-linkage tests)');
   }
 
   // (b) Stripe API versions ~2025+ moved current_period_end onto the subscription ITEMS. The webhook
@@ -1178,73 +1203,100 @@ console.log('\nA316: sign-up squat purge (lazy, at the register collision) + rec
   const now = Date.now();
   const optionsFor = email => registerOptions({ request: req('/api/account/register-options', { body: { email } }), env });
 
-  // Verified holder → plain 409 (no reclaim affordance).
+  // Verified holder — plain account-state setup, not an endpoint call, so unaffected by the freeze.
   const legit = await createUser(db, 'held@example.com', now - UNVERIFIED_USER_TTL_MS - 1000);
   await setEmailVerified(db, legit.id);
-  const dupVerified = await optionsFor('held@example.com');
-  const dupVerifiedJson = await dupVerified.json();
-  ok('verified holder → 409 without reclaimable', dupVerified.status === 409 && !('reclaimable' in dupVerifiedJson));
-
-  // Young unverified holder → 409 + reclaimable: true (the client offers the magic-link flow).
+  // Young unverified holder — created directly (not through the frozen register-options endpoint)
+  // because the reclaim-confirm section below needs this account regardless of ARCHIVED.
   await createUser(db, 'young@example.com', now - 1000);
-  const dupYoung = await optionsFor('young@example.com');
-  const dupYoungJson = await dupYoung.json();
-  ok('pre-TTL unverified holder → 409 with reclaimable: true', dupYoung.status === 409 && dupYoungJson.reclaimable === true);
 
-  // TTL-expired unverified squatter → freed on the spot; registration proceeds (200 + options).
-  const squatter = await createUser(db, 'squatted@example.com', now - UNVERIFIED_USER_TTL_MS - 1000);
-  db.tables.sessions.push({
-    id: 'sq-s',
-    user_id: squatter.id,
-    secret_hash: 'h',
-    created_at: now,
-    expires_at: now + DAY,
-    last_seen_at: null,
-  });
-  const freedRes = await optionsFor('squatted@example.com');
-  const freedJson = await freedRes.json();
-  ok(
-    'TTL-expired squatter → collision register succeeds (200 + options)',
-    freedRes.status === 200 && typeof freedJson.options?.challenge === 'string'
-  );
-  ok('...the squatter account is gone', (await userByEmail(db, 'squatted@example.com')) == null);
-  ok('...its child rows are swept (sessions)', !db.tables.sessions.some(s => s.user_id === squatter.id));
+  // ARCHIVE FREEZE (docs/archive-freeze.md): register-options' new-account branch (so its squat-purge
+  // + reclaim-affordance logic too) and reclaim-send are both frozen. The tests below are kept intact
+  // for a future revert but skipped — replaced with 410 assertions — while ARCHIVED.
+  if (!ARCHIVED) {
+    // Verified holder → plain 409 (no reclaim affordance).
+    const dupVerified = await optionsFor('held@example.com');
+    const dupVerifiedJson = await dupVerified.json();
+    ok('verified holder → 409 without reclaimable', dupVerified.status === 409 && !('reclaimable' in dupVerifiedJson));
 
-  // ---- reclaim-send: enumeration-safe; emails ONLY a never-verified holder ----
-  const realFetch = globalThis.fetch;
-  const sent = [];
-  globalThis.fetch = async (url, init) => {
-    sent.push({ url, body: JSON.parse(init.body) });
-    return new Response('{"id":"em_1"}', { status: 200 });
-  };
-  try {
-    const renv = { ACCOUNTS_DB: db, RESEND_API_KEY: 're_x' };
-    const sendFor = email => reclaimSend({ request: req('/api/account/reclaim-send', { body: { email } }), env: renv });
-    const hit = await sendFor('young@example.com'); // unverified holder — the ONE that sends
-    const missVerified = await sendFor('held@example.com'); // verified holder — silent
-    const missFree = await sendFor('nobody@example.com'); // no account — silent
-    const bodies = await Promise.all([hit, missVerified, missFree].map(r => r.text()));
-    ok(
-      'reclaim-send returns an identical generic 200 for unverified / verified / free',
-      hit.status === 200 && bodies[0] === bodies[1] && bodies[1] === bodies[2]
-    );
-    ok(
-      'reclaim-send emails ONLY the never-verified holder (1 mail, with a reclaim link)',
-      sent.length === 1 && /\?reclaim=/.test(sent[0].body.html)
-    );
-    const noKey = await reclaimSend({
-      request: req('/api/account/reclaim-send', { body: { email: 'young@example.com' } }),
-      env: { ACCOUNTS_DB: db },
+    // Young unverified holder → 409 + reclaimable: true (the client offers the magic-link flow).
+    const dupYoung = await optionsFor('young@example.com');
+    const dupYoungJson = await dupYoung.json();
+    ok('pre-TTL unverified holder → 409 with reclaimable: true', dupYoung.status === 409 && dupYoungJson.reclaimable === true);
+
+    // TTL-expired unverified squatter → freed on the spot; registration proceeds (200 + options).
+    const squatter = await createUser(db, 'squatted@example.com', now - UNVERIFIED_USER_TTL_MS - 1000);
+    db.tables.sessions.push({
+      id: 'sq-s',
+      user_id: squatter.id,
+      secret_hash: 'h',
+      created_at: now,
+      expires_at: now + DAY,
+      last_seen_at: null,
     });
+    const freedRes = await optionsFor('squatted@example.com');
+    const freedJson = await freedRes.json();
     ok(
-      "reclaim-send 503 { error:'email unavailable' } when RESEND unbound",
-      noKey.status === 503 && (await noKey.json()).error === 'email unavailable'
+      'TTL-expired squatter → collision register succeeds (200 + options)',
+      freedRes.status === 200 && typeof freedJson.options?.challenge === 'string'
     );
-  } finally {
-    globalThis.fetch = realFetch;
+    ok('...the squatter account is gone', (await userByEmail(db, 'squatted@example.com')) == null);
+    ok('...its child rows are swept (sessions)', !db.tables.sessions.some(s => s.user_id === squatter.id));
+
+    // ---- reclaim-send: enumeration-safe; emails ONLY a never-verified holder ----
+    const realFetch = globalThis.fetch;
+    const sent = [];
+    globalThis.fetch = async (url, init) => {
+      sent.push({ url, body: JSON.parse(init.body) });
+      return new Response('{"id":"em_1"}', { status: 200 });
+    };
+    try {
+      const renv = { ACCOUNTS_DB: db, RESEND_API_KEY: 're_x' };
+      const sendFor = email => reclaimSend({ request: req('/api/account/reclaim-send', { body: { email } }), env: renv });
+      const hit = await sendFor('young@example.com'); // unverified holder — the ONE that sends
+      const missVerified = await sendFor('held@example.com'); // verified holder — silent
+      const missFree = await sendFor('nobody@example.com'); // no account — silent
+      const bodies = await Promise.all([hit, missVerified, missFree].map(r => r.text()));
+      ok(
+        'reclaim-send returns an identical generic 200 for unverified / verified / free',
+        hit.status === 200 && bodies[0] === bodies[1] && bodies[1] === bodies[2]
+      );
+      ok(
+        'reclaim-send emails ONLY the never-verified holder (1 mail, with a reclaim link)',
+        sent.length === 1 && /\?reclaim=/.test(sent[0].body.html)
+      );
+      const noKey = await reclaimSend({
+        request: req('/api/account/reclaim-send', { body: { email: 'young@example.com' } }),
+        env: { ACCOUNTS_DB: db },
+      });
+      ok(
+        "reclaim-send 503 { error:'email unavailable' } when RESEND unbound",
+        noKey.status === 503 && (await noKey.json()).error === 'email unavailable'
+      );
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    ok(
+      'reclaim-send cross-origin rejected 403',
+      (await reclaimSend({ request: req('/api/account/reclaim-send', { origin: 'https://evil.example', body: { email: 'a@b.co' } }), env }))
+        .status === 403
+    );
+  } else {
+    const frozenOpts = await optionsFor('held@example.com');
+    const frozenOptsJson = await frozenOpts.json();
+    ok('register-options (new-account path) frozen: 410 archived', frozenOpts.status === 410 && frozenOptsJson.code === 'archived');
+    const frozenReclaim = await reclaimSend({
+      request: req('/api/account/reclaim-send', { body: { email: 'young@example.com' } }),
+      env,
+    });
+    const frozenReclaimJson = await frozenReclaim.json();
+    ok('reclaim-send frozen: 410 archived', frozenReclaim.status === 410 && frozenReclaimJson.code === 'archived');
+    console.log('  (skipped — archive freeze: squat-purge / reclaim-send enumeration-safety tests)');
   }
 
   // ---- reclaim-confirm: frees the squatter, pre-creates a VERIFIED account, binds the ceremony ----
+  // (reclaim-confirm itself is untouched by the freeze; tokens are minted directly below rather than
+  // via reclaim-send, so this section runs unconditionally regardless of ARCHIVED.)
   const young = await userByEmail(db, 'young@example.com');
   // seed an unclaimed donation under the reclaimed email — proof-of-inbox sweeps it in
   db.tables.donations.push({
@@ -1309,11 +1361,8 @@ console.log('\nA316: sign-up squat purge (lazy, at the register collision) + rec
       })
     ).status === 403
   );
-  ok(
-    'reclaim-send cross-origin rejected 403',
-    (await reclaimSend({ request: req('/api/account/reclaim-send', { origin: 'https://evil.example', body: { email: 'a@b.co' } }), env }))
-      .status === 403
-  );
+  // (reclaim-send cross-origin behavior is asserted above, inside the ARCHIVED branch — the freeze
+  // check fires before the origin check, so it's covered there rather than duplicated here.)
 }
 
 console.log('\nSession revocation + absolute cap + passkey delete (A302):');

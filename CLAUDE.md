@@ -6,6 +6,15 @@ narrative is in [`docs/architecture.md`](docs/architecture.md); the
 accounts/payments/admin backend is in
 [`functions/README.md`](functions/README.md).
 
+> **ARCHIVE FREEZE (2026-07-08).** Blotterbook is frozen as a local-only app — the owner is
+> re-platforming accounts/subscriptions/cloud-sync as a conventional client→server SaaS elsewhere.
+> New accounts, subscriptions, and cloud-sync setup are paused; the local app (and demo) are
+> unaffected and existing accounts keep working. See [`docs/archive-freeze.md`](docs/archive-freeze.md)
+> for the why, the full touchpoint inventory, and the revert procedure. All account/subscription/sync
+> code remains in the repo, gated behind one flag (`src/lib/archive.ts` / `functions/_lib/archive.ts`)
+> — nothing was deleted. The recurring backlog rituals **R1** (repo audit) and **CH16** (staging→prod
+> promotion) are **DORMANT** until thawed — do not run them while archived.
+
 ## What this is
 
 **Blotterbook** is a client-side trading journal and cost dashboard for futures

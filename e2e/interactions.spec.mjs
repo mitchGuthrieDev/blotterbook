@@ -8,6 +8,12 @@ import { watchErrors } from './helpers.mjs';
 // write control is disabled/guarded. The full redesign-DOM engine coverage lives in
 // staging-redesign.spec.mjs; here we only assert the demo-specific guarantees.
 
+// ARCHIVE FREEZE (2026-07-08, docs/archive-freeze.md): the Account nav entry is dropped on every
+// surface (including demo) while archived — App.svelte's `sections` list is built without it
+// regardless of mode. The pre-freeze "Account is promoted to demo" test is preserved verbatim inside
+// `if (!ARCHIVED)`; the archived reality (no Account item at all) is asserted alongside.
+const ARCHIVED = true; // mirror of src/lib/archive.ts — flip on thaw (docs/archive-freeze.md)
+
 const DEMO = '/app/demo.html';
 const nav = page => page.locator('nav[aria-label="Primary"]');
 const gotoScreen = async (page, name) => {
@@ -58,15 +64,24 @@ test('demo: boots into the redesigned sidebar dashboard with real seeded metrics
   expect(errors, errors.join('\n')).toHaveLength(0);
 });
 
-test('demo: Account screen is promoted (CH16) and fully read-only — controls disabled, no /api/me probe acted on', async ({ page }) => {
-  await page.goto(DEMO, { waitUntil: 'networkidle' });
-  // The Account nav item exists on demo now (F53 promoted).
-  await page.getByRole('button', { name: 'Account' }).click();
-  // Demo renders the screen in read-only mode with its explanatory note and disabled controls.
-  await expect(page.getByText(/demo/i).first()).toBeVisible();
-  const disabled = page.locator('button[disabled]');
-  await expect(disabled.first()).toBeVisible();
-});
+if (!ARCHIVED) {
+  test('demo: Account screen is promoted (CH16) and fully read-only — controls disabled, no /api/me probe acted on', async ({ page }) => {
+    await page.goto(DEMO, { waitUntil: 'networkidle' });
+    // The Account nav item exists on demo now (F53 promoted).
+    await page.getByRole('button', { name: 'Account' }).click();
+    // Demo renders the screen in read-only mode with its explanatory note and disabled controls.
+    await expect(page.getByText(/demo/i).first()).toBeVisible();
+    const disabled = page.locator('button[disabled]');
+    await expect(disabled.first()).toBeVisible();
+  });
+} // if (!ARCHIVED)
+
+if (ARCHIVED) {
+  test('ARCHIVE FREEZE: demo has no Account nav entry (dropped on every surface while archived)', async ({ page }) => {
+    await bootDashboard(page);
+    await expect(nav(page).getByRole('button', { name: 'Account', exact: true })).toHaveCount(0);
+  });
+} // if (ARCHIVED)
 
 test('demo: HARD invariant — nothing is persisted (no "blotterbook" IndexedDB database)', async ({ page }) => {
   await bootDashboard(page);

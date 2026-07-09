@@ -4,6 +4,10 @@
   // rule below — no JS, so it works pre- and post-hydration). `active` highlights the matching link
   // (the old build-includes `active=KEY` marker); `variant="admin"` renders the trimmed internal-tool
   // nav (A9: admin keeps a bespoke, marketing-free chrome).
+  // ARCHIVE FREEZE (docs/archive-freeze.md): the shared freeze flag — gates the header's Account
+  // entry below. See src/lib/archive.ts for the full explanation + revert instructions.
+  import { ARCHIVED } from '$lib/archive.ts';
+
   interface Props {
     active?: string;
     variant?: 'full' | 'admin';
@@ -60,13 +64,19 @@
           <a data-nav={l.key} class:active={active === l.key} href={l.href}>{l.label}</a>
         {/each}
       {/if}
-      <!-- A293: the header CTA is the Account entry — /account.html routes login vs dashboard itself. -->
-      <a class="navlaunch" href="/account.html">Account &rarr;</a>
+      {#if !ARCHIVED}
+        <!-- A293: the header CTA is the Account entry — /account.html routes login vs dashboard itself. -->
+        <a class="navlaunch" href="/account.html">Account &rarr;</a>
+      {/if}
+      <!-- ARCHIVE FREEZE (docs/archive-freeze.md): the Account entry is dropped above while archived —
+           new accounts/subscriptions/sync are paused, so there's nothing for it to lead to. -->
     </div>
-    <a
-      class="cta ml-auto rounded-[9px] bg-primary px-[14px] py-2 text-[13.5px] font-semibold text-primary-foreground no-underline hover:no-underline hover:brightness-[1.08]"
-      href="/account.html">Account &rarr;</a
-    >
+    {#if !ARCHIVED}
+      <a
+        class="cta ml-auto rounded-[9px] bg-primary px-[14px] py-2 text-[13.5px] font-semibold text-primary-foreground no-underline hover:no-underline hover:brightness-[1.08]"
+        href="/account.html">Account &rarr;</a
+      >
+    {/if}
     <label
       class="hamburger ml-auto h-9 w-10 cursor-pointer items-center justify-center rounded-[9px] border border-border bg-card"
       for="navtoggle"

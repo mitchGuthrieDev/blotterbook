@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { watchErrors } from './helpers.mjs';
 
+// ARCHIVE FREEZE (2026-07-08, docs/archive-freeze.md): the F56 login-gate (`launch-gate`) tests near
+// the bottom of this file assume the gate is armed by default on staging/prod — that's no longer
+// true while archived (`gateArmed` is forced false). They're preserved verbatim inside `if
+// (!ARCHIVED)`; the archived reality is asserted alongside. Also note the "seven screens + Account"
+// framing in the next comment is the pre-freeze nav — Account is dropped from the nav while archived
+// (see App.svelte's `sections`), though the screen route itself is left in place, just unreachable.
+const ARCHIVED = true; // mirror of src/lib/archive.ts — flip on thaw (docs/archive-freeze.md)
+
 // CH16 cutover: ALL app surfaces (app/demo/staging) render the ONE redesigned sidebar-shell SPA
 // (src/app/App.svelte = AppShell + a hash router over the seven screens + Account). This file is the
 // FULL redesign-DOM engine coverage — it drives it against the STAGING surface specifically because
@@ -960,40 +968,66 @@ test('staging redesign: F45 boot splash shows on demo too, then unmounts (CH16 p
 });
 
 // ── F56: login-gated launch module (flag + staging gated) ───────────────────────────────────────
+// ARCHIVE FREEZE: the gate never arms while archived (see the file-top note) — both tests below are
+// preserved verbatim for the thaw, and the archived reality is asserted right after.
+if (!ARCHIVED) {
+  test('staging redesign: F56 gate is ARMED by default — staging boots to the launch gate (both buttons)', async ({ page }) => {
+    // ACCOUNT_GATE = true, so staging boots to the login gate with NO override present.
+    await page.goto(STAGING, { waitUntil: 'networkidle' });
+    const gate = page.getByTestId('launch-gate');
+    await expect(gate).toBeVisible({ timeout: 8000 });
+    await expect(gate).toContainText('Sign in to launch Blotterbook');
+    await expect(gate.getByRole('button', { name: 'Log in', exact: true })).toBeVisible();
+    await expect(gate.getByRole('button', { name: 'Create account', exact: true })).toBeVisible();
+    // The app is held behind the gate — the real Dashboard KPIs are NOT rendered.
+    await expect(page.getByText('Net P&L', { exact: true })).toHaveCount(0);
 
-test('staging redesign: F56 gate is ARMED by default — staging boots to the launch gate (both buttons)', async ({ page }) => {
-  // ACCOUNT_GATE = true, so staging boots to the login gate with NO override present.
-  await page.goto(STAGING, { waitUntil: 'networkidle' });
-  const gate = page.getByTestId('launch-gate');
-  await expect(gate).toBeVisible({ timeout: 8000 });
-  await expect(gate).toContainText('Sign in to launch Blotterbook');
-  await expect(gate.getByRole('button', { name: 'Log in', exact: true })).toBeVisible();
-  await expect(gate.getByRole('button', { name: 'Create account', exact: true })).toBeVisible();
-  // The app is held behind the gate — the real Dashboard KPIs are NOT rendered.
-  await expect(page.getByText('Net P&L', { exact: true })).toHaveCount(0);
+    // Create account expands the email + passkey-register form in place.
+    await gate.getByRole('button', { name: 'Create account', exact: true }).click();
+    await expect(gate.getByPlaceholder('you@example.com')).toBeVisible();
+    await expect(gate.getByRole('button', { name: /Create account with a passkey/ })).toBeVisible();
 
-  // Create account expands the email + passkey-register form in place.
-  await gate.getByRole('button', { name: 'Create account', exact: true }).click();
-  await expect(gate.getByPlaceholder('you@example.com')).toBeVisible();
-  await expect(gate.getByRole('button', { name: /Create account with a passkey/ })).toBeVisible();
+    // CH16: the gate is promoted to PROD too — app.html is gated as well (no override present).
+    await page.goto('/app/app.html', { waitUntil: 'networkidle' });
+    await expect(page.getByTestId('launch-gate')).toBeVisible({ timeout: 8000 });
+  });
 
-  // CH16: the gate is promoted to PROD too — app.html is gated as well (no override present).
-  await page.goto('/app/app.html', { waitUntil: 'networkidle' });
-  await expect(page.getByTestId('launch-gate')).toBeVisible({ timeout: 8000 });
-});
+  test('staging redesign: F56 bb:flags override can force the gate OFF (QA bypass); demo is never gated', async ({ page }) => {
+    // The bb:flags override wins in both directions — force the armed gate OFF without a rebuild.
+    await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
+    await page.goto(STAGING, { waitUntil: 'networkidle' });
+    await expect(page.getByTestId('launch-gate')).toHaveCount(0);
+    await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 8000 });
 
-test('staging redesign: F56 bb:flags override can force the gate OFF (QA bypass); demo is never gated', async ({ page }) => {
-  // The bb:flags override wins in both directions — force the armed gate OFF without a rebuild.
-  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
-  await page.goto(STAGING, { waitUntil: 'networkidle' });
-  await expect(page.getByTestId('launch-gate')).toHaveCount(0);
-  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 8000 });
+    // Demo is NEVER gated regardless of the flag (isDemo excluded from gateArmed); boots to the dashboard.
+    await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+    await expect(page.getByTestId('launch-gate')).toHaveCount(0);
+    await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+  });
+} // if (!ARCHIVED)
 
-  // Demo is NEVER gated regardless of the flag (isDemo excluded from gateArmed); boots to the dashboard.
-  await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
-  await expect(page.getByTestId('launch-gate')).toHaveCount(0);
-  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
-});
+if (ARCHIVED) {
+  test('ARCHIVE FREEZE: staging + app boot straight to the dashboard/onboarding with NO bb:flags override — the gate never arms', async ({
+    page,
+  }) => {
+    // Deliberately no ACCOUNT_GATE override — pre-freeze this test's staging case required it.
+    await page.goto(STAGING, { waitUntil: 'networkidle' });
+    await expect(page.getByTestId('launch-gate')).toHaveCount(0);
+    await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 8000 });
+
+    await page.evaluate(() => indexedDB.deleteDatabase('blotterbook'));
+    await page.goto('/app/app.html', { waitUntil: 'networkidle' });
+    await expect(page.getByTestId('launch-gate')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Welcome to Blotterbook' })).toBeVisible({ timeout: 8000 });
+
+    // Demo is unaffected either way.
+    await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
+    await expect(page.getByTestId('launch-gate')).toHaveCount(0);
+    await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+
+    await page.evaluate(() => indexedDB.deleteDatabase('blotterbook')); // leave the surface clean
+  });
+} // if (ARCHIVED)
 
 // ── F49: editable-cell pickers (moved from the demo spec — demo is read-only for trades) ────────
 test('staging redesign: Trade Editor Date cell opens a calendar popover and picking a day updates the draft (F49)', async ({ page }) => {

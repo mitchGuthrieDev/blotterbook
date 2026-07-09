@@ -11,6 +11,10 @@
   // pill (admin override via /api/status, else auto-detect by pinging /app/). SSR renders the initial
   // state (first feature active, "Checking status…") so it matches hydration exactly.
   import { onMount } from 'svelte';
+  // ARCHIVE FREEZE (docs/archive-freeze.md): the shared freeze flag — gates every account/
+  // subscription/cloud-sync CTA on this page. See src/lib/archive.ts for the full explanation +
+  // revert instructions.
+  import { ARCHIVED, ARCHIVE_NOTE } from '$lib/archive.ts';
 
   // F38 — Stripe donations (LIVE). Donations are Stripe-dashboard-created PAYMENT LINKS: hosted,
   // full-redirect checkout pages opened in a new tab — no Stripe.js on this page, so ZERO CSP change
@@ -169,14 +173,20 @@
       <a href="/help/index.html">Help</a>
       <a href="roadmap.html">Roadmap</a>
       <a href="changelog.html">Changelog</a>
-      <!-- A293: the header CTA is the Account entry — /account.html routes login vs dashboard itself. -->
-      <a class="navlaunch" href="/account.html">Account &rarr;</a>
+      {#if !ARCHIVED}
+        <!-- A293: the header CTA is the Account entry — /account.html routes login vs dashboard itself. -->
+        <a class="navlaunch" href="/account.html">Account &rarr;</a>
+      {/if}
+      <!-- ARCHIVE FREEZE (docs/archive-freeze.md): the Account entry is dropped above while archived —
+           new accounts/subscriptions/sync are paused, so there's nothing for it to lead to. -->
     </div>
     <div class="navcta ml-auto flex items-center gap-[10px]">
-      <a
-        class="btn-primary inline-flex items-center gap-[7px] rounded-[9px] bg-primary px-4 py-[9px] text-[13.5px] font-semibold text-primary-foreground transition-[filter,transform] duration-150 hover:translate-y-[-1px] hover:brightness-[1.08]"
-        href="/account.html">Account &rarr;</a
-      >
+      {#if !ARCHIVED}
+        <a
+          class="btn-primary inline-flex items-center gap-[7px] rounded-[9px] bg-primary px-4 py-[9px] text-[13.5px] font-semibold text-primary-foreground transition-[filter,transform] duration-150 hover:translate-y-[-1px] hover:brightness-[1.08]"
+          href="/account.html">Account &rarr;</a
+        >
+      {/if}
     </div>
     <label
       class="hamburger ml-auto hidden h-9 w-10 cursor-pointer items-center justify-center rounded-[9px] border border-border bg-card"
@@ -199,15 +209,18 @@
   <div class="mx-auto w-full max-w-[1180px]">
     <div class="flex max-w-[660px] flex-col items-start gap-[22px]">
       <!-- announcement chip (the reference's "NOW …" pill → a real Blotterbook announcement) -->
+      <!-- ARCHIVE FREEZE (docs/archive-freeze.md): the badge + wording below swap when archived so the
+           hero doesn't advertise a signup that's currently paused; the link still scrolls to Pricing,
+           where the full archived explanation lives. -->
       <a
         class="rise r1 group inline-flex w-fit items-center gap-[10px] rounded-md border border-border bg-card px-[6px] py-[5px] text-[12.5px] text-muted-foreground shadow-[0_1px_0_rgba(0,0,0,0.3)] transition-colors hover:border-ring"
         href="#pricing"
       >
         <span
           class="rounded-[3px] border border-border bg-popover px-[6px] py-[2px] font-mono text-[10.5px] tracking-[0.14em] text-foreground"
-          >NEW</span
+          >{ARCHIVED ? 'ARCHIVED' : 'NEW'}</span
         >
-        <span>Cloud sync is live — end&#8209;to&#8209;end encrypted</span>
+        <span>{ARCHIVED ? 'Cloud sync is paused — the local app stays free' : 'Cloud sync is live — end‑to‑end encrypted'}</span>
         <span class="h-4 w-px flex-none bg-border"></span>
         <svg
           viewBox="0 0 24 24"
@@ -688,8 +701,15 @@
     <p class="mb-2 max-w-[680px] text-[clamp(15px,1.6vw,17px)] leading-[1.6] text-muted-foreground">
       Blotterbook is free for everyone — the whole CSV-driven app, with nothing about your trades uploaded. Launching takes a free account;
       or try the <a href="/app/demo.html">demo</a> with no sign-up. If it saves you money, back the project with an optional donation.
-      Cross-device
-      <b>synced workspaces</b> are live as the one optional paid add-on — $5/month, end-to-end encrypted.
+      {#if ARCHIVED}
+        <!-- ARCHIVE FREEZE (docs/archive-freeze.md): synced workspaces were the one paid add-on;
+             new signups/subscriptions are paused, so this sentence replaces the "live now" claim. -->
+        Cross-device <b>synced workspaces</b> were the one optional paid add-on ($5/month, end-to-end encrypted) — new sync signups are paused
+        while Blotterbook is archived; the local app stays free and fully working.
+      {:else}
+        Cross-device
+        <b>synced workspaces</b> are live as the one optional paid add-on — $5/month, end-to-end encrypted.
+      {/if}
     </p>
     <div class="price-grid mt-[34px] grid grid-cols-[1.1fr_1fr_1fr] items-stretch gap-4 max-[900px]:grid-cols-1">
       <div class="plan flex flex-col rounded-[14px] border border-primary/50 bg-card p-[26px] ring-1 ring-primary/30">
@@ -792,9 +812,11 @@
       </div>
 
       <div class="plan flex flex-col rounded-[14px] border border-border bg-card p-[26px]">
+        <!-- ARCHIVE FREEZE (docs/archive-freeze.md): the ribbon swaps to "Paused" when archived — new
+             sync signups/subscriptions are frozen, so "Available now" would be a false claim. -->
         <span
           class="ribbon mb-[14px] self-start rounded-[4px] border border-border bg-popover px-[9px] py-[3px] font-mono text-[10.5px] uppercase tracking-[0.12em] text-foreground"
-          >Available now</span
+          >{ARCHIVED ? 'Paused' : 'Available now'}</span
         >
         <h3 class="mb-1 text-[18px] font-semibold">Synced workspaces</h3>
         <p class="mb-[18px] text-[13px] leading-[1.5] text-muted-foreground">
@@ -827,13 +849,27 @@
           </li>
         </ul>
         <div class="mt-auto flex flex-col gap-2">
-          <!-- A278: carries the subscribe intent — /account.html latches ?subscribe=1 through
-               login/signup and opens the payment form the moment the session exists. -->
-          <p class="text-[11px] leading-[1.4] text-muted-foreground">Sign in (or sign up) and subscribe right there.</p>
-          <a
-            class="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
-            href="/account.html?subscribe=1">Get cloud sync &rarr;</a
-          >
+          {#if !ARCHIVED}
+            <!-- A278: carries the subscribe intent — /account.html latches ?subscribe=1 through
+                 login/signup and opens the payment form the moment the session exists. -->
+            <p class="text-[11px] leading-[1.4] text-muted-foreground">Sign in (or sign up) and subscribe right there.</p>
+            <a
+              class="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-[9px] border border-primary/50 bg-primary/12 px-4 py-[10px] text-[13.5px] font-semibold text-foreground transition-[border-color,background] duration-150 hover:border-primary hover:bg-primary/20"
+              href="/account.html?subscribe=1">Get cloud sync &rarr;</a
+            >
+          {:else}
+            <!-- ARCHIVE FREEZE (docs/archive-freeze.md): the subscribe CTA becomes a disabled, greyed
+                 button (not a link) — new sync signups/subscriptions are paused. -->
+            <button
+              type="button"
+              class="mt-auto inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-[9px] border border-border bg-secondary/40 px-4 py-[10px] text-[13.5px] font-semibold text-muted-foreground opacity-60"
+              disabled
+              title={ARCHIVE_NOTE}>Get cloud sync &rarr;</button
+            >
+            <p class="text-[11px] leading-[1.4] text-muted-foreground">
+              Paused — Blotterbook is archived; the local app stays free and fully working.
+            </p>
+          {/if}
         </div>
       </div>
     </div>
@@ -961,10 +997,16 @@
         <p
           class="ans m-0 pb-[22px] pl-9 pr-1 text-[14px] leading-[1.7] text-muted-foreground [&_code]:rounded-[5px] [&_code]:border [&_code]:border-border [&_code]:bg-card [&_code]:px-[5px] [&_code]:py-px [&_code]:font-mono [&_code]:text-[12.5px] [&_code]:text-foreground"
         >
-          Yes, if you want it: cross-device <b>synced workspaces</b> (end-to-end encrypted, $5/month) are live as the one optional paid add-on
-          — see Pricing. On the free tier, local storage is per-browser, so data isn't synced across devices and is cleared if you clear site
-          data — keep your original CSV or a backup. Re-uploading is safe: trades are de-duplicated by a stable id, so overlapping exports only
-          add genuinely new rows.
+          Yes, if you want it: cross-device <b>synced workspaces</b> (end-to-end encrypted, $5/month) are live as the one optional paid
+          add-on — see Pricing. On the free tier, local storage is per-browser, so data isn't synced across devices and is cleared if you
+          clear site data — keep your original CSV or a backup. Re-uploading is safe: trades are de-duplicated by a stable id, so
+          overlapping exports only add genuinely new rows.
+          {#if ARCHIVED}
+            <!-- ARCHIVE FREEZE (docs/archive-freeze.md): one appended sentence — don't rewrite the
+                 answer, just don't leave a dead-end promise. -->
+            <b>Blotterbook is currently archived:</b> new cloud-sync signups and subscriptions are paused, though the local, per-browser experience
+            described above keeps working exactly as described.
+          {/if}
         </p>
       </details>
       <details class="border-b border-border">
@@ -981,6 +1023,12 @@
           The app is <b>free for everyone</b> and stays free. You can optionally <b>back the project</b> with a $25 one-time, non-refundable
           donation (checkout via Stripe) — it's not a purchase and grants no product access. The only paid feature is
           <b>synced workspaces</b> — end-to-end-encrypted cross-device sync at $5/month, live now. Nothing else is gated.
+          {#if ARCHIVED}
+            <!-- ARCHIVE FREEZE (docs/archive-freeze.md): one appended sentence — don't rewrite the
+                 answer, just don't leave a dead-end promise. -->
+            <b>Blotterbook is currently archived:</b> new accounts, subscriptions, and cloud sync are paused, so <b>synced workspaces</b> aren't
+            available to sign up for right now — everything above stays free and works locally either way.
+          {/if}
         </p>
       </details>
     </div>

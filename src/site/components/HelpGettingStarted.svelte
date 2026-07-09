@@ -4,6 +4,9 @@
   // HelpShell (SiteShell + the HelpNav sidebar); the numbered `.steps` styling is global, defined in
   // HelpShell itself.
   import HelpShell from '../lib/HelpShell.svelte';
+  // ARCHIVE FREEZE (docs/archive-freeze.md): the launch gate is bypassed while archived — the app
+  // needs no account, so the first-run copy branches.
+  import { ARCHIVED } from '$lib/archive.ts';
 </script>
 
 <HelpShell active="getting-started">
@@ -17,9 +20,16 @@
   <section id="gs-firstrun" class="scroll-mt-[72px] mt-[18px] border-t border-border pt-6">
     <h2 class="mt-0">First run</h2>
     <p>
-      Blotterbook runs entirely in your browser — your trade data never leaves the page. Launching the app takes a free account (a passkey,
-      no password); the <a href="/app/demo.html">demo</a> needs no sign-up. Open the app and you'll land on the setup screen. The whole flow is
-      four steps:
+      Blotterbook runs entirely in your browser — your trade data never leaves the page.
+      {#if ARCHIVED}
+        <!-- ARCHIVE FREEZE (docs/archive-freeze.md): no account needed while archived. -->
+        No sign-up needed — <a href="/app/app.html">open the app</a> (or the <a href="/app/demo.html">demo</a>) and you'll land on the setup
+        screen.
+      {:else}
+        Launching the app takes a free account (a passkey, no password); the <a href="/app/demo.html">demo</a> needs no sign-up. Open the app
+        and you'll land on the setup screen.
+      {/if}
+      The whole flow is four steps:
     </p>
     <ol class="steps">
       <li><b>Pick your broker, data feed, and state</b> — these drive the cost &amp; tax model.</li>

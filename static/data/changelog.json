@@ -4,6 +4,20 @@
   "note": "Curated, user-facing release notes for the prod (main + demo) track. Keyed by the CH12 prod version. Add a new entry at the top of `releases` each time the prod version bumps (see chore(release) boundaries on main). Keep it readable — this is for users, not a git log.",
   "releases": [
     {
+      "version": "0.71.1",
+      "date": "2026-07-08",
+      "title": "Blotterbook is archived — free local mode continues",
+      "summary": "Blotterbook is now frozen as a free, local-only app while the accounts/subscriptions/cloud-sync idea is re-platformed elsewhere. New accounts, subscriptions, and cloud-sync setup are paused — everything you already rely on locally keeps working exactly as before.",
+      "highlights": [
+        "The whole local app — CSV import, the journal, the equity curve and calendar, the cost and Section 1256 tax model, analytics, and reports — keeps working exactly as before, free, entirely in your browser. Nothing about local use changed.",
+        "New accounts, new subscriptions, and new cloud-sync setups are paused for now — creating one will tell you the product is archived rather than silently failing.",
+        "If you already have an account: you can still log in, and if you have a synced workspace it keeps syncing your own data as before.",
+        "If you already have a subscription: you can still cancel it from your account — nothing is charged going forward, and your already-synced data stays reachable.",
+        "The demo is unaffected — try Blotterbook with no sign-up any time.",
+        "See the archive notice on the Account page (or docs/archive-freeze.md in the source) for the full explanation."
+      ]
+    },
+    {
       "version": "0.70.0",
       "date": "2026-07-08",
       "title": "The Help hub goes live, and support gets real tools",

@@ -7,6 +7,12 @@ import { watchErrors } from './helpers.mjs';
 // no multiple workspaces) never mounts it. Each test gets a fresh, isolated browser context
 // (Playwright default), so the workspace registry (Store.local, per F59) starts at the single migrated
 // "Default" workspace every time — no cross-test bleed.
+//
+// ARCHIVE FREEZE (2026-07-08, docs/archive-freeze.md): the per-workspace sync-affordance assertions
+// (sync-status/sync-enable/"cloud tier required"/"Checking…") no longer apply — the switcher replaces
+// that whole row with one muted archived-note line. Workspace CRUD (create/rename/delete/switch) is
+// untouched by the freeze (local-only) and stays asserted unconditionally below.
+const ARCHIVED = true; // mirror of src/lib/archive.ts — flip on thaw (docs/archive-freeze.md)
 
 const STAGING = '/app/staging.html';
 const nav = page => page.locator('nav[aria-label="Primary"]');
@@ -31,13 +37,20 @@ test('workspace switcher: renders on staging with the Default workspace active',
   await expect(trigger(page)).toBeVisible();
   await expect.poll(() => activeName(page)).toBe('Default');
 
-  // Opening it lists the registry (one entry) with the F63 per-workspace sync-status affordance, and
-  // Delete is disabled — the store refuses to delete the last remaining workspace. The e2e static
-  // server can't run functions, so /api/me fails → the local tier → the inert "cloud tier required".
+  // Opening it lists the registry (one entry), and Delete is disabled — the store refuses to delete
+  // the last remaining workspace.
   await trigger(page).click();
   await expect(page.getByRole('menuitem', { name: 'Default', exact: true })).toBeVisible();
-  await expect(page.getByTestId('sync-status')).toBeVisible();
-  await expect(page.getByText('cloud tier required')).toBeVisible();
+  if (!ARCHIVED) {
+    // Pre-freeze: the F63 per-workspace sync-status affordance. The e2e static server can't run
+    // functions, so /api/me fails → the local tier → the inert "cloud tier required".
+    await expect(page.getByTestId('sync-status')).toBeVisible();
+    await expect(page.getByText('cloud tier required')).toBeVisible();
+  } else {
+    // ARCHIVE FREEZE: the sync row is replaced by the one muted archived-note line.
+    await expect(page.getByTestId('archived-note')).toBeVisible();
+    await expect(page.getByTestId('sync-status')).toHaveCount(0);
+  }
   await expect(page.getByRole('menuitem', { name: 'Delete…' })).toHaveAttribute('aria-disabled', 'true');
   await page.keyboard.press('Escape');
 
@@ -155,11 +168,16 @@ test('workspace switcher: renders on PROD after import (CH16-promoted), sync-sta
   await expect(trigger(page)).toBeVisible();
   await expect.poll(() => activeName(page)).toBe('Default');
 
-  // The F63 sync-status row reads sensibly (not a broken state) on prod's local tier: the e2e static
-  // server can't run functions, so /api/me fails → local tier → the inert "cloud tier required" hint.
   await trigger(page).click();
-  await expect(page.getByTestId('sync-status')).toBeVisible();
-  await expect(page.getByText('cloud tier required')).toBeVisible();
+  if (!ARCHIVED) {
+    // Pre-freeze: the F63 sync-status row reads sensibly (not a broken state) on prod's local tier —
+    // the e2e static server can't run functions, so /api/me fails → local tier → "cloud tier required".
+    await expect(page.getByTestId('sync-status')).toBeVisible();
+    await expect(page.getByText('cloud tier required')).toBeVisible();
+  } else {
+    // ARCHIVE FREEZE: the archived-note line renders on prod too (every non-demo surface).
+    await expect(page.getByTestId('archived-note')).toBeVisible();
+  }
   await page.keyboard.press('Escape');
 
   await page.evaluate(() => indexedDB.deleteDatabase('blotterbook')); // leave the surface clean
@@ -204,44 +222,71 @@ test('cloud sync: demo and prod never call /api/sync (inert CloudStore off enabl
 // a NEUTRAL "Checking…" — it must NOT mislabel a would-be cloud user "cloud tier required" during the
 // window. The full A279/A299 pill state machine (enable → synced → pending → pause + per-workspace
 // switch) is driven end-to-end in cloud-sync.spec.mjs.
-test('workspace switcher: shows a neutral "checking…" while the tier probe is in flight (A306)', async ({ page }) => {
-  await page.route('**/api/me', async route => {
-    await new Promise(r => setTimeout(r, 4000)); // hold the probe so tier stays '' when we open the menu
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ tier: 'cloud', cloudSync: true, user: null, passkeys: [] }),
+// ARCHIVE FREEZE: the tier-probe state machine this guards is never entered while archived — the
+// controller isn't configured, so no /api/me probe happens at all. Preserved unmodified for the thaw.
+if (!ARCHIVED) {
+  test('workspace switcher: shows a neutral "checking…" while the tier probe is in flight (A306)', async ({ page }) => {
+    await page.route('**/api/me', async route => {
+      await new Promise(r => setTimeout(r, 4000)); // hold the probe so tier stays '' when we open the menu
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ tier: 'cloud', cloudSync: true, user: null, passkeys: [] }),
+      });
     });
+    // Boot WITHOUT waiting for network idle — `networkidle` would block on the held /api/me above, so by
+    // the time the menu opened the probe would already have resolved (tier='cloud') and the transient
+    // 'checking' window would be gone. The dashboard renders off the local Store, independent of the probe.
+    await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
+    await page.goto(STAGING, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+    await trigger(page).click();
+    await expect(page.getByTestId('sync-checking')).toBeVisible();
+    await expect(page.getByText('cloud tier required')).toHaveCount(0);
   });
-  // Boot WITHOUT waiting for network idle — `networkidle` would block on the held /api/me above, so by
-  // the time the menu opened the probe would already have resolved (tier='cloud') and the transient
-  // 'checking' window would be gone. The dashboard renders off the local Store, independent of the probe.
-  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
-  await page.goto(STAGING, { waitUntil: 'domcontentloaded' });
-  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
-  await trigger(page).click();
-  await expect(page.getByTestId('sync-checking')).toBeVisible();
-  await expect(page.getByText('cloud tier required')).toHaveCount(0);
-});
 
-// F63/A336: the per-workspace sync-status affordance renders on STAGING for a cloud-tier account.
-// The button is ALWAYS the sync action ("Enable sync"); when the E2E key isn't in memory, clicking
-// it opens the inline key prompt as a step of the action (the e2e server can't run /api/sync, so
-// this asserts the affordance is present + wired, not a full push/pull — convergence is proven in
-// scripts/test-cloudsync.mjs).
-test('cloud sync (staging): the switcher shows the sync affordance for a cloud-tier account', async ({ page }) => {
-  await page.route('**/api/me', route =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ tier: 'cloud', cloudSync: true, user: null, passkeys: [] }),
-    })
-  );
-  await bootDashboard(page);
-  await trigger(page).click();
-  await expect(page.getByTestId('sync-status')).toBeVisible();
-  // A336: the action button renders directly — no unlock affordance exists anymore.
-  await expect(page.getByTestId('sync-enable')).toBeVisible();
-  await expect(page.getByTestId('sync-unlock')).toHaveCount(0);
-  await expect(page.getByText('cloud tier required')).toHaveCount(0);
-});
+  // F63/A336: the per-workspace sync-status affordance renders on STAGING for a cloud-tier account.
+  // The button is ALWAYS the sync action ("Enable sync"); when the E2E key isn't in memory, clicking
+  // it opens the inline key prompt as a step of the action (the e2e server can't run /api/sync, so
+  // this asserts the affordance is present + wired, not a full push/pull — convergence is proven in
+  // scripts/test-cloudsync.mjs).
+  test('cloud sync (staging): the switcher shows the sync affordance for a cloud-tier account', async ({ page }) => {
+    await page.route('**/api/me', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ tier: 'cloud', cloudSync: true, user: null, passkeys: [] }),
+      })
+    );
+    await bootDashboard(page);
+    await trigger(page).click();
+    await expect(page.getByTestId('sync-status')).toBeVisible();
+    // A336: the action button renders directly — no unlock affordance exists anymore.
+    await expect(page.getByTestId('sync-enable')).toBeVisible();
+    await expect(page.getByTestId('sync-unlock')).toHaveCount(0);
+    await expect(page.getByText('cloud tier required')).toHaveCount(0);
+  });
+} // if (!ARCHIVED)
+
+// ARCHIVE FREEZE: even a slow/would-be-cloud /api/me response never surfaces a tier-probe state —
+// the controller is never configured while archived, so the switcher shows the archived-note line
+// immediately, with no "Checking…" flash and no dependency on /api/me at all.
+if (ARCHIVED) {
+  test('ARCHIVE FREEZE: the switcher shows the archived-note immediately, independent of any /api/me response', async ({ page }) => {
+    await page.route('**/api/me', async route => {
+      await new Promise(r => setTimeout(r, 4000)); // would-be cloud tier, held slow — must not matter
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ tier: 'cloud', cloudSync: true, user: null, passkeys: [] }),
+      });
+    });
+    await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
+    await page.goto(STAGING, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 6000 });
+    await trigger(page).click();
+    await expect(page.getByTestId('archived-note')).toBeVisible();
+    await expect(page.getByTestId('sync-checking')).toHaveCount(0);
+    await expect(page.getByTestId('sync-status')).toHaveCount(0);
+  });
+} // if (ARCHIVED)

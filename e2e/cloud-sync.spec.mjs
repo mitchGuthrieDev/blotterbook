@@ -7,6 +7,14 @@ import { test, expect } from '@playwright/test';
 // real key math runs in the browser (Web Crypto + the Argon2id wasm) — no CSP is enforced by the
 // static server, so the wasm compiles freely. The wrapped-IK blobs the setup PUTs are opaque
 // ciphertext held only in the test's in-memory map (mirroring the dumb-blob-store contract).
+//
+// ARCHIVE FREEZE (2026-07-08, docs/archive-freeze.md): the Account screen is unreachable while
+// archived (no nav entry, #account falls back to Dashboard), so none of the setup/subscribe/
+// state-machine/prod-promotion flows below can be driven anymore — they're preserved verbatim inside
+// `if (!ARCHIVED)` so a thaw (flip the constant below to false) re-arms them unmodified. The archived
+// reality is asserted in the new tests at the bottom of this file: no Account nav button, the
+// switcher's archived-note line, and zero /api/sync + /api/me traffic across boot + interaction.
+const ARCHIVED = true; // mirror of src/lib/archive.ts — flip on thaw (docs/archive-freeze.md)
 
 const STAGING = '/app/staging.html';
 
@@ -116,185 +124,190 @@ async function bootStaging(page) {
 
 const PASSPHRASE = 'correct horse battery';
 
-test('cloud sync (staging): setup blocks finishing until the recovery key is confirmed saved', async ({ page }) => {
-  installStubs(page);
-  await bootStaging(page);
-  await gotoAccount(page);
+// ARCHIVE FREEZE: the Account screen these setup/subscribe/state-machine/prod-promotion tests drive
+// through is unreachable while archived — preserved verbatim so a thaw (ARCHIVED = false above)
+// re-arms them unmodified.
+if (!ARCHIVED) {
+  test('cloud sync (staging): setup blocks finishing until the recovery key is confirmed saved', async ({ page }) => {
+    installStubs(page);
+    await bootStaging(page);
+    await gotoAccount(page);
 
-  const card = page.getByTestId('cloud-sync-card');
-  await expect(card).toBeVisible();
-  await page.getByTestId('cloud-setup-open').click();
+    const card = page.getByTestId('cloud-sync-card');
+    await expect(card).toBeVisible();
+    await page.getByTestId('cloud-setup-open').click();
 
-  // Generate → the recovery key is rendered ONCE.
-  await page.getByTestId('cloud-generate').click();
-  const key = page.getByTestId('recovery-key');
-  await expect(key).toBeVisible({ timeout: 8000 });
-  const keyText = (await key.textContent())?.trim() ?? '';
-  expect(keyText.length).toBeGreaterThan(20); // a real base64 256-bit key
+    // Generate → the recovery key is rendered ONCE.
+    await page.getByTestId('cloud-generate').click();
+    const key = page.getByTestId('recovery-key');
+    await expect(key).toBeVisible({ timeout: 8000 });
+    const keyText = (await key.textContent())?.trim() ?? '';
+    expect(keyText.length).toBeGreaterThan(20); // a real base64 256-bit key
 
-  // Finish is BLOCKED until the "I've saved my recovery key" confirmation — even after a passphrase.
-  const finish = page.getByTestId('cloud-finish');
-  await expect(finish).toBeDisabled();
-  await page.getByLabel('Also set a passphrase (optional)').click();
-  await page.getByLabel('Cloud-sync passphrase').fill(PASSPHRASE);
-  await expect(finish).toBeDisabled(); // still blocked — the confirmation is mandatory
+    // Finish is BLOCKED until the "I've saved my recovery key" confirmation — even after a passphrase.
+    const finish = page.getByTestId('cloud-finish');
+    await expect(finish).toBeDisabled();
+    await page.getByLabel('Also set a passphrase (optional)').click();
+    await page.getByLabel('Cloud-sync passphrase').fill(PASSPHRASE);
+    await expect(finish).toBeDisabled(); // still blocked — the confirmation is mandatory
 
-  // Confirm saved → Finish enables, and the account IK lands in memory for the session — the sync
-  // panel appearing is the ready signal (A336: no unlocked badge).
-  await page.getByTestId('recovery-saved').click();
-  await expect(finish).toBeEnabled();
-  await finish.click();
-  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible({ timeout: 15_000 });
-});
-
-test('cloud sync (staging): a LOCAL-tier user sees the subscribe CTA, not the key-setup form', async ({ page }) => {
-  installStubs(page, { tier: 'local' });
-  await page.route('**/api/checkout', route =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ url: '/app/app.html#account' }) })
-  );
-  await bootStaging(page);
-  await gotoAccount(page);
-
-  const card = page.getByTestId('cloud-sync-card');
-  await expect(card).toBeVisible();
-  // The tier gate: a local-tier account gets the subscribe CTA, and the key-setup entry point is absent
-  // (so a free user can't generate keys the server's A253 entitlement gate would reject on write).
-  await expect(page.getByTestId('cloud-subscribe')).toBeVisible();
-  await expect(page.getByTestId('cloud-setup-open')).toHaveCount(0);
-
-  // A278: the CTA now reveals the IN-APP subscription form, which immediately creates the
-  // incomplete subscription server-side (POST /api/subscription/create — the account linkage +
-  // price stay server-resolved). Register the request wait BEFORE the click — the fetch fires as
-  // the form mounts, so an after-the-fact wait would race. (On this static test server the API
-  // 404s, so the form settles into its error/fallback state — the wiring is what's asserted.)
-  const [createReq] = await Promise.all([
-    page.waitForRequest(r => r.url().includes('/api/subscription/create') && r.method() === 'POST'),
-    page.getByTestId('cloud-subscribe').click(),
-  ]);
-  expect(createReq.method()).toBe('POST');
-  await expect(page.getByTestId('subscribe-form')).toBeVisible();
-});
-
-test('cloud sync (staging): the key prompt rides inline in the sync action after a reload (A336)', async ({ page }) => {
-  installStubs(page);
-  const sync = installSyncTransport(page, { pushDelayMs: 0 });
-  await bootStaging(page);
-  await gotoAccount(page);
-
-  // Run setup with a passphrase (same flow as above).
-  await page.getByTestId('cloud-setup-open').click();
-  await page.getByTestId('cloud-generate').click();
-  await expect(page.getByTestId('recovery-key')).toBeVisible({ timeout: 8000 });
-  await page.getByLabel('Also set a passphrase (optional)').click();
-  await page.getByLabel('Cloud-sync passphrase').fill(PASSPHRASE);
-  await page.getByTestId('recovery-saved').click();
-  await page.getByTestId('cloud-finish').click();
-  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('How sign-in and encryption relate')).toBeVisible();
-
-  // A336: no lock/unlock affordances exist anywhere — the vault is invisible.
-  await expect(page.getByTestId('cloud-lock')).toHaveCount(0);
-  await expect(page.getByTestId('cloud-unlock-open')).toHaveCount(0);
-  await expect(page.getByTestId('cloud-unlocked')).toHaveCount(0);
-
-  // Reload → the in-memory IK is gone (nothing persists). Enabling sync from the switcher now opens
-  // the inline key prompt as a STEP of that action; the passphrase path rebuilds the KEK (Argon2id),
-  // unwraps the IK back into memory, and CONTINUES the enable automatically — one click, not
-  // unlock-then-click-again.
-  await page.reload({ waitUntil: 'networkidle' });
-  // The #account hash persists across the reload, so wait on the booted shell, not the Dashboard.
-  await expect(wsTrigger(page)).toBeVisible({ timeout: 8000 });
-  await wsTrigger(page).click();
-  await page.getByTestId('sync-enable').click();
-  await expect(page.getByText('Enter your sync passphrase to turn on sync.')).toBeVisible({ timeout: 8000 });
-  await page.getByPlaceholder('Your cloud-sync passphrase').fill(PASSPHRASE);
-  await page.getByTestId('sync-key-passphrase-submit').click();
-  await page.keyboard.press('Escape'); // dismiss the switcher dropdown if still open
-  await gotoAccount(page);
-  await expect(page.getByTestId('cloud-sync-panel').getByTestId('sync-state')).toHaveAttribute('data-status', 'synced', {
-    timeout: 20_000,
+    // Confirm saved → Finish enables, and the account IK lands in memory for the session — the sync
+    // panel appearing is the ready signal (A336: no unlocked badge).
+    await page.getByTestId('recovery-saved').click();
+    await expect(finish).toBeEnabled();
+    await finish.click();
+    await expect(page.getByTestId('cloud-sync-panel')).toBeVisible({ timeout: 15_000 });
   });
-  expect(sync.pushCount).toBeGreaterThan(0); // the continued enable actually ran the full reconcile
-});
 
-test('cloud sync (staging): A279/A299 state machine — enable → synced, controls, pending, pause/resume, per-workspace', async ({
-  page,
-}) => {
-  test.setTimeout(90_000);
-  installStubs(page); // /api/me (cloud) + the wrapped-IK blob store
-  // Push starts INSTANT so the initial full reconcile (12-record batches over the seeded staging data,
-  // A253) settles fast; the delay is turned on only around the 'pending' observation below.
-  const sync = installSyncTransport(page, { pushDelayMs: 0 });
-  await bootStaging(page);
-  await setupSync(page);
+  test('cloud sync (staging): a LOCAL-tier user sees the subscribe CTA, not the key-setup form', async ({ page }) => {
+    installStubs(page, { tier: 'local' });
+    await page.route('**/api/checkout', route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ url: '/app/app.html#account' }) })
+    );
+    await bootStaging(page);
+    await gotoAccount(page);
 
-  const panelPill = page.getByTestId('cloud-sync-panel').getByTestId('sync-state');
+    const card = page.getByTestId('cloud-sync-card');
+    await expect(card).toBeVisible();
+    // The tier gate: a local-tier account gets the subscribe CTA, and the key-setup entry point is absent
+    // (so a free user can't generate keys the server's A253 entitlement gate would reject on write).
+    await expect(page.getByTestId('cloud-subscribe')).toBeVisible();
+    await expect(page.getByTestId('cloud-setup-open')).toHaveCount(0);
 
-  // Enable sync for the active workspace from the switcher → the pill runs syncing → synced.
-  await wsTrigger(page).click();
-  await page.getByTestId('sync-enable').click();
-  await page.keyboard.press('Escape');
-  await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+    // A278: the CTA now reveals the IN-APP subscription form, which immediately creates the
+    // incomplete subscription server-side (POST /api/subscription/create — the account linkage +
+    // price stay server-resolved). Register the request wait BEFORE the click — the fetch fires as
+    // the form mounts, so an after-the-fact wait would race. (On this static test server the API
+    // 404s, so the form settles into its error/fallback state — the wiring is what's asserted.)
+    const [createReq] = await Promise.all([
+      page.waitForRequest(r => r.url().includes('/api/subscription/create') && r.method() === 'POST'),
+      page.getByTestId('cloud-subscribe').click(),
+    ]);
+    expect(createReq.method()).toBe('POST');
+    await expect(page.getByTestId('subscribe-form')).toBeVisible();
+  });
 
-  // The direction controls now render + have REAL effects (each hits the stubbed transport).
-  let pulls = sync.pullCount;
-  let pushes = sync.pushCount;
-  await page.getByTestId('cloud-pull').click();
-  await expect.poll(() => sync.pullCount).toBeGreaterThan(pulls);
-  expect(sync.pushCount).toBe(pushes); // pull-only never pushes (A299 pending-clear parity)
-  await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+  test('cloud sync (staging): the key prompt rides inline in the sync action after a reload (A336)', async ({ page }) => {
+    installStubs(page);
+    const sync = installSyncTransport(page, { pushDelayMs: 0 });
+    await bootStaging(page);
+    await gotoAccount(page);
 
-  pushes = sync.pushCount;
-  await page.getByTestId('cloud-push').click();
-  await expect.poll(() => sync.pushCount).toBeGreaterThan(pushes);
+    // Run setup with a passphrase (same flow as above).
+    await page.getByTestId('cloud-setup-open').click();
+    await page.getByTestId('cloud-generate').click();
+    await expect(page.getByTestId('recovery-key')).toBeVisible({ timeout: 8000 });
+    await page.getByLabel('Also set a passphrase (optional)').click();
+    await page.getByLabel('Cloud-sync passphrase').fill(PASSPHRASE);
+    await page.getByTestId('recovery-saved').click();
+    await page.getByTestId('cloud-finish').click();
+    await expect(page.getByTestId('cloud-sync-panel')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('How sign-in and encryption relate')).toBeVisible();
 
-  pulls = sync.pullCount;
-  pushes = sync.pushCount;
-  await page.getByTestId('cloud-sync-now').click();
-  await expect.poll(() => sync.pullCount).toBeGreaterThan(pulls);
-  await expect.poll(() => sync.pushCount).toBeGreaterThan(pushes);
-  await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+    // A336: no lock/unlock affordances exist anywhere — the vault is invisible.
+    await expect(page.getByTestId('cloud-lock')).toHaveCount(0);
+    await expect(page.getByTestId('cloud-unlock-open')).toHaveCount(0);
+    await expect(page.getByTestId('cloud-unlocked')).toHaveCount(0);
 
-  // A279 PENDING: a local write (a journal note) marks the workspace "pending upload" until the
-  // (slow) debounced push reaches the server, then settles back to 'synced'. Slow the push down NOW
-  // (a single-record batch) so 'pending' is observable — the initial full reconcile above ran instant.
-  sync.pushDelayMs = 1200;
-  await gotoScreen(page, 'Calendar');
-  await page.locator('button:has(span.text-chart-2), button:has(span.text-destructive)').first().click();
-  await expect(page.getByText('Journal note')).toBeVisible();
-  await page.locator('textarea').fill('pending-state note');
-  await page.getByRole('button', { name: 'Save note' }).click();
-  await gotoAccount(page);
-  await expect(panelPill).toHaveAttribute('data-status', 'pending', { timeout: 4000 });
-  await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
-  sync.pushDelayMs = 0; // Resume below does a full re-push — keep it instant so it settles fast.
+    // Reload → the in-memory IK is gone (nothing persists). Enabling sync from the switcher now opens
+    // the inline key prompt as a STEP of that action; the passphrase path rebuilds the KEK (Argon2id),
+    // unwraps the IK back into memory, and CONTINUES the enable automatically — one click, not
+    // unlock-then-click-again.
+    await page.reload({ waitUntil: 'networkidle' });
+    // The #account hash persists across the reload, so wait on the booted shell, not the Dashboard.
+    await expect(wsTrigger(page)).toBeVisible({ timeout: 8000 });
+    await wsTrigger(page).click();
+    await page.getByTestId('sync-enable').click();
+    await expect(page.getByText('Enter your sync passphrase to turn on sync.')).toBeVisible({ timeout: 8000 });
+    await page.getByPlaceholder('Your cloud-sync passphrase').fill(PASSPHRASE);
+    await page.getByTestId('sync-key-passphrase-submit').click();
+    await page.keyboard.press('Escape'); // dismiss the switcher dropdown if still open
+    await gotoAccount(page);
+    await expect(page.getByTestId('cloud-sync-panel').getByTestId('sync-state')).toHaveAttribute('data-status', 'synced', {
+      timeout: 20_000,
+    });
+    expect(sync.pushCount).toBeGreaterThan(0); // the continued enable actually ran the full reconcile
+  });
 
-  // PAUSE → the pill reads 'paused' (distinct from never-synced) and a Resume control appears.
-  await page.getByTestId('cloud-pause').click();
-  await expect(panelPill).toHaveAttribute('data-status', 'paused', { timeout: 8000 });
-  await expect(page.getByTestId('cloud-resume')).toBeVisible();
+  test('cloud sync (staging): A279/A299 state machine — enable → synced, controls, pending, pause/resume, per-workspace', async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    installStubs(page); // /api/me (cloud) + the wrapped-IK blob store
+    // Push starts INSTANT so the initial full reconcile (12-record batches over the seeded staging data,
+    // A253) settles fast; the delay is turned on only around the 'pending' observation below.
+    const sync = installSyncTransport(page, { pushDelayMs: 0 });
+    await bootStaging(page);
+    await setupSync(page);
 
-  // RESUME → back to synced, direction controls return.
-  await page.getByTestId('cloud-resume').click();
-  await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
-  await expect(page.getByTestId('cloud-pull')).toBeVisible();
+    const panelPill = page.getByTestId('cloud-sync-panel').getByTestId('sync-state');
 
-  // A299 PER-WORKSPACE: create a second workspace + switch to it — the pill must re-derive to 'off'
-  // (the new workspace is NOT enabled), NOT carry the Default workspace's 'synced'. Switching back
-  // restores 'synced'.
-  await wsTrigger(page).click();
-  await page.getByRole('menuitem', { name: 'New workspace…' }).click();
-  const dlg = page.getByRole('dialog');
-  await dlg.getByPlaceholder('Workspace name').fill('Second');
-  await dlg.getByRole('button', { name: 'Create' }).click();
-  await expect(wsTrigger(page)).toHaveAttribute('aria-label', /Second/, { timeout: 8000 });
-  await expect(panelPill).toHaveAttribute('data-status', 'off', { timeout: 8000 });
+    // Enable sync for the active workspace from the switcher → the pill runs syncing → synced.
+    await wsTrigger(page).click();
+    await page.getByTestId('sync-enable').click();
+    await page.keyboard.press('Escape');
+    await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
 
-  await wsTrigger(page).click();
-  await page.getByRole('menuitem', { name: 'Default', exact: true }).click();
-  await expect(wsTrigger(page)).toHaveAttribute('aria-label', /Default/, { timeout: 8000 });
-  await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
-});
+    // The direction controls now render + have REAL effects (each hits the stubbed transport).
+    let pulls = sync.pullCount;
+    let pushes = sync.pushCount;
+    await page.getByTestId('cloud-pull').click();
+    await expect.poll(() => sync.pullCount).toBeGreaterThan(pulls);
+    expect(sync.pushCount).toBe(pushes); // pull-only never pushes (A299 pending-clear parity)
+    await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+
+    pushes = sync.pushCount;
+    await page.getByTestId('cloud-push').click();
+    await expect.poll(() => sync.pushCount).toBeGreaterThan(pushes);
+
+    pulls = sync.pullCount;
+    pushes = sync.pushCount;
+    await page.getByTestId('cloud-sync-now').click();
+    await expect.poll(() => sync.pullCount).toBeGreaterThan(pulls);
+    await expect.poll(() => sync.pushCount).toBeGreaterThan(pushes);
+    await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+
+    // A279 PENDING: a local write (a journal note) marks the workspace "pending upload" until the
+    // (slow) debounced push reaches the server, then settles back to 'synced'. Slow the push down NOW
+    // (a single-record batch) so 'pending' is observable — the initial full reconcile above ran instant.
+    sync.pushDelayMs = 1200;
+    await gotoScreen(page, 'Calendar');
+    await page.locator('button:has(span.text-chart-2), button:has(span.text-destructive)').first().click();
+    await expect(page.getByText('Journal note')).toBeVisible();
+    await page.locator('textarea').fill('pending-state note');
+    await page.getByRole('button', { name: 'Save note' }).click();
+    await gotoAccount(page);
+    await expect(panelPill).toHaveAttribute('data-status', 'pending', { timeout: 4000 });
+    await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+    sync.pushDelayMs = 0; // Resume below does a full re-push — keep it instant so it settles fast.
+
+    // PAUSE → the pill reads 'paused' (distinct from never-synced) and a Resume control appears.
+    await page.getByTestId('cloud-pause').click();
+    await expect(panelPill).toHaveAttribute('data-status', 'paused', { timeout: 8000 });
+    await expect(page.getByTestId('cloud-resume')).toBeVisible();
+
+    // RESUME → back to synced, direction controls return.
+    await page.getByTestId('cloud-resume').click();
+    await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+    await expect(page.getByTestId('cloud-pull')).toBeVisible();
+
+    // A299 PER-WORKSPACE: create a second workspace + switch to it — the pill must re-derive to 'off'
+    // (the new workspace is NOT enabled), NOT carry the Default workspace's 'synced'. Switching back
+    // restores 'synced'.
+    await wsTrigger(page).click();
+    await page.getByRole('menuitem', { name: 'New workspace…' }).click();
+    const dlg = page.getByRole('dialog');
+    await dlg.getByPlaceholder('Workspace name').fill('Second');
+    await dlg.getByRole('button', { name: 'Create' }).click();
+    await expect(wsTrigger(page)).toHaveAttribute('aria-label', /Second/, { timeout: 8000 });
+    await expect(panelPill).toHaveAttribute('data-status', 'off', { timeout: 8000 });
+
+    await wsTrigger(page).click();
+    await page.getByRole('menuitem', { name: 'Default', exact: true }).click();
+    await expect(wsTrigger(page)).toHaveAttribute('aria-label', /Default/, { timeout: 8000 });
+    await expect(panelPill).toHaveAttribute('data-status', 'synced', { timeout: 20_000 });
+  });
+} // if (!ARCHIVED)
 
 test('cloud sync (demo): NEVER renders any setup/unlock UI (in-memory DemoStore never syncs)', async ({ page }) => {
   installStubs(page); // even with a logged-in session stubbed, demo must not show it
@@ -303,62 +316,155 @@ test('cloud sync (demo): NEVER renders any setup/unlock UI (in-memory DemoStore 
   // account.user stays null and cloudSyncOn is false on top of the isDemo guard).
   await page.goto('/app/demo.html', { waitUntil: 'networkidle' });
   await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 8000 });
-  await nav(page).getByRole('button', { name: 'Account', exact: true }).click();
-  await expect(page.locator('header h1')).toHaveText('Account');
+  if (ARCHIVED) {
+    // ARCHIVE FREEZE: the Account nav entry is gone on EVERY surface (demo included), so the
+    // screen can't be visited — the setup/unlock UI can't render anywhere without it.
+    await expect(nav(page).getByRole('button', { name: 'Account', exact: true })).toHaveCount(0);
+  } else {
+    await nav(page).getByRole('button', { name: 'Account', exact: true }).click();
+    await expect(page.locator('header h1')).toHaveText('Account');
+  }
   await expect(page.getByTestId('cloud-sync-card')).toHaveCount(0);
   await expect(page.getByTestId('cloud-setup-open')).toHaveCount(0);
   await expect(page.getByTestId('recovery-key')).toHaveCount(0);
 });
 
-test('cloud sync (prod): renders the cloud-sync card for a logged-in user (CH16-promoted)', async ({ page }) => {
-  test.setTimeout(60_000);
-  installStubs(page); // logged-in /api/me session + the wrapped-IK blob store
+if (!ARCHIVED) {
+  test('cloud sync (prod): renders the cloud-sync card for a logged-in user (CH16-promoted)', async ({ page }) => {
+    test.setTimeout(60_000);
+    installStubs(page); // logged-in /api/me session + the wrapped-IK blob store
 
-  // A fresh prod install boots to first-run onboarding; import a CSV + Launch to reach the app shell.
-  await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
-  await page.goto('/app/app.html', { waitUntil: 'networkidle' });
-  await page.evaluate(() => indexedDB.deleteDatabase('blotterbook'));
-  await page.reload({ waitUntil: 'networkidle' });
-  await expect(page.getByRole('heading', { name: 'Welcome to Blotterbook' })).toBeVisible({ timeout: 8000 });
+    // A fresh prod install boots to first-run onboarding; import a CSV + Launch to reach the app shell.
+    await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
+    await page.goto('/app/app.html', { waitUntil: 'networkidle' });
+    await page.evaluate(() => indexedDB.deleteDatabase('blotterbook'));
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: 'Welcome to Blotterbook' })).toBeVisible({ timeout: 8000 });
 
-  const [chooser] = await Promise.all([
-    page.waitForEvent('filechooser', { timeout: 3000 }),
-    page.getByRole('button', { name: 'Choose CSV files' }).click(),
-  ]);
-  await chooser.setFiles([
-    {
-      name: 'trades.csv',
-      mimeType: 'text/csv',
-      buffer: Buffer.from(
-        'Time,Action,Realized PnL (value)\n' +
-          '2026-06-02 10:00:00,"Close long position for symbol MESM2025 at price 5310.00",50.00\n' +
-          '2026-06-02 11:30:00,"Close short position for symbol MNQM2025 at price 18000.00",-20.00\n'
-      ),
-    },
-  ]);
-  const launch = page.getByRole('button', { name: /Launch Blotterbook/ });
-  await expect(launch).toBeEnabled({ timeout: 8000 });
-  await launch.click();
-  await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 8000 });
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser', { timeout: 3000 }),
+      page.getByRole('button', { name: 'Choose CSV files' }).click(),
+    ]);
+    await chooser.setFiles([
+      {
+        name: 'trades.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(
+          'Time,Action,Realized PnL (value)\n' +
+            '2026-06-02 10:00:00,"Close long position for symbol MESM2025 at price 5310.00",50.00\n' +
+            '2026-06-02 11:30:00,"Close short position for symbol MNQM2025 at price 18000.00",-20.00\n'
+        ),
+      },
+    ]);
+    const launch = page.getByRole('button', { name: /Launch Blotterbook/ });
+    await expect(launch).toBeEnabled({ timeout: 8000 });
+    await launch.click();
+    await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 8000 });
 
-  // Account screen (logged in via the stub) → the promoted cloud-sync card + setup control now render
-  // on prod. On prod's local tier the feature stays inert until the user is cloud-tier, but the card
-  // itself is present (it was staging-only before CH16).
-  await gotoAccount(page);
-  await expect(page.getByTestId('cloud-sync-card')).toBeVisible({ timeout: 8000 });
-  await expect(page.getByTestId('cloud-setup-open')).toBeVisible();
+    // Account screen (logged in via the stub) → the promoted cloud-sync card + setup control now render
+    // on prod. On prod's local tier the feature stays inert until the user is cloud-tier, but the card
+    // itself is present (it was staging-only before CH16).
+    await gotoAccount(page);
+    await expect(page.getByTestId('cloud-sync-card')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByTestId('cloud-setup-open')).toBeVisible();
 
-  // A279/CH16 (2026-07-07): cloud sync is LIVE on prod, not just staging — the CloudStore wraps every
-  // non-demo Store (A256) and configureCloudSync runs on prod, so cloudSync.configured is true here.
-  // Complete setup and confirm the reworked parity panel + passkey/passphrase explainer render
-  // on the PROD surface (the same UI staging gets); A336: the panel appearing IS the ready signal.
-  await page.getByTestId('cloud-setup-open').click();
-  await page.getByTestId('cloud-generate').click();
-  await expect(page.getByTestId('recovery-key')).toBeVisible({ timeout: 8000 });
-  await page.getByTestId('recovery-saved').click();
-  await page.getByTestId('cloud-finish').click();
-  await expect(page.getByTestId('cloud-sync-panel')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('How sign-in and encryption relate')).toBeVisible();
+    // A279/CH16 (2026-07-07): cloud sync is LIVE on prod, not just staging — the CloudStore wraps every
+    // non-demo Store (A256) and configureCloudSync runs on prod, so cloudSync.configured is true here.
+    // Complete setup and confirm the reworked parity panel + passkey/passphrase explainer render
+    // on the PROD surface (the same UI staging gets); A336: the panel appearing IS the ready signal.
+    await page.getByTestId('cloud-setup-open').click();
+    await page.getByTestId('cloud-generate').click();
+    await expect(page.getByTestId('recovery-key')).toBeVisible({ timeout: 8000 });
+    await page.getByTestId('recovery-saved').click();
+    await page.getByTestId('cloud-finish').click();
+    await expect(page.getByTestId('cloud-sync-panel')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('How sign-in and encryption relate')).toBeVisible();
 
-  await page.evaluate(() => indexedDB.deleteDatabase('blotterbook')); // leave the surface clean
-});
+    await page.evaluate(() => indexedDB.deleteDatabase('blotterbook')); // leave the surface clean
+  });
+} // if (!ARCHIVED)
+
+// ── ARCHIVE FREEZE (2026-07-08, docs/archive-freeze.md) ─────────────────────────────────────────
+// The tests above are unreachable while archived (no Account nav entry to drive them from). These
+// assert the frozen reality instead: no Account nav item, the switcher's single archived-note line,
+// and — the hard guarantee — zero /api/sync or /api/me traffic across boot AND interaction.
+
+if (ARCHIVED) {
+  test('ARCHIVE FREEZE: no Account entry in the sidebar nav on app or staging', async ({ page }) => {
+    // Staging boots straight to the seeded dashboard — the nav rail is present, Account absent.
+    await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
+    await page.goto(STAGING, { waitUntil: 'networkidle' });
+    await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 8000 });
+    await expect(nav(page)).toBeVisible();
+    await expect(nav(page).getByRole('button', { name: 'Account', exact: true })).toHaveCount(0);
+
+    // A fresh app install boots to full-screen first-run onboarding (NO nav rail renders there) —
+    // the archived assertions: no launch gate blocked entry, and no Account button exists anywhere.
+    await page.goto('/app/app.html', { waitUntil: 'networkidle' });
+    await page.evaluate(() => indexedDB.deleteDatabase('blotterbook'));
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: 'Welcome to Blotterbook' })).toBeVisible({ timeout: 8000 });
+    await expect(page.getByRole('button', { name: 'Log in with a passkey' })).toHaveCount(0); // gate bypassed
+    await expect(page.getByRole('button', { name: 'Account', exact: true })).toHaveCount(0);
+  });
+
+  test('ARCHIVE FREEZE: #account falls back to the Dashboard instead of rendering the Account screen', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('bb:flags', JSON.stringify({ ACCOUNT_GATE: false })));
+    await page.goto(STAGING + '#account', { waitUntil: 'networkidle' });
+    await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('header h1')).toHaveText('Dashboard');
+    await expect(page.getByTestId('cloud-sync-card')).toHaveCount(0);
+  });
+
+  test('ARCHIVE FREEZE: the workspace switcher shows the archived-note line, not the sync state machine', async ({ page }) => {
+    await bootStaging(page);
+    await wsTrigger(page).click();
+    const note = page.getByTestId('archived-note');
+    await expect(note).toBeVisible();
+    await expect(note).toContainText('Cloud sync is paused — Blotterbook is archived.');
+    // The pre-freeze sync affordances are gone — replaced, not just hidden alongside.
+    await expect(page.getByTestId('sync-status')).toHaveCount(0);
+    await expect(page.getByTestId('sync-enable')).toHaveCount(0);
+    await expect(page.getByTestId('sync-checking')).toHaveCount(0);
+    // Workspace CRUD itself is unaffected by the freeze (local-only, still works).
+    await expect(page.getByRole('menuitem', { name: 'Default', exact: true })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'New workspace…' })).toBeVisible();
+  });
+
+  test('ARCHIVE FREEZE: boot + interaction issue ZERO /api/sync or /api/me requests', async ({ page }) => {
+    const calls = [];
+    page.on('request', r => {
+      if (/\/api\/(sync|me)\b/.test(r.url())) calls.push(r.url());
+    });
+    // Even a stubbed cloud-tier /api/me response must never be reached at all — nothing should probe it.
+    await page.route('**/api/me', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ tier: 'cloud', cloudSync: true, user: null, passkeys: [] }),
+      })
+    );
+    await bootStaging(page);
+
+    // Interact: switch screens, open the workspace switcher, create a workspace, write a journal note —
+    // all local-only actions that, pre-freeze, would eventually touch /api/sync via the write-behind push.
+    await nav(page).getByRole('button', { name: 'Calendar', exact: true }).click();
+    await expect(page.locator('header h1')).toHaveText('Calendar');
+    await page.locator('button:has(span.text-chart-2), button:has(span.text-destructive)').first().click();
+    await expect(page.getByText('Journal note')).toBeVisible();
+    await page.locator('textarea').fill('archive-freeze note — never synced');
+    await page.getByRole('button', { name: 'Save note' }).click();
+    await page.keyboard.press('Escape');
+
+    await wsTrigger(page).click();
+    await page.getByRole('menuitem', { name: 'New workspace…' }).click();
+    const dlg = page.getByRole('dialog');
+    await dlg.getByPlaceholder('Workspace name').fill('Archive check');
+    await dlg.getByRole('button', { name: 'Create' }).click();
+    await expect(wsTrigger(page)).toHaveAttribute('aria-label', /Archive check/, { timeout: 8000 });
+
+    await page.waitForTimeout(1000); // let any debounced write-behind push have its chance to fire
+
+    expect(calls, calls.join('\n')).toHaveLength(0);
+  });
+} // if (ARCHIVED)
