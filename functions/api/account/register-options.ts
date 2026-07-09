@@ -14,6 +14,7 @@
  */
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import type { AuthenticatorTransportFuture } from '@simplewebauthn/server';
+import { ARCHIVED, archivedResponse } from '../../_lib/archive.ts';
 import { json, rateLimited } from '../../_lib/http.ts';
 import type { Ctx } from '../../_lib/types.ts';
 import {
@@ -48,6 +49,9 @@ export async function onRequestPost(ctx: Ctx) {
   if (user) {
     email = user.email; // add-another-passkey: identity comes from the session, not the body
   } else {
+    // ARCHIVE FREEZE (docs/archive-freeze.md): new-account registration (anonymous + email) is
+    // frozen; add-another-passkey above (session-authed, no email) is unaffected.
+    if (ARCHIVED) return archivedResponse();
     const body = await readJson<{ email?: unknown }>(request);
     email = String(body?.email ?? '')
       .trim()

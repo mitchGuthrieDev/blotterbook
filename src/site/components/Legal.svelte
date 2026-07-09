@@ -7,6 +7,10 @@
   // proprietor." Governing law / arbitration venue: Delaware. Privacy/legal contact:
   // privacy@blotterbook.com. Update the Effective date below when the terms materially change.
   import SiteShell from '../lib/SiteShell.svelte';
+  // ARCHIVE FREEZE (docs/archive-freeze.md): the counsel-reviewed terms below are NOT edited while
+  // archived — a status note up top corrects the operative facts (no account needed to launch; new
+  // accounts/subscriptions paused) without touching reviewed language.
+  import { ARCHIVED } from '$lib/archive.ts';
 </script>
 
 <SiteShell active="legal">
@@ -17,6 +21,15 @@
     the disclaimers, Terms of Service, binding-arbitration agreement, Privacy Policy, and donation terms. Please read them before relying on
     anything the app shows you. Last updated July&nbsp;2026.
   </p>
+
+  {#if ARCHIVED}
+    <!-- ARCHIVE FREEZE (docs/archive-freeze.md): status note only — the reviewed terms below are unedited. -->
+    <div class="note warn" data-testid="archived-note">
+      <b>Archived-status note (July 8, 2026):</b> Blotterbook is archived. While archived, launching the app requires <b>no</b> account, and new
+      accounts, subscriptions, and donations are paused — references below to account-gated launch, subscriptions, or checkout describe the pre-archive
+      service and apply only to accounts that already exist. Everything else on this page remains in effect.
+    </div>
+  {/if}
 
   <!-- F18/A202: counsel-reviewed and in effect. Update the Effective date when terms materially change.
        2026-07-08 (docs audit): the Privacy Policy gained the cloud-sync section (E2E ciphertext egress,

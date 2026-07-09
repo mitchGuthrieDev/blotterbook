@@ -12,6 +12,19 @@
 
 ---
 
+> ## ⚠ Archived (2026-07-08)
+>
+> **Blotterbook is frozen as a free, local-only app.** The owner is re-platforming the accounts/
+> subscriptions/cloud-sync idea as a conventional client→server SaaS elsewhere, so new accounts,
+> subscriptions, and cloud-sync setup are paused here — but **nothing about the local app changed**:
+> CSV import, the journal, the cost/tax model, and the demo all keep working, free, entirely in your
+> browser, with no server dependency for any of it. Existing accounts can still log in, cancel a
+> subscription, or delete their account, and already-synced workspaces keep syncing their own data.
+> See [`docs/archive-freeze.md`](docs/archive-freeze.md) for the full explanation, what's frozen vs.
+> still working, and the revert procedure.
+
+---
+
 **Blotterbook** is a private trading journal and cost dashboard for futures traders. You export
 your account balance history from TradingView (or another supported platform), drop the CSV into
 Blotterbook, and get a full performance, cost, and tax picture — an equity curve, a trading

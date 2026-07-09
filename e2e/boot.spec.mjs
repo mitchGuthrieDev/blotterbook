@@ -1,6 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { watchErrors } from './helpers.mjs';
 
+// ARCHIVE FREEZE (2026-07-08, docs/archive-freeze.md): the F56 login-gate (`launch-gate`) never
+// arms while archived (`gateArmed = !isDemo && !ARCHIVED && accountGateEnabled()` in App.svelte), so
+// every `bb:flags` ACCOUNT_GATE:false override below is now a no-op belt-and-suspenders bypass, not
+// a load-bearing one — kept so the surfaces below thaw unmodified. See the dedicated archive-freeze
+// assertion near the bottom of this file.
+const ARCHIVED = true; // mirror of src/lib/archive.ts — flip on thaw (docs/archive-freeze.md)
+
 // Every surface must boot with ZERO console/page errors — the core guarantee the A20 ESM
 // migration is verified against (a missing import / dead reference surfaces here).
 const surfaces = [
@@ -237,3 +244,20 @@ test('demo (360px): status pill is dot-only on mobile, but still opens the popov
   await expect(pop).toContainText('Online');
   await expect(pop).toContainText('All systems normal.');
 });
+
+// ── ARCHIVE FREEZE (2026-07-08, docs/archive-freeze.md) ─────────────────────────────────────────
+if (ARCHIVED) {
+  test('ARCHIVE FREEZE: app + staging boot straight to their content, with NO bb:flags override and no launch-gate', async ({ page }) => {
+    // Deliberately NOT setting the ACCOUNT_GATE bb:flags override — pre-freeze this would have armed
+    // the gate on staging (and prod, post-F56/CH16). Direct local access must hold regardless.
+    await page.goto('/app/staging.html', { waitUntil: 'networkidle' });
+    await expect(page.getByTestId('launch-gate')).toHaveCount(0);
+    await expect(page.getByText('Net P&L', { exact: true })).toBeVisible({ timeout: 8000 });
+
+    await page.evaluate(() => indexedDB.deleteDatabase('blotterbook'));
+    await page.goto('/app/app.html', { waitUntil: 'networkidle' });
+    await expect(page.getByTestId('launch-gate')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Welcome to Blotterbook' })).toBeVisible({ timeout: 8000 });
+    await page.evaluate(() => indexedDB.deleteDatabase('blotterbook')); // leave the surface clean
+  });
+}

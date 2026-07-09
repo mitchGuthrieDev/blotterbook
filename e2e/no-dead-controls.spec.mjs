@@ -12,7 +12,14 @@ import { watchErrors } from './helpers.mjs';
    Buttons are swept in REVERSE document order so view-switching toolbar toggles (Calendar
    Month→Year, page-size pills) don't detach the deeper controls before they're exercised; a click
    intercepted by an open overlay is retried once after Escape. Demo-disabled controls are skipped
-   by the :enabled filter (their guards are covered in interactions.spec.mjs). */
+   by the :enabled filter (their guards are covered in interactions.spec.mjs).
+
+   ARCHIVE FREEZE (2026-07-08, docs/archive-freeze.md): no allow-list change needed here. The sweep
+   is scoped to `main button` per screen (Dashboard/Calendar/Analytics/Blotter/CSV Library/Trade
+   Editor/Reports) — it never reaches the sidebar (the now-removed Account nav item) or the site's
+   homepage pricing CTA (a different surface entirely). The homepage's frozen "Synced workspaces"
+   CTA is a `disabled` button, which the same `:enabled`-filter exemption this file already relies on
+   for demo-disabled controls would cover if it were ever swept. */
 
 const DEMO = '/app/demo.html';
 const SCREENS = ['Dashboard', 'Calendar', 'Analytics', 'Blotter', 'CSV Library', 'Trade Editor', 'Reports'];

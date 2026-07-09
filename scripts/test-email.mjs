@@ -21,6 +21,7 @@ import { onRequestPost as subscribe } from '../functions/api/subscribe.ts';
 import { onRequestGet as confirmGet, onRequestPost as confirmPost } from '../functions/api/confirm.ts';
 import { onRequestGet as unsubscribeGet, onRequestPost as unsubscribePost } from '../functions/api/unsubscribe.ts';
 import { onRequestPost as notify } from '../functions/api/notify-changelog.ts';
+import { ARCHIVED } from '../functions/_lib/archive.ts';
 
 let pass = 0,
   fail = 0;
@@ -180,122 +181,134 @@ console.log('\nverifyTurnstile (defense-in-depth, S22):');
   }
 }
 
-console.log('\nsubscribe — fail-closed shapes + validation:');
-{
+// ARCHIVE FREEZE (docs/archive-freeze.md): /api/subscribe (new changelog-email signup) is frozen
+// unconditionally — a frozen product shouldn't collect new subscribers. The suites below are kept
+// intact for a future revert but skipped while ARCHIVED, replaced with a 410 assertion; confirm/
+// unsubscribe/notify-changelog (further down) stay live for existing subscribers either way.
+if (!ARCHIVED) {
+  console.log('\nsubscribe — fail-closed shapes + validation:');
+  {
+    const db = mockDb();
+    ok('db unbound → 503', (await subscribe({ request: req('/api/subscribe', { body: { email: 'a@b.co' } }), env: {} })).status === 503);
+    ok(
+      'cross-origin → 403',
+      (
+        await subscribe({
+          request: req('/api/subscribe', { origin: 'https://evil.example', body: { email: 'a@b.co' } }),
+          env: { ACCOUNTS_DB: db },
+        })
+      ).status === 403
+    );
+    ok(
+      'bad email → 400',
+      (await subscribe({ request: req('/api/subscribe', { body: { email: 'nope' } }), env: { ACCOUNTS_DB: db } })).status === 400
+    );
+    const noResend = await subscribe({ request: req('/api/subscribe', { body: { email: 'a@b.co' } }), env: { ACCOUNTS_DB: db } });
+    ok('RESEND unbound → 503 email unavailable', noResend.status === 503 && (await noResend.json()).error === 'email unavailable');
+    // the RESEND-unbound check ran BEFORE any write — no row created
+    ok('nothing written when email unconfigured', db.tables.subscribers.length === 0);
+  }
+
+  console.log('\nsubscribe — double opt-in happy path + enumeration-safety:');
+  {
+    const f = installFetch();
+    try {
+      const db = mockDb();
+      const env = { ACCOUNTS_DB: db, ...RESEND_ENV };
+      const r1 = await subscribe({ request: req('/api/subscribe', { body: { email: 'New@Trader.com' } }), env });
+      const b1 = await r1.text();
+      ok('new signup → 200 generic', r1.status === 200 && JSON.parse(b1).ok === true);
+      ok('pending row created (lowercased)', db.tables.subscribers.length === 1 && db.tables.subscribers[0].email === 'new@trader.com');
+      ok('row starts pending, unconfirmed', db.tables.subscribers[0].status === 'pending' && db.tables.subscribers[0].confirmed_at == null);
+      ok(
+        'confirm mail sent once with a /api/confirm link',
+        f.sent.single.length === 1 && /\/api\/confirm\?token=/.test(f.sent.single[0].html)
+      );
+      ok('raw secret is NOT stored (only its hash)', !f.sent.single[0].html.includes(db.tables.subscribers[0].confirm_token_hash));
+
+      // Re-subscribe of the SAME pending address within the cooldown → no second mail, same generic body.
+      const r2 = await subscribe({ request: req('/api/subscribe', { body: { email: 'new@trader.com' } }), env });
+      const b2 = await r2.text();
+      ok('pending re-signup within cooldown → still 200, no new mail', r2.status === 200 && f.sent.single.length === 1);
+      ok('enumeration-safe: identical generic body for new vs existing', b1 === b2);
+
+      // Confirm it, then re-subscribe a CONFIRMED address → silent no-op (no mail).
+      const token = f.sent.single[0].html.match(/token=([^"&]+)/)[1];
+      await confirmSubscriber(db, decodeURIComponent(token));
+      ok('address now confirmed', db.tables.subscribers[0].status === 'confirmed');
+      const r3 = await subscribe({ request: req('/api/subscribe', { body: { email: 'new@trader.com' } }), env });
+      ok('confirmed re-signup → 200, NO mail', r3.status === 200 && f.sent.single.length === 1);
+    } finally {
+      f.restore();
+    }
+  }
+
+  console.log('\nsubscribe — per-address cooldown resend (S22):');
+  {
+    const f = installFetch();
+    try {
+      const db = mockDb();
+      const env = { ACCOUNTS_DB: db, ...RESEND_ENV };
+      await subscribe({ request: req('/api/subscribe', { body: { email: 'wait@b.co' } }), env });
+      ok('first mail sent', f.sent.single.length === 1);
+      // simulate the cooldown elapsing
+      db.tables.subscribers[0].last_sent_at = Date.now() - RESEND_COOLDOWN_MS - 1000;
+      const before = db.tables.subscribers[0].confirm_token_hash;
+      await subscribe({ request: req('/api/subscribe', { body: { email: 'wait@b.co' } }), env });
+      ok('past the cooldown → confirm mail re-sent', f.sent.single.length === 2);
+      ok('...with a freshly-minted confirm token', db.tables.subscribers[0].confirm_token_hash !== before);
+      ok(
+        'canResend gate reflects last_sent_at',
+        canResend({ last_sent_at: Date.now() }) === false && canResend({ last_sent_at: 0 }) === true
+      );
+    } finally {
+      f.restore();
+    }
+  }
+} else {
+  console.log('\nsubscribe (frozen — Archive Freeze):');
   const db = mockDb();
-  ok('db unbound → 503', (await subscribe({ request: req('/api/subscribe', { body: { email: 'a@b.co' } }), env: {} })).status === 503);
-  ok(
-    'cross-origin → 403',
-    (
-      await subscribe({
-        request: req('/api/subscribe', { origin: 'https://evil.example', body: { email: 'a@b.co' } }),
-        env: { ACCOUNTS_DB: db },
-      })
-    ).status === 403
-  );
-  ok(
-    'bad email → 400',
-    (await subscribe({ request: req('/api/subscribe', { body: { email: 'nope' } }), env: { ACCOUNTS_DB: db } })).status === 400
-  );
-  const noResend = await subscribe({ request: req('/api/subscribe', { body: { email: 'a@b.co' } }), env: { ACCOUNTS_DB: db } });
-  ok('RESEND unbound → 503 email unavailable', noResend.status === 503 && (await noResend.json()).error === 'email unavailable');
-  // the RESEND-unbound check ran BEFORE any write — no row created
-  ok('nothing written when email unconfigured', db.tables.subscribers.length === 0);
-}
-
-console.log('\nsubscribe — double opt-in happy path + enumeration-safety:');
-{
-  const f = installFetch();
-  try {
-    const db = mockDb();
-    const env = { ACCOUNTS_DB: db, ...RESEND_ENV };
-    const r1 = await subscribe({ request: req('/api/subscribe', { body: { email: 'New@Trader.com' } }), env });
-    const b1 = await r1.text();
-    ok('new signup → 200 generic', r1.status === 200 && JSON.parse(b1).ok === true);
-    ok('pending row created (lowercased)', db.tables.subscribers.length === 1 && db.tables.subscribers[0].email === 'new@trader.com');
-    ok('row starts pending, unconfirmed', db.tables.subscribers[0].status === 'pending' && db.tables.subscribers[0].confirmed_at == null);
-    ok(
-      'confirm mail sent once with a /api/confirm link',
-      f.sent.single.length === 1 && /\/api\/confirm\?token=/.test(f.sent.single[0].html)
-    );
-    ok('raw secret is NOT stored (only its hash)', !f.sent.single[0].html.includes(db.tables.subscribers[0].confirm_token_hash));
-
-    // Re-subscribe of the SAME pending address within the cooldown → no second mail, same generic body.
-    const r2 = await subscribe({ request: req('/api/subscribe', { body: { email: 'new@trader.com' } }), env });
-    const b2 = await r2.text();
-    ok('pending re-signup within cooldown → still 200, no new mail', r2.status === 200 && f.sent.single.length === 1);
-    ok('enumeration-safe: identical generic body for new vs existing', b1 === b2);
-
-    // Confirm it, then re-subscribe a CONFIRMED address → silent no-op (no mail).
-    const token = f.sent.single[0].html.match(/token=([^"&]+)/)[1];
-    await confirmSubscriber(db, decodeURIComponent(token));
-    ok('address now confirmed', db.tables.subscribers[0].status === 'confirmed');
-    const r3 = await subscribe({ request: req('/api/subscribe', { body: { email: 'new@trader.com' } }), env });
-    ok('confirmed re-signup → 200, NO mail', r3.status === 200 && f.sent.single.length === 1);
-  } finally {
-    f.restore();
-  }
-}
-
-console.log('\nsubscribe — per-address cooldown resend (S22):');
-{
-  const f = installFetch();
-  try {
-    const db = mockDb();
-    const env = { ACCOUNTS_DB: db, ...RESEND_ENV };
-    await subscribe({ request: req('/api/subscribe', { body: { email: 'wait@b.co' } }), env });
-    ok('first mail sent', f.sent.single.length === 1);
-    // simulate the cooldown elapsing
-    db.tables.subscribers[0].last_sent_at = Date.now() - RESEND_COOLDOWN_MS - 1000;
-    const before = db.tables.subscribers[0].confirm_token_hash;
-    await subscribe({ request: req('/api/subscribe', { body: { email: 'wait@b.co' } }), env });
-    ok('past the cooldown → confirm mail re-sent', f.sent.single.length === 2);
-    ok('...with a freshly-minted confirm token', db.tables.subscribers[0].confirm_token_hash !== before);
-    ok(
-      'canResend gate reflects last_sent_at',
-      canResend({ last_sent_at: Date.now() }) === false && canResend({ last_sent_at: 0 }) === true
-    );
-  } finally {
-    f.restore();
-  }
+  const r = await subscribe({ request: req('/api/subscribe', { body: { email: 'anyone@example.com' } }), env: { ACCOUNTS_DB: db } });
+  const j = await r.json();
+  ok('subscribe frozen: 410 archived', r.status === 410 && j.code === 'archived');
+  console.log('  (skipped — archive freeze: subscribe double opt-in / cooldown suites)');
 }
 
 console.log('\nconfirm — flip pending → confirmed:');
 {
-  const f = installFetch();
-  try {
-    const db = mockDb();
-    const env = { ACCOUNTS_DB: db, ...RESEND_ENV };
-    await subscribe({ request: req('/api/subscribe', { body: { email: 'c@b.co' } }), env });
-    const token = decodeURIComponent(f.sent.single[0].html.match(/token=([^"&]+)/)[1]);
+  const db = mockDb();
+  const env = { ACCOUNTS_DB: db, ...RESEND_ENV };
+  // ARCHIVE FREEZE (docs/archive-freeze.md): confirm must keep working for anyone already in the
+  // pipeline, so seed the pending row directly via createSubscriber() rather than through the
+  // now-frozen subscribe() endpoint (this keeps these assertions valid whether ARCHIVED is true or
+  // false).
+  const { confirmToken } = await createSubscriber(db, 'c@b.co');
+  const token = confirmToken;
 
-    // wrong secret must be rejected without confirming
-    const badId = token.split('.')[0];
-    const bad = await confirmPost({ request: req('/api/confirm', { body: { token: badId + '.' + 'z'.repeat(43) } }), env });
-    ok('POST confirm with a wrong secret → 400', bad.status === 400 && db.tables.subscribers[0].status === 'pending');
+  // wrong secret must be rejected without confirming
+  const badId = token.split('.')[0];
+  const bad = await confirmPost({ request: req('/api/confirm', { body: { token: badId + '.' + 'z'.repeat(43) } }), env });
+  ok('POST confirm with a wrong secret → 400', bad.status === 400 && db.tables.subscribers[0].status === 'pending');
 
-    // GET (email click) confirms + redirects
-    const gr = await confirmGet({ request: getReq('/api/confirm?token=' + encodeURIComponent(token)), env });
-    ok('GET confirm → 302 subscribed=1', gr.status === 302 && /subscribed=1/.test(gr.headers.get('Location') || ''));
-    ok(
-      '...row now confirmed with a timestamp',
-      db.tables.subscribers[0].status === 'confirmed' && db.tables.subscribers[0].confirmed_at != null
-    );
+  // GET (email click) confirms + redirects
+  const gr = await confirmGet({ request: getReq('/api/confirm?token=' + encodeURIComponent(token)), env });
+  ok('GET confirm → 302 subscribed=1', gr.status === 302 && /subscribed=1/.test(gr.headers.get('Location') || ''));
+  ok(
+    '...row now confirmed with a timestamp',
+    db.tables.subscribers[0].status === 'confirmed' && db.tables.subscribers[0].confirmed_at != null
+  );
 
-    // idempotent: a second click is still a success (already-confirmed)
-    const again = await confirmGet({ request: getReq('/api/confirm?token=' + encodeURIComponent(token)), env });
-    ok('GET confirm again → idempotent 302 subscribed=1', again.status === 302 && /subscribed=1/.test(again.headers.get('Location') || ''));
+  // idempotent: a second click is still a success (already-confirmed)
+  const again = await confirmGet({ request: getReq('/api/confirm?token=' + encodeURIComponent(token)), env });
+  ok('GET confirm again → idempotent 302 subscribed=1', again.status === 302 && /subscribed=1/.test(again.headers.get('Location') || ''));
 
-    // a garbage token: GET → error redirect, POST → 400
-    const bg = await confirmGet({ request: getReq('/api/confirm?token=bogus.tok'), env });
-    ok('GET confirm bad token → 302 subscribe=error', bg.status === 302 && /subscribe=error/.test(bg.headers.get('Location') || ''));
-    ok(
-      'confirm 503 when ACCOUNTS_DB unbound',
-      (await confirmPost({ request: req('/api/confirm', { body: { token } }), env: {} })).status === 503
-    );
-  } finally {
-    f.restore();
-  }
+  // a garbage token: GET → error redirect, POST → 400
+  const bg = await confirmGet({ request: getReq('/api/confirm?token=bogus.tok'), env });
+  ok('GET confirm bad token → 302 subscribe=error', bg.status === 302 && /subscribe=error/.test(bg.headers.get('Location') || ''));
+  ok(
+    'confirm 503 when ACCOUNTS_DB unbound',
+    (await confirmPost({ request: req('/api/confirm', { body: { token } }), env: {} })).status === 503
+  );
 }
 
 console.log('\nunsubscribe — one-click hard delete, idempotent:');

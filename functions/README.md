@@ -309,3 +309,27 @@ audMatches:true, expired:false`.
   when `SYNC_BUCKET` (or `ACCOUNTS_DB`) is unbound.** Create + bind the bucket:
   `npx wrangler r2 bucket create blotterbook-sync`, then Pages dashboard → Settings → Functions → R2
   bucket bindings → variable name `SYNC_BUCKET`.
+
+## Archive freeze (2026-07-08)
+
+Blotterbook is archived as a frozen, local-only app (owner decision) — see
+[`docs/archive-freeze.md`](../docs/archive-freeze.md) for the why, the full touchpoint inventory, and
+the revert procedure. Everything branches on one flag, `ARCHIVED` in
+[`functions/_lib/archive.ts`](_lib/archive.ts) (mirrored client-side in `src/lib/archive.ts`); nothing
+was deleted. Five creation endpoints answer **410 `{ error, code: 'archived' }`** while `ARCHIVED` is
+true:
+
+- `functions/api/account/register-options.ts` — only its **new-account** (anonymous + email) branch;
+  the same endpoint's add-another-passkey branch (session-authed, no email) is untouched.
+- `functions/api/account/reclaim-send.ts` — email-squat reclaim exists only to seed a new account.
+- `functions/api/checkout.ts` — Stripe Checkout (one-time donation + hosted-Checkout subscription).
+- `functions/api/subscription/create.ts` — the in-app Payment Element subscription bootstrap.
+- `functions/api/subscribe.ts` — changelog-email double opt-in signup.
+
+Everything an **existing** user needs stays live and untouched: login (`login-options`/`login-verify`),
+`/api/me`, passkey add (the session branch above)/remove, account recovery + deletion,
+`reclaim-confirm` (any in-flight token just fails once `reclaim-send` stops minting new ones),
+**subscription cancel** (`subscription/cancel.ts`) and the Stripe **webhook** lifecycle for existing
+subscriptions, the `/api/sync/*` transport for an already-opted-in workspace, and
+`/api/{confirm,unsubscribe,notify-changelog}` for existing changelog subscribers. To revert: flip
+`ARCHIVED` to `false` here and in `src/lib/archive.ts` (see the doc for the full checklist).

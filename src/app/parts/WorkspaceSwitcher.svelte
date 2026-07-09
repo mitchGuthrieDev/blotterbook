@@ -38,6 +38,9 @@
   import { subscribe } from '$lib/account/account.svelte.ts';
   import type { Dashboard } from '../lib/dashboard.svelte.ts';
   import type { Workspace } from '../../lib/core/types.ts';
+  // ARCHIVE FREEZE (docs/archive-freeze.md): replaces the whole sync-status state machine below with
+  // one muted line while archived.
+  import { ARCHIVED, ARCHIVE_NOTE } from '../../lib/archive.ts';
 
   let {
     dash,
@@ -243,72 +246,82 @@
     <!-- A279: cloud-sync PARITY row (prod + staging, not demo) — a status pill + a clear "Sync now"
          instead of the old lock/unlock framing. Direction controls (Pull/Push/Pause) + the
          passkey-vs-passphrase explainer live on the Account screen's cloud-sync card. -->
-    <div class="flex flex-col gap-1.5 px-2 py-1.5" data-testid="sync-status">
-      {#if !cloudSync.enabled}
-        {#if cloudSync.tier === ''}
-          <!-- A306: neutral while /api/me is still probing — don't mislabel a paying user "cloud tier required". -->
-          <div class="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="sync-checking">
-            <Cloud class="size-3.5 shrink-0" /> Checking subscription…
-          </div>
-        {:else if cloudSync.tier !== 'cloud'}
-          <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <CloudOff class="size-3.5 shrink-0" /> Local only · cloud tier required
-          </div>
-        {:else if cloudSync.serverGone}
-          <!-- A309(b): the server copy was removed elsewhere — explain + offer re-enable. -->
-          <div class="flex items-start gap-1.5 text-xs text-chart-4" data-testid="sync-server-gone">
-            <TriangleAlert class="mt-0.5 size-3.5 shrink-0" /><span class="min-w-0">{cloudSync.error || 'Cloud copy removed.'}</span>
-          </div>
-          <button
-            type="button"
-            data-testid="sync-reenable"
-            class="self-start text-xs font-medium text-foreground hover:underline"
-            disabled={cloudSync.busy}
-            onclick={doEnable}>Re-enable sync</button
-          >
-        {:else}
-          <!-- A306: paused ≠ never-synced — offer Resume. A336: this is ALWAYS the action button;
+    {#if ARCHIVED}
+      <!-- ARCHIVE FREEZE (docs/archive-freeze.md): the controller is never configured while archived
+           (configureCloudSync() no-ops), so the tier-probe states below (e.g. "Checking subscription…")
+           would otherwise show forever. Replace the whole state machine with one muted line. -->
+      <div class="flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground" data-testid="archived-note" title={ARCHIVE_NOTE}>
+        <CloudOff class="size-3.5 shrink-0" />
+        Cloud sync is paused — Blotterbook is archived.
+      </div>
+    {:else}
+      <div class="flex flex-col gap-1.5 px-2 py-1.5" data-testid="sync-status">
+        {#if !cloudSync.enabled}
+          {#if cloudSync.tier === ''}
+            <!-- A306: neutral while /api/me is still probing — don't mislabel a paying user "cloud tier required". -->
+            <div class="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="sync-checking">
+              <Cloud class="size-3.5 shrink-0" /> Checking subscription…
+            </div>
+          {:else if cloudSync.tier !== 'cloud'}
+            <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <CloudOff class="size-3.5 shrink-0" /> Local only · cloud tier required
+            </div>
+          {:else if cloudSync.serverGone}
+            <!-- A309(b): the server copy was removed elsewhere — explain + offer re-enable. -->
+            <div class="flex items-start gap-1.5 text-xs text-chart-4" data-testid="sync-server-gone">
+              <TriangleAlert class="mt-0.5 size-3.5 shrink-0" /><span class="min-w-0">{cloudSync.error || 'Cloud copy removed.'}</span>
+            </div>
+            <button
+              type="button"
+              data-testid="sync-reenable"
+              class="self-start text-xs font-medium text-foreground hover:underline"
+              disabled={cloudSync.busy}
+              onclick={doEnable}>Re-enable sync</button
+            >
+          {:else}
+            <!-- A306: paused ≠ never-synced — offer Resume. A336: this is ALWAYS the action button;
                if the E2E key isn't in memory yet, doEnable opens the inline key prompt as a step. -->
-          <button
-            type="button"
-            data-testid={cloudSync.paused ? 'sync-resume' : 'sync-enable'}
-            class="flex items-center gap-1.5 text-xs font-medium text-foreground hover:underline"
-            disabled={cloudSync.busy}
-            onclick={doEnable}
-          >
-            <Cloud class="size-3.5 shrink-0" />
-            {cloudSync.busy ? (cloudSync.paused ? 'Resuming…' : 'Enabling…') : cloudSync.paused ? 'Resume sync' : 'Enable sync'}
-          </button>
-        {/if}
-      {:else}
-        <SyncStatusPill />
-        {#if cloudSync.needsSub}
-          <!-- A306: lapsed subscription on an enabled workspace — RENEW, not the first-time Subscribe CTA. -->
-          <button
-            type="button"
-            data-testid="sync-renew"
-            class="self-start text-xs font-medium text-chart-4 hover:underline"
-            onclick={() => void subscribe()}>Renew subscription</button
-          >
-        {:else if !cloudSync.unlocked}
-          <!-- A336: the key session lapsed while the workspace stayed enabled (e.g. a reload) —
+            <button
+              type="button"
+              data-testid={cloudSync.paused ? 'sync-resume' : 'sync-enable'}
+              class="flex items-center gap-1.5 text-xs font-medium text-foreground hover:underline"
+              disabled={cloudSync.busy}
+              onclick={doEnable}
+            >
+              <Cloud class="size-3.5 shrink-0" />
+              {cloudSync.busy ? (cloudSync.paused ? 'Resuming…' : 'Enabling…') : cloudSync.paused ? 'Resume sync' : 'Enable sync'}
+            </button>
+          {/if}
+        {:else}
+          <SyncStatusPill />
+          {#if cloudSync.needsSub}
+            <!-- A306: lapsed subscription on an enabled workspace — RENEW, not the first-time Subscribe CTA. -->
+            <button
+              type="button"
+              data-testid="sync-renew"
+              class="self-start text-xs font-medium text-chart-4 hover:underline"
+              onclick={() => void subscribe()}>Renew subscription</button
+            >
+          {:else if !cloudSync.unlocked}
+            <!-- A336: the key session lapsed while the workspace stayed enabled (e.g. a reload) —
                resume is an action, not a vault concept; the prompt rides inside it. -->
-          <button
-            type="button"
-            data-testid="sync-resume-key"
-            class="self-start text-xs font-medium text-chart-4 hover:underline"
-            onclick={() => void requestKey('resume syncing', () => void syncActiveWorkspace({ full: true }))}>Resume syncing</button
-          >
-        {:else if cloudSync.status !== 'syncing'}
-          <button
-            type="button"
-            data-testid="sync-now"
-            class="self-start text-xs font-medium text-foreground hover:underline"
-            onclick={() => void syncActiveWorkspace({ full: true })}>Sync now</button
-          >
+            <button
+              type="button"
+              data-testid="sync-resume-key"
+              class="self-start text-xs font-medium text-chart-4 hover:underline"
+              onclick={() => void requestKey('resume syncing', () => void syncActiveWorkspace({ full: true }))}>Resume syncing</button
+            >
+          {:else if cloudSync.status !== 'syncing'}
+            <button
+              type="button"
+              data-testid="sync-now"
+              class="self-start text-xs font-medium text-foreground hover:underline"
+              onclick={() => void syncActiveWorkspace({ full: true })}>Sync now</button
+            >
+          {/if}
         {/if}
-      {/if}
-    </div>
+      </div>
+    {/if}
   </DropdownMenu.Content>
 </DropdownMenu.Root>
 

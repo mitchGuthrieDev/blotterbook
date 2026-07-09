@@ -5,11 +5,23 @@
   // real setup UI (src/app/parts/CloudSyncSetup.svelte, WorkspaceSwitcher.svelte) — rewritten for
   // traders, not engineers. Shared chrome from HelpShell.
   import HelpShell from '../lib/HelpShell.svelte';
+  // ARCHIVE FREEZE (docs/archive-freeze.md): the shared freeze flag — drives the banner below. See
+  // src/lib/archive.ts for the full explanation + revert instructions.
+  import { ARCHIVED, ARCHIVE_NOTE } from '$lib/archive.ts';
 </script>
 
 <HelpShell active="cloud-sync">
   <p class="eyebrow">Blotterbook Help</p>
   <h1>Cloud sync</h1>
+  {#if ARCHIVED}
+    <!-- ARCHIVE FREEZE (docs/archive-freeze.md): cloud sync is paused for new users — the article
+         below (nothing else gated) still describes the frozen feature as it exists for anyone who
+         already has it. -->
+    <div class="note warn" data-testid="archived-note">
+      <b>Cloud sync is paused while Blotterbook is archived.</b> New signups and subscriptions aren't available. The article below describes the
+      frozen feature as it exists today.
+    </div>
+  {/if}
   <p class="blurb">
     Blotterbook is local-first by default — your trades never leave your browser. <b>Cloud sync</b> is an optional, paid add-on that lets you
     use Blotterbook on more than one device, while keeping the same "we can't read your data" guarantee.

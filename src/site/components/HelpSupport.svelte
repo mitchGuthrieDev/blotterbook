@@ -2,6 +2,9 @@
   // Help > Support (A273 — new content). Contact + bug-report guidance + pointers to Roadmap/Changelog
   // for known issues and recent ships. Shared chrome from HelpShell.
   import HelpShell from '../lib/HelpShell.svelte';
+  // ARCHIVE FREEZE (docs/archive-freeze.md): the shared freeze flag — annotates the Account & billing
+  // section below. See src/lib/archive.ts for the full explanation + revert instructions.
+  import { ARCHIVED } from '$lib/archive.ts';
 </script>
 
 <HelpShell active="support">
@@ -67,6 +70,12 @@
       Manage your passkeys, recovery email, and cloud-sync subscription from <a href="/account.html">your Account page</a>. Donations and
       subscriptions are processed by Stripe and are covered by the <a href="/legal.html#donations">Donations &amp; Refund Policy</a> and the
       rest of the <a href="/legal.html">Legal &amp; Disclaimers</a> page.
+      {#if ARCHIVED}
+        <!-- ARCHIVE FREEZE (docs/archive-freeze.md): one appended sentence — the Account page itself
+             now shows an archived notice instead of the live dashboard. -->
+        <b>Blotterbook is currently archived:</b> that page shows an archived notice rather than the live dashboard — see it for options if you
+        have an existing account.
+      {/if}
     </p>
   </section>
 </HelpShell>

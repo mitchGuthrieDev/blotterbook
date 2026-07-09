@@ -76,6 +76,9 @@
   import { checkCsvFile, checkXlsxFile, isXlsxFile } from '../lib/core/intake.ts';
   import { classifyNonTrade, type BatchRow } from './lib/batch.ts';
   import type { Trade, ParseResult } from '../lib/core/types.ts';
+  // ARCHIVE FREEZE (docs/archive-freeze.md): the shared freeze flag — gates every account/subscription/
+  // sync touchpoint below. See src/lib/archive.ts for the full explanation + revert instructions.
+  import { ARCHIVED } from '../lib/archive.ts';
 
   // Mode-aware persistence seam (parity with the legacy App.svelte):
   //   app      → real IndexedDB Store (blotterbook DB), NO seed (real user data; empty → onboarding)
@@ -99,7 +102,11 @@
   // in-memory DemoStore — CloudStore is never constructed there, so demo NEVER syncs (non-persistence
   // holds by construction).
   const localStore = isDemo ? createDemoStore() : Entitlements.storeFor('local');
-  const store = isDemo ? localStore : wrapStore(localStore);
+  // ARCHIVE FREEZE (docs/archive-freeze.md): no CloudStore wrap while archived — a plain local Store,
+  // so there's no write-behind onWrite hook at all (not just an inert one). configureCloudSync() is
+  // also skipped below, and the controller itself no-ops when ARCHIVED (cloudsync.svelte.ts), so this
+  // is belt-and-suspenders, not the only gate.
+  const store = isDemo || ARCHIVED ? localStore : wrapStore(localStore);
   const SEEDED = isStaging || isDemo;
   const dash = createDashboard(store, { seed: SEEDED, isDemo });
   const dashTabsState = createDashTabs(store, { isStaging });
@@ -118,11 +125,20 @@
   };
 
   // F53/CH16: passkey accounts, promoted to every surface (demo renders it read-only via isDemo).
-  const sections = [...navSections, { label: 'Account', items: [{ key: 'account', label: 'Account', icon: UserRound }] }];
+  // ARCHIVE FREEZE (docs/archive-freeze.md): drop the Account entry from the sidebar nav while
+  // archived — new accounts are paused, so there's nothing for it to lead to. The Account.svelte
+  // screen + its route branch below are left intact (never deleted), just unreachable via nav.
+  const sections = ARCHIVED
+    ? navSections
+    : [...navSections, { label: 'Account', items: [{ key: 'account', label: 'Account', icon: UserRound }] }];
   const allNavKeys = $derived(new Set(sections.flatMap(s => s.items.map(i => i.key))));
 
   const fromHash = (): string => {
     const h = typeof location !== 'undefined' ? location.hash.replace(/^#/, '') : '';
+    // ARCHIVE FREEZE (docs/archive-freeze.md): a bookmarked/typed #account link must fall back to the
+    // Dashboard while archived. Belt-and-suspenders: 'account' is already absent from allNavKeys above
+    // (the nav gate), so this explicit check just makes the fallback obvious at the hash-router seam.
+    if (ARCHIVED && h === 'account') return 'dashboard';
     return allNavKeys.has(h) ? h : 'dashboard';
   };
   let active = $state(fromHash());
@@ -790,7 +806,10 @@
   // behind LaunchGate until a user is signed in — `!account.user` covers both the in-flight probe
   // (gate shows its own skeleton) and the logged-out state. On login/register `account.user` flips and
   // the gate unmounts, so the normal flow proceeds (dashboard, or first-run onboarding composed after).
-  const gateArmed = !isDemo && accountGateEnabled();
+  // ARCHIVE FREEZE (docs/archive-freeze.md): never gate entry while archived — go straight to the
+  // local app. accountGateEnabled() already hard-returns false when ARCHIVED (flags.ts), so `!ARCHIVED`
+  // here is belt-and-suspenders at the call site itself.
+  const gateArmed = !isDemo && !ARCHIVED && accountGateEnabled();
   const gateBlocking = $derived(gateArmed && !account.user);
 
   // F45/CH16: a quick branded splash over the boot sequence, on every surface. Purely visual —
@@ -966,6 +985,9 @@
     });
     // F56: only when the gate is armed (staging + flag) do we probe /api/me — prod/demo issue no
     // account traffic at all. refreshSession never throws; account.loaded flips when it settles.
+    // ARCHIVE FREEZE (docs/archive-freeze.md): gateArmed is forced false above while archived, so this
+    // whole block — the session probe AND the ?recover=/?reclaim= ceremony handling — never runs. The
+    // app issues no account traffic at boot.
     if (gateArmed) {
       void refreshSession();
       // A300: a lost-passkey recovery link (`?recover=<token>`) lands here BEHIND the login gate —
@@ -988,7 +1010,10 @@
     // connectivity, settles per-workspace status). It stays inert on local tier — no /api/sync
     // (write-behind) traffic until a cloud-tier user enables + unlocks a workspace. Demo never calls
     // this, so demo never syncs.
-    if (!isDemo) configureCloudSync({ localStore, dash });
+    // ARCHIVE FREEZE (docs/archive-freeze.md): skip this while archived — zero sync-controller traffic.
+    // configureCloudSync() itself also no-ops when ARCHIVED (cloudsync.svelte.ts), so this is
+    // belt-and-suspenders.
+    if (!isDemo && !ARCHIVED) configureCloudSync({ localStore, dash });
     fetch('/api/status', { headers: { Accept: 'application/json' } })
       .then(r => (r.ok ? (r.json() as Promise<{ mode?: string; label?: string }>) : null))
       .then(v => (statusRec = v))

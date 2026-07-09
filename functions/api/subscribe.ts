@@ -13,6 +13,7 @@
  * Fail closed: 503 (ACCOUNTS_DB shape) when the DB is unbound; 503 { error:'email unavailable' } when
  * RESEND_API_KEY is unbound; 403 cross-origin; 400 on a malformed email.
  */
+import { ARCHIVED, archivedResponse } from '../_lib/archive.ts';
 import { json } from '../_lib/http.ts';
 import type { Ctx } from '../_lib/types.ts';
 import { badOrigin, checkOrigin, dbUnavailable, getDb, readJson } from '../_lib/accounts.ts';
@@ -31,6 +32,9 @@ import { confirmSubscriptionBody, emailUnavailable, sendEmail } from '../_lib/em
 const GENERIC_OK = { ok: true, message: 'Check your inbox for a confirmation link.' };
 
 export async function onRequestPost(ctx: Ctx) {
+  // ARCHIVE FREEZE (docs/archive-freeze.md): a frozen product shouldn't collect new changelog
+  // subscribers; confirm/unsubscribe stay live for existing ones.
+  if (ARCHIVED) return archivedResponse();
   const { request, env } = ctx;
   if (!checkOrigin(request)) return badOrigin();
   const db = getDb(env);

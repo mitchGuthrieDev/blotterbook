@@ -16,6 +16,7 @@
 
 import type { StoreLike } from '../../lib/core/types.ts';
 import { Entitlements, type Tier } from '../../lib/core/entitlements.ts';
+import { ARCHIVED } from '../../lib/archive.ts';
 import { getIK } from './vault.svelte.ts';
 import { createCloudStore } from './cloudstore.ts';
 import {
@@ -346,6 +347,11 @@ export function wrapStore(local: StoreLike): StoreLike {
 /** Configure the controller after boot (every non-demo surface — prod + staging): probe the tier, wire
  *  connectivity/focus listeners, and settle the active workspace's status. Never throws. */
 export function configureCloudSync(opts: { localStore: StoreLike; dash: { reload(): Promise<void> } }): void {
+  // ARCHIVE FREEZE (docs/archive-freeze.md): stay unconfigured — the controller never probes the tier,
+  // never wires connectivity listeners, and issues zero /api/sync or /api/me traffic. App.svelte's boot
+  // path already skips calling this when archived (belt-and-suspenders — this holds even if some other
+  // caller is added later).
+  if (ARCHIVED) return;
   localStore = opts.localStore;
   dashRef = opts.dash;
   cloudSync.configured = true;

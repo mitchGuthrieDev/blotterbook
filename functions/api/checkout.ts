@@ -10,11 +10,15 @@
  * Fail closed: 501 when STRIPE_SECRET_KEY or the matching price is unset; Origin-checked (mutating).
  * Stripe is called over the REST API via fetch() — no SDK on Workers.
  */
+import { ARCHIVED, archivedResponse } from '../_lib/archive.ts';
 import { json } from '../_lib/http.ts';
 import type { Ctx } from '../_lib/types.ts';
 import { badOrigin, checkOrigin, getDb, readJson, sessionFromRequest } from '../_lib/accounts.ts';
 
 export async function onRequestPost(ctx: Ctx) {
+  // ARCHIVE FREEZE (docs/archive-freeze.md): donations + hosted-Checkout subscriptions are both
+  // frozen unconditionally — a frozen product takes no new money.
+  if (ARCHIVED) return archivedResponse();
   const { request, env } = ctx;
   if (!checkOrigin(request)) return badOrigin();
   if (!env.STRIPE_SECRET_KEY) return json({ error: 'Payments are not configured.', code: 'not_configured' }, 501);

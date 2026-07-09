@@ -14,12 +14,16 @@
  * (mutating). Rate limiting is defense-in-depth only — enumeration-safety and single-use tokens are
  * the real controls, never the fail-open limiter (S22/S25).
  */
+import { ARCHIVED, archivedResponse } from '../../_lib/archive.ts';
 import { json, rateLimited } from '../../_lib/http.ts';
 import type { Ctx } from '../../_lib/types.ts';
 import { EMAIL_RE, badOrigin, checkOrigin, createRecoveryToken, dbUnavailable, getDb, readJson, userByEmail } from '../../_lib/accounts.ts';
 import { emailUnavailable, reclaimEmailBody, sendEmail } from '../../_lib/email.ts';
 
 export async function onRequestPost(ctx: Ctx) {
+  // ARCHIVE FREEZE (docs/archive-freeze.md): reclaim exists only to seed a NEW account, so it's
+  // frozen unconditionally; reclaim-confirm is left alone (any in-flight token just fails naturally).
+  if (ARCHIVED) return archivedResponse();
   const { request, env } = ctx;
   if (!checkOrigin(request)) return badOrigin();
   const db = getDb(env);

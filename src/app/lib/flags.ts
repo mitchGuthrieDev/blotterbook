@@ -14,6 +14,7 @@
    always participated in auto-detection regardless of the flag; betaRibbon was superseded by the
    version-based Beta pill in the header). Removed from here, the Admin panel, and the Worker
    DEFAULTS.flags mirror in functions/api/config.ts. */
+import { ARCHIVED } from '../../lib/archive.ts';
 /* F56 — login-gate switch. CH16 (2026-07-06) promoted the gate to PROD: when this is on, the app +
    staging surfaces boot to LaunchGate until signed in (DEMO is never gated — the App-side gateArmed
    excludes isDemo). It is deliberately NOT a Worker-mirrored flag: it never appears in
@@ -31,8 +32,12 @@ export type AppFlags = typeof APP_FLAGS;
 /** F56: is the login gate armed? A `bb:flags` localStorage override with an `ACCOUNT_GATE` key wins in
  *  BOTH directions (force on for manual QA, or force OFF for e2e/QA bypass — no rebuild); otherwise the
  *  compile-time ACCOUNT_GATE constant decides. Never throws; the caller is responsible for the
- *  isStaging guard (prod/demo are never gated). */
+ *  isStaging guard (prod/demo are never gated).
+ *  ARCHIVE FREEZE (docs/archive-freeze.md): while archived this ALWAYS returns false — no override (not
+ *  even the bb:flags QA escape hatch) can re-arm the gate, so a direct app visit never asks for an
+ *  account. New accounts are paused; thaw by flipping ARCHIVED back to false. */
 export function accountGateEnabled(): boolean {
+  if (ARCHIVED) return false;
   try {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('bb:flags') : null;
     if (raw) {

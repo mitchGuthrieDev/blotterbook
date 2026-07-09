@@ -19,6 +19,7 @@
  *
  * Hosted Checkout (/api/checkout) stays as the fallback for iframe/script-blocked clients.
  */
+import { ARCHIVED, archivedResponse } from '../../_lib/archive.ts';
 import { json } from '../../_lib/http.ts';
 import type { Ctx } from '../../_lib/types.ts';
 import {
@@ -81,6 +82,9 @@ async function stripeReq(
 }
 
 export async function onRequestPost(ctx: Ctx) {
+  // ARCHIVE FREEZE (docs/archive-freeze.md): starting a NEW subscription is frozen unconditionally;
+  // subscription/cancel.ts + webhook.ts stay live for existing subscribers.
+  if (ARCHIVED) return archivedResponse();
   const { request, env } = ctx;
   if (!checkOrigin(request)) return badOrigin();
   const db = getDb(env);

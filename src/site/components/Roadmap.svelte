@@ -2,11 +2,24 @@
   // Roadmap (A69 — ex roadmap.html static markup). Shared chrome + typography come from SiteShell;
   // the checklist + tag-chip styling is page-specific (Tailwind utilities inline, A128).
   import SiteShell from '../lib/SiteShell.svelte';
+  // ARCHIVE FREEZE (docs/archive-freeze.md): the shared freeze flag — drives the status note below.
+  // See src/lib/archive.ts for the full explanation + revert instructions.
+  import { ARCHIVED, ARCHIVE_NOTE } from '$lib/archive.ts';
 </script>
 
 <SiteShell active="roadmap">
   <p class="eyebrow">The Plan</p>
   <h1>Roadmap</h1>
+  {#if ARCHIVED}
+    <!-- ARCHIVE FREEZE (docs/archive-freeze.md): this page frames "In progress"/"Planned" as active
+         development — a short status note so it doesn't read as a live commitment while archived.
+         The checklist itself is left completely intact (nothing deleted). -->
+    <div class="note warn" data-testid="archived-note">
+      <b>Blotterbook is archived.</b>
+      {ARCHIVE_NOTE} The "In progress" and "Planned" items below reflect the plan as of the freeze — active development is paused, so treat them
+      as on hold rather than in flight.
+    </div>
+  {/if}
   <p class="blurb">
     Where <b>Blotterbook</b> is headed — the big picture, not a task list. You already get a full futures journal with a true-cost &amp; tax
     dashboard and end-to-end-encrypted sync across your devices; next come numbers you can trust to the cent and deeper journaling — all
